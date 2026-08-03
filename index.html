@@ -62,11 +62,17 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/localforage/1.10.0/localforage.min.js"></script>
 
     <style>
-        /* Filas de las tablas de materiales pendientes (RMD/Forecast): con
-           content-visibility el navegador se salta el layout/paint de las
-           filas que están fuera del área visible del scroll, sin cambiar
-           nada del resultado visual. Ayuda sobre todo con listas largas. */
-        #tablaPendientesBody tr, #tablaPendientesForecastBody tr {
+        /* Tabla de Forecast (sin selects interactivos): content-visibility
+           hace que el navegador se salte el layout/paint de las filas fuera
+           del área visible del scroll, sin cambiar el resultado visual.
+           NOTA: la tabla de RMD Pendientes de Producción (#tablaPendientesBody)
+           queda fuera de esta regla a propósito, porque sus filas contienen
+           <select> de responsable editables por el usuario, y
+           content-visibility puede hacer que el navegador reconstruya el
+           renderizado de filas fuera de pantalla, revirtiendo visualmente el
+           valor seleccionado al que tenía el HTML original en vez del que
+           el usuario acaba de elegir. */
+        #tablaPendientesForecastBody tr {
             content-visibility: auto;
             contain-intrinsic-size: auto 34px;
         }
@@ -923,6 +929,12 @@
             box-shadow: 0 2px 8px -2px rgba(59,130,246,0.4);
         }
         .planta-btn:focus-visible { outline: 2px solid #60a5fa; outline-offset: 1px; }
+        .planta-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+        .planta-btn:disabled:hover { color: #94a3b8; background: transparent; }
+        .planta-btn[data-planta="consolidado"].active {
+            background: linear-gradient(145deg, #a855f7, #7e22ce);
+            box-shadow: 0 2px 8px -2px rgba(168,85,247,0.5);
+        }
         .forecast-filter-btn { padding: 0.3rem 0.9rem; border-radius: 0.4rem; font-size: 0.7rem; font-weight: 600; color: #94a3b8; background: transparent; border: none; cursor: pointer; transition: all 0.2s ease; white-space: nowrap; }
 .forecast-filter-btn:hover { color: #f8fafc; background: rgba(255,255,255,0.05); }
 .forecast-filter-btn.active { background: linear-gradient(145deg, #f43f5e, #e11d48); color: white; box-shadow: 0 2px 8px -2px rgba(244,63,94,0.4); }
@@ -1063,6 +1075,7 @@
             <div class="planta-selector" id="plantaSelector">
                 <button class="planta-btn" data-planta="planta1" onclick="switchPlanta('planta1')">Planta 1</button>
                 <button class="planta-btn active" data-planta="planta2" onclick="switchPlanta('planta2')">Planta 2</button>
+                <button class="planta-btn" data-planta="consolidado" id="btnConsolidado" onclick="switchPlanta('consolidado')" disabled title="Disponible cuando ambas plantas tengan datos cargados">Consolidado</button>
             </div>
 
             <div class="drop-zone-mini prod-style" id="dropZoneProd" onclick="document.getElementById('fileInputProd').click()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();document.getElementById('fileInputProd').click();}" role="button" tabindex="0" title="Cargar Excel Producción para la planta activa" aria-label="Cargar Excel Producción">
@@ -1653,7 +1666,7 @@
         // ==================== STORAGE LAYER ====================
         const dbStore = localforage.createInstance({ name: 'programaProduccionDB', storeName: 'datos_app' });
 
-        async function storeSet(key, value) { try { await dbStore.setItem(key, value); } catch (err) { console.error('IndexedDB set error:', key, err); } return true; }
+        async function storeSet(key, value) { try { await dbStore.setItem(key, value); return true; } catch (err) { console.error('IndexedDB set error:', key, err); return false; } }
         async function storeGet(key) { try { return await dbStore.getItem(key); } catch (err) { console.error('IndexedDB get error:', key, err); return null; } }
         async function storeRemove(key) { try { await dbStore.removeItem(key); } catch (err) { console.error('IndexedDB remove error:', key, err); } return true; }
 
@@ -2409,23 +2422,29 @@ function buildDateColumnMapPlanta1(headerRow, weekLabelRow, hiddenCols) {
         function handleFileProd(e) { const file = e.target.files[0]; if (file) processFileProd(file); e.target.value = ''; }
 
         function processFileProd(file) {
-            Swal.fire({ title: `Analizando (${currentPlanta === 'planta1' ? 'Planta 1' : 'Planta 2'})...`, allowOutsideClick: false, didOpen: () => Swal.showLoading(), background: '#0f172a' });
+            // Se captura la planta ANTES de leer el archivo (operación asíncrona).
+            // Si el usuario cambia de planta mientras el Excel se está leyendo o
+            // procesando, esta función sigue tratando el archivo como de la
+            // planta que estaba activa cuando se inició la carga — evita que el
+            // archivo se guarde o parsee con el formato/planta equivocada.
+            const plantaObjetivo = currentPlanta;
+            Swal.fire({ title: `Analizando (${plantaObjetivo === 'planta1' ? 'Planta 1' : 'Planta 2'})...`, allowOutsideClick: false, didOpen: () => Swal.showLoading(), background: '#0f172a' });
             const reader = new FileReader();
-            reader.onload = (ev) => {
+            reader.onload = async (ev) => {
                 try {
                     const data = new Uint8Array(ev.target.result);
                     const wb = XLSX.read(data, { type: 'array', cellDates: true });
                     const pmap = new Map();
-                    availableAreas.clear();
+                    const areasDeEstaCarga = new Set();
 
                     const globalWeekMondayMap = buildGlobalWeekMondayMap(wb);
-                    const planta1Format = currentPlanta === 'planta1';
+                    const planta1Format = plantaObjetivo === 'planta1';
 
                     wb.SheetNames.forEach(sn => {
     const sh = wb.Sheets[sn];
 
     // Excluir el área "REA" (Reacondicionado) solo para Planta 2
-    if (currentPlanta === 'planta2' && sn.trim().toUpperCase() === 'REA') return;
+    if (plantaObjetivo === 'planta2' && sn.trim().toUpperCase() === 'REA') return;
 
     const hiddenRows = getHiddenRowSet(sh);
     const hiddenCols = getHiddenColSet(sh);
@@ -2481,7 +2500,7 @@ function buildDateColumnMapPlanta1(headerRow, weekLabelRow, hiddenCols) {
     const codigoColIdx = findLabelCol(/c[oó]digo/i);
     if (codigoColIdx === -1) return;
  
-    availableAreas.add(sn);
+    areasDeEstaCarga.add(sn);
  
     let productoColIdx = findLabelCol(/produc/i);
     if (productoColIdx === -1) productoColIdx = findLabelCol(/descripci/i);
@@ -2528,16 +2547,38 @@ function buildDateColumnMapPlanta1(headerRow, weekLabelRow, hiddenCols) {
     });
 });
 
-                    productionData = Array.from(pmap.values()).map(p => ({ ...p, fechas: Array.from(p.fechas).sort((a, b) => new Date(a) - new Date(b)) }));
-                    saveProdData();
-                    document.getElementById('prodStatusBadge').style.display = 'inline';
-                    const ib = document.getElementById('dateFilterInfo');
-                    if (productionData.length > 0) {
-                        ib.style.display = 'flex';
-                        document.getElementById('dateFilterText').textContent = `${productionData.length} productos programados desde hoy (${dayjs().format('DD/MM/YYYY')}) en adelante.`;
+                    const nuevaProductionData = Array.from(pmap.values()).map(p => ({ ...p, fechas: Array.from(p.fechas).sort((a, b) => new Date(a) - new Date(b)) }));
+
+                    // Se guarda SIEMPRE bajo la key de la planta que originó la
+                    // carga (plantaObjetivo), sin importar en qué planta esté
+                    // parado el usuario en este momento.
+                    await storeSet(`prod_data_${plantaObjetivo}`, { data: nuevaProductionData, areas: Array.from(areasDeEstaCarga) });
+                    await updateConsolidadoBtnState();
+
+                    if (currentPlanta === plantaObjetivo) {
+                        // El usuario sigue viendo la misma planta: reflejamos el
+                        // resultado en pantalla de inmediato.
+                        productionData = nuevaProductionData;
+                        availableAreas = areasDeEstaCarga;
+                        document.getElementById('prodStatusBadge').style.display = 'inline';
+                        const ib = document.getElementById('dateFilterInfo');
+                        if (productionData.length > 0) {
+                            ib.style.display = 'flex';
+                            document.getElementById('dateFilterText').textContent = `${productionData.length} productos programados desde hoy (${dayjs().format('DD/MM/YYYY')}) en adelante.`;
+                        }
+                        updateDashboardProd();
+                    } else if (currentPlanta === 'consolidado') {
+                        // El usuario cambió a la vista consolidada mientras se
+                        // procesaba el archivo: refrescamos el consolidado para
+                        // que incluya el dato recién guardado.
+                        loadProdDataConsolidado();
                     }
-                    Swal.fire({ icon: 'success', title: 'Completado', text: `${productionData.length} productos vigentes.`, timer: 2000, showConfirmButton: false, background: '#0f172a' });
-                    updateDashboardProd();
+                    // Si el usuario cambió a la OTRA planta específica (no la que
+                    // originó esta carga ni consolidado), no tocamos su pantalla:
+                    // el archivo ya quedó guardado correctamente y se verá la
+                    // próxima vez que vuelva a esa planta.
+
+                    Swal.fire({ icon: 'success', title: 'Completado', text: `${nuevaProductionData.length} productos vigentes (${plantaObjetivo === 'planta1' ? 'Planta 1' : 'Planta 2'}).`, timer: 2200, showConfirmButton: false, background: '#0f172a' });
                 } catch (err) {
                     console.error(err);
                     Swal.fire({ icon: 'error', title: 'Error', text: 'No se pudo procesar el archivo.', background: '#0f172a' });
@@ -2546,13 +2587,17 @@ function buildDateColumnMapPlanta1(headerRow, weekLabelRow, hiddenCols) {
             reader.readAsArrayBuffer(file);
         }
 
-        async function saveProdData() {
-            const key = `prod_data_${currentPlanta}`;
-            await storeSet(key, { data: productionData, areas: Array.from(availableAreas) });
-        }
+        let __loadProdDataToken = 0;
         async function loadProdData() {
-            const key = `prod_data_${currentPlanta}`;
+            if (currentPlanta === 'consolidado') return loadProdDataConsolidado();
+            const plantaObjetivo = currentPlanta;
+            const key = `prod_data_${plantaObjetivo}`;
+            const myToken = ++__loadProdDataToken;
             const saved = await storeGet(key);
+            // Si mientras se leía el storage el usuario ya cambió de planta otra
+            // vez (doble clic rápido entre Planta 1/2), esta respuesta llegó
+            // "tarde" y no debe pisar lo que ya se está mostrando ahora.
+            if (myToken !== __loadProdDataToken || currentPlanta !== plantaObjetivo) return;
             if (saved) {
                 productionData = saved.data;
                 availableAreas = new Set(saved.areas);
@@ -2567,16 +2612,75 @@ function buildDateColumnMapPlanta1(headerRow, weekLabelRow, hiddenCols) {
             }
         }
 
+        // Carga y fusiona los datos guardados de Planta 1 y Planta 2 en la
+        // misma forma que espera el resto del pipeline (productionData /
+        // availableAreas), etiquetando cada producto con su planta de origen
+        // para poder mostrarla en el detalle sin afectar los cruces por código.
+        async function loadProdDataConsolidado() {
+            const myToken = ++__loadProdDataToken;
+            const [d1, d2] = await Promise.all([storeGet('prod_data_planta1'), storeGet('prod_data_planta2')]);
+            if (myToken !== __loadProdDataToken || currentPlanta !== 'consolidado') return;
+            const merged = [];
+            const areasMerged = new Set();
+            if (d1 && Array.isArray(d1.data)) {
+                d1.data.forEach(p => merged.push({ ...p, planta: 'planta1' }));
+                (d1.areas || []).forEach(a => areasMerged.add(a));
+            }
+            if (d2 && Array.isArray(d2.data)) {
+                d2.data.forEach(p => merged.push({ ...p, planta: 'planta2' }));
+                (d2.areas || []).forEach(a => areasMerged.add(a));
+            }
+            productionData = merged;
+            availableAreas = areasMerged;
+            document.getElementById('prodStatusBadge').style.display = merged.length > 0 ? 'inline' : 'none';
+            updateDashboardProd();
+        }
+
+        // Nombre legible de la planta/vista activa, usado en todos los textos
+        // dinámicos (empty states, resúmenes, mensajes de carga) para que el
+        // modo Consolidado se identifique igual de claro que Planta 1 / 2.
+        function plantaLabel() {
+            if (currentPlanta === 'consolidado') return 'Consolidado (Planta 1 + Planta 2)';
+            return currentPlanta === 'planta1' ? 'Planta 1' : 'Planta 2';
+        }
+
+        // Revisa si existen datos guardados para ambas plantas y habilita o
+        // deshabilita el botón "Consolidado" en consecuencia. Se llama después
+        // de cada carga o borrado de Excel de Producción.
+        async function updateConsolidadoBtnState() {
+            const btn = document.getElementById('btnConsolidado');
+            if (!btn) return;
+            const [d1, d2] = await Promise.all([storeGet('prod_data_planta1'), storeGet('prod_data_planta2')]);
+            const ready = !!(d1 && Array.isArray(d1.data) && d1.data.length > 0) && !!(d2 && Array.isArray(d2.data) && d2.data.length > 0);
+            btn.disabled = !ready;
+            btn.title = ready ? 'Ver Planta 1 + Planta 2 consolidadas' : 'Disponible cuando ambas plantas tengan datos cargados';
+            // Si estábamos en consolidado y una planta se quedó sin datos, volvemos a Planta 2 para no dejar la vista vacía sin aviso.
+            if (!ready && currentPlanta === 'consolidado') {
+                currentPlanta = null; // fuerza que switchPlanta no haga early-return por "planta === currentPlanta"
+                switchPlanta('planta2');
+            }
+        }
+
         function switchPlanta(planta) {
             if (planta === currentPlanta) return;
+            if (planta === 'consolidado' && document.getElementById('btnConsolidado').disabled) return;
             currentPlanta = planta;
             // Actualizar botones
             document.querySelectorAll('.planta-btn').forEach(btn => {
                 btn.classList.toggle('active', btn.dataset.planta === planta);
             });
-            // Actualizar etiqueta del drop zone
-            document.getElementById('prodDropLabel').textContent = `Cargar Excel (${planta === 'planta1' ? 'Planta 1' : 'Planta 2'})`;
-            // Cargar datos de la planta seleccionada
+            // En consolidado no se sube archivo directo (se arma a partir de Planta 1 + Planta 2 ya guardadas)
+            const dropZoneProd = document.getElementById('dropZoneProd');
+            const prodStatusBadge = document.getElementById('prodStatusBadge');
+            if (planta === 'consolidado') {
+                dropZoneProd.style.display = 'none';
+                prodStatusBadge.style.display = 'none';
+            } else {
+                dropZoneProd.style.display = '';
+                // Actualizar etiqueta del drop zone
+                document.getElementById('prodDropLabel').textContent = `Cargar Excel (${planta === 'planta1' ? 'Planta 1' : 'Planta 2'})`;
+            }
+            // Cargar datos de la planta seleccionada (o el consolidado)
             loadProdData();
         }
 
@@ -2801,9 +2905,10 @@ function buildDateColumnMapPlanta1(headerRow, weekLabelRow, hiddenCols) {
 
         function showModalProd(item) {
             const c = getAreaColor(item.area);
+            const plantaBadge = item.planta ? `<div><span class="text-slate-400 block text-xs uppercase">Planta de origen</span><span class="font-medium text-slate-200">${item.planta === 'planta1' ? 'Planta 1' : 'Planta 2'}</span></div>` : '';
             Swal.fire({
                 title: `<div class="text-base font-bold text-left text-white border-b border-slate-700/50 pb-2 flex justify-between"><span>Detalle</span><span class="text-xs px-2 py-0.5 rounded text-white" style="background-color:${c}">${item.area}</span></div>`,
-                html: `<div class="text-left space-y-3 text-sm mt-2"><div><span class="text-slate-400 block text-xs uppercase">Código</span><span class="font-bold text-slate-200">${item.codigo}</span></div><div><span class="text-slate-400 block text-xs uppercase">Producto</span><span class="font-medium text-slate-200">${item.producto}</span></div><div><span class="text-slate-400 block text-xs uppercase mb-1.5">Días</span><div class="flex flex-wrap gap-1.5">${item.fechas.map(d => `<span class="bg-slate-800 border border-slate-600 px-2 py-0.5 rounded text-xs text-emerald-400">${dayjs(d).format('DD/MM/YYYY')}</span>`).join('')}</div></div></div>`,
+                html: `<div class="text-left space-y-3 text-sm mt-2"><div><span class="text-slate-400 block text-xs uppercase">Código</span><span class="font-bold text-slate-200">${item.codigo}</span></div><div><span class="text-slate-400 block text-xs uppercase">Producto</span><span class="font-medium text-slate-200">${item.producto}</span></div>${plantaBadge}<div><span class="text-slate-400 block text-xs uppercase mb-1.5">Días</span><div class="flex flex-wrap gap-1.5">${item.fechas.map(d => `<span class="bg-slate-800 border border-slate-600 px-2 py-0.5 rounded text-xs text-emerald-400">${dayjs(d).format('DD/MM/YYYY')}</span>`).join('')}</div></div></div>`,
                 showConfirmButton: true, confirmButtonText: 'Cerrar', width: 'min(500px, 94vw)',
                 customClass: { confirmButton: 'bg-slate-700 hover:bg-slate-600 text-white px-4 py-2.5 rounded-lg text-xs min-w-[44px]' },
                 buttonsStyling: false, background: '#0f172a'
@@ -2811,14 +2916,26 @@ function buildDateColumnMapPlanta1(headerRow, weekLabelRow, hiddenCols) {
         }
 
         function clearProdData() {
-            Swal.fire({ title: `¿Limpiar datos de ${currentPlanta === 'planta1' ? 'Planta 1' : 'Planta 2'}?`, text: 'Se borrará el programa.', icon: 'warning', showCancelButton: true, confirmButtonText: 'Sí', cancelButtonText: 'No', background: '#0f172a', color: '#f8fafc', width: 'min(420px, 92vw)', customClass: { confirmButton: 'bg-red-600 px-4 py-2.5 rounded text-white mr-2 text-xs min-w-[44px]', cancelButton: 'bg-slate-600 px-4 py-2.5 rounded text-white text-xs min-w-[44px]' }, buttonsStyling: false }).then(async r => {
+            if (currentPlanta === 'consolidado') {
+                Swal.fire({ icon: 'info', title: 'Vista consolidada', text: 'El consolidado se arma automáticamente a partir de Planta 1 y Planta 2. Para borrar datos, cambia primero a la planta específica.', background: '#0f172a', color: '#f8fafc' });
+                return;
+            }
+            // Se captura ANTES del diálogo de confirmación: si el usuario tarda
+            // en confirmar y mientras tanto cambia de planta, esta acción sigue
+            // apuntando a la planta que tenía activa cuando pidió limpiar.
+            const plantaObjetivo = currentPlanta;
+            Swal.fire({ title: `¿Limpiar datos de ${plantaObjetivo === 'planta1' ? 'Planta 1' : 'Planta 2'}?`, text: 'Se borrará el programa.', icon: 'warning', showCancelButton: true, confirmButtonText: 'Sí', cancelButtonText: 'No', background: '#0f172a', color: '#f8fafc', width: 'min(420px, 92vw)', customClass: { confirmButton: 'bg-red-600 px-4 py-2.5 rounded text-white mr-2 text-xs min-w-[44px]', cancelButton: 'bg-slate-600 px-4 py-2.5 rounded text-white text-xs min-w-[44px]' }, buttonsStyling: false }).then(async r => {
                 if (r.isConfirmed) {
-                    const key = `prod_data_${currentPlanta}`;
-                    await storeRemove(key);
-                    productionData = []; availableAreas.clear(); currentAreaFilter = 'TODAS';
-                    document.getElementById('dateFilterInfo').style.display = 'none';
-                    document.getElementById('prodStatusBadge').style.display = 'none';
-                    updateDashboardProd();
+                    await storeRemove(`prod_data_${plantaObjetivo}`);
+                    if (currentPlanta === plantaObjetivo) {
+                        productionData = []; availableAreas.clear(); currentAreaFilter = 'TODAS';
+                        document.getElementById('dateFilterInfo').style.display = 'none';
+                        document.getElementById('prodStatusBadge').style.display = 'none';
+                        updateDashboardProd();
+                    } else if (currentPlanta === 'consolidado') {
+                        loadProdDataConsolidado();
+                    }
+                    updateConsolidadoBtnState();
                     Swal.fire({ icon: 'success', title: 'Limpio', timer: 1500, showConfirmButton: false, background: '#0f172a' });
                 }
             });
@@ -2839,6 +2956,35 @@ function buildDateColumnMapPlanta1(headerRow, weekLabelRow, hiddenCols) {
         function normalizeEtapa(raw) {
             if (raw === null || raw === undefined) return '';
             return String(raw).trim().toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        }
+
+        // Las 5 etapas del proceso, en el orden fijo en que siempre deben
+        // aparecer como columnas en el Excel exportado, sin importar cómo
+        // esté escrita la etapa en los archivos de origen (Base de Datos /
+        // RMD Autorizados). ETAPAS_FIJAS ya está normalizada (sin tildes,
+        // mayúsculas) porque así es como circula "etapaNorm" en todo el resto
+        // del código.
+        const ETAPAS_FIJAS = ['FABRICACION', 'RECUBRIMIENTO', 'INSPECCION', 'ENVASE', 'ACONDICIONADO'];
+        const ETAPAS_FIJAS_LABEL = { FABRICACION: 'FABRICACIÓN', RECUBRIMIENTO: 'RECUBRIMIENTO', INSPECCION: 'INSPECCIÓN', ENVASE: 'ENVASE', ACONDICIONADO: 'ACONDICIONADO' };
+        // Alias conocidos por si el Excel trae una variante distinta (plural, abreviatura, etc.)
+        const ETAPA_ALIASES = {
+            FABRICACION: 'FABRICACION', FABRIC: 'FABRICACION',
+            RECUBRIMIENTO: 'RECUBRIMIENTO', RECUBRIMIENTOS: 'RECUBRIMIENTO', RECUB: 'RECUBRIMIENTO',
+            INSPECCION: 'INSPECCION', INSPECCIONES: 'INSPECCION', INSP: 'INSPECCION',
+            ENVASE: 'ENVASE', ENVASADO: 'ENVASE',
+            ACONDICIONADO: 'ACONDICIONADO', ACONDICIONAMIENTO: 'ACONDICIONADO', ACOND: 'ACONDICIONADO'
+        };
+        // Traduce una etapa ya normalizada (normalizeEtapa) a una de las 5 fijas.
+        // Si no coincide con ningún alias conocido, devuelve null (no se marca
+        // ninguna columna del export para esa etapa "desconocida").
+        function mapEtapaAFija(etapaNorm) {
+            if (!etapaNorm) return null;
+            if (ETAPA_ALIASES[etapaNorm]) return ETAPA_ALIASES[etapaNorm];
+            // Buscar por coincidencia parcial (ej. "INSPECCION FINAL" -> INSPECCION)
+            for (const key of Object.keys(ETAPA_ALIASES)) {
+                if (etapaNorm.includes(key)) return ETAPA_ALIASES[key];
+            }
+            return null;
         }
 
         function normalizeAgrupador(raw) {
@@ -3169,9 +3315,59 @@ async function downloadPlanProduccionFromCloud() {
 
         async function saveManualAutorizados() { await storeSet('val_manual_autorizados', Array.from(manualAutorizados)); }
 
+        // ==================== RESPONSABLES POR ETAPA (RMD Pendientes) ====================
+        // Map<"MATERIAL::ETAPA_FIJA", "DOC"|"PRO"|"ASC"|"IDE"> — es GLOBAL (no por
+        // planta), así que se ve y se edita igual en Planta 1, Planta 2 y
+        // Consolidado. Persiste aunque se recarguen nuevos Excel; solo se limpia
+        // cuando un material deja de figurar como pendiente en TODAS sus etapas
+        // (ver limpiarResponsablesDeMaterialesAutorizados()).
+        const RESPONSABLES_VALIDOS = ['DOC', 'PRO', 'ASC', 'IDE'];
+        let responsablesEtapa = new Map();
+        function responsableKey(material, etapaFija) { return `${material}::${etapaFija}`; }
+        async function saveResponsablesEtapa() { return await storeSet('val_responsables_etapa', Array.from(responsablesEtapa.entries())); }
+        window.setResponsableEtapa = async function (material, etapaFija, valor) {
+            const key = responsableKey(material, etapaFija);
+            const anterior = responsablesEtapa.get(key);
+            if (!valor) responsablesEtapa.delete(key);
+            else responsablesEtapa.set(key, valor);
+            const ok = await saveResponsablesEtapa();
+            if (!ok) {
+                // El guardado en IndexedDB falló: revertimos el cambio en memoria
+                // y avisamos, para no dejar al usuario creyendo que quedó
+                // guardado cuando en realidad se perdería al recargar o volver.
+                if (anterior === undefined) responsablesEtapa.delete(key); else responsablesEtapa.set(key, anterior);
+                const select = document.getElementById(`resp_${material}_${etapaFija}`);
+                if (select) select.value = anterior || '';
+                Swal.fire({ icon: 'error', title: 'No se pudo guardar', text: 'El responsable no se guardó. Intenta de nuevo.', background: '#0f172a', timer: 2500, showConfirmButton: false });
+            }
+        };
+        // Después de cada corrida de runValidacionMateriales(), borra los
+        // responsables guardados de cualquier material que YA NO figure como
+        // pendiente en NINGUNA de sus etapas (fue autorizado por completo, o ya
+        // no aparece en la validación). Mientras el material siga teniendo AL
+        // MENOS una etapa pendiente, se conservan todos sus responsables
+        // guardados — incluida cualquier etapa que en esta pasada puntual ya
+        // no aparezca, para no perder datos por timing entre recálculos.
+        function limpiarResponsablesDeMaterialesAutorizados(pendientesActuales) {
+            const materialesConAlgunaPendiente = new Set();
+            pendientesActuales.forEach(p => {
+                if (p.etapasPendientes && p.etapasPendientes.length > 0) {
+                    materialesConAlgunaPendiente.add(p.material);
+                }
+            });
+            let changed = false;
+            Array.from(responsablesEtapa.keys()).forEach(k => {
+                const material = k.split('::')[0];
+                if (!materialesConAlgunaPendiente.has(material)) { responsablesEtapa.delete(k); changed = true; }
+            });
+            if (changed) saveResponsablesEtapa();
+        }
+
         async function loadValidacionData() {
             const ma = await storeGet('val_manual_autorizados');
             if (ma) manualAutorizados = new Set(ma);
+            const re = await storeGet('val_responsables_etapa');
+            if (re) responsablesEtapa = new Map(re);
 
             const flags = await storeGet('val_flags');
             if (!flags) return;
@@ -3220,7 +3416,7 @@ async function downloadPlanProduccionFromCloud() {
                 emptyState.style.display = 'block';
                 tableWrapper.style.display = 'none';
                 if (toolbar) toolbar.style.display = 'none';
-                emptyState.textContent = `Carga los tres archivos (Programa de Producción - ${currentPlanta === 'planta1' ? 'Planta 1' : 'Planta 2'}, Base de Datos y RMD Autorizados) para generar la validación de materiales.`;
+                emptyState.textContent = `Carga los tres archivos (Programa de Producción - ${plantaLabel()}, Base de Datos y RMD Autorizados) para generar la validación de materiales.`;
                 animateCounter('kpi-val-revisados', 0);
                 animateCounter('kpi-val-autorizados', 0);
                 animateCounter('kpi-val-pendientes', 0);
@@ -3230,6 +3426,7 @@ async function downloadPlanProduccionFromCloud() {
             }
 
             const materialAreas = new Map();
+const materialPlantas = new Map(); // NUEVO: qué planta(s) aportan cada material (solo relevante en consolidado)
 const materialFechaMin = new Map(); // 🔽 NUEVO: fecha más próxima por material
 
 productionData.forEach(p => {
@@ -3238,6 +3435,10 @@ productionData.forEach(p => {
     if (!cod) return;
     if (!materialAreas.has(cod)) materialAreas.set(cod, new Set());
     materialAreas.get(cod).add(p.area);
+    if (p.planta) {
+        if (!materialPlantas.has(cod)) materialPlantas.set(cod, new Set());
+        materialPlantas.get(cod).add(p.planta);
+    }
 
     // p.fechas ya viene ordenado ascendente (ver processFileProd), así que fechas[0] es la más próxima
     if (p.fechas && p.fechas.length > 0) {
@@ -3294,12 +3495,23 @@ pendientes.sort((a, b) => {
     return a.fechaProxima.localeCompare(b.fechaProxima);
 });
 
+// En consolidado, cada fila lleva además de qué planta(s) proviene el material
+// (solo es útil mostrar esto cuando ambas plantas están mezcladas en la vista).
+if (currentPlanta === 'consolidado') {
+    pendientes.forEach(p => {
+        const plantas = materialPlantas.get(p.material);
+        p.plantas = plantas && plantas.size > 0 ? Array.from(plantas).map(pl => pl === 'planta1' ? 'P1' : 'P2').sort().join('+') : '';
+    });
+}
+
             const pendientesReales = [];
             const autorizadosManualLista = [];
             pendientes.forEach(p => {
                 if (manualAutorizados.has(p.material)) autorizadosManualLista.push(p);
                 else pendientesReales.push(p);
             });
+
+            limpiarResponsablesDeMaterialesAutorizados(pendientesReales);
 
             const autorizadosTotal = autorizados + autorizadosManualLista.length;
             ultimoResultadoValidacion = { revisados, autorizados: autorizadosTotal, pendientes: pendientesReales, autorizadosManual: autorizadosManualLista };
@@ -3349,12 +3561,11 @@ pendientes.sort((a, b) => {
             if (contador) contador.textContent = `${visibles.length} de ${filas.length} materiales`;
 
             if (visibles.length === 0) {
-                body.innerHTML = `<tr><td colspan="5" class="text-center text-slate-500 py-6 text-xs">Ningún material coincide con el filtro/búsqueda actual.</td></tr>`;
+                body.innerHTML = `<tr><td colspan="7" class="text-center text-slate-500 py-6 text-xs">Ningún material coincide con el filtro/búsqueda actual.</td></tr>`;
                 return;
             }
 
             body.innerHTML = visibles.map(p => {
-                const etapasTxt = p.etapasPendientes && p.etapasPendientes.length > 0 ? p.etapasPendientes.join(', ') : (p.motivo || 'No encontrado');
                 const esAutorizado = p.estado === 'autorizado';
                 const rowCls = esAutorizado
                     ? 'border-b border-slate-800/60 last:border-0 bg-emerald-500/10 hover:bg-emerald-500/15 transition-colors'
@@ -3362,22 +3573,60 @@ pendientes.sort((a, b) => {
                 const badge = esAutorizado
                     ? '<span class="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 px-2 py-0.5 rounded-full whitespace-nowrap"><svg xmlns="http://www.w3.org/2000/svg" class="h-2.5 w-2.5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.7 5.3a1 1 0 010 1.4l-8 8a1 1 0 01-1.4 0l-4-4a1 1 0 111.4-1.4L8 12.6l7.3-7.3a1 1 0 011.4 0z" clip-rule="evenodd"/></svg>Autorizado manual</span>'
                     : '<span class="inline-flex items-center gap-1 text-[10px] font-semibold text-red-300 bg-red-500/10 border border-red-500/30 px-2 py-0.5 rounded-full whitespace-nowrap">Pendiente</span>';
-                const etapasCls = esAutorizado ? 'text-emerald-300/70 line-through whitespace-nowrap' : 'text-red-300 whitespace-nowrap';
+                const etapasCls = esAutorizado ? 'text-emerald-300/70 line-through' : 'text-red-300';
                 const accionBtn = esAutorizado
                     ? `<button onclick="toggleManualAutorizado('${p.material}')" class="text-[10px] font-medium text-slate-400 hover:text-slate-200 border border-slate-600 hover:border-slate-400 px-2 py-1.5 rounded-md transition-colors whitespace-nowrap min-h-[32px]">Revertir</button>`
                     : `<button onclick="toggleManualAutorizado('${p.material}')" class="text-[10px] font-medium text-emerald-400 hover:text-emerald-300 border border-emerald-500/40 hover:border-emerald-400 bg-emerald-500/5 hover:bg-emerald-500/10 px-2 py-1.5 rounded-md transition-colors whitespace-nowrap min-h-[32px]">Marcar autorizado</button>`;
                 const fechaTxt = p.fechaProxima ? dayjs(p.fechaProxima).format('DD/MM/YYYY') : '-';
+                const plantaTag = p.plantas ? ` <span class="text-[9px] text-purple-300/80 bg-purple-500/10 border border-purple-500/30 px-1 py-0.5 rounded whitespace-nowrap" title="Planta(s) de origen">${p.plantas}</span>` : '';
+
+                // Etapas en una sola columna, pero cada una con su propio selector
+                // de responsable al costado (solo si es una de las 5 etapas fijas
+                // reconocidas; si no se reconoce, se muestra el texto sin selector).
+                let etapasHtml;
+                if (p.etapasPendientes && p.etapasPendientes.length > 0) {
+                    etapasHtml = p.etapasPendientes.map(et => {
+                        const fija = mapEtapaAFija(et);
+                        const labelTxt = fija ? ETAPAS_FIJAS_LABEL[fija] : et;
+                        if (esAutorizado || !fija) {
+                            return `<div class="flex items-center gap-1.5 whitespace-nowrap"><span class="${etapasCls}">${labelTxt}</span></div>`;
+                        }
+                        const valorActual = responsablesEtapa.get(responsableKey(p.material, fija)) || '';
+                        const selectId = `resp_${p.material}_${fija}`;
+                        const opciones = ['', ...RESPONSABLES_VALIDOS].map(r => `<option value="${r}" ${r === valorActual ? 'selected' : ''}>${r || '—'}</option>`).join('');
+                        return `<div class="flex items-center gap-1.5 whitespace-nowrap">
+                            <span class="${etapasCls}">${labelTxt}</span>
+                            <select id="${selectId}" onchange="setResponsableEtapa('${p.material}','${fija}', this.value)" class="bg-slate-800/80 border border-slate-600/60 rounded text-[10px] text-slate-200 px-1 py-0.5 focus:outline-none focus:border-blue-500/60" title="Responsable de ${labelTxt}">${opciones}</select>
+                        </div>`;
+                    }).join('');
+                } else {
+                    etapasHtml = `<span class="${etapasCls}">${p.motivo || 'No encontrado'}</span>`;
+                }
 
 return `<tr class="${rowCls}" title="${p.motivo || ''}">
     <td class="font-medium text-slate-200 whitespace-nowrap py-2">${p.material}</td>
     <td class="text-slate-300 py-2">${p.descripcion}</td>
-    <td class="text-slate-400 whitespace-nowrap py-2">${p.areas}</td>
+    <td class="text-slate-400 whitespace-nowrap py-2">${p.areas}${plantaTag}</td>
     <td class="text-slate-300 whitespace-nowrap py-2">${fechaTxt}</td>
-    <td class="${etapasCls} py-2">${etapasTxt}</td>
+    <td class="py-2"><div class="flex flex-col gap-1">${etapasHtml}</div></td>
     <td class="py-2">${badge}</td>
     <td class="py-2 text-right">${accionBtn}</td>
 </tr>`;
             }).join('');
+
+            // Capa de seguridad adicional: además del atributo "selected" que ya
+            // trae el HTML generado arriba, se fija explícitamente la propiedad
+            // .value de cada <select> de responsable con el dato guardado en
+            // memoria. Esto evita que el valor visible quede desincronizado si
+            // el navegador reconstruye el renderizado de alguna fila (por
+            // ejemplo al hacer scroll o cambiar de pestaña).
+            body.querySelectorAll('select[id^="resp_"]').forEach(sel => {
+                const parts = sel.id.split('_'); // resp_<material>_<etapaFija>
+                const material = parts[1];
+                const etapaFija = parts.slice(2).join('_');
+                const valorGuardado = responsablesEtapa.get(responsableKey(material, etapaFija)) || '';
+                if (sel.value !== valorGuardado) sel.value = valorGuardado;
+            });
         }
 
         function refiltrarTablaPendientes() { if (window.__ultimasFilasValidacion) renderTablaPendientes(window.__ultimasFilasValidacion); }
@@ -3400,16 +3649,50 @@ return `<tr class="${rowCls}" title="${p.motivo || ''}">
                 Swal.fire({ icon: 'info', title: 'Nada que exportar', text: 'No hay materiales pendientes para exportar en este momento.', background: '#0f172a', timer: 2000, showConfirmButton: false });
                 return;
             }
-            const wsData = pendientes.map(p => ({
-                'Material': p.material, 'Descripción': p.descripcion, 'Área(s)': p.areas,
-                'Etapa(s) Pendiente(s)': p.etapasPendientes && p.etapasPendientes.length > 0 ? p.etapasPendientes.join(', ') : '-',
-                'Motivo': p.motivo || ''
-            }));
+            const wsData = pendientes.map(p => {
+                // Set de etapas fijas que SÍ están pendientes para este material
+                // (traduciendo cada etapa cruda del material a una de las 5 fijas).
+                const pendientesFijasSet = new Set((p.etapasPendientes || []).map(mapEtapaAFija).filter(Boolean));
+                // Caso especial: el material está en la lista de pendientes pero
+                // no por una etapa concreta (no se encontró en Base de Datos, o
+                // no tiene agrupador válido) — no hay que marcar "AUTORIZADO" en
+                // ese caso, porque induciría a pensar que está todo en regla.
+                const sinDatosDeEtapa = (!p.etapasPendientes || p.etapasPendientes.length === 0);
+                const row = {
+                    'Material': p.material, 'Descripción': p.descripcion, 'Área(s)': p.areas,
+                    'Inicio de Producción': p.fechaProxima ? dayjs(p.fechaProxima).format('DD/MM/YYYY') : '-'
+                };
+                ETAPAS_FIJAS.forEach(fija => {
+                    const label = ETAPAS_FIJAS_LABEL[fija];
+                    const estaPendiente = pendientesFijasSet.has(fija);
+                    if (sinDatosDeEtapa) {
+                        row[label] = 'SIN DATOS';
+                        row[`Responsable ${label}`] = 'NO APLICA';
+                    } else {
+                        row[label] = estaPendiente ? 'X' : 'AUTORIZADO';
+                        row[`Responsable ${label}`] = estaPendiente ? (responsablesEtapa.get(responsableKey(p.material, fija)) || '') : 'NO APLICA';
+                    }
+                });
+                // Si alguna etapa pendiente no coincide con ninguna de las 5 fijas
+                // (nombre no reconocido en el Excel de origen), se deja constancia
+                // en el Motivo para no perder esa información silenciosamente.
+                const etapasNoReconocidas = (p.etapasPendientes || []).filter(et => !mapEtapaAFija(et));
+                let motivoFinal = p.motivo || '';
+                if (etapasNoReconocidas.length > 0) {
+                    motivoFinal += (motivoFinal ? ' | ' : '') + `Etapa(s) no reconocida(s) en las 5 columnas fijas: ${etapasNoReconocidas.join(', ')}`;
+                }
+                row['Motivo'] = motivoFinal;
+                return row;
+            });
             const ws = XLSX.utils.json_to_sheet(wsData);
-            ws['!cols'] = [{ wch: 14 }, { wch: 45 }, { wch: 20 }, { wch: 30 }, { wch: 55 }];
+            // Anchos: Material, Descripción, Área(s), Inicio, luego 2 columnas (etapa+responsable) x 5 etapas, y Motivo al final.
+            ws['!cols'] = [{ wch: 14 }, { wch: 45 }, { wch: 20 }, { wch: 16 },
+                ...ETAPAS_FIJAS.flatMap(() => [{ wch: 14 }, { wch: 16 }]),
+                { wch: 55 }];
             const wb = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(wb, ws, 'Materiales Pendientes');
-            XLSX.writeFile(wb, `Materiales_Pendientes_RMD_${dayjs().format('YYYYMMDD_HHmm')}.xlsx`);
+            const plantaSufijo = currentPlanta === 'consolidado' ? 'Consolidado' : (currentPlanta === 'planta1' ? 'Planta1' : 'Planta2');
+            XLSX.writeFile(wb, `Materiales_Pendientes_RMD_${plantaSufijo}_${dayjs().format('YYYYMMDD_HHmm')}.xlsx`);
         }
 
         async function copyPendientesToClipboard() {
@@ -4065,12 +4348,12 @@ function updateForecastActiveFiltersBadge() {
             if (!textEl) return;
 
             if (productionData.length === 0) {
-                textEl.textContent = `Sube el Excel de Producción (${currentPlanta === 'planta1' ? 'Planta 1' : 'Planta 2'}) para generar el resumen automático de volumen por área y fechas pico.`;
+                textEl.textContent = `Sube el Excel de Producción (${plantaLabel()}) para generar el resumen automático de volumen por área y fechas pico.`;
                 statsEl.innerHTML = '';
                 return;
             }
 
-            subtitleEl.textContent = `Basado en ${productionData.length} productos programados desde ${dayjs().format('DD/MM/YYYY')} (${currentPlanta === 'planta1' ? 'Planta 1' : 'Planta 2'})`;
+            subtitleEl.textContent = `Basado en ${productionData.length} productos programados desde ${dayjs().format('DD/MM/YYYY')} (${plantaLabel()})`;
 
             const areaTotals = {}; const dateCounts = {};
             productionData.forEach(p => {
@@ -4365,11 +4648,11 @@ const TOUR_STEPS = [
     { tab: 'forecast', selector: '#chartForecastMonthly', title: 'Materiales programados por mes', text: 'Vista mensual de cuántos materiales tienen producción proyectada, útil para planificar autorizaciones con anticipación.' },
 
     // ---- Pestaña Producción ----
-    { tab: 'produccion', selector: '#inlineUploadProd', title: 'Carga de archivos de Producción', text: 'Sube el Programa de Producción (elige Planta 1 o 2), la Base de Datos de materiales y los RMD Autorizados.' },
+    { tab: 'produccion', selector: '#inlineUploadProd', title: 'Carga de archivos de Producción', text: 'Sube el Programa de Producción (elige Planta 1 o 2), la Base de Datos de materiales y los RMD Autorizados. Cuando ambas plantas tengan datos cargados, se habilita un tercer botón "Consolidado" que junta todo: calendario, productos, RMD pendientes, gráficos y resumen.' },
     { tab: 'produccion', selector: '#areaFiltersContainer', title: 'Filtro por área', text: 'Filtra todo el dashboard (calendario, gráficos y tabla) por una sola área de producción.' },
     { tab: 'produccion', selector: '#cardUpcomingProd', title: 'Próximas a Producir', text: 'Lista de lo próximo a producir, con buscador y filtro de fecha "Desde" para ubicar rápidamente un producto o revisar solo lo que viene.' },
     { tab: 'produccion', selector: '#calendarProd', title: 'Calendario de producción', text: 'Visualiza qué se produce cada día por área. Haz clic en cualquier evento para ver el detalle del producto.' },
-    { tab: 'produccion', selector: '#cardValidacionMateriales', title: 'RMD Pendientes de Autorización', text: 'Cruza automáticamente los tres archivos y te dice qué materiales programados aún no tienen su RMD autorizado.' },
+    { tab: 'produccion', selector: '#cardValidacionMateriales', title: 'RMD Pendientes de Autorización', text: 'Cruza automáticamente los tres archivos y te dice qué materiales programados aún no tienen su RMD autorizado. En cada etapa pendiente puedes asignar un responsable (DOC, PRO, ASC o IDE); se guarda de forma permanente y se refleja igual en Planta 1, Planta 2 y Consolidado.' },
     { tab: 'produccion', selector: '#cardAreaDistribution', title: 'Gráficos de distribución y tendencia', text: 'Más abajo encontrarás la distribución de carga por área, la comparativa entre secciones y la tendencia de producción de los próximos días.' },
 
     // ---- Pestaña OP sin RMD ----
@@ -4585,6 +4868,7 @@ async function maybeAutoStartTour() {
             await loadValidacionData();
             // Cargar producción de la planta por defecto (planta2)
             await loadProdData();
+            await updateConsolidadoBtnState();
             await loadForecastData();
             initReactiveBackground();
             initTiltCards();
