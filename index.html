@@ -62,6 +62,15 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/localforage/1.10.0/localforage.min.js"></script>
 
     <style>
+        /* Filas de las tablas de materiales pendientes (RMD/Forecast): con
+           content-visibility el navegador se salta el layout/paint de las
+           filas que están fuera del área visible del scroll, sin cambiar
+           nada del resultado visual. Ayuda sobre todo con listas largas. */
+        #tablaPendientesBody tr, #tablaPendientesForecastBody tr {
+            content-visibility: auto;
+            contain-intrinsic-size: auto 34px;
+        }
+
         :root {
             --color-1: #3b82f6;
             --color-2: #8b5cf6;
@@ -109,7 +118,7 @@
             width: 800px;
             height: 800px;
             border-radius: 50%;
-            background: radial-gradient(circle, rgba(16, 185, 129, 0.15) 0%, rgba(59, 130, 246, 0.1) 40%, rgba(0, 0, 0, 0) 70%);
+            background: radial-gradient(circle, rgba(244, 63, 94, 0.15) 0%, rgba(249, 115, 22, 0.1) 40%, rgba(0, 0, 0, 0) 70%);
             filter: blur(80px);
             top: 50%;
             left: 50%;
@@ -187,6 +196,37 @@
             box-shadow: 0 0 16px -4px rgba(245,158,11,0.35);
         }
         .rmd-icon-badge svg { width: 1.1rem; height: 1.1rem; }
+
+        /* Caja de KPI "RMD Pendientes" en Forecast: es la métrica más
+           importante de la validación, así que se distingue del resto con
+           el mismo lenguaje visual ámbar/glow que .card-rmd-highlight, pero
+           a escala de una caja de KPI pequeña. */
+        .rmd-pendientes-highlight {
+            background: linear-gradient(150deg, rgba(120, 53, 15, 0.28), rgba(15, 23, 42, 0.9) 60%);
+            border: 1px solid rgba(245, 158, 11, 0.45);
+            box-shadow:
+                0 1px 0 0 rgba(255,255,255,0.06) inset,
+                0 0 0 1px rgba(245, 158, 11, 0.12),
+                0 0 26px -6px rgba(245, 158, 11, 0.4);
+            animation: rmdPendientesPulse 2.6s ease-in-out infinite;
+        }
+        @keyframes rmdPendientesPulse {
+            0%, 100% {
+                box-shadow:
+                    0 1px 0 0 rgba(255,255,255,0.06) inset,
+                    0 0 0 1px rgba(245, 158, 11, 0.12),
+                    0 0 26px -6px rgba(245, 158, 11, 0.4);
+            }
+            50% {
+                box-shadow:
+                    0 1px 0 0 rgba(255,255,255,0.06) inset,
+                    0 0 0 1px rgba(245, 158, 11, 0.22),
+                    0 0 34px -4px rgba(245, 158, 11, 0.58);
+            }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            .rmd-pendientes-highlight { animation: none; }
+        }
 
         .kpi-filter.active-filter {
             background: linear-gradient(145deg, rgba(59, 130, 246, 0.22), rgba(30, 41, 59, 0.92));
@@ -978,7 +1018,13 @@
         <div class="gooey-nav-container" id="gooeyNavContainer">
             <nav>
                 <ul id="gooeyNavList">
-                    <li class="active" data-tab="produccion">
+                    <li class="active" data-tab="forecast">
+                        <a href="#" onclick="return false;">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>
+                            Forecast
+                        </a>
+                    </li>
+                    <li data-tab="produccion">
                         <a href="#" onclick="return false;">
                             <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 002-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
                             Producción
@@ -988,12 +1034,6 @@
                         <a href="#" onclick="return false;">
                             <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
                             OP sin RMD
-                        </a>
-                    </li>
-                    <li data-tab="forecast">
-                        <a href="#" onclick="return false;">
-                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>
-                            Forecast
                         </a>
                     </li>
                     <li data-tab="seguimiento">
@@ -1193,7 +1233,7 @@
     </div>
 
     <!-- ==================== TAB 2: Programa de Producción ==================== -->
-    <div class="tab-content active" id="tab-produccion">
+    <div class="tab-content" id="tab-produccion">
         <div class="info-badge opacity-0 section-spacing" id="dateFilterInfo" style="display: none;">
             <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
             <span id="dateFilterText" class="text-xs"></span>
@@ -1226,7 +1266,7 @@
 
         <!-- Main Grid Producción -->
         <div class="grid grid-cols-1 lg:grid-cols-4 gap-5 section-spacing">
-            <div class="card p-0 flex flex-col h-[480px] lg:h-[560px] opacity-0 lg:col-span-1">
+            <div class="card p-0 flex flex-col h-[480px] lg:h-[560px] opacity-0 lg:col-span-1" id="cardUpcomingProd">
                 <div class="p-3 border-b border-slate-700/50 bg-slate-800/30 space-y-2.5">
                     <h2 class="font-semibold text-slate-200 text-sm flex items-center gap-1.5">
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
@@ -1311,7 +1351,7 @@
             <div id="validacionToolbar" class="flex flex-col sm:flex-row sm:items-center gap-2.5 mb-3" style="display:none;">
                 <div class="relative flex-1 min-w-[160px]">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 text-slate-500 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M17 10a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
-                    <input id="validacionBuscador" type="text" placeholder="Buscar por código o descripción..." oninput="validacionBusqueda = this.value; refiltrarTablaPendientes();" class="w-full bg-slate-900/60 border border-slate-700/50 rounded-lg pl-8 pr-3 py-1.5 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-blue-500/60 transition-colors">
+                    <input id="validacionBuscador" type="text" placeholder="Buscar por código o descripción..." oninput="clearTimeout(window.__validacionBuscadorDebounce); window.__validacionBuscadorDebounce = setTimeout(()=>{ validacionBusqueda = this.value; refiltrarTablaPendientes(); }, 150);" class="w-full bg-slate-900/60 border border-slate-700/50 rounded-lg pl-8 pr-3 py-1.5 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-blue-500/60 transition-colors">
                 </div>
                 <div class="flex items-center gap-1.5 flex-wrap">
                     <button onclick="validacionFiltroEstado='todos'; refiltrarValidacionFiltros();" id="filtroValTodos" class="filter-pill active px-3 py-1.5 rounded-lg text-[11px] font-medium">Todos</button>
@@ -1350,11 +1390,7 @@
 
         <!-- Gráficos de Distribución -->
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-5 section-spacing">
-            <div class="card p-4 md:p-5 opacity-0">
-                <h2 class="font-semibold text-slate-200 mb-4 text-sm flex items-center gap-2">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z" /></svg>
-                    Distribución de Carga por Área
-                </h2>
+            <div class="card p-4 md:p-5 opacity-0" id="cardAreaDistribution">
                 <div class="h-[280px] md:h-[300px] w-full">
                     <canvas id="chartAreaDistribution"></canvas>
                 </div>
@@ -1387,7 +1423,7 @@
     </div>
 
     <!-- ==================== TAB 3: FORECAST ==================== -->
-    <div class="tab-content" id="tab-forecast">
+    <div class="tab-content active" id="tab-forecast">
         <div class="info-badge opacity-0 section-spacing" id="forecastInfoBadge" style="display:none; border-color: rgba(244,63,94,0.3); background: rgba(244,63,94,0.12); color: #fda4af;">
             <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
             <span id="forecastInfoText" class="text-xs"></span>
@@ -1490,12 +1526,12 @@
                     <p id="kpi-val-autorizados-forecast" class="text-xl font-bold mt-0.5 text-emerald-400">0</p>
                 </div>
                 <div class="bg-slate-900/50 border border-red-700/30 rounded-lg px-3 py-2.5 text-center">
-                    <p class="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Producto Pendiente</p>
+                    <p class="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Productos Pendientes</p>
                     <p id="kpi-val-pendientes-forecast" class="text-xl font-bold mt-0.5 text-red-400">0</p>
                 </div>
-                <div class="bg-slate-900/50 border border-orange-700/30 rounded-lg px-3 py-2.5 text-center">
-                    <p class="text-[10px] text-slate-400 uppercase font-bold tracking-wider">RMD Pendientes</p>
-                    <p id="kpi-val-rmd-forecast" class="text-xl font-bold mt-0.5 text-orange-400">0</p>
+                <div class="rmd-pendientes-highlight rounded-lg px-3 py-2.5 text-center relative">
+                    <p class="text-[10px] text-orange-300/90 uppercase font-bold tracking-wider">RMD Pendientes</p>
+                    <p id="kpi-val-rmd-forecast" class="text-3xl font-bold mt-0.5 text-orange-400">0</p>
                 </div>
             </div>
 
@@ -1507,7 +1543,7 @@
             <div id="validacionForecastToolbar" class="flex flex-col sm:flex-row sm:items-center gap-2.5 mb-3" style="display:none;">
                 <div class="relative flex-1 min-w-[160px]">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 text-slate-500 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M17 10a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
-                    <input id="validacionForecastBuscador" type="text" placeholder="Buscar por código o descripción..." oninput="validacionForecastBusqueda = this.value; refiltrarTablaPendientesForecast();" class="w-full bg-slate-900/60 border border-slate-700/50 rounded-lg pl-8 pr-3 py-1.5 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-rose-500/60 transition-colors">
+                    <input id="validacionForecastBuscador" type="text" placeholder="Buscar por código o descripción..." oninput="clearTimeout(window.__validacionForecastBuscadorDebounce); window.__validacionForecastBuscadorDebounce = setTimeout(()=>{ validacionForecastBusqueda = this.value; refiltrarTablaPendientesForecast(); }, 150);" class="w-full bg-slate-900/60 border border-slate-700/50 rounded-lg pl-8 pr-3 py-1.5 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-rose-500/60 transition-colors">
                 </div>
                 <div class="flex items-center gap-1.5 flex-wrap">
                     <button onclick="validacionForecastFiltroEstado='todos'; refiltrarValidacionForecastFiltros();" id="filtroValForecastTodos" class="filter-pill active px-3 py-1.5 rounded-lg text-[11px] font-medium">Todos</button>
@@ -1548,7 +1584,7 @@
 
     <!-- ==================== TAB 4: SEGUIMIENTO RMD ==================== -->
     <div class="tab-content" id="tab-seguimiento">
-        <div class="card p-0 opacity-0 overflow-hidden" style="height: calc(100vh - 230px); min-height: 560px;">
+        <div class="card p-0 opacity-0 overflow-hidden" id="cardSeguimientoRMD" style="height: calc(100vh - 230px); min-height: 560px;">
             <iframe id="iframeSeguimientoRMD" title="Seguimiento RMD" style="width:100%; height:100%; border:0; background:#f3f4f6; border-radius: 1rem; display:block;"></iframe>
         </div>
     </div>
@@ -1587,7 +1623,7 @@
         dayjs.extend(window.dayjs_plugin_customParseFormat);
         dayjs.locale('es');
 
-        let currentTab = 'produccion';
+        let currentTab = 'forecast';
         let seguimientoRmdLoaded = false;
         // Código completo de la app "SEGUIMIENTO RMD" (aportada por el usuario), embebido en Base64
         // para poder cargarla de forma aislada (sin colisiones de variables/IDs) dentro de un iframe.
@@ -1725,10 +1761,27 @@
             if (!glowOrb) return;
             let mouseX = window.innerWidth / 2, mouseY = window.innerHeight / 2, orbX = mouseX, orbY = mouseY;
             const isTouch = window.matchMedia('(pointer: coarse)').matches;
-            if (!isTouch) window.addEventListener('mousemove', (e) => { mouseX = e.clientX; mouseY = e.clientY; });
+            // En dispositivos táctiles el mouse nunca se mueve, así que el bucle
+            // de rAF quedaba corriendo para siempre sin ningún efecto visual
+            // (recalculando/escribiendo el mismo transform miles de veces por
+            // minuto). Ahora simplemente no se inicia en touch: la bola queda
+            // centrada de forma estática, igual que el resultado visual previo
+            // una vez el lerp convergía.
+            if (isTouch) return;
+            window.addEventListener('mousemove', (e) => { mouseX = e.clientX; mouseY = e.clientY; });
+            // Una vez que el orbe casi alcanzó su objetivo, dejar de escribir el
+            // estilo en cada frame (evita layout/paint innecesario mientras el
+            // mouse está quieto) y reanudar en el próximo movimiento real.
+            let settled = false;
             function animate() {
-                orbX += (mouseX - orbX) * 0.04; orbY += (mouseY - orbY) * 0.04;
-                glowOrb.style.transform = `translate(calc(-50% + ${orbX - window.innerWidth / 2}px), calc(-50% + ${orbY - window.innerHeight / 2}px))`;
+                const dx = mouseX - orbX, dy = mouseY - orbY;
+                if (Math.abs(dx) < 0.05 && Math.abs(dy) < 0.05) {
+                    settled = true;
+                } else {
+                    settled = false;
+                    orbX += dx * 0.04; orbY += dy * 0.04;
+                    glowOrb.style.transform = `translate(calc(-50% + ${orbX - window.innerWidth / 2}px), calc(-50% + ${orbY - window.innerHeight / 2}px))`;
+                }
                 requestAnimationFrame(animate);
             }
             animate();
@@ -1759,10 +1812,10 @@
         // ==================== TAB SWITCHING ====================
         let tabSwitchTimeline = null;
         const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-        const TAB_ORDER = ['rmd', 'produccion', 'forecast', 'seguimiento'];
-// NUEVO: índice de cada pestaña dentro de la lista visual del gooey nav (li[0]=produccion, li[1]=rmd, li[2]=forecast)
-const TAB_TO_GOOEY_INDEX = { produccion: 0, rmd: 1, forecast: 2, seguimiento: 3 };
-let gooeyActiveIndex = 0; // NUEVO: reemplaza al "activeIndex" local de initGooeyNav
+        const TAB_ORDER = ['forecast', 'produccion', 'rmd', 'seguimiento'];
+// índice de cada pestaña dentro de la lista visual del gooey nav (li[0]=forecast, li[1]=produccion, li[2]=rmd, li[3]=seguimiento)
+const TAB_TO_GOOEY_INDEX = { forecast: 0, produccion: 1, rmd: 2, seguimiento: 3 };
+let gooeyActiveIndex = 0; // arranca en "forecast" (pestaña activa por defecto), posición 0
 
         function switchTab(tab) {
             if (currentTab === tab) return;
@@ -1829,13 +1882,24 @@ let gooeyActiveIndex = 0; // NUEVO: reemplaza al "activeIndex" local de initGooe
                 incoming.classList.add('active');
                 gsap.set(incoming, { x: dist, opacity: 0, filter: 'blur(6px)' });
                 resizeCharts();
+                // Las tarjetas se dejan invisibles ANTES de que el contenedor
+                // vuelva a mostrarse, para que su propia animación de entrada
+                // (animateCurrentTabCards) arranque junto con el fade del
+                // contenedor y no después. Antes se esperaba a que el
+                // contenedor terminara de aparecer (opacity 1) para recién
+                // ahí poner las tarjetas en opacity 0 y animarlas de nuevo:
+                // eso producía el "doble parpadeo" (todo aparece, luego cada
+                // tarjeta desaparece y vuelve a aparecer).
+                const cards = incoming.querySelectorAll('.card, #areaFiltersContainer, .info-badge, .summary-card');
+                gsap.set(cards, { y: 14, opacity: 0 });
             });
 
             tabSwitchTimeline.to(incoming, {
                 x: 0, opacity: 1, filter: 'blur(0px)', duration: 0.42, ease: 'power3.out',
-                clearProps: 'transform,filter,opacity',
-                onComplete: animateCurrentTabCards
+                clearProps: 'transform,filter,opacity'
             }, '+=0.01');
+
+            tabSwitchTimeline.call(animateCurrentTabCards, [], '<');
         }
 
         let tabFadeTimeline = null;
@@ -4291,23 +4355,31 @@ function updateForecastActiveFiltersBadge() {
 
 // ==================== TOUR GUIADO ====================
 const TOUR_STEPS = [
-    { tab: null, selector: '#gooeyNavContainer nav ul', title: 'Navegación por pestañas', text: 'El dashboard tiene tres secciones: Producción, OP sin RMD y Forecast. Puedes cambiar entre ellas en cualquier momento desde aquí.' },
-
-    // ---- Pestaña OP sin RMD ----
-    { tab: 'rmd', selector: '#inlineUploadRMD', title: 'Carga de Excel RMD', text: 'Sube aquí el Excel de órdenes con RMD pendiente. El dashboard detecta automáticamente las órdenes vigentes en Planta ATE y LIMA.' },
-    { tab: 'rmd', selector: '#calendarRMD', title: 'Calendario de fechas críticas', text: 'Muestra cuándo vence la autorización de cada orden. Haz clic en un evento para ver el detalle y dejar observaciones.' },
-    { tab: 'rmd', selector: '#alertsListRMD', title: 'Fechas Críticas', text: 'Lista priorizada de órdenes por urgencia: vencidas primero, luego las más próximas a vencer.' },
-
-    // ---- Pestaña Producción ----
-    { tab: 'produccion', selector: '#inlineUploadProd', title: 'Carga de archivos de Producción', text: 'Sube el Programa de Producción (elige Planta 1 o 2), la Base de Datos de materiales y los RMD Autorizados.' },
-    { tab: 'produccion', selector: '#calendarProd', title: 'Calendario de producción', text: 'Visualiza qué se produce cada día por área. Haz clic en cualquier evento para ver el detalle del producto.' },
-    { tab: 'produccion', selector: '#cardValidacionMateriales', title: 'RMD Pendientes de Autorización', text: 'Cruza automáticamente los tres archivos y te dice qué materiales programados aún no tienen su RMD autorizado.' },
-    { tab: 'produccion', selector: '#areaFiltersContainer', title: 'Filtro por área', text: 'Filtra todo el dashboard (calendario, gráficos y tabla) por una sola área de producción.' },
+    { tab: null, selector: '#gooeyNavContainer nav ul', title: 'Navegación por pestañas', text: 'El dashboard tiene cuatro secciones: Forecast, Producción, OP sin RMD y Seguimiento RMD. Puedes cambiar entre ellas en cualquier momento desde aquí.' },
 
     // ---- Pestaña Forecast ----
     { tab: 'forecast', selector: '#inlineUploadForecast', title: 'Carga del Plan de Producción (Forecast)', text: 'Sube el Plan de Producción proyectado, reutilizando la misma Base de Datos y RMD Autorizados que en Producción.' },
+    { tab: 'forecast', selector: '#forecastFiltersCard', title: 'Filtros de Planta y Mes', text: 'Filtra el forecast por planta (ATE o LIMA) y por mes: puedes ver todos los meses, desde uno en adelante, o solo uno específico.' },
+    { tab: 'forecast', selector: '#cardValidacionForecast', title: 'RMD Pendientes — Forecast', text: 'Cruza automáticamente los tres archivos y te dice qué materiales proyectados aún no tienen su RMD autorizado.' },
+    { tab: 'forecast', selector: '.rmd-pendientes-highlight', title: 'RMD Pendientes: el dato clave', text: 'Este número es el más importante de la validación: cuántos RMD distintos siguen pendientes de autorización entre los materiales proyectados. Por eso se destaca del resto de los indicadores.' },
     { tab: 'forecast', selector: '#chartForecastMonthly', title: 'Materiales programados por mes', text: 'Vista mensual de cuántos materiales tienen producción proyectada, útil para planificar autorizaciones con anticipación.' },
-    { tab: 'forecast', selector: '#cardValidacionForecast', title: 'RMD Pendientes — Forecast', text: 'Igual que en Producción, pero a nivel proyección: te adelanta qué RMD necesitarás gestionar en los próximos meses.' },
+
+    // ---- Pestaña Producción ----
+    { tab: 'produccion', selector: '#inlineUploadProd', title: 'Carga de archivos de Producción', text: 'Sube el Programa de Producción (elige Planta 1 o 2), la Base de Datos de materiales y los RMD Autorizados.' },
+    { tab: 'produccion', selector: '#areaFiltersContainer', title: 'Filtro por área', text: 'Filtra todo el dashboard (calendario, gráficos y tabla) por una sola área de producción.' },
+    { tab: 'produccion', selector: '#cardUpcomingProd', title: 'Próximas a Producir', text: 'Lista de lo próximo a producir, con buscador y filtro de fecha "Desde" para ubicar rápidamente un producto o revisar solo lo que viene.' },
+    { tab: 'produccion', selector: '#calendarProd', title: 'Calendario de producción', text: 'Visualiza qué se produce cada día por área. Haz clic en cualquier evento para ver el detalle del producto.' },
+    { tab: 'produccion', selector: '#cardValidacionMateriales', title: 'RMD Pendientes de Autorización', text: 'Cruza automáticamente los tres archivos y te dice qué materiales programados aún no tienen su RMD autorizado.' },
+    { tab: 'produccion', selector: '#cardAreaDistribution', title: 'Gráficos de distribución y tendencia', text: 'Más abajo encontrarás la distribución de carga por área, la comparativa entre secciones y la tendencia de producción de los próximos días.' },
+
+    // ---- Pestaña OP sin RMD ----
+    { tab: 'rmd', selector: '#inlineUploadRMD', title: 'Carga de Excel RMD', text: 'Sube aquí el Excel de órdenes con RMD pendiente. El dashboard detecta automáticamente las órdenes vigentes en Planta ATE y LIMA.' },
+    { tab: 'rmd', selector: '#kpi-card-total', title: 'Tarjetas de filtro por planta', text: 'Haz clic en Total, ATE o LIMA para filtrar todo lo de abajo (calendario, alertas y gráficos) por esa planta.' },
+    { tab: 'rmd', selector: '#calendarRMD', title: 'Calendario de fechas críticas', text: 'Muestra cuándo vence la autorización de cada orden. Haz clic en un evento para ver el detalle y dejar observaciones.' },
+    { tab: 'rmd', selector: '#alertsListRMD', title: 'Fechas Críticas', text: 'Lista priorizada de órdenes por urgencia: vencidas primero, luego las más próximas a vencer.' },
+
+    // ---- Pestaña Seguimiento RMD ----
+    { tab: 'seguimiento', selector: '#cardSeguimientoRMD', title: 'Seguimiento RMD', text: 'Aquí llevas el control de cada RMD: Suspendidos, Ingresados y Autorizados. Carga tu Excel de configuración, edita celdas directamente en la tabla y filtra por planta, sección o estatus.' },
 
     // ---- Global ----
     { tab: null, selector: '#backupCorner', title: 'Copia de seguridad', text: 'Exporta o importa todos tus datos guardados en un archivo JSON, por si cambias de equipo o navegador.' }
@@ -4518,8 +4590,8 @@ async function maybeAutoStartTour() {
             initTiltCards();
 
             document.getElementById('inlineUploadRMD').style.display = 'none';
-            document.getElementById('inlineUploadProd').style.display = 'flex';
-            document.getElementById('inlineUploadForecast').style.display = 'none';
+            document.getElementById('inlineUploadProd').style.display = 'none';
+            document.getElementById('inlineUploadForecast').style.display = 'flex';
 
             // Asegurar que el botón de planta activa esté correcto
             document.querySelectorAll('.planta-btn').forEach(btn => {
@@ -4531,13 +4603,22 @@ async function maybeAutoStartTour() {
             gsap.fromTo('#tab-nav-row', { y: 15, opacity: 0 }, { y: 0, opacity: 1, duration: 0.6, delay: 0.2, ease: "power2.out" });
             animateCurrentTabCards();
 
+            // Antes este handler se ejecutaba en CADA evento 'resize' (docenas
+            // por segundo mientras se arrastra el borde de la ventana),
+            // recalculando calendarios y hasta 4 gráficos de Chart.js a la vez.
+            // Se agrupa con un debounce corto: mismo resultado final, una sola
+            // vez que el usuario termina de redimensionar.
+            let __resizeDebounce = null;
             window.addEventListener('resize', () => {
-                if (calendarRMD && currentTab === 'rmd') calendarRMD.updateSize();
-                if (calendarProd && currentTab === 'produccion') calendarProd.updateSize();
-                if (chartAreaDist && currentTab === 'produccion') chartAreaDist.update();
-                if (chartPie3D && currentTab === 'produccion') chartPie3D.update();
-                if (chartTrendProd && currentTab === 'produccion') chartTrendProd.update();
-                if (chartForecastMonthly && currentTab === 'forecast') chartForecastMonthly.update();
+                clearTimeout(__resizeDebounce);
+                __resizeDebounce = setTimeout(() => {
+                    if (calendarRMD && currentTab === 'rmd') calendarRMD.updateSize();
+                    if (calendarProd && currentTab === 'produccion') calendarProd.updateSize();
+                    if (chartAreaDist && currentTab === 'produccion') chartAreaDist.update();
+                    if (chartPie3D && currentTab === 'produccion') chartPie3D.update();
+                    if (chartTrendProd && currentTab === 'produccion') chartTrendProd.update();
+                    if (chartForecastMonthly && currentTab === 'forecast') chartForecastMonthly.update();
+                }, 150);
             });
         });
     </script>
