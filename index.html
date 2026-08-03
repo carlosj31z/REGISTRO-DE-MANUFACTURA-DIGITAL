@@ -1666,7 +1666,23 @@
         // ==================== STORAGE LAYER ====================
         const dbStore = localforage.createInstance({ name: 'programaProduccionDB', storeName: 'datos_app' });
 
-        async function storeSet(key, value) { try { await dbStore.setItem(key, value); return true; } catch (err) { console.error('IndexedDB set error:', key, err); return false; } }
+        // storeSet reintenta una vez si la escritura falla: la mayoría de
+        // errores de IndexedDB (p.ej. "transacción abortada") son transitorios
+        // y un segundo intento inmediato suele resolverlos. Esto evita mostrar
+        // errores intermitentes al usuario por fallos que se autorresuelven.
+        async function storeSet(key, value, _retried) {
+            try {
+                await dbStore.setItem(key, value);
+                return true;
+            } catch (err) {
+                if (!_retried) {
+                    await new Promise(r => setTimeout(r, 150));
+                    return storeSet(key, value, true);
+                }
+                console.error('IndexedDB set error:', key, err);
+                return false;
+            }
+        }
         async function storeGet(key) { try { return await dbStore.getItem(key); } catch (err) { console.error('IndexedDB get error:', key, err); return null; } }
         async function storeRemove(key) { try { await dbStore.removeItem(key); } catch (err) { console.error('IndexedDB remove error:', key, err); } return true; }
 
@@ -1981,11 +1997,11 @@ let gooeyActiveIndex = 0; // arranca en "forecast" (pestaña activa por defecto)
         function processFileRMD(file) {
             Swal.fire({ title: 'Procesando...', allowOutsideClick: false, didOpen: () => Swal.showLoading(), background: '#0f172a' });
             const reader = new FileReader();
-            reader.onload = (e) => {
+            reader.onload = async (e) => {
                 try {
                     const data = new Uint8Array(e.target.result);
                     const workbook = XLSX.read(data, { type: 'array', cellDates: true });
-                    parseExcelDataRMD(workbook.Sheets[workbook.SheetNames[0]]);
+                    await parseExcelDataRMD(workbook.Sheets[workbook.SheetNames[0]]);
                     document.getElementById('rmdStatusBadge').style.display = 'inline';
                 } catch (error) {
                     console.error(error);
@@ -2002,7 +2018,7 @@ let gooeyActiveIndex = 0; // arranca en "forecast" (pestaña activa por defecto)
             return p.includes("ATE") || p.includes("LIMA");
         }
 
-        function parseExcelDataRMD(sheet) {
+        async function parseExcelDataRMD(sheet) {
             const hiddenRows = getHiddenRowSet(sheet);
             const hiddenCols = getHiddenColSet(sheet);
 
@@ -2062,10 +2078,14 @@ let gooeyActiveIndex = 0; // arranca en "forecast" (pestaña activa por defecto)
             });
 
             productsRMD = Array.from(newProductsMap.values());
-            saveRMData();
+            const guardadoOk = await saveRMData();
             updateDashboardRMD();
             logActivityRMD(`📂 Excel cargado: ${productsRMD.length} productos vigentes en Planta ATE/LIMA (${excluidosPorPlanta} excluidos sin planta válida).`);
-            Swal.fire({ icon: 'success', title: '¡Listo!', text: `${productsRMD.length} órdenes vigentes en Planta ATE/LIMA.`, timer: 2200, showConfirmButton: false, background: '#0f172a' });
+            if (guardadoOk) {
+                Swal.fire({ icon: 'success', title: '¡Listo!', text: `${productsRMD.length} órdenes vigentes en Planta ATE/LIMA.`, timer: 2200, showConfirmButton: false, background: '#0f172a' });
+            } else {
+                Swal.fire({ icon: 'warning', title: 'Cargado, pero no se pudo guardar', text: 'Los datos se cargaron en pantalla, pero no se guardaron para la próxima vez que abras la página. Intenta cargar el archivo de nuevo.', background: '#0f172a' });
+            }
         }
 
         function getCriticalDate(product) { return product.dates && product.dates.length > 0 ? product.dates[0] : null; }
@@ -2242,7 +2262,7 @@ let gooeyActiveIndex = 0; // arranca en "forecast" (pestaña activa por defecto)
             document.getElementById('activityListRMD').innerHTML = logs.length === 0 ? '<p class="text-slate-500 text-center mt-3">Sin actividad</p>' : logs.map(l => `<div class="flex items-start gap-2 p-1.5 hover:bg-slate-800/30 rounded border-b border-slate-700/30 last:border-0"><span class="text-blue-400/70 font-medium min-w-[65px] text-xs">${l.time}</span><span class="text-slate-300 text-xs">${l.message}</span></div>`).join('');
         }
 
-        async function saveRMData() { await storeSet('dashboard_products_rmd', productsRMD); }
+        async function saveRMData() { return await storeSet('dashboard_products_rmd', productsRMD); }
         async function loadRMData() {
             const saved = await storeGet('dashboard_products_rmd');
             if (saved) {
@@ -2552,7 +2572,7 @@ function buildDateColumnMapPlanta1(headerRow, weekLabelRow, hiddenCols) {
                     // Se guarda SIEMPRE bajo la key de la planta que originó la
                     // carga (plantaObjetivo), sin importar en qué planta esté
                     // parado el usuario en este momento.
-                    await storeSet(`prod_data_${plantaObjetivo}`, { data: nuevaProductionData, areas: Array.from(areasDeEstaCarga) });
+                    const guardadoOk = await storeSet(`prod_data_${plantaObjetivo}`, { data: nuevaProductionData, areas: Array.from(areasDeEstaCarga) });
                     await updateConsolidadoBtnState();
 
                     if (currentPlanta === plantaObjetivo) {
@@ -2578,7 +2598,11 @@ function buildDateColumnMapPlanta1(headerRow, weekLabelRow, hiddenCols) {
                     // el archivo ya quedó guardado correctamente y se verá la
                     // próxima vez que vuelva a esa planta.
 
-                    Swal.fire({ icon: 'success', title: 'Completado', text: `${nuevaProductionData.length} productos vigentes (${plantaObjetivo === 'planta1' ? 'Planta 1' : 'Planta 2'}).`, timer: 2200, showConfirmButton: false, background: '#0f172a' });
+                    if (guardadoOk) {
+                        Swal.fire({ icon: 'success', title: 'Completado', text: `${nuevaProductionData.length} productos vigentes (${plantaObjetivo === 'planta1' ? 'Planta 1' : 'Planta 2'}).`, timer: 2200, showConfirmButton: false, background: '#0f172a' });
+                    } else {
+                        Swal.fire({ icon: 'warning', title: 'Cargado, pero no se pudo guardar', text: 'Los datos se cargaron en pantalla, pero no se guardaron para la próxima vez que abras la página. Intenta cargar el archivo de nuevo.', background: '#0f172a' });
+                    }
                 } catch (err) {
                     console.error(err);
                     Swal.fire({ icon: 'error', title: 'Error', text: 'No se pudo procesar el archivo.', background: '#0f172a' });
@@ -3158,12 +3182,12 @@ async function downloadPlanProduccionFromCloud() {
         function processFileBaseDatos(file) {
             Swal.fire({ title: 'Procesando Base de Datos...', allowOutsideClick: false, didOpen: () => Swal.showLoading(), background: '#0f172a' });
             const reader = new FileReader();
-            reader.onload = (e) => { parseBaseDatosWorkbookData(new Uint8Array(e.target.result)); };
+            reader.onload = async (e) => { await parseBaseDatosWorkbookData(new Uint8Array(e.target.result)); };
             reader.onerror = () => { Swal.fire({ icon: 'error', title: 'Error', text: 'No se pudo leer el archivo de Base de Datos.', background: '#0f172a' }); };
             reader.readAsArrayBuffer(file);
         }
 
-        function parseBaseDatosWorkbookData(data) {
+        async function parseBaseDatosWorkbookData(data) {
             try {
                 const workbook = XLSX.read(data, { type: 'array', cellDates: true });
                 const parsed = new Map();
@@ -3217,10 +3241,17 @@ async function downloadPlanProduccionFromCloud() {
                 databaseMaterials = parsed;
                 agrupadorEtapasMap = etapasByAgr;
                 databaseMaterialsLoaded = true;
-                saveValidacionData();
+                // Se espera a que el guardado termine ANTES de avisar "Listo": si
+                // el usuario recarga la página justo después del mensaje de
+                // éxito, el archivo ya debe estar persistido en ese momento.
+                const guardadoOk = await saveValidacionData();
                 document.getElementById('baseDatosStatusBadge').style.display = 'inline-flex';
                 const bdf = document.getElementById('baseDatosStatusBadgeForecast'); if (bdf) bdf.style.display = 'inline-flex';
-                Swal.fire({ icon: 'success', title: '¡Listo!', text: `${parsed.size} materiales cargados desde Base de Datos.`, timer: 2000, showConfirmButton: false, background: '#0f172a' });
+                if (guardadoOk) {
+                    Swal.fire({ icon: 'success', title: '¡Listo!', text: `${parsed.size} materiales cargados desde Base de Datos.`, timer: 2000, showConfirmButton: false, background: '#0f172a' });
+                } else {
+                    Swal.fire({ icon: 'warning', title: 'Cargado, pero no se pudo guardar', text: 'Los materiales se cargaron en pantalla, pero no se guardaron para la próxima vez que abras la página. Intenta cargar el archivo de nuevo.', background: '#0f172a' });
+                }
                 runValidacionMateriales();
                 runValidacionForecast();
                 return true;
@@ -3234,7 +3265,7 @@ async function downloadPlanProduccionFromCloud() {
         function processFileRmdAutorizados(file) {
             Swal.fire({ title: 'Procesando RMD Autorizados...', allowOutsideClick: false, didOpen: () => Swal.showLoading(), background: '#0f172a' });
             const reader = new FileReader();
-            reader.onload = (e) => {
+            reader.onload = async (e) => {
                 try {
                     const data = new Uint8Array(e.target.result);
                     const workbook = XLSX.read(data, { type: 'array', cellDates: true });
@@ -3291,10 +3322,15 @@ async function downloadPlanProduccionFromCloud() {
                     rmdAutorizadosEtapasPorAgrupador = etapasByAgrupador;
                     rmdAutorizadosRaw = raw;
                     rmdAutorizadosLoaded = true;
-                    saveValidacionData();
+                    // Se espera a que el guardado termine ANTES de avisar "Listo".
+                    const guardadoOk = await saveValidacionData();
                     document.getElementById('rmdAutorizadosStatusBadge').style.display = 'inline';
                     const raf = document.getElementById('rmdAutorizadosStatusBadgeForecast'); if (raf) raf.style.display = 'inline';
-                    Swal.fire({ icon: 'success', title: '¡Listo!', text: `${raw.length} registros de RMD Autorizados cargados.`, timer: 2000, showConfirmButton: false, background: '#0f172a' });
+                    if (guardadoOk) {
+                        Swal.fire({ icon: 'success', title: '¡Listo!', text: `${raw.length} registros de RMD Autorizados cargados.`, timer: 2000, showConfirmButton: false, background: '#0f172a' });
+                    } else {
+                        Swal.fire({ icon: 'warning', title: 'Cargado, pero no se pudo guardar', text: 'Los datos se cargaron en pantalla, pero no se guardaron para la próxima vez que abras la página. Intenta cargar el archivo de nuevo.', background: '#0f172a' });
+                    }
                     runValidacionMateriales();
                     runValidacionForecast();
                 } catch (error) {
@@ -3306,11 +3342,17 @@ async function downloadPlanProduccionFromCloud() {
         }
 
         async function saveValidacionData() {
-            await storeSet('val_database_materials', Array.from(databaseMaterials.entries()));
-            await storeSet('val_agrupador_etapas', Array.from(agrupadorEtapasMap.entries()).map(([k, v]) => [k, Array.from(v)]));
-            await storeSet('val_rmd_autorizados_raw', rmdAutorizadosRaw);
-            await storeSet('val_rmd_autorizados_etapas_por_agrupador', Array.from(rmdAutorizadosEtapasPorAgrupador.entries()).map(([k, v]) => [k, Array.from(v)]));
-            await storeSet('val_flags', { databaseMaterialsLoaded, rmdAutorizadosLoaded });
+            // Las 5 escrituras son independientes entre sí, así que se lanzan en
+            // paralelo en vez de una tras otra: reduce notablemente el tiempo
+            // de guardado cuando Base de Datos o RMD Autorizados son grandes.
+            const results = await Promise.all([
+                storeSet('val_database_materials', Array.from(databaseMaterials.entries())),
+                storeSet('val_agrupador_etapas', Array.from(agrupadorEtapasMap.entries()).map(([k, v]) => [k, Array.from(v)])),
+                storeSet('val_rmd_autorizados_raw', rmdAutorizadosRaw),
+                storeSet('val_rmd_autorizados_etapas_por_agrupador', Array.from(rmdAutorizadosEtapasPorAgrupador.entries()).map(([k, v]) => [k, Array.from(v)])),
+                storeSet('val_flags', { databaseMaterialsLoaded, rmdAutorizadosLoaded })
+            ]);
+            return results.every(Boolean);
         }
 
         async function saveManualAutorizados() { await storeSet('val_manual_autorizados', Array.from(manualAutorizados)); }
@@ -3820,7 +3862,7 @@ function updateForecastActiveFiltersBadge() {
         function processFileForecast(file) {
             Swal.fire({ title: 'Procesando Forecast...', allowOutsideClick: false, didOpen: () => Swal.showLoading(), background: '#0f172a' });
             const reader = new FileReader();
-            reader.onload = (e) => {
+            reader.onload = async (e) => {
                 try {
                     const data = new Uint8Array(e.target.result);
                     const workbook = XLSX.read(data, { type: 'array', cellDates: true });
@@ -3917,10 +3959,14 @@ function updateForecastActiveFiltersBadge() {
                         .filter(m => dayjs(m.key + '-01').isSameOrAfter(currentMonthStart, 'month'))
                         .sort((a, b) => a.key.localeCompare(b.key));
 
-                    saveForecastData();
+                    const guardadoOk = await saveForecastData();
                     document.getElementById('forecastStatusBadge').style.display = 'inline-flex';
                     updateDashboardForecast();
-                    Swal.fire({ icon: 'success', title: '¡Listo!', text: `${forecastData.length} materiales con producción proyectada.`, timer: 2200, showConfirmButton: false, background: '#0f172a' });
+                    if (guardadoOk) {
+                        Swal.fire({ icon: 'success', title: '¡Listo!', text: `${forecastData.length} materiales con producción proyectada.`, timer: 2200, showConfirmButton: false, background: '#0f172a' });
+                    } else {
+                        Swal.fire({ icon: 'warning', title: 'Cargado, pero no se pudo guardar', text: 'Los datos se cargaron en pantalla, pero no se guardaron para la próxima vez que abras la página. Intenta cargar el archivo de nuevo.', background: '#0f172a' });
+                    }
                 } catch (error) {
                     console.error(error);
                     Swal.fire({ icon: 'error', title: 'Error', text: 'No se pudo procesar el archivo de Forecast.', background: '#0f172a' });
@@ -3930,8 +3976,11 @@ function updateForecastActiveFiltersBadge() {
         }
 
         async function saveForecastData() {
-            await storeSet('forecast_data', forecastData);
-            await storeSet('forecast_months_meta', forecastMonthsMeta);
+            const results = await Promise.all([
+                storeSet('forecast_data', forecastData),
+                storeSet('forecast_months_meta', forecastMonthsMeta)
+            ]);
+            return results.every(Boolean);
         }
         async function saveManualAutorizadosForecast() { await storeSet('val_manual_autorizados_forecast', Array.from(manualAutorizadosForecast)); }
 
