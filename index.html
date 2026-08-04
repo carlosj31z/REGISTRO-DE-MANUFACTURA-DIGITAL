@@ -110,6 +110,7 @@
             --color-2: #8b5cf6;
             --color-3: #10b981;
             --color-4: #f59e0b;
+            color-scheme: dark
 
             /* ============ SISTEMA DE TEMA (oscuro / claro) ============
                :root define el tema oscuro (el que ya existía, sin cambios de
@@ -145,11 +146,12 @@
             --surface-2-soft: rgba(15, 23, 42, 0.6);
             --nav-track-bg: rgba(30, 41, 59, 0.6);
             --nav-track-border: rgba(255, 255, 255, 0.08);
-            --nav-pill-bg: rgba(255, 255, 255, 0.14);
-            --nav-pill-border: rgba(255, 255, 255, 0.22);
+            --nav-pill-bg: rgba(59, 130, 246, 0.25);
+            --nav-pill-border: rgba(59, 130, 246, 0.4);
             --nav-pill-text: #f8fafc;
         }
         html[data-theme="light"] {
+            color-scheme: light;
             --slate-50: #0b1120; --slate-100: #1e293b; --slate-200: #334155;
             --slate-300: #475569; --slate-400: #64748b; --slate-500: #94a3b8;
             --slate-600: #cbd5e1; --slate-700: #e2e8f0; --slate-800: #f1f5f9;
@@ -171,9 +173,9 @@
             --surface-2-soft: rgba(255, 255, 255, 0.75);
             --nav-track-bg: rgba(226, 232, 240, 0.6);
             --nav-track-border: rgba(11, 17, 32, 0.08);
-            --nav-pill-bg: rgba(11, 17, 32, 0.08);
-            --nav-pill-border: rgba(11, 17, 32, 0.14);
-            --nav-pill-text: #0b1120;
+            --nav-pill-bg: rgba(59, 130, 246, 0.16);
+            --nav-pill-border: rgba(59, 130, 246, 0.28);
+            --nav-pill-text: #1d4ed8;
         }
         html, body { transition: background-color 0.4s ease, color 0.4s ease; }
         @media (prefers-reduced-motion: reduce) {
@@ -4721,9 +4723,12 @@ pendientes.forEach(p => {
                         const selectId = `resp_${p.material}_${fija}`;
                         const opciones = ['', ...RESPONSABLES_VALIDOS].map(r => `<option value="${r}" ${r === valorActual ? 'selected' : ''}>${r || '—'}</option>`).join('');
                         return `<div class="flex items-center gap-1.5 whitespace-nowrap">
-                            <span class="${etapasCls}">${labelTxt}</span>
-                            <select id="${selectId}" onchange="setResponsableEtapa('${p.material}','${fija}', this.value)" class="bg-slate-800/80 border border-slate-600/60 rounded text-[10px] text-slate-200 px-1 py-0.5 focus:outline-none focus:border-blue-500/60" title="Responsable de ${labelTxt}">${opciones}</select>
-                        </div>`;
+    <span class="${etapasCls}">${labelTxt}</span>
+    <select id="${selectId}" onchange="setResponsableEtapa('${p.material}','${fija}', this.value)"
+        class="bg-slate-800 border border-slate-600/60 rounded text-[10px] text-slate-100 px-1 py-0.5 focus:outline-none focus:border-blue-500/60"
+        style="color-scheme: ${currentAppTheme};"
+        title="Responsable de ${labelTxt}">${opciones}</select>
+</div>`;
                     }).join('');
                 } else {
                     etapasHtml = `<span class="${etapasCls}">${p.motivo || 'No encontrado'}</span>`;
