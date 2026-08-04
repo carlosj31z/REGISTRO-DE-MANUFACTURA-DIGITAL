@@ -3957,9 +3957,15 @@ productionData.forEach(p => {
     if (!cod) return;
     if (!materialAreas.has(cod)) materialAreas.set(cod, new Set());
     materialAreas.get(cod).add(p.area);
-    if (p.planta) {
+    // p.planta solo viene seteado en modo consolidado (ver
+    // loadProdDataConsolidado); en Planta 1 / Planta 2 individuales se usa
+    // currentPlanta, ya que en esas vistas TODO lo cargado pertenece a esa
+    // única planta. Así, materialPlantas queda disponible en los 3 modos,
+    // no solo en consolidado, para poder exportar la columna Planta siempre.
+    const plantaDeEsteItem = p.planta || (currentPlanta !== 'consolidado' ? currentPlanta : null);
+    if (plantaDeEsteItem) {
         if (!materialPlantas.has(cod)) materialPlantas.set(cod, new Set());
-        materialPlantas.get(cod).add(p.planta);
+        materialPlantas.get(cod).add(plantaDeEsteItem);
     }
 
     // p.fechas ya viene ordenado ascendente (ver processFileProd), así que fechas[0] es la más próxima
@@ -4017,14 +4023,14 @@ pendientes.sort((a, b) => {
     return a.fechaProxima.localeCompare(b.fechaProxima);
 });
 
-// En consolidado, cada fila lleva además de qué planta(s) proviene el material
-// (solo es útil mostrar esto cuando ambas plantas están mezcladas en la vista).
-if (currentPlanta === 'consolidado') {
-    pendientes.forEach(p => {
-        const plantas = materialPlantas.get(p.material);
-        p.plantas = plantas && plantas.size > 0 ? Array.from(plantas).map(pl => pl === 'planta1' ? 'P1' : 'P2').sort().join('+') : '';
-    });
-}
+// Cada fila lleva de qué planta(s) proviene el material, en los 3 modos
+// (Planta 1, Planta 2, Consolidado). En vistas individuales siempre será una
+// sola planta; en consolidado puede ser una o ambas si el mismo código se
+// programó en las dos.
+pendientes.forEach(p => {
+    const plantas = materialPlantas.get(p.material);
+    p.plantas = plantas && plantas.size > 0 ? Array.from(plantas).map(pl => pl === 'planta1' ? 'ATE' : 'LIMA').sort().join(' + ') : '';
+});
 
             const pendientesReales = [];
             const autorizadosManualLista = [];
@@ -4100,7 +4106,11 @@ if (currentPlanta === 'consolidado') {
                     ? `<button onclick="toggleManualAutorizado('${p.material}')" class="text-[10px] font-medium text-slate-400 hover:text-slate-200 border border-slate-600 hover:border-slate-400 px-2 py-1.5 rounded-md transition-colors whitespace-nowrap min-h-[32px]">Revertir</button>`
                     : `<button onclick="toggleManualAutorizado('${p.material}')" class="text-[10px] font-medium text-emerald-400 hover:text-emerald-300 border border-emerald-500/40 hover:border-emerald-400 bg-emerald-500/5 hover:bg-emerald-500/10 px-2 py-1.5 rounded-md transition-colors whitespace-nowrap min-h-[32px]">Marcar autorizado</button>`;
                 const fechaTxt = p.fechaProxima ? dayjs(p.fechaProxima).format('DD/MM/YYYY') : '-';
-                const plantaTag = p.plantas ? ` <span class="text-[9px] text-purple-300/80 bg-purple-500/10 border border-purple-500/30 px-1 py-0.5 rounded whitespace-nowrap" title="Planta(s) de origen">${p.plantas}</span>` : '';
+                // La etiqueta de planta solo se muestra en la tabla cuando estamos
+                // en consolidado (en Planta 1/2 individuales sería redundante
+                // repetirla en cada fila, ya que sería siempre la misma). El dato
+                // p.plantas en sí siempre está disponible para el export a Excel.
+                const plantaTag = (currentPlanta === 'consolidado' && p.plantas) ? ` <span class="text-[9px] text-purple-300/80 bg-purple-500/10 border border-purple-500/30 px-1 py-0.5 rounded whitespace-nowrap" title="Planta(s) de origen">${p.plantas}</span>` : '';
 
                 // Etapas en una sola columna, pero cada una con su propio selector
                 // de responsable al costado (solo si es una de las 5 etapas fijas
@@ -4171,6 +4181,10 @@ return `<tr class="${rowCls}" title="${p.motivo || ''}">
                 Swal.fire({ icon: 'info', title: 'Nada que exportar', text: 'No hay materiales pendientes para exportar en este momento.', background: '#0f172a', timer: 2000, showConfirmButton: false });
                 return;
             }
+            // Conteo Planta x Etapa para la hoja de resumen (equivalente a una
+            // tabla dinámica simple: cantidad de pendientes por planta y etapa).
+            const resumenPlantaEtapa = new Map(); // key: `${planta}::${etapaLabel}` -> count
+
             const wsData = pendientes.map(p => {
                 // Set de etapas fijas que SÍ están pendientes para este material
                 // (traduciendo cada etapa cruda del material a una de las 5 fijas).
@@ -4180,8 +4194,11 @@ return `<tr class="${rowCls}" title="${p.motivo || ''}">
                 // no tiene agrupador válido) — no hay que marcar "AUTORIZADO" en
                 // ese caso, porque induciría a pensar que está todo en regla.
                 const sinDatosDeEtapa = (!p.etapasPendientes || p.etapasPendientes.length === 0);
+                // Columna Planta: ATE / LIMA / ATE + LIMA (si el material se
+                // programó en ambas plantas, solo posible en modo Consolidado).
+                const plantaTxt = p.plantas || '';
                 const row = {
-                    'Material': p.material, 'Descripción': p.descripcion, 'Área(s)': p.areas,
+                    'Material': p.material, 'Descripción': p.descripcion, 'Planta': plantaTxt, 'Área(s)': p.areas,
                     'Inicio de Producción': p.fechaProxima ? dayjs(p.fechaProxima).format('DD/MM/YYYY') : '-'
                 };
                 ETAPAS_FIJAS.forEach(fija => {
@@ -4193,6 +4210,15 @@ return `<tr class="${rowCls}" title="${p.motivo || ''}">
                     } else {
                         row[label] = estaPendiente ? 'X' : 'AUTORIZADO';
                         row[`Responsable ${label}`] = estaPendiente ? (responsablesEtapa.get(responsableKey(p.material, fija)) || '') : 'NO APLICA';
+                        if (estaPendiente) {
+                            // Si el material aplica a más de una planta (Consolidado),
+                            // se cuenta una vez por cada planta involucrada.
+                            const plantasIndividuales = plantaTxt ? plantaTxt.split(' + ') : ['(sin planta)'];
+                            plantasIndividuales.forEach(pl => {
+                                const key = `${pl}::${label}`;
+                                resumenPlantaEtapa.set(key, (resumenPlantaEtapa.get(key) || 0) + 1);
+                            });
+                        }
                     }
                 });
                 // Si alguna etapa pendiente no coincide con ninguna de las 5 fijas
@@ -4207,12 +4233,42 @@ return `<tr class="${rowCls}" title="${p.motivo || ''}">
                 return row;
             });
             const ws = XLSX.utils.json_to_sheet(wsData);
-            // Anchos: Material, Descripción, Área(s), Inicio, luego 2 columnas (etapa+responsable) x 5 etapas, y Motivo al final.
-            ws['!cols'] = [{ wch: 14 }, { wch: 45 }, { wch: 20 }, { wch: 16 },
+            // Anchos: Material, Descripción, Planta, Área(s), Inicio, luego 2 columnas (etapa+responsable) x 5 etapas, y Motivo al final.
+            ws['!cols'] = [{ wch: 14 }, { wch: 45 }, { wch: 10 }, { wch: 20 }, { wch: 16 },
                 ...ETAPAS_FIJAS.flatMap(() => [{ wch: 14 }, { wch: 16 }]),
                 { wch: 55 }];
+            // Autofiltro sobre todo el rango de datos, para poder filtrar por
+            // Planta (ATE/LIMA), Etapa, Responsable, etc. directamente en Excel.
+            const numCols = 5 + ETAPAS_FIJAS.length * 2 + 1;
+            const lastColLetter = XLSX.utils.encode_col(numCols - 1);
+            ws['!autofilter'] = { ref: `A1:${lastColLetter}${wsData.length + 1}` };
+            // Congela la fila de encabezado para que quede visible al hacer scroll.
+            ws['!freeze'] = { xSplit: 0, ySplit: 1, topLeftCell: 'A2', activePane: 'bottomLeft', state: 'frozen' };
+
             const wb = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(wb, ws, 'Materiales Pendientes');
+
+            // Hoja de resumen (equivalente a una tabla dinámica simple):
+            // cantidad de pendientes por Planta y Etapa. Para una tabla dinámica
+            // real e interactiva de Excel, usa el archivo .xlsm con macro que
+            // genera esta misma información como Pivot Table nativo.
+            const resumenData = [];
+            const plantasVistas = new Set(Array.from(resumenPlantaEtapa.keys()).map(k => k.split('::')[0]));
+            Array.from(plantasVistas).sort().forEach(planta => {
+                const fila = { 'Planta': planta };
+                ETAPAS_FIJAS.forEach(fija => {
+                    const label = ETAPAS_FIJAS_LABEL[fija];
+                    fila[label] = resumenPlantaEtapa.get(`${planta}::${label}`) || 0;
+                });
+                fila['Total'] = ETAPAS_FIJAS.reduce((sum, fija) => sum + (resumenPlantaEtapa.get(`${planta}::${ETAPAS_FIJAS_LABEL[fija]}`) || 0), 0);
+                resumenData.push(fila);
+            });
+            if (resumenData.length > 0) {
+                const wsResumen = XLSX.utils.json_to_sheet(resumenData);
+                wsResumen['!cols'] = [{ wch: 12 }, ...ETAPAS_FIJAS.map(() => ({ wch: 14 })), { wch: 10 }];
+                XLSX.utils.book_append_sheet(wb, wsResumen, 'Resumen por Planta');
+            }
+
             const plantaSufijo = currentPlanta === 'consolidado' ? 'Consolidado' : (currentPlanta === 'planta1' ? 'Planta1' : 'Planta2');
             XLSX.writeFile(wb, `Materiales_Pendientes_RMD_${plantaSufijo}_${dayjs().format('YYYYMMDD_HHmm')}.xlsx`);
         }
