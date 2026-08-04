@@ -5,20 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>RMD Pendientes de Autorización</title>
 
-    <!-- Aplica el tema guardado ANTES de que el navegador pinte nada, para
-         evitar el parpadeo de "oscuro por un instante, luego claro" al
-         recargar con el tema claro activo. Usa una caché local rápida
-         (localStorage) porque la fuente de verdad real (Supabase) tarda un
-         round-trip de red; en cuanto esa respuesta llegue más adelante en la
-         carga, se reconcilia si hubiera diferencia entre dispositivos. -->
-    <script>
-        try {
-            if (localStorage.getItem('app_theme_cache') === 'light') {
-                document.documentElement.setAttribute('data-theme', 'light');
-            }
-        } catch (e) { /* localStorage no disponible: se queda en oscuro por defecto */ }
-    </script>
-
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
@@ -27,24 +13,11 @@
             theme: {
                 extend: {
                     colors: {
-                        // Los 9 shades de "slate" ahora resuelven a variables CSS
-                        // definidas en el <style> principal (modo oscuro por
-                        // defecto en :root, sobrescritas bajo
-                        // html[data-theme="light"]). Así, todas las clases
-                        // bg-slate-900, text-slate-400, etc. que ya existen en el
-                        // HTML cambian de color automáticamente al alternar el
-                        // tema, sin tener que tocar ni una sola clase existente.
                         slate: {
-                            50: 'var(--slate-50)',
-                            100: 'var(--slate-100)',
-                            200: 'var(--slate-200)',
-                            300: 'var(--slate-300)',
-                            400: 'var(--slate-400)',
-                            500: 'var(--slate-500)',
-                            600: 'var(--slate-600)',
-                            700: 'var(--slate-700)',
-                            800: 'var(--slate-800)',
-                            900: 'var(--slate-900)',
+                            900: '#0b1120',
+                            800: '#1e293b',
+                            700: '#334155',
+                            600: '#475569',
                         }
                     },
                     fontFamily: {
@@ -110,76 +83,6 @@
             --color-2: #8b5cf6;
             --color-3: #10b981;
             --color-4: #f59e0b;
-            color-scheme: dark
-
-            /* ============ SISTEMA DE TEMA (oscuro / claro) ============
-               :root define el tema oscuro (el que ya existía, sin cambios de
-               color). html[data-theme="light"] sobrescribe estas mismas
-               variables con la paleta clara equivalente, invirtiendo el
-               orden de luminosidad de cada shade (900 pasa a ser el más
-               claro en vez del más oscuro) para preservar el mismo
-               contraste relativo en todos los textos, fondos y bordes que
-               ya usan estas clases en toda la app. */
-            --slate-50: #f8fafc; --slate-100: #f1f5f9; --slate-200: #e2e8f0;
-            --slate-300: #cbd5e1; --slate-400: #94a3b8; --slate-500: #64748b;
-            --slate-600: #475569; --slate-700: #334155; --slate-800: #1e293b;
-            --slate-900: #0b1120;
-            --app-bg: #0b1120;
-            --app-bg-glow: #1e293b;
-            --app-text: #f8fafc;
-            --theme-switch-track: rgba(30, 41, 59, 0.55);
-            --theme-switch-border: rgba(255, 255, 255, 0.14);
-            --theme-switch-thumb: #f8fafc;
-            --card-bg-1: rgba(30, 41, 59, 0.85);
-            --card-bg-2: rgba(15, 23, 42, 0.92);
-            --card-border: rgba(255, 255, 255, 0.06);
-            --card-border-highlight: rgba(255, 255, 255, 0.09);
-            /* Superficie translúcida genérica (pills de filtro, drop-zones,
-               encabezados sticky de tabla, inputs dentro de modales): en
-               oscuro usa los mismos tonos rgba(30,41,59,*) / rgba(15,23,42,*)
-               que ya existían antes del sistema de tema, para no cambiar
-               nada visualmente en modo oscuro. */
-            --surface-1: rgba(30, 41, 59, 0.7);
-            --surface-1-soft: rgba(30, 41, 59, 0.5);
-            --surface-1-faint: rgba(30, 41, 59, 0.35);
-            --surface-2: rgba(15, 23, 42, 0.97);
-            --surface-2-soft: rgba(15, 23, 42, 0.6);
-            --nav-track-bg: rgba(30, 41, 59, 0.6);
-            --nav-track-border: rgba(255, 255, 255, 0.08);
-            --nav-pill-bg: rgba(59, 130, 246, 0.25);
-            --nav-pill-border: rgba(59, 130, 246, 0.4);
-            --nav-pill-text: #f8fafc;
-        }
-        html[data-theme="light"] {
-            color-scheme: light;
-            --slate-50: #0b1120; --slate-100: #1e293b; --slate-200: #334155;
-            --slate-300: #475569; --slate-400: #64748b; --slate-500: #94a3b8;
-            --slate-600: #cbd5e1; --slate-700: #e2e8f0; --slate-800: #f1f5f9;
-            --slate-900: #f8fafc;
-            --app-bg: #f8fafc;
-            --app-bg-glow: #e2e8f0;
-            --app-text: #0b1120;
-            --theme-switch-track: rgba(255, 255, 255, 0.6);
-            --theme-switch-border: rgba(11, 17, 32, 0.12);
-            --theme-switch-thumb: #ffffff;
-            --card-bg-1: rgba(255, 255, 255, 0.85);
-            --card-bg-2: rgba(241, 245, 249, 0.92);
-            --card-border: rgba(11, 17, 32, 0.08);
-            --card-border-highlight: rgba(11, 17, 32, 0.06);
-            --surface-1: rgba(255, 255, 255, 0.75);
-            --surface-1-soft: rgba(255, 255, 255, 0.6);
-            --surface-1-faint: rgba(241, 245, 249, 0.6);
-            --surface-2: rgba(255, 255, 255, 0.97);
-            --surface-2-soft: rgba(255, 255, 255, 0.75);
-            --nav-track-bg: rgba(226, 232, 240, 0.6);
-            --nav-track-border: rgba(11, 17, 32, 0.08);
-            --nav-pill-bg: rgba(59, 130, 246, 0.16);
-            --nav-pill-border: rgba(59, 130, 246, 0.28);
-            --nav-pill-text: #1d4ed8;
-        }
-        html, body { transition: background-color 0.4s ease, color 0.4s ease; }
-        @media (prefers-reduced-motion: reduce) {
-            html, body { transition: none !important; }
         }
 
         * { -webkit-tap-highlight-color: transparent; }
@@ -188,9 +91,9 @@
 
         body {
             font-family: 'Inter', sans-serif;
-            background-color: var(--app-bg);
-            background-image: radial-gradient(circle at 50% 0%, var(--app-bg-glow) 0%, var(--app-bg) 70%);
-            color: var(--app-text);
+            background-color: #0b1120;
+            background-image: radial-gradient(circle at 50% 0%, #1e293b 0%, #0b1120 70%);
+            color: #f8fafc;
             background-attachment: fixed;
             overflow-x: hidden;
             padding-left: max(0.75rem, env(safe-area-inset-left));
@@ -241,8 +144,8 @@
         }
 
         .card {
-            background: linear-gradient(145deg, var(--card-bg-1), var(--card-bg-2));
-            border: 1px solid var(--card-border);
+            background: linear-gradient(145deg, rgba(30, 41, 59, 0.85), rgba(15, 23, 42, 0.92));
+            border: 1px solid rgba(255, 255, 255, 0.06);
             border-radius: 1rem;
             box-shadow:
                 0 1px 0 0 rgba(255,255,255,0.04) inset,
@@ -250,7 +153,7 @@
                 0 4px 10px -4px rgba(0, 0, 0, 0.3);
             backdrop-filter: blur(16px) saturate(140%);
             -webkit-backdrop-filter: blur(16px) saturate(140%);
-            transition: border-color 0.35s ease, box-shadow 0.35s ease, transform 0.35s ease, background 0.35s ease;
+            transition: border-color 0.35s ease, box-shadow 0.35s ease, transform 0.35s ease;
             margin-bottom: 1.5rem;
             position: relative;
             isolation: isolate;
@@ -262,7 +165,7 @@
             inset: 0;
             border-radius: inherit;
             padding: 1px;
-            background: linear-gradient(160deg, var(--card-border-highlight), rgba(255,255,255,0) 40%);
+            background: linear-gradient(160deg, rgba(255,255,255,0.09), rgba(255,255,255,0) 40%);
             -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
             -webkit-mask-composite: xor;
             mask-composite: exclude;
@@ -280,7 +183,7 @@
         }
 
         .card-rmd-highlight {
-            background: linear-gradient(150deg, rgba(120, 53, 15, 0.16), var(--card-bg-2) 55%);
+            background: linear-gradient(150deg, rgba(120, 53, 15, 0.16), rgba(15, 23, 42, 0.94) 55%);
             border: 1px solid rgba(245, 158, 11, 0.28);
             box-shadow:
                 0 1px 0 0 rgba(255,255,255,0.05) inset,
@@ -306,7 +209,7 @@
            el mismo lenguaje visual ámbar/glow que .card-rmd-highlight, pero
            a escala de una caja de KPI pequeña. */
         .rmd-pendientes-highlight {
-            background: linear-gradient(150deg, rgba(120, 53, 15, 0.28), var(--card-bg-2) 60%);
+            background: linear-gradient(150deg, rgba(120, 53, 15, 0.28), rgba(15, 23, 42, 0.9) 60%);
             border: 1px solid rgba(245, 158, 11, 0.45);
             box-shadow:
                 0 1px 0 0 rgba(255,255,255,0.06) inset,
@@ -333,7 +236,7 @@
         }
 
         .kpi-filter.active-filter {
-            background: linear-gradient(145deg, rgba(59, 130, 246, 0.22), var(--card-bg-1));
+            background: linear-gradient(145deg, rgba(59, 130, 246, 0.22), rgba(30, 41, 59, 0.92));
             border-color: #3b82f6;
             box-shadow:
                 0 1px 0 0 rgba(255,255,255,0.06) inset,
@@ -342,14 +245,14 @@
         }
 
         .filter-pill {
-            background: var(--surface-1);
-            border: 1px solid var(--card-border-highlight);
-            color: var(--slate-400);
+            background: rgba(30, 41, 59, 0.7);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            color: #94a3b8;
             transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
         }
         .filter-pill:hover {
-            background: var(--surface-1);
-            color: var(--app-text);
+            background: rgba(51, 65, 85, 0.8);
+            color: #f8fafc;
             transform: translateY(-1px);
         }
         .filter-pill.active {
@@ -389,7 +292,7 @@
             font-size: 1.05rem;
         }
         .title-line-primary {
-            color: var(--app-text);
+            color: #f8fafc;
             text-shadow: 0 1px 16px rgba(148, 163, 184, 0.18);
         }
         .title-line-accent {
@@ -410,7 +313,7 @@
         }
         .area-badge-seg {
             font-size: 0.62rem; font-weight: 700; letter-spacing: 0.22em;
-            color: var(--slate-400); text-transform: uppercase;
+            color: #94a3b8; text-transform: uppercase;
         }
         .area-badge-sep {
             width: 1px; height: 0.7rem;
@@ -422,84 +325,23 @@
         }
 
         .btn-clear {
-            background: linear-gradient(145deg, var(--card-bg-1), var(--card-bg-2));
-            color: var(--slate-300); border: 1px solid var(--card-border-highlight);
+            background: linear-gradient(145deg, rgba(30,41,59,0.85), rgba(15,23,42,0.9));
+            color: #cbd5e1; border: 1px solid rgba(255,255,255,0.09);
             box-shadow: 0 1px 0 0 rgba(255,255,255,0.05) inset, 0 6px 16px -8px rgba(0,0,0,0.5);
             backdrop-filter: blur(10px);
             transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), border-color 0.25s ease, background 0.25s ease, color 0.25s ease;
         }
         .btn-clear:hover {
-            color: var(--app-text); border-color: rgba(239, 68, 68, 0.4);
-            background: linear-gradient(145deg, var(--surface-1), var(--card-bg-1));
+            color: #fff; border-color: rgba(239, 68, 68, 0.4);
+            background: linear-gradient(145deg, rgba(51,65,85,0.9), rgba(30,41,59,0.95));
             transform: translateY(-1px);
         }
 
-        /* ============ SWITCH DE TEMA (glass, estilo iOS Control Center) ============ */
-        .theme-switch {
-            position: relative;
-            width: 3.1rem; height: 1.75rem;
-            border-radius: 999px;
-            padding: 0;
-            flex-shrink: 0;
-            cursor: pointer;
-            background: var(--theme-switch-track);
-            border: 1px solid var(--theme-switch-border);
-            -webkit-backdrop-filter: blur(14px) saturate(180%);
-            backdrop-filter: blur(14px) saturate(180%);
-            box-shadow: 0 1px 0 0 rgba(255,255,255,0.08) inset, 0 4px 12px -6px rgba(0,0,0,0.4);
-            transition: background 0.35s ease, border-color 0.35s ease, box-shadow 0.2s ease;
-        }
-        .theme-switch:active { box-shadow: 0 1px 0 0 rgba(255,255,255,0.08) inset, 0 2px 6px -4px rgba(0,0,0,0.5); }
-        .theme-switch:focus-visible { outline: 2px solid #60a5fa; outline-offset: 2px; }
-
-        .theme-switch-thumb {
-            position: absolute;
-            top: 50%; left: 0.2rem;
-            width: 1.3rem; height: 1.3rem;
-            border-radius: 50%;
-            background: var(--theme-switch-thumb);
-            box-shadow: 0 1px 3px rgba(0,0,0,0.35), 0 1px 1px rgba(0,0,0,0.2);
-            transform: translateY(-50%);
-            /* Física con leve overshoot al asentar, como un spring de iOS
-               (damping ~0.8 según las referencias de Apple Design). */
-            transition: transform 0.38s cubic-bezier(0.34, 1.56, 0.64, 1), background 0.35s ease;
-        }
-        .theme-switch.is-light .theme-switch-thumb {
-            transform: translateY(-50%) translateX(1.35rem);
-        }
-
-        .theme-switch-icon {
-            position: absolute;
-            top: 50%; transform: translateY(-50%);
-            width: 0.85rem; height: 0.85rem;
-            display: flex; align-items: center; justify-content: center;
-            transition: opacity 0.3s ease, color 0.3s ease;
-        }
-        .theme-switch-icon svg { width: 100%; height: 100%; }
-        .theme-switch-icon-moon { left: 0.32rem; color: var(--slate-300); opacity: 1; }
-        .theme-switch-icon-sun { right: 0.32rem; color: #fbbf24; opacity: 0.35; }
-        .theme-switch.is-light .theme-switch-icon-moon { opacity: 0.3; }
-        .theme-switch.is-light .theme-switch-icon-sun { opacity: 1; }
-
-        @media (prefers-reduced-motion: reduce) {
-            .theme-switch-thumb, .theme-switch-icon { transition: none !important; }
-        }
-
-        /* ============ NAV PRINCIPAL: pill deslizante "liquid glass" ============
-           Reemplaza el sistema anterior de partículas gooey (que dejaba un
-           bloque de fondo negro visible, sobre todo en modo claro, y no se
-           veía bien). Ahora es un pill translúcido con blur que se desliza
-           entre las 4 pestañas, mismo lenguaje visual que el switch de tema
-           (glass, sin partículas, sin fondos sólidos oscuros fijos). */
         .gooey-nav-container {
             position: relative;
             display: inline-flex;
         }
-        .gooey-nav-container nav {
-            display: flex;
-            position: relative;
-            z-index: 3;
-        }
+        .gooey-nav-container nav { display: flex; position: relative; z-index: 3; }
         .gooey-nav-container nav ul {
             display: flex;
             gap: 0.25rem;
@@ -508,38 +350,21 @@
             margin: 0;
             position: relative;
             z-index: 3;
-            color: var(--slate-400);
-            background: var(--nav-track-bg);
+            color: #94a3b8;
+            background: rgba(30, 41, 59, 0.6);
             border-radius: 0.85rem;
-            border: 1px solid var(--nav-track-border);
+            border: 1px solid rgba(255, 255, 255, 0.08);
             backdrop-filter: blur(10px);
             overflow: hidden;
-        }
-        /* Pill que se desliza detrás del item activo, con efecto glass:
-           translúcido + blur + un borde luminoso sutil, igual que el switch
-           de tema. Su posición y ancho los calcula JS por índice de tab. */
-        .gooey-nav-pill {
-            position: absolute;
-            top: 0.3rem; left: 0.3rem;
-            height: calc(100% - 0.6rem);
-            border-radius: 0.6rem;
-            background: var(--nav-pill-bg);
-            border: 1px solid var(--nav-pill-border);
-            box-shadow: 0 1px 0 0 rgba(255,255,255,0.12) inset, 0 4px 14px -6px rgba(0,0,0,0.35);
-            -webkit-backdrop-filter: blur(14px) saturate(180%);
-            backdrop-filter: blur(14px) saturate(180%);
-            z-index: 4;
-            transition: transform 0.42s cubic-bezier(0.34, 1.56, 0.64, 1), width 0.42s cubic-bezier(0.34, 1.56, 0.64, 1);
-            pointer-events: none;
         }
         .gooey-nav-container nav ul li {
             border-radius: 0.6rem;
             position: relative;
             cursor: pointer;
             transition: color 0.3s ease;
-            color: var(--slate-400);
+            color: #94a3b8;
             white-space: nowrap;
-            z-index: 5;
+            z-index: 4;
         }
         .gooey-nav-container nav ul li a {
             display: flex;
@@ -554,17 +379,73 @@
             border-radius: 0.6rem;
             transition: all 0.3s ease;
             position: relative;
+            z-index: 5;
         }
-        .gooey-nav-container nav ul li a svg { transition: transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1); flex-shrink: 0; }
+        .gooey-nav-container nav ul li a svg { transition: transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1); }
         .gooey-nav-container nav ul li:hover a svg { transform: scale(1.15) rotate(-4deg); }
-        .gooey-nav-container nav ul li:hover { color: var(--slate-50); }
-        .gooey-nav-container nav ul li.active { color: var(--nav-pill-text); }
+        .gooey-nav-container nav ul li:hover { color: #f8fafc; }
+        .gooey-nav-container nav ul li.active { color: white; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3); }
+        .gooey-nav-container nav ul li.active a {
+            background: linear-gradient(145deg, rgba(59, 130, 246, 0.95), rgba(139, 92, 246, 0.95));
+            box-shadow: 0 2px 8px -2px rgba(59,130,246,0.45), 0 0 0 1px rgba(255,255,255,0.08) inset;
+        }
+
+        .gooey-nav-container .effect {
+            position: absolute; left: 0; top: 0; width: 0; height: 0;
+            opacity: 0; pointer-events: none; z-index: 1; border-radius: 0.6rem;
+        }
+        .gooey-nav-container .effect.filter {
+            filter: none;
+            mix-blend-mode: normal;
+            opacity: 0;
+            transition: opacity 0.15s ease;
+        }
+        .gooey-nav-container .effect.filter.is-bursting {
+            filter: blur(7px) contrast(100) blur(0);
+            mix-blend-mode: lighten;
+            opacity: 1;
+        }
+        .gooey-nav-container .effect.filter::before { display: none; }
+        .gooey-nav-container .effect.filter::after {
+            content: ''; position: absolute; inset: 0;
+            background: linear-gradient(145deg, rgba(59, 130, 246, 0.9), rgba(139, 92, 246, 0.9));
+            transform: scale(0); opacity: 0; z-index: -1; border-radius: 0.6rem;
+        }
+        .gooey-nav-container .effect.active::after { animation: pill 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+        @keyframes pill { to { transform: scale(1); opacity: 1; } }
+
+        .particle, .point {
+            display: block; opacity: 0; width: 12px; height: 12px;
+            border-radius: 100%; transform-origin: center;
+        }
+        .particle {
+            --time: 5s; position: absolute; top: calc(50% - 6px); left: calc(50% - 6px);
+            animation: particle calc(var(--time)) ease 1 -350ms;
+        }
+        .point {
+            background: var(--color); opacity: 1;
+            animation: point calc(var(--time)) ease 1 -350ms;
+        }
+        @keyframes particle {
+            0% { transform: rotate(0deg) translate(calc(var(--start-x)), calc(var(--start-y))); opacity: 1; animation-timing-function: cubic-bezier(0.55, 0, 1, 0.45); }
+            70% { transform: rotate(calc(var(--rotate) * 0.5)) translate(calc(var(--end-x) * 1.2), calc(var(--end-y) * 1.2)); opacity: 1; animation-timing-function: ease; }
+            85% { transform: rotate(calc(var(--rotate) * 0.66)) translate(calc(var(--end-x)), calc(var(--end-y))); opacity: 1; }
+            100% { transform: rotate(calc(var(--rotate) * 1.2)) translate(calc(var(--end-x) * 0.5), calc(var(--end-y) * 0.5)); opacity: 0; }
+        }
+        @keyframes point {
+            0% { transform: scale(0); opacity: 0; }
+            25% { transform: scale(calc(var(--scale) * 0.25)); }
+            38% { opacity: 1; }
+            65% { transform: scale(var(--scale)); opacity: 1; }
+            85% { transform: scale(var(--scale)); opacity: 1; }
+            100% { transform: scale(0); opacity: 0; }
+        }
 
         .drop-zone-mini {
             display: flex; align-items: center; gap: 0.5rem;
-            padding: 0.55rem 1rem; border: 1px dashed var(--card-border-highlight);
+            padding: 0.55rem 1rem; border: 1px dashed rgba(255, 255, 255, 0.15);
             border-radius: 0.6rem; cursor: pointer; transition: all 0.3s;
-            font-size: 0.8rem; white-space: nowrap; background: var(--surface-1-soft);
+            font-size: 0.8rem; white-space: nowrap; background: rgba(30, 41, 59, 0.5);
         }
         .drop-zone-mini:hover {
             border-color: rgba(59, 130, 246, 0.55);
@@ -589,7 +470,7 @@
             display: flex; align-items: stretch; gap: 0;
             border-radius: 0.7rem;
             border: 1px solid rgba(34, 211, 238, 0.18);
-            background: linear-gradient(160deg, rgba(8, 47, 73, 0.35), var(--surface-1));
+            background: linear-gradient(160deg, rgba(8, 47, 73, 0.35), rgba(30, 41, 59, 0.55));
             overflow: hidden;
             transition: border-color 0.3s ease, box-shadow 0.3s ease;
             position: relative;
@@ -612,7 +493,7 @@
             transition: background 0.25s ease;
         }
         .db-group-action:hover { background: rgba(34, 211, 238, 0.08); }
-        .db-group-label { font-size: 0.78rem; font-weight: 600; color: var(--app-text); line-height: 1.15; white-space: nowrap; }
+        .db-group-label { font-size: 0.78rem; font-weight: 600; color: #e2e8f0; line-height: 1.15; white-space: nowrap; }
         .db-group-sub { font-size: 0.62rem; color: #64748b; font-weight: 500; letter-spacing: 0.01em; white-space: nowrap; }
         .db-group-cloud-btn {
             display: flex; align-items: center; gap: 0.35rem;
@@ -640,7 +521,7 @@
     display: flex; align-items: stretch; gap: 0;
     border-radius: 0.7rem;
     border: 1px solid rgba(244, 63, 94, 0.2);
-    background: linear-gradient(160deg, rgba(76, 5, 25, 0.28), var(--surface-1));
+    background: linear-gradient(160deg, rgba(76, 5, 25, 0.28), rgba(30, 41, 59, 0.55));
     overflow: hidden;
     transition: border-color 0.3s ease, box-shadow 0.3s ease;
     position: relative;
@@ -663,7 +544,7 @@
     transition: background 0.25s ease;
 }
 .pp-group-action:hover { background: rgba(244, 63, 94, 0.08); }
-.pp-group-label { font-size: 0.78rem; font-weight: 600; color: var(--app-text); line-height: 1.15; white-space: nowrap; }
+.pp-group-label { font-size: 0.78rem; font-weight: 600; color: #e2e8f0; line-height: 1.15; white-space: nowrap; }
 .pp-group-sub { font-size: 0.62rem; color: #64748b; font-weight: 500; letter-spacing: 0.01em; white-space: nowrap; }
 .pp-group-status {
     display: inline-flex; align-items: center; gap: 0.3rem;
@@ -677,7 +558,7 @@
         
 
         .fc-theme-standard td, .fc-theme-standard th, .fc-theme-standard .fc-scrollgrid {
-            border-color: var(--card-border) !important;
+            border-color: rgba(255, 255, 255, 0.05) !important;
         }
         .fc .fc-button-primary {
             background: linear-gradient(145deg, #3b82f6, #2563eb) !important;
@@ -694,8 +575,8 @@
         }
         .fc-event:hover { transform: scale(1.03); z-index: 50; }
         .fc .fc-toolbar-title { font-size: 1.05rem !important; font-weight: 600; }
-        .fc .fc-col-header-cell-cushion { color: var(--slate-400); font-weight: 500; }
-        .fc .fc-daygrid-day-number { color: var(--slate-300); }
+        .fc .fc-col-header-cell-cushion { color: #94a3b8; font-weight: 500; }
+        .fc .fc-daygrid-day-number { color: #cbd5e1; }
         .fc .fc-toolbar { flex-wrap: wrap; gap: 0.5rem; }
 
         .fc-day-past { background-color: rgba(255, 255, 255, 0.012) !important; }
@@ -784,14 +665,14 @@
         .section-spacing { margin-bottom: 1.5rem; }
 
         .swal2-popup {
-            background: var(--surface-2) !important;
+            background: rgba(15, 23, 42, 0.97) !important;
             backdrop-filter: blur(18px);
-            border: 1px solid var(--card-border-highlight);
-            color: var(--app-text) !important;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: #f8fafc !important;
             border-radius: 1.1rem !important;
         }
-        .swal2-title { color: var(--app-text) !important; }
-        .swal2-html-container { color: var(--slate-300) !important; }
+        .swal2-title { color: #f8fafc !important; }
+        .swal2-html-container { color: #cbd5e1 !important; }
 
         .bd-dialog-popup.swal2-popup { padding: 1.5rem 1.4rem 1.6rem !important; }
         .bd-dialog-popup .swal2-title {
@@ -799,26 +680,26 @@
             padding: 0 0 0.15rem !important; margin: 0 !important;
         }
         .bd-dialog-sub {
-            font-size: 0.78rem; color: var(--slate-400); margin: 0 0 1.1rem; text-align: left;
+            font-size: 0.78rem; color: #94a3b8; margin: 0 0 1.1rem; text-align: left;
         }
         .bd-dialog-options { display: flex; flex-direction: column; gap: 0.6rem; }
         .bd-dialog-option {
             display: flex; align-items: center; gap: 0.75rem;
             width: 100%; text-align: left; cursor: pointer;
             padding: 0.7rem 0.85rem; border-radius: 0.85rem;
-            border: 1px solid var(--card-border-highlight);
-            background: linear-gradient(150deg, var(--surface-1), var(--surface-1-soft));
+            border: 1px solid rgba(255,255,255,0.08);
+            background: linear-gradient(150deg, rgba(51,65,85,0.55), rgba(30,41,59,0.6));
             transition: border-color 0.25s ease, background 0.25s ease, transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
         }
         .bd-dialog-option:hover {
             transform: translateY(-1px);
             border-color: rgba(59, 130, 246, 0.4);
-            background: linear-gradient(150deg, rgba(59,130,246,0.14), var(--surface-1-soft));
+            background: linear-gradient(150deg, rgba(59,130,246,0.14), rgba(30,41,59,0.7));
         }
         .bd-dialog-option:active { transform: translateY(0) scale(0.985); }
         .bd-dialog-option-cloud:hover {
             border-color: rgba(34, 211, 238, 0.45);
-            background: linear-gradient(150deg, rgba(34,211,238,0.14), var(--surface-1-soft));
+            background: linear-gradient(150deg, rgba(34,211,238,0.14), rgba(30,41,59,0.7));
         }
         .bd-dialog-option-icon {
             display: flex; align-items: center; justify-content: center;
@@ -837,12 +718,12 @@
         }
         .bd-dialog-option-text { display: flex; flex-direction: column; gap: 0.1rem; flex: 1; min-width: 0; }
         .bd-dialog-option-title { font-size: 0.85rem; font-weight: 700; color: #f1f5f9; }
-        .bd-dialog-option-desc { font-size: 0.7rem; color: var(--slate-400); line-height: 1.3; }
+        .bd-dialog-option-desc { font-size: 0.7rem; color: #94a3b8; line-height: 1.3; }
         .bd-dialog-option-chevron {
             width: 1rem; height: 1rem; flex-shrink: 0; color: #64748b;
             transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), color 0.25s ease;
         }
-        .bd-dialog-option:hover .bd-dialog-option-chevron { transform: translateX(3px); color: var(--slate-300); }
+        .bd-dialog-option:hover .bd-dialog-option-chevron { transform: translateX(3px); color: #cbd5e1; }
 
         .skeleton {
             position: relative;
@@ -863,8 +744,8 @@
         }
 
         .summary-card {
-            background: linear-gradient(160deg, var(--card-bg-1), var(--surface-2));
-            border: 1px solid var(--card-border-highlight);
+            background: linear-gradient(160deg, rgba(30, 41, 59, 0.9), rgba(11, 17, 32, 0.95));
+            border: 1px solid rgba(255,255,255,0.07);
             border-radius: 1.1rem;
             box-shadow: 0 25px 50px -15px rgba(0,0,0,0.5);
             position: relative;
@@ -901,13 +782,13 @@
 
         .badge-auth { background: linear-gradient(145deg, rgba(34,197,94,0.2), rgba(22,101,52,0.3)); color:#86efac; border:1px solid rgba(34,197,94,0.25); }
         .badge-pending { background: linear-gradient(145deg, rgba(239,68,68,0.2), rgba(153,27,27,0.3)); color:#fca5a5; border:1px solid rgba(239,68,68,0.25); }
-        .badge-unknown { background: linear-gradient(145deg, rgba(148,163,184,0.18), var(--surface-1-faint)); color:var(--slate-300); border:1px solid rgba(148,163,184,0.25); }
-        #tablaPendientes tbody tr:hover, #tablaPendientesForecast tbody tr:hover { background: var(--surface-1-faint); }
+        .badge-unknown { background: linear-gradient(145deg, rgba(148,163,184,0.18), rgba(51,65,85,0.3)); color:#cbd5e1; border:1px solid rgba(148,163,184,0.25); }
+        #tablaPendientes tbody tr:hover, #tablaPendientesForecast tbody tr:hover { background: rgba(51,65,85,0.35); }
         #tablaPendientes th, #tablaPendientes td, #tablaPendientesForecast th, #tablaPendientesForecast td { padding: 0.55rem 0.75rem; }
-        #tablaPendientes thead th, #tablaPendientesForecast thead th { position: sticky; top: 0; background: var(--surface-2); z-index: 1; }
+        #tablaPendientes thead th, #tablaPendientesForecast thead th { position: sticky; top: 0; background: rgba(15,23,42,0.96); z-index: 1; }
 
         .card-forecast-highlight {
-            background: linear-gradient(150deg, rgba(76, 5, 25, 0.18), var(--card-bg-2) 55%);
+            background: linear-gradient(150deg, rgba(76, 5, 25, 0.18), rgba(15, 23, 42, 0.94) 55%);
             border: 1px solid rgba(244, 63, 94, 0.28);
             box-shadow:
                 0 1px 0 0 rgba(255,255,255,0.05) inset,
@@ -949,7 +830,7 @@
             box-shadow: 0 0 16px -4px rgba(244,63,94,0.35);
         }
         .forecast-icon-badge svg { width: 1.1rem; height: 1.1rem; }
-        .mes-chip { display:inline-block; background: var(--surface-1-soft); border:1px solid var(--card-border-highlight); color:var(--slate-300); font-size:10px; padding: 1px 6px; border-radius: 5px; margin: 1px 3px 1px 0; white-space: nowrap; }
+        .mes-chip { display:inline-block; background: rgba(51,65,85,0.6); border:1px solid rgba(255,255,255,0.08); color:#cbd5e1; font-size:10px; padding: 1px 6px; border-radius: 5px; margin: 1px 3px 1px 0; white-space: nowrap; }
 
         @media (max-width: 768px) {
             .card { border-radius: 0.85rem; }
@@ -973,8 +854,8 @@
             width: 1.6rem; height: 1.6rem;
             padding: 0; margin: 0; font: inherit;
             border-radius: 50%;
-            border: 1px solid var(--card-border-highlight);
-            background: var(--surface-1-faint);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            background: rgba(30, 41, 59, 0.35);
             color: rgba(148, 163, 184, 0.35);
             opacity: 0.55;
             cursor: pointer;
@@ -1002,8 +883,8 @@
             position: relative;
             width: 1.6rem; height: 1.6rem;
             border-radius: 50%;
-            border: 1px solid var(--card-border-highlight);
-            background: var(--surface-1-faint);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            background: rgba(30, 41, 59, 0.35);
             color: rgba(148, 163, 184, 0.35);
             opacity: 0.35;
             cursor: pointer;
@@ -1034,8 +915,8 @@
             display: flex; align-items: center; justify-content: center;
             width: 1.6rem; height: 1.6rem;
             border-radius: 50%;
-            border: 1px solid var(--card-border-highlight);
-            background: var(--surface-1-faint);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            background: rgba(30, 41, 59, 0.35);
             color: rgba(148, 163, 184, 0.35);
             opacity: 0.35;
             cursor: pointer;
@@ -1058,8 +939,8 @@
             right: 0;
             bottom: calc(100% + 0.6rem);
             min-width: 220px;
-            background: linear-gradient(160deg, var(--surface-1), var(--surface-2));
-            border: 1px solid var(--card-border-highlight);
+            background: linear-gradient(160deg, rgba(30, 41, 59, 0.97), rgba(15, 23, 42, 0.98));
+            border: 1px solid rgba(255, 255, 255, 0.08);
             border-radius: 0.85rem;
             box-shadow: 0 20px 45px -15px rgba(0,0,0,0.55), 0 0 0 1px rgba(255,255,255,0.03) inset;
             backdrop-filter: blur(14px);
@@ -1077,40 +958,40 @@
         .backup-action {
             display: flex; align-items: center; gap: 0.55rem;
             padding: 0.5rem 0.6rem; border-radius: 0.55rem;
-            font-size: 0.72rem; font-weight: 600; color: var(--slate-300);
+            font-size: 0.72rem; font-weight: 600; color: #cbd5e1;
             text-align: left; cursor: pointer; white-space: nowrap;
             transition: background 0.2s ease, color 0.2s ease;
         }
         .backup-action svg { width: 0.9rem; height: 0.9rem; flex-shrink: 0; color: #64748b; transition: color 0.2s ease; }
-        .backup-action:hover { background: rgba(34, 211, 238, 0.1); color: var(--app-text); }
+        .backup-action:hover { background: rgba(34, 211, 238, 0.1); color: #f8fafc; }
         .backup-action:hover svg { color: #67e8f9; }
         .backup-hint {
-            font-size: 0.6rem; color: var(--slate-500); padding: 0.4rem 0.6rem 0.1rem;
-            line-height: 1.35; border-top: 1px solid var(--card-border-highlight); margin-top: 0.2rem;
+            font-size: 0.6rem; color: #475569; padding: 0.4rem 0.6rem 0.1rem;
+            line-height: 1.35; border-top: 1px solid rgba(255,255,255,0.05); margin-top: 0.2rem;
         }
 
         /* Selector de planta - nuevo estilo */
         .planta-selector {
             display: inline-flex;
             gap: 0.2rem;
-            background: var(--surface-1-soft);
+            background: rgba(30, 41, 59, 0.5);
             border-radius: 0.6rem;
             padding: 0.2rem;
-            border: 1px solid var(--card-border-highlight);
+            border: 1px solid rgba(255,255,255,0.06);
         }
         .planta-btn {
             padding: 0.3rem 0.9rem;
             border-radius: 0.4rem;
             font-size: 0.7rem;
             font-weight: 600;
-            color: var(--slate-400);
+            color: #94a3b8;
             background: transparent;
             border: none;
             cursor: pointer;
             transition: all 0.2s ease;
             white-space: nowrap;
         }
-        .planta-btn:hover { color: var(--app-text); background: var(--surface-1-faint); }
+        .planta-btn:hover { color: #f8fafc; background: rgba(255,255,255,0.05); }
         .planta-btn.active {
             background: linear-gradient(145deg, #3b82f6, #2563eb);
             color: white;
@@ -1118,13 +999,13 @@
         }
         .planta-btn:focus-visible { outline: 2px solid #60a5fa; outline-offset: 1px; }
         .planta-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-        .planta-btn:disabled:hover { color: var(--slate-400); background: transparent; }
+        .planta-btn:disabled:hover { color: #94a3b8; background: transparent; }
         .planta-btn[data-planta="consolidado"].active {
             background: linear-gradient(145deg, #a855f7, #7e22ce);
             box-shadow: 0 2px 8px -2px rgba(168,85,247,0.5);
         }
-        .forecast-filter-btn { padding: 0.3rem 0.9rem; border-radius: 0.4rem; font-size: 0.7rem; font-weight: 600; color: var(--slate-400); background: transparent; border: none; cursor: pointer; transition: all 0.2s ease; white-space: nowrap; }
-.forecast-filter-btn:hover { color: var(--app-text); background: var(--surface-1-faint); }
+        .forecast-filter-btn { padding: 0.3rem 0.9rem; border-radius: 0.4rem; font-size: 0.7rem; font-weight: 600; color: #94a3b8; background: transparent; border: none; cursor: pointer; transition: all 0.2s ease; white-space: nowrap; }
+.forecast-filter-btn:hover { color: #f8fafc; background: rgba(255,255,255,0.05); }
 .forecast-filter-btn.active { background: linear-gradient(145deg, #f43f5e, #e11d48); color: white; box-shadow: 0 2px 8px -2px rgba(244,63,94,0.4); }
 .forecast-filter-btn:focus-visible { outline: 2px solid #fb7185; outline-offset: 1px; }
         @media (max-width: 640px) {
@@ -1151,8 +1032,8 @@
     position: fixed;
     z-index: 201;
     width: min(320px, 88vw);
-    background: linear-gradient(160deg, var(--surface-1), var(--surface-2));
-    border: 1px solid var(--card-border-highlight);
+    background: linear-gradient(160deg, rgba(30, 41, 59, 0.98), rgba(15, 23, 42, 0.99));
+    border: 1px solid rgba(255,255,255,0.09);
     border-radius: 1rem;
     box-shadow: 0 30px 60px -15px rgba(0,0,0,0.6);
     padding: 1.1rem 1.2rem 1rem;
@@ -1162,14 +1043,14 @@
 }
 .tour-tooltip.is-visible { opacity: 1; transform: translateY(0) scale(1); pointer-events: auto; }
 .tour-step-badge { font-size: 0.62rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: #60a5fa; margin-bottom: 0.35rem; }
-.tour-title { font-size: 0.92rem; font-weight: 700; color: var(--app-text); margin-bottom: 0.35rem; }
-.tour-text { font-size: 0.78rem; color: var(--slate-300); line-height: 1.5; margin-bottom: 1rem; }
+.tour-title { font-size: 0.92rem; font-weight: 700; color: #f8fafc; margin-bottom: 0.35rem; }
+.tour-text { font-size: 0.78rem; color: #cbd5e1; line-height: 1.5; margin-bottom: 1rem; }
 .tour-actions { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
 .tour-btn { font-size: 0.72rem; font-weight: 600; padding: 0.45rem 0.85rem; border-radius: 0.55rem; cursor: pointer; transition: all 0.2s ease; border: 1px solid transparent; white-space: nowrap; }
-.tour-btn-skip { color: var(--slate-400); background: transparent; }
-.tour-btn-skip:hover { color: var(--app-text); }
-.tour-btn-prev { color: var(--slate-300); background: var(--surface-1-faint); border-color: var(--card-border-highlight); }
-.tour-btn-prev:hover { background: var(--surface-1-soft); }
+.tour-btn-skip { color: #94a3b8; background: transparent; }
+.tour-btn-skip:hover { color: #f8fafc; }
+.tour-btn-prev { color: #cbd5e1; background: rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.08); }
+.tour-btn-prev:hover { background: rgba(255,255,255,0.1); }
 .tour-btn-prev:disabled { opacity: 0.35; cursor: default; }
 .tour-btn-next { color: white; background: linear-gradient(145deg, #3b82f6, #2563eb); box-shadow: 0 6px 16px -6px rgba(59,130,246,0.6); }
 .tour-btn-next:hover { filter: brightness(1.08); }
@@ -1205,15 +1086,6 @@
             <button onclick="startTour()" class="btn-clear px-3 py-2 rounded-lg flex items-center justify-center active:scale-95" title="Ver guía de la interfaz" aria-label="Ver guía de la interfaz">
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
             </button>
-            <button type="button" id="themeToggleSwitch" onclick="alternarTema()" class="theme-switch" role="switch" aria-checked="false" aria-label="Cambiar entre modo oscuro y modo claro" title="Cambiar tema">
-                <span class="theme-switch-icon theme-switch-icon-moon" aria-hidden="true">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M21.64 13a1 1 0 00-1.05-.14 8.05 8.05 0 01-3.37.73 8.15 8.15 0 01-8.14-8.14 8.05 8.05 0 01.73-3.37A1 1 0 008.4.32a10.14 10.14 0 1012.68 12.68 1 1 0 00.56-.99z"/></svg>
-                </span>
-                <span class="theme-switch-thumb"></span>
-                <span class="theme-switch-icon theme-switch-icon-sun" aria-hidden="true">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
-                </span>
-            </button>
             <button onclick="clearCurrentTabData()" class="btn-clear flex-1 md:flex-initial justify-center px-4 py-2 rounded-lg text-xs font-medium flex items-center gap-1.5 active:scale-95">
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                 Limpiar
@@ -1230,30 +1102,30 @@
                     <li class="active" data-tab="forecast">
                         <a href="#" onclick="return false;">
                             <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>
-                            <span class="gooey-nav-label">Forecast</span>
+                            Forecast
                         </a>
                     </li>
                     <li data-tab="produccion">
                         <a href="#" onclick="return false;">
                             <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 002-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
-                            <span class="gooey-nav-label">Producción</span>
+                            Producción
                         </a>
                     </li>
                     <li data-tab="rmd">
                         <a href="#" onclick="return false;">
                             <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-                            <span class="gooey-nav-label">OP sin RMD</span>
+                            OP sin RMD
                         </a>
                     </li>
                     <li data-tab="seguimiento">
                         <a href="#" onclick="return false;">
                             <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" /></svg>
-                            <span class="gooey-nav-label">Seguimiento RMD</span>
+                            Seguimiento RMD
                         </a>
                     </li>
                 </ul>
             </nav>
-            <span class="gooey-nav-pill" id="gooeyNavPill"></span>
+            <span class="effect filter" id="gooeyFilter"></span>
         </div>
 
         <!-- Inline Upload Zone RMD -->
@@ -1357,7 +1229,7 @@
         <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 md:gap-4 section-spacing">
             <div class="card card-hover p-4 cursor-pointer transition-all kpi-filter active-filter opacity-0" onclick="setFilterRMD('ALL')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();setFilterRMD('ALL');}" role="button" tabindex="0" aria-label="Filtrar: todas las plantas" id="kpi-card-total">
                 <p class="text-xs text-slate-400 uppercase font-bold tracking-wider">Total Productos</p>
-                <p id="kpi-total" class="text-2xl font-bold mt-1.5" style="color: var(--app-text);">0</p>
+                <p id="kpi-total" class="text-2xl font-bold mt-1.5 text-white">0</p>
             </div>
             <div class="card card-hover p-4 cursor-pointer transition-all kpi-filter opacity-0" onclick="setFilterRMD('ATE')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();setFilterRMD('ATE');}" role="button" tabindex="0" aria-label="Filtrar: Planta ATE" id="kpi-card-ate">
                 <p class="text-xs text-slate-400 uppercase font-bold tracking-wider">Planta ATE</p>
@@ -1558,7 +1430,7 @@
         <div class="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 section-spacing">
             <div class="card p-4 opacity-0 text-center">
                 <p class="text-xs text-slate-400 uppercase font-bold tracking-wider">Productos Únicos</p>
-                <p id="kpi-productos" class="text-2xl font-bold mt-1.5" style="color: var(--app-text);">0</p>
+                <p id="kpi-productos" class="text-2xl font-bold mt-1.5 text-white">0</p>
             </div>
             <div class="card p-4 opacity-0 text-center">
                 <p class="text-xs text-slate-400 uppercase font-bold tracking-wider">Días Programados</p>
@@ -1675,7 +1547,7 @@
         <div class="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 section-spacing">
             <div class="card p-4 opacity-0 text-center">
                 <p class="text-xs text-slate-400 uppercase font-bold tracking-wider">Materiales en Forecast</p>
-                <p id="kpi-forecast-materiales" class="text-2xl font-bold mt-1.5" style="color: var(--app-text);">0</p>
+                <p id="kpi-forecast-materiales" class="text-2xl font-bold mt-1.5 text-white">0</p>
             </div>
             <div class="card p-4 opacity-0 text-center">
                 <p class="text-xs text-slate-400 uppercase font-bold tracking-wider">Meses Cubiertos</p>
@@ -1896,68 +1768,6 @@
         dayjs.extend(window.dayjs_plugin_customParseFormat);
         dayjs.locale('es');
 
-        // ==================== TEMA (oscuro / claro) ====================
-        // El color real de cada shade "slate" ya vive en variables CSS (ver
-        // <style> principal); esta parte solo decide cuál set de variables
-        // está activo (agregando/quitando data-theme="light" en <html>) y
-        // hace que los diálogos de SweetAlert2 —que se abren con colores
-        // fijos en JS, no con clases de Tailwind— también seleccionen el
-        // color correcto según el tema activo en cada apertura.
-        let currentAppTheme = document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark';
-
-        function aplicarTema(theme, animar) {
-            currentAppTheme = theme === 'light' ? 'light' : 'dark';
-            if (currentAppTheme === 'light') document.documentElement.setAttribute('data-theme', 'light');
-            else document.documentElement.removeAttribute('data-theme');
-            const toggle = document.getElementById('themeToggleSwitch');
-            if (toggle) toggle.classList.toggle('is-light', currentAppTheme === 'light');
-            if (animar) actualizarIndicadorSupabase && actualizarIndicadorSupabase();
-        }
-
-        async function alternarTema() {
-            const nuevo = currentAppTheme === 'light' ? 'dark' : 'light';
-            aplicarTema(nuevo, true);
-            try { localStorage.setItem('app_theme_cache', nuevo); } catch (e) { /* best effort */ }
-            try { await storeSet('app_theme', nuevo); } catch (e) { /* ya quedó en la caché local */ }
-        }
-        window.alternarTema = alternarTema;
-
-        // Los tooltips de Chart.js reciben sus colores como valores JS fijos
-        // (no como clases CSS), así que no heredan el tema automáticamente.
-        // Esta función centraliza esos colores según el tema activo, para no
-        // repetir la misma lógica en cada uno de los gráficos de la app.
-        function getChartTooltipTheme() {
-            return currentAppTheme === 'light'
-                ? { backgroundColor: 'rgba(255,255,255,0.97)', titleColor: '#0f172a', bodyColor: '#334155' }
-                : { backgroundColor: 'rgba(15,23,42,0.95)', titleColor: '#f8fafc', bodyColor: '#cbd5e1' };
-        }
-
-        // Colores de fondo/texto que usan los diálogos de SweetAlert2 en cada
-        // tema. Los 77 llamados a Swal.fire ya en el código siguen pasando su
-        // propio "background"/"color" fijo (pensado para oscuro); este
-        // wrapper los sobrescribe en tiempo real con el valor correcto del
-        // tema activo, sin tener que tocar cada llamada existente una por
-        // una.
-        const SWAL_THEME_COLORS = {
-            dark: { background: '#0f172a', color: '#f8fafc' },
-            light: { background: '#ffffff', color: '#0f172a' }
-        };
-        (function envolverSwalConTema() {
-            if (!window.Swal || window.__swalThemeWrapped) return;
-            window.__swalThemeWrapped = true;
-            const fireOriginal = Swal.fire.bind(Swal);
-            Swal.fire = function (opciones) {
-                const colores = SWAL_THEME_COLORS[currentAppTheme] || SWAL_THEME_COLORS.dark;
-                if (opciones && typeof opciones === 'object') {
-                    opciones = Object.assign({}, opciones, {
-                        background: colores.background,
-                        color: colores.color
-                    });
-                }
-                return fireOriginal(opciones);
-            };
-        })();
-
         let currentTab = 'forecast';
         let seguimientoRmdLoaded = false;
         // Código completo de la app "SEGUIMIENTO RMD" (aportada por el usuario), embebido en Base64
@@ -2074,33 +1884,33 @@
                 const e = (estado || '').toLowerCase();
                 if (e.includes('autoriz')) return { bg: 'rgba(16,185,129,0.12)', fg: '#6ee7b7', border: 'rgba(16,185,129,0.3)' };
                 if (e.includes('suspend')) return { bg: 'rgba(239,68,68,0.12)', fg: '#fca5a5', border: 'rgba(239,68,68,0.3)' };
-                return { bg: 'rgba(148,163,184,0.12)', fg: currentAppTheme === 'light' ? '#475569' : '#cbd5e1', border: 'rgba(148,163,184,0.3)' };
+                return { bg: 'rgba(148,163,184,0.12)', fg: '#cbd5e1', border: 'rgba(148,163,184,0.3)' };
             };
             const filasHtml = (busqueda) => {
                 const q = (busqueda || '').trim().toLowerCase();
                 const filtradas = q ? descripciones.filter(d => d.descripcion.toLowerCase().includes(q)) : descripciones;
                 if (filtradas.length === 0) {
-                    return `<div style="text-align:center;color:var(--slate-400);padding:28px 12px;font-size:12px;">Ningún resultado para "${busqueda}".</div>`;
+                    return `<div style="text-align:center;color:#94a3b8;padding:28px 12px;font-size:12px;">Ningún resultado para "${busqueda}".</div>`;
                 }
                 return filtradas.slice(0, 200).map(d => {
                     const c = estadoColorConsulta(d.estado);
                     return `
-                    <button type="button" class="consulta-rmd-item" onclick="verHistorialConsultaRMD(${JSON.stringify(d.descripcion).replace(/"/g, '&quot;')})" style="width:100%;text-align:left;padding:10px 14px;border:none;border-bottom:1px solid var(--card-border-highlight);background:transparent;color:var(--app-text);font-size:12.5px;cursor:pointer;transition:background .15s;">
+                    <button type="button" class="consulta-rmd-item" onclick="verHistorialConsultaRMD(${JSON.stringify(d.descripcion).replace(/"/g, '&quot;')})" style="width:100%;text-align:left;padding:10px 14px;border:none;border-bottom:1px solid rgba(255,255,255,0.06);background:transparent;color:#e2e8f0;font-size:12.5px;cursor:pointer;transition:background .15s;">
                         <div style="margin-bottom:4px;">${escapeHtmlConsulta(d.descripcion)}</div>
                         <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
-                            ${d.etapa ? `<span style="font-size:10px;color:var(--slate-400);background:rgba(255,255,255,0.05);border-radius:5px;padding:1.5px 7px;">${escapeHtmlConsulta(d.etapa)}</span>` : ''}
+                            ${d.etapa ? `<span style="font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.05);border-radius:5px;padding:1.5px 7px;">${escapeHtmlConsulta(d.etapa)}</span>` : ''}
                             ${d.estado ? `<span style="font-size:10px;font-weight:700;padding:1.5px 7px;border-radius:5px;background:${c.bg};color:${c.fg};border:1px solid ${c.border};text-transform:uppercase;letter-spacing:.02em;">${escapeHtmlConsulta(d.estado)}</span>` : ''}
                         </div>
                     </button>`;
-                }).join('') + (filtradas.length > 200 ? `<div style="text-align:center;color:var(--slate-400);padding:10px;font-size:11px;">Mostrando 200 de ${filtradas.length} resultados. Sigue escribiendo para acotar.</div>` : '');
+                }).join('') + (filtradas.length > 200 ? `<div style="text-align:center;color:#94a3b8;padding:10px;font-size:11px;">Mostrando 200 de ${filtradas.length} resultados. Sigue escribiendo para acotar.</div>` : '');
             };
 
             Swal.fire({
                 title: 'Consultar RMD',
                 html: `<div style="text-align:left;">
                     <input id="consultaRmdInput" type="text" placeholder="Buscar por Descripción RMD..." value="${filtroInicial ? escapeHtmlConsulta(filtroInicial) : ''}"
-                        style="width:100%;padding:8px 12px;border-radius:8px;border:1px solid var(--card-border-highlight);background:var(--surface-2-soft);color:var(--app-text);font-size:12.5px;margin-bottom:10px;outline:none;">
-                    <div id="consultaRmdLista" style="max-height:50vh;overflow-y:auto;border:1px solid var(--card-border-highlight);border-radius:8px;">${filasHtml(filtroInicial)}</div>
+                        style="width:100%;padding:8px 12px;border-radius:8px;border:1px solid rgba(255,255,255,0.12);background:rgba(15,23,42,0.6);color:#f8fafc;font-size:12.5px;margin-bottom:10px;outline:none;">
+                    <div id="consultaRmdLista" style="max-height:50vh;overflow-y:auto;border:1px solid rgba(255,255,255,0.08);border-radius:8px;">${filasHtml(filtroInicial)}</div>
                 </div>`,
                 width: 'min(520px, 94vw)',
                 showConfirmButton: false,
@@ -2145,29 +1955,29 @@
                 const e = (estado || '').toLowerCase();
                 if (e.includes('autoriz')) return { bg: 'rgba(16,185,129,0.12)', fg: '#6ee7b7', border: 'rgba(16,185,129,0.3)' };
                 if (e.includes('suspend')) return { bg: 'rgba(239,68,68,0.12)', fg: '#fca5a5', border: 'rgba(239,68,68,0.3)' };
-                return { bg: 'rgba(148,163,184,0.12)', fg: currentAppTheme === 'light' ? '#475569' : '#cbd5e1', border: 'rgba(148,163,184,0.3)' };
+                return { bg: 'rgba(148,163,184,0.12)', fg: '#cbd5e1', border: 'rgba(148,163,184,0.3)' };
             };
             const maxVersion = historial.length ? Math.max(...historial.map(h => h.version || 0)) : 0;
 
             const timelineHtml = historial.length === 0
-                ? `<div style="text-align:center;color:var(--slate-400);padding:28px 12px;font-size:12px;">Sin historial disponible para este producto.</div>`
+                ? `<div style="text-align:center;color:#94a3b8;padding:28px 12px;font-size:12px;">Sin historial disponible para este producto.</div>`
                 : historial.map(h => {
                     const c = estadoColor(h.estado);
                     const isLatest = h.version === maxVersion;
-                    return `<div style="display:flex;gap:12px;padding:12px 4px;border-bottom:1px solid var(--card-border-highlight);${isLatest ? 'background:rgba(16,185,129,0.04);' : ''}">
+                    return `<div style="display:flex;gap:12px;padding:12px 4px;border-bottom:1px solid rgba(255,255,255,0.06);${isLatest ? 'background:rgba(16,185,129,0.04);' : ''}">
                         <div style="flex-shrink:0;width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;background:${c.bg};color:${c.fg};border:1px solid ${c.border};">v${h.version ?? '?'}</div>
                         <div style="flex:1;min-width:0;">
                             <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:3px;">
                                 <span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:999px;background:${c.bg};color:${c.fg};border:1px solid ${c.border};text-transform:uppercase;letter-spacing:.03em;">${escapeHtmlConsulta(h.estado || '-')}</span>
                                 ${isLatest ? '<span style="font-size:9.5px;color:#a78bfa;font-weight:600;">· versión actual</span>' : ''}
                             </div>
-                            <div style="font-size:11px;color:var(--slate-400);display:grid;grid-template-columns:1fr 1fr;gap:2px 10px;">
-                                <span>Registro: <span style="color:var(--slate-300);">${h.fechaRegistro || '-'}</span></span>
-                                <span>Autorización: <span style="color:var(--slate-300);">${h.fechaAutorizacion || '-'}</span></span>
-                                <span>Por: <span style="color:var(--slate-300);">${escapeHtmlConsulta(h.usuarioRegistro || '-')}</span></span>
-                                <span>Por: <span style="color:var(--slate-300);">${escapeHtmlConsulta(h.usuarioAutorizacion || '-')}</span></span>
+                            <div style="font-size:11px;color:#94a3b8;display:grid;grid-template-columns:1fr 1fr;gap:2px 10px;">
+                                <span>Registro: <span style="color:#cbd5e1;">${h.fechaRegistro || '-'}</span></span>
+                                <span>Autorización: <span style="color:#cbd5e1;">${h.fechaAutorizacion || '-'}</span></span>
+                                <span>Por: <span style="color:#cbd5e1;">${escapeHtmlConsulta(h.usuarioRegistro || '-')}</span></span>
+                                <span>Por: <span style="color:#cbd5e1;">${escapeHtmlConsulta(h.usuarioAutorizacion || '-')}</span></span>
                             </div>
-                            ${h.observacion ? `<div style="font-size:11px;color:var(--slate-400);margin-top:5px;background:rgba(255,255,255,0.03);border-radius:6px;padding:6px 8px;">${escapeHtmlConsulta(h.observacion)}</div>` : ''}
+                            ${h.observacion ? `<div style="font-size:11px;color:#94a3b8;margin-top:5px;background:rgba(255,255,255,0.03);border-radius:6px;padding:6px 8px;">${escapeHtmlConsulta(h.observacion)}</div>` : ''}
                         </div>
                     </div>`;
                 }).join('');
@@ -2175,7 +1985,7 @@
             Swal.fire({
                 title: 'Historial RMD',
                 html: `<div style="text-align:left;">
-                    <div style="font-size:12.5px;color:var(--app-text);font-weight:600;margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid var(--card-border-highlight);">${escapeHtmlConsulta(descripcion)}</div>
+                    <div style="font-size:12.5px;color:#e2e8f0;font-weight:600;margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid rgba(255,255,255,0.08);">${escapeHtmlConsulta(descripcion)}</div>
                     <div style="max-height:55vh;overflow-y:auto;">${timelineHtml}</div>
                 </div>`,
                 width: 'min(560px, 94vw)',
@@ -2257,7 +2067,7 @@ alter publication supabase_realtime add table public.rmd_dashboard_kv;`;
                 : '<span style="color:#fca5a5;">✗ Sin conexión</span> — puede que la tabla aún no exista en Supabase, o que no haya red. Mientras tanto, los datos quedan en una copia local del navegador y se subirán solos en cuanto se restablezca la conexión.';
             Swal.fire({
                 title: 'Conexión con Supabase',
-                html: `<div style="text-align:left;font-size:12.5px;color:var(--slate-300);">
+                html: `<div style="text-align:left;font-size:12.5px;color:#cbd5e1;">
                     <p style="margin-bottom:10px;">${estadoTxt}</p>
                     <p style="margin-bottom:6px;">Si es la primera vez, ejecuta este SQL una sola vez en el editor SQL de tu proyecto de Supabase para crear la tabla (no afecta ninguna tabla existente):</p>
                     <div style="background:#1c2128;border-radius:8px;padding:12px 14px;">
@@ -2474,7 +2284,7 @@ alter publication supabase_realtime add table public.rmd_dashboard_kv;`;
         async function pedirDNI(accionTexto) {
             const { value: entrada, isConfirmed } = await Swal.fire({
                 title: 'Identificación requerida',
-                html: `<p style="font-size:13px;color:var(--slate-300);margin-bottom:10px;text-align:left;">Ingresa tu N° de DNI para dejar constancia de esta acción${accionTexto ? ` (${accionTexto})` : ''}.</p>`,
+                html: `<p style="font-size:13px;color:#cbd5e1;margin-bottom:10px;text-align:left;">Ingresa tu N° de DNI para dejar constancia de esta acción${accionTexto ? ` (${accionTexto})` : ''}.</p>`,
                 input: 'text',
                 inputPlaceholder: 'N° de DNI',
                 showCancelButton: true,
@@ -2540,17 +2350,17 @@ alter publication supabase_realtime add table public.rmd_dashboard_kv;`;
         async function openHistorialTrazabilidadModal() {
             const entradas = await actualizarBadgeHistorial();
             const filasHtml = entradas.length === 0
-                ? `<tr><td colspan="4" style="text-align:center;color:var(--slate-400);padding:24px;font-size:12px;">Aún no hay registros de carga o eliminación de archivos.</td></tr>`
+                ? `<tr><td colspan="4" style="text-align:center;color:#94a3b8;padding:24px;font-size:12px;">Aún no hay registros de carga o eliminación de archivos.</td></tr>`
                 : entradas.map(e => {
                     const fecha = new Date(e.fecha);
                     const fechaTxt = isNaN(fecha) ? '-' : dayjs(fecha).format('YYYY-MM-DD HH:mm');
                     const esElim = e.accion && e.accion.toLowerCase().includes('elimin');
                     const accionColor = esElim ? '#fca5a5' : '#6ee7b7';
-                    return `<tr style="border-bottom:1px solid var(--card-border-highlight);">
-                        <td style="padding:6px 8px;white-space:nowrap;color:var(--slate-300);">${fechaTxt}</td>
+                    return `<tr style="border-bottom:1px solid rgba(255,255,255,0.06);">
+                        <td style="padding:6px 8px;white-space:nowrap;color:#cbd5e1;">${fechaTxt}</td>
                         <td style="padding:6px 8px;white-space:nowrap;color:${accionColor};">${e.accion || '-'}</td>
-                        <td style="padding:6px 8px;color:var(--slate-300);">${e.detalle || '-'}</td>
-                        <td style="padding:6px 8px;white-space:nowrap;color:var(--slate-400);">${e.usuario || '-'}</td>
+                        <td style="padding:6px 8px;color:#cbd5e1;">${e.detalle || '-'}</td>
+                        <td style="padding:6px 8px;white-space:nowrap;color:#94a3b8;">${e.usuario || '-'}</td>
                     </tr>`;
                 }).join('');
             Swal.fire({
@@ -2558,10 +2368,10 @@ alter publication supabase_realtime add table public.rmd_dashboard_kv;`;
                 html: `<div style="max-height:60vh;overflow-y:auto;text-align:left;">
                     <table style="width:100%;border-collapse:collapse;font-size:11.5px;">
                         <thead><tr style="border-bottom:1px solid rgba(255,255,255,0.12);">
-                            <th style="padding:6px 8px;text-align:left;color:var(--slate-400);font-size:10px;text-transform:uppercase;">Fecha</th>
-                            <th style="padding:6px 8px;text-align:left;color:var(--slate-400);font-size:10px;text-transform:uppercase;">Acción</th>
-                            <th style="padding:6px 8px;text-align:left;color:var(--slate-400);font-size:10px;text-transform:uppercase;">Detalle</th>
-                            <th style="padding:6px 8px;text-align:left;color:var(--slate-400);font-size:10px;text-transform:uppercase;">Usuario</th>
+                            <th style="padding:6px 8px;text-align:left;color:#94a3b8;font-size:10px;text-transform:uppercase;">Fecha</th>
+                            <th style="padding:6px 8px;text-align:left;color:#94a3b8;font-size:10px;text-transform:uppercase;">Acción</th>
+                            <th style="padding:6px 8px;text-align:left;color:#94a3b8;font-size:10px;text-transform:uppercase;">Detalle</th>
+                            <th style="padding:6px 8px;text-align:left;color:#94a3b8;font-size:10px;text-transform:uppercase;">Usuario</th>
                         </tr></thead>
                         <tbody>${filasHtml}</tbody>
                     </table>
@@ -2574,27 +2384,71 @@ alter publication supabase_realtime add table public.rmd_dashboard_kv;`;
             });
         }
 
-        // ==================== NAV PRINCIPAL: pill deslizante glass ====================
+        // ==================== GOOEY NAV ====================
         function initGooeyNav() {
             const container = document.getElementById('gooeyNavContainer');
             const navList = document.getElementById('gooeyNavList');
-            const pillEl = document.getElementById('gooeyNavPill');
+            const filterEl = document.getElementById('gooeyFilter');
             const items = navList.querySelectorAll('li');
 
-            const updatePillPosition = (element, animate) => {
-                if (!container || !pillEl || !element) return;
+            const animationTime = 600;
+            const particleCount = 12;
+            const particleDistances = [70, 8];
+            const particleR = 80;
+            const timeVariance = 300;
+            const colors = [1, 2, 3, 1, 2, 3, 1, 4];
+
+            const noise = (n = 1) => n / 2 - Math.random() * n;
+            const getXY = (distance, pointIndex, totalPoints) => {
+                const angle = ((360 + noise(8)) / totalPoints) * pointIndex * (Math.PI / 180);
+                return [distance * Math.cos(angle), distance * Math.sin(angle)];
+            };
+            const createParticle = (i, t, d, r) => {
+                let rotate = noise(r / 10);
+                return {
+                    start: getXY(d[0], particleCount - i, particleCount),
+                    end: getXY(d[1] + noise(7), particleCount - i, particleCount),
+                    time: t, scale: 1 + noise(0.2), color: colors[Math.floor(Math.random() * colors.length)],
+                    rotate: rotate > 0 ? (rotate + r / 20) * 10 : (rotate - r / 20) * 10
+                };
+            };
+
+            const makeParticles = (element) => {
+                const d = particleDistances, r = particleR;
+                element.classList.remove('active');
+                element.classList.add('is-bursting');
+                let maxDuration = 0;
+                for (let i = 0; i < particleCount; i++) {
+                    const t = animationTime * 2 + noise(timeVariance * 2);
+                    maxDuration = Math.max(maxDuration, t);
+                    const p = createParticle(i, t, d, r);
+                    setTimeout(() => {
+                        const particle = document.createElement('span');
+                        const point = document.createElement('span');
+                        particle.classList.add('particle');
+                        particle.style.setProperty('--start-x', `${p.start[0]}px`);
+                        particle.style.setProperty('--start-y', `${p.start[1]}px`);
+                        particle.style.setProperty('--end-x', `${p.end[0]}px`);
+                        particle.style.setProperty('--end-y', `${p.end[1]}px`);
+                        particle.style.setProperty('--time', `${p.time}ms`);
+                        particle.style.setProperty('--scale', `${p.scale}`);
+                        particle.style.setProperty('--color', `var(--color-${p.color}, white)`);
+                        particle.style.setProperty('--rotate', `${p.rotate}deg`);
+                        point.classList.add('point');
+                        particle.appendChild(point);
+                        element.appendChild(particle);
+                        requestAnimationFrame(() => { element.classList.add('active'); });
+                        setTimeout(() => { try { element.removeChild(particle); } catch {} }, t);
+                    }, 30);
+                }
+                setTimeout(() => { element.classList.remove('is-bursting', 'active'); }, maxDuration + 60);
+            };
+
+            const updateEffectPosition = (element) => {
+                if (!container || !filterEl) return;
                 const containerRect = container.getBoundingClientRect();
                 const pos = element.getBoundingClientRect();
-                const styles = { left: `${pos.x - containerRect.x}px`, top: `${pos.y - containerRect.y}px`, width: `${pos.width}px`, height: `${pos.height}px` };
-                if (!animate) pillEl.style.transition = 'none';
-                Object.assign(pillEl.style, styles);
-                if (!animate) {
-                    // Fuerza el reflow antes de reactivar la transición, para que
-                    // el primer posicionamiento (al cargar la página) no se anime
-                    // desde la esquina superior izquierda.
-                    void pillEl.offsetWidth;
-                    pillEl.style.transition = '';
-                }
+                Object.assign(filterEl.style, { left: `${pos.x - containerRect.x}px`, top: `${pos.y - containerRect.y}px`, width: `${pos.width}px`, height: `${pos.height}px` });
             };
 
             const handleNavClick = (index, liEl) => {
@@ -2602,15 +2456,18 @@ alter publication supabase_realtime add table public.rmd_dashboard_kv;`;
                 gooeyActiveIndex = index;
                 items.forEach(item => item.classList.remove('active'));
                 liEl.classList.add('active');
-                updatePillPosition(liEl, true);
+                updateEffectPosition(liEl);
+                if (filterEl) {
+                    const particles = filterEl.querySelectorAll('.particle');
+                    particles.forEach(p => filterEl.removeChild(p));
+                    makeParticles(filterEl);
+                }
                 gsap.fromTo(liEl.querySelector('a'), { scale: 0.85 }, { scale: 1, duration: 0.45, ease: "elastic.out(1, 0.5)" });
                 switchTab(liEl.getAttribute('data-tab'));
             };
 
             const activeLi = items[gooeyActiveIndex];
-            if (activeLi) {
-                setTimeout(() => updatePillPosition(activeLi, false), 100);
-            }
+            if (activeLi) setTimeout(() => updateEffectPosition(activeLi), 100);
             items.forEach((li, index) => {
                 li.addEventListener('click', () => handleNavClick(index, li));
                 li.addEventListener('keydown', (e) => {
@@ -2620,7 +2477,7 @@ alter publication supabase_realtime add table public.rmd_dashboard_kv;`;
 
             const resizeObserver = new ResizeObserver(() => {
                 const currentActive = items[gooeyActiveIndex];
-                if (currentActive) updatePillPosition(currentActive, false);
+                if (currentActive) updateEffectPosition(currentActive);
             });
             resizeObserver.observe(container);
         }
@@ -3031,7 +2888,7 @@ let gooeyActiveIndex = 0; // arranca en "forecast" (pestaña activa por defecto)
                 if (critStr) { const week = `S${dayjs(formatToIso(critStr)).week()}`; weekCounts[week] = (weekCounts[week] || 0) + 1; }
                 p.dates.forEach(d => { const fmt = formatToIso(d); dateCounts[fmt] = (dateCounts[fmt] || 0) + 1; });
             });
-            Chart.defaults.color = currentAppTheme === 'light' ? '#475569' : '#94a3b8'; Chart.defaults.font.family = 'Inter';
+            Chart.defaults.color = '#94a3b8'; Chart.defaults.font.family = 'Inter';
             const ctxWeekly = document.getElementById('chartWeeklyRMD').getContext('2d');
             if (chartWeeklyInst) chartWeeklyInst.destroy();
             let gradW = ctxWeekly.createLinearGradient(0, 0, 0, 400); gradW.addColorStop(0, 'rgba(59, 130, 246, 0.85)'); gradW.addColorStop(1, 'rgba(59, 130, 246, 0.1)');
@@ -3042,9 +2899,9 @@ let gooeyActiveIndex = 0; // arranca en "forecast" (pestaña activa por defecto)
                     responsive: true, maintainAspectRatio: false,
                     plugins: {
                         legend: { display: false },
-                        tooltip: { ...getChartTooltipTheme(), borderColor: 'rgba(59,130,246,0.4)', borderWidth: 1, padding: 10, displayColors: false, callbacks: { title: (items) => `Semana ${items[0].label.replace('S','')}`, label: (c) => `${c.raw} órdenes` } }
+                        tooltip: { backgroundColor: 'rgba(15,23,42,0.95)', borderColor: 'rgba(59,130,246,0.4)', borderWidth: 1, padding: 10, titleColor: '#f8fafc', bodyColor: '#cbd5e1', displayColors: false, callbacks: { title: (items) => `Semana ${items[0].label.replace('S','')}`, label: (c) => `${c.raw} órdenes` } }
                     },
-                    scales: { y: { grid: { color: (currentAppTheme === 'light' ? 'rgba(15,23,42,0.08)' : 'rgba(255,255,255,0.05)') }, ticks: { precision: 0 } }, x: { grid: { display: false } } }
+                    scales: { y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { precision: 0 } }, x: { grid: { display: false } } }
                 }
             });
             const ctxTime = document.getElementById('chartTimelineRMD').getContext('2d');
@@ -3058,9 +2915,9 @@ let gooeyActiveIndex = 0; // arranca en "forecast" (pestaña activa por defecto)
                     indexAxis: 'y', responsive: true, maintainAspectRatio: false,
                     plugins: {
                         legend: { display: false },
-                        tooltip: { ...getChartTooltipTheme(), borderColor: 'rgba(16,185,129,0.4)', borderWidth: 1, padding: 10, displayColors: false, callbacks: { label: (c) => `${c.raw} órdenes programadas` } }
+                        tooltip: { backgroundColor: 'rgba(15,23,42,0.95)', borderColor: 'rgba(16,185,129,0.4)', borderWidth: 1, padding: 10, titleColor: '#f8fafc', bodyColor: '#cbd5e1', displayColors: false, callbacks: { label: (c) => `${c.raw} órdenes programadas` } }
                     },
-                    scales: { x: { grid: { color: (currentAppTheme === 'light' ? 'rgba(15,23,42,0.08)' : 'rgba(255,255,255,0.05)') }, ticks: { precision: 0 } }, y: { grid: { display: false } } }
+                    scales: { x: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { precision: 0 } }, y: { grid: { display: false } } }
                 }
             });
         }
@@ -3078,8 +2935,8 @@ let gooeyActiveIndex = 0; // arranca en "forecast" (pestaña activa por defecto)
 
         function showProductModalRMD(product) {
             Swal.fire({
-                title: `<div class="text-lg font-bold text-left border-b border-slate-700/50 pb-2 mb-2 flex justify-between" style="color: var(--app-text);"><span>Detalle de Orden</span><span class="text-xs bg-blue-500/20 text-blue-400 px-2 py-0.5 rounded-full">#${product.orden}</span></div>`,
-                html: `<div class="text-left space-y-3 text-sm px-1"><div class="grid grid-cols-2 gap-3 bg-slate-800/30 p-3 rounded-lg"><div><span class="text-slate-400 block text-xs uppercase">Planta</span><span class="font-semibold text-slate-200">${product.planta}</span></div><div><span class="text-slate-400 block text-xs uppercase">Código</span><span class="font-semibold text-slate-200">${product.codigo}</span></div></div><div class="bg-indigo-900/20 border border-indigo-500/30 p-2.5 rounded-lg flex justify-between"><span class="text-indigo-300 text-xs uppercase">Etapa</span><span class="font-bold text-indigo-400 text-xs">${getEtapaNombre(product.etapa)}</span></div><div><span class="text-slate-400 text-xs uppercase">Descripción</span><br><span class="font-medium text-slate-200">${product.descripcion}</span></div><div><span class="text-slate-400 text-xs uppercase">Fechas</span><br><div class="mt-1.5">${product.dates.map(d => `<span class="inline-block bg-slate-700/50 border border-slate-600 px-2 py-0.5 rounded text-xs text-slate-200 mr-1.5 mb-1.5">${d}</span>`).join('')}</div></div><div class="mt-4 pt-3 border-t border-slate-700/50"><h4 class="font-semibold text-slate-200 mb-2 text-xs uppercase">Observaciones</h4><div class="flex gap-1.5 mb-2"><input type="text" id="swal-note-input-rmd" class="flex-1 bg-slate-900/50 border border-slate-600 rounded-lg px-2.5 py-2 text-xs focus:outline-none" style="color: var(--app-text);" placeholder="Añadir nota..." aria-label="Añadir observación"><button onclick="handleAddNoteRMD('${product.orden}')" class="bg-blue-600 hover:bg-blue-500 text-white px-3 py-2 rounded-lg text-xs min-w-[44px]">Guardar</button></div><div id="swal-notes-list-rmd" class="space-y-1.5 max-h-32 overflow-y-auto"></div></div></div>`,
+                title: `<div class="text-lg font-bold text-left text-white border-b border-slate-700/50 pb-2 mb-2 flex justify-between"><span>Detalle de Orden</span><span class="text-xs bg-blue-500/20 text-blue-400 px-2 py-0.5 rounded-full">#${product.orden}</span></div>`,
+                html: `<div class="text-left space-y-3 text-sm px-1"><div class="grid grid-cols-2 gap-3 bg-slate-800/30 p-3 rounded-lg"><div><span class="text-slate-400 block text-xs uppercase">Planta</span><span class="font-semibold text-slate-200">${product.planta}</span></div><div><span class="text-slate-400 block text-xs uppercase">Código</span><span class="font-semibold text-slate-200">${product.codigo}</span></div></div><div class="bg-indigo-900/20 border border-indigo-500/30 p-2.5 rounded-lg flex justify-between"><span class="text-indigo-300 text-xs uppercase">Etapa</span><span class="font-bold text-indigo-400 text-xs">${getEtapaNombre(product.etapa)}</span></div><div><span class="text-slate-400 text-xs uppercase">Descripción</span><br><span class="font-medium text-slate-200">${product.descripcion}</span></div><div><span class="text-slate-400 text-xs uppercase">Fechas</span><br><div class="mt-1.5">${product.dates.map(d => `<span class="inline-block bg-slate-700/50 border border-slate-600 px-2 py-0.5 rounded text-xs text-slate-200 mr-1.5 mb-1.5">${d}</span>`).join('')}</div></div><div class="mt-4 pt-3 border-t border-slate-700/50"><h4 class="font-semibold text-slate-200 mb-2 text-xs uppercase">Observaciones</h4><div class="flex gap-1.5 mb-2"><input type="text" id="swal-note-input-rmd" class="flex-1 bg-slate-900/50 border border-slate-600 rounded-lg px-2.5 py-2 text-xs text-white focus:outline-none" placeholder="Añadir nota..." aria-label="Añadir observación"><button onclick="handleAddNoteRMD('${product.orden}')" class="bg-blue-600 hover:bg-blue-500 text-white px-3 py-2 rounded-lg text-xs min-w-[44px]">Guardar</button></div><div id="swal-notes-list-rmd" class="space-y-1.5 max-h-32 overflow-y-auto"></div></div></div>`,
                 showConfirmButton: false, showCloseButton: true, width: 'min(550px, 94vw)', didOpen: () => renderModalNotesRMD(product.orden)
             });
         }
@@ -3838,7 +3695,7 @@ function buildDateColumnMapPlanta1(headerRow, weekLabelRow, hiddenCols) {
             const lb = sa, dt = sa.map(a => apc[a]), cl = sa.map(a => getAreaColor(a));
             const tot = dt.reduce((s, v) => s + v, 0); const pct = dt.map(v => tot > 0 ? ((v / tot) * 100).toFixed(1) : 0);
             if (chartAreaDist) chartAreaDist.destroy();
-            Chart.defaults.color = currentAppTheme === 'light' ? '#475569' : '#94a3b8'; Chart.defaults.font.family = 'Inter';
+            Chart.defaults.color = '#94a3b8'; Chart.defaults.font.family = 'Inter';
             chartAreaDist = new Chart(ctx, {
                 type: 'bar',
                 data: { labels: lb, datasets: [{ label: 'Productos', data: dt, backgroundColor: cl.map(c => c + '99'), borderColor: cl, borderWidth: 2, borderRadius: 8, borderSkipped: false }] },
@@ -3846,9 +3703,9 @@ function buildDateColumnMapPlanta1(headerRow, weekLabelRow, hiddenCols) {
                     indexAxis: 'y', responsive: true, maintainAspectRatio: false,
                     plugins: {
                         legend: { display: false },
-                        tooltip: { ...getChartTooltipTheme(), borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', padding: 10, displayColors: true, callbacks: { label: function (c) { return ` ${c.raw} productos (${pct[c.dataIndex]}%)`; } } }
+                        tooltip: { backgroundColor: 'rgba(15,23,42,0.95)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', padding: 10, titleColor: '#f8fafc', bodyColor: '#cbd5e1', displayColors: true, callbacks: { label: function (c) { return ` ${c.raw} productos (${pct[c.dataIndex]}%)`; } } }
                     },
-                    scales: { x: { grid: { color: (currentAppTheme === 'light' ? 'rgba(15,23,42,0.08)' : 'rgba(255,255,255,0.05)') }, ticks: { stepSize: 1, precision: 0 } }, y: { grid: { display: false }, reverse: true } }
+                    scales: { x: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { stepSize: 1, precision: 0 } }, y: { grid: { display: false }, reverse: true } }
                 }
             });
         }
@@ -3868,7 +3725,7 @@ function buildDateColumnMapPlanta1(headerRow, weekLabelRow, hiddenCols) {
             const labels = sa, data = sa.map(a => apc[a]), colors = sa.map(a => getAreaColor(a));
             const total = data.reduce((s, v) => s + v, 0);
             if (chartPie3D) chartPie3D.destroy();
-            Chart.defaults.color = currentAppTheme === 'light' ? '#475569' : '#94a3b8'; Chart.defaults.font.family = 'Inter';
+            Chart.defaults.color = '#94a3b8'; Chart.defaults.font.family = 'Inter';
             chartPie3D = new Chart(ctx, {
                 type: 'doughnut',
                 data: { labels: labels, datasets: [{ data: data, backgroundColor: colors.map(c => c + 'CC'), borderColor: colors, borderWidth: 3, hoverBorderWidth: 5, hoverBorderColor: '#ffffff', borderRadius: 4, spacing: 6 }] },
@@ -3890,7 +3747,7 @@ function buildDateColumnMapPlanta1(headerRow, weekLabelRow, hiddenCols) {
                             }
                         },
                         tooltip: {
-                            ...getChartTooltipTheme(), borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', padding: 10,
+                            backgroundColor: 'rgba(15,23,42,0.95)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', padding: 10, titleColor: '#f8fafc', bodyColor: '#cbd5e1',
                             callbacks: { label: function (context) { const value = context.raw; const pct = ((value / total) * 100).toFixed(1); return ` ${context.label}: ${value} productos (${pct}%)`; } }
                         }
                     },
@@ -3921,7 +3778,7 @@ function buildDateColumnMapPlanta1(headerRow, weekLabelRow, hiddenCols) {
             gradient.addColorStop(0, 'rgba(59, 130, 246, 0.45)');
             gradient.addColorStop(1, 'rgba(59, 130, 246, 0.0)');
 
-            Chart.defaults.color = currentAppTheme === 'light' ? '#475569' : '#94a3b8'; Chart.defaults.font.family = 'Inter';
+            Chart.defaults.color = '#94a3b8'; Chart.defaults.font.family = 'Inter';
             chartTrendProd = new Chart(ctx, {
                 type: 'line',
                 data: { labels: displayLabels, datasets: [{ label: 'Productos programados', data: values, borderColor: '#60a5fa', backgroundColor: gradient, fill: true, tension: 0.35, pointRadius: 3, pointBackgroundColor: '#3b82f6', pointBorderColor: '#0b1120', pointBorderWidth: 2, pointHoverRadius: 6 }] },
@@ -3930,10 +3787,10 @@ function buildDateColumnMapPlanta1(headerRow, weekLabelRow, hiddenCols) {
                     interaction: { mode: 'index', intersect: false },
                     plugins: {
                         legend: { display: false },
-                        tooltip: { ...getChartTooltipTheme(), borderWidth: 1, borderColor: 'rgba(59,130,246,0.4)', padding: 12, displayColors: false, callbacks: { label: (c) => `${c.raw} productos programados` } }
+                        tooltip: { backgroundColor: 'rgba(15,23,42,0.95)', borderWidth: 1, borderColor: 'rgba(59,130,246,0.4)', padding: 12, titleColor: '#f8fafc', bodyColor: '#cbd5e1', displayColors: false, callbacks: { label: (c) => `${c.raw} productos programados` } }
                     },
                     scales: {
-                        y: { grid: { color: (currentAppTheme === 'light' ? 'rgba(15,23,42,0.08)' : 'rgba(255,255,255,0.05)') }, ticks: { precision: 0 }, beginAtZero: true },
+                        y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { precision: 0 }, beginAtZero: true },
                         x: { grid: { display: false }, ticks: { maxRotation: 0, autoSkip: true, maxTicksLimit: 8 } }
                     }
                 }
@@ -3944,7 +3801,7 @@ function buildDateColumnMapPlanta1(headerRow, weekLabelRow, hiddenCols) {
             const c = getAreaColor(item.area);
             const plantaBadge = item.planta ? `<div><span class="text-slate-400 block text-xs uppercase">Planta de origen</span><span class="font-medium text-slate-200">${item.planta === 'planta1' ? 'Planta 1' : 'Planta 2'}</span></div>` : '';
             Swal.fire({
-                title: `<div class="text-base font-bold text-left border-b border-slate-700/50 pb-2 flex justify-between" style="color: var(--app-text);"><span>Detalle</span><span class="text-xs px-2 py-0.5 rounded text-white" style="background-color:${c}">${item.area}</span></div>`,
+                title: `<div class="text-base font-bold text-left text-white border-b border-slate-700/50 pb-2 flex justify-between"><span>Detalle</span><span class="text-xs px-2 py-0.5 rounded text-white" style="background-color:${c}">${item.area}</span></div>`,
                 html: `<div class="text-left space-y-3 text-sm mt-2"><div><span class="text-slate-400 block text-xs uppercase">Código</span><span class="font-bold text-slate-200">${item.codigo}</span></div><div><span class="text-slate-400 block text-xs uppercase">Producto</span><span class="font-medium text-slate-200">${item.producto}</span></div>${plantaBadge}<div><span class="text-slate-400 block text-xs uppercase mb-1.5">Días</span><div class="flex flex-wrap gap-1.5">${item.fechas.map(d => `<span class="bg-slate-800 border border-slate-600 px-2 py-0.5 rounded text-xs text-emerald-400">${dayjs(d).format('YYYY-MM-DD')}</span>`).join('')}</div></div></div>`,
                 showConfirmButton: true, confirmButtonText: 'Cerrar', width: 'min(500px, 94vw)',
                 customClass: { confirmButton: 'bg-slate-700 hover:bg-slate-600 text-white px-4 py-2.5 rounded-lg text-xs min-w-[44px]' },
@@ -4425,54 +4282,26 @@ async function downloadPlanProduccionFromCloud() {
         // guardados — incluida cualquier etapa que en esta pasada puntual ya
         // no aparezca, para no perder datos por timing entre recálculos.
         // Después de cada corrida de runValidacionMateriales(), borra el
-        // responsable guardado SOLO si el material ya no existe en NINGÚN
-        // archivo cargado (ni Planta 1 ni Planta 2, sin importar cuál esté
-        // viendo el usuario ahora mismo). Antes esta limpieza comparaba
-        // contra los pendientes de la vista activa únicamente, lo que
-        // borraba por error responsables de materiales que seguían vigentes
-        // en la otra planta o en el consolidado. Ahora se leen ambos
-        // archivos directamente de Supabase (storeGet), sin depender de qué
-        // planta está cargada en memoria en este momento, así que el
-        // responsable persiste sin importar cuántas veces se recargue la
-        // página, se cargue un archivo nuevo, o se cambie de planta.
-        let limpiezaResponsablesEnCurso = false;
-        async function limpiarResponsablesDeMaterialesAutorizados() {
-            // Evita que dos corridas se pisen entre sí si el usuario navega
-            // muy rápido entre pestañas/plantas mientras esto sigue en curso.
-            if (limpiezaResponsablesEnCurso) return;
-            limpiezaResponsablesEnCurso = true;
-            try {
-                const [d1, d2] = await Promise.all([storeGet('prod_data_planta1'), storeGet('prod_data_planta2')]);
-                const materialesConocidos = new Set();
-                [d1, d2].forEach(saved => {
-                    if (!saved || !Array.isArray(saved.data)) return;
-                    saved.data.forEach(item => {
-                        const cod = normalizeMaterialCode(item.codigo);
-                        if (cod) materialesConocidos.add(cod);
-                    });
+        // responsable guardado de cualquier combinación material+etapa que ya
+        // NO figure como pendiente (esa etapa puntual fue autorizada, o el
+        // material ya no aparece en la validación). Mientras esa etapa
+        // específica del producto siga pendiente, el responsable asignado se
+        // conserva sin importar cuántas veces se recarguen nuevos archivos —
+        // aunque el producto tenga otras etapas que ya no estén pendientes,
+        // el responsable de la etapa que SÍ sigue pendiente no se toca.
+        function limpiarResponsablesDeMaterialesAutorizados(pendientesActuales) {
+            const clavesVigentes = new Set();
+            pendientesActuales.forEach(p => {
+                (p.etapasPendientes || []).forEach(et => {
+                    const fija = mapEtapaAFija(et);
+                    if (fija) clavesVigentes.add(responsableKey(p.material, fija));
                 });
-                // Si por algún motivo no se pudo leer ningún dato de ninguna
-                // planta (ambas keys vacías/no cargadas todavía), no se borra
-                // nada: es más seguro conservar los responsables de más que
-                // arriesgarse a borrarlos por un problema de lectura temporal.
-                if (materialesConocidos.size === 0) return;
-
-                let changed = false;
-                Array.from(responsablesEtapa.keys()).forEach(k => {
-                    const material = k.split('::')[0];
-                    if (!materialesConocidos.has(material)) { responsablesEtapa.delete(k); changed = true; }
-                });
-                if (changed) {
-                    await saveResponsablesEtapa();
-                    // Refresca la tabla visible (si corresponde) para reflejar
-                    // el cambio, ya que esta limpieza corrió en segundo plano
-                    // después de que la tabla ya se había pintado.
-                    if (currentTab === 'produccion' && typeof refiltrarTablaPendientes === 'function') refiltrarTablaPendientes();
-                    if (currentTab === 'forecast' && typeof refiltrarTablaPendientesForecast === 'function') refiltrarTablaPendientesForecast();
-                }
-            } finally {
-                limpiezaResponsablesEnCurso = false;
-            }
+            });
+            let changed = false;
+            Array.from(responsablesEtapa.keys()).forEach(k => {
+                if (!clavesVigentes.has(k)) { responsablesEtapa.delete(k); changed = true; }
+            });
+            if (changed) saveResponsablesEtapa();
         }
 
         async function loadValidacionData() {
@@ -4635,7 +4464,7 @@ pendientes.forEach(p => {
                 else pendientesReales.push(p);
             });
 
-            limpiarResponsablesDeMaterialesAutorizados();
+            limpiarResponsablesDeMaterialesAutorizados(pendientesReales);
 
             const autorizadosTotal = autorizados + autorizadosManualLista.length;
             ultimoResultadoValidacion = { revisados, autorizados: autorizadosTotal, pendientes: pendientesReales, autorizadosManual: autorizadosManualLista };
@@ -4723,12 +4552,9 @@ pendientes.forEach(p => {
                         const selectId = `resp_${p.material}_${fija}`;
                         const opciones = ['', ...RESPONSABLES_VALIDOS].map(r => `<option value="${r}" ${r === valorActual ? 'selected' : ''}>${r || '—'}</option>`).join('');
                         return `<div class="flex items-center gap-1.5 whitespace-nowrap">
-    <span class="${etapasCls}">${labelTxt}</span>
-    <select id="${selectId}" onchange="setResponsableEtapa('${p.material}','${fija}', this.value)"
-        class="bg-slate-800 border border-slate-600/60 rounded text-[10px] text-slate-100 px-1 py-0.5 focus:outline-none focus:border-blue-500/60"
-        style="color-scheme: ${currentAppTheme};"
-        title="Responsable de ${labelTxt}">${opciones}</select>
-</div>`;
+                            <span class="${etapasCls}">${labelTxt}</span>
+                            <select id="${selectId}" onchange="setResponsableEtapa('${p.material}','${fija}', this.value)" class="bg-slate-800/80 border border-slate-600/60 rounded text-[10px] text-slate-200 px-1 py-0.5 focus:outline-none focus:border-blue-500/60" title="Responsable de ${labelTxt}">${opciones}</select>
+                        </div>`;
                     }).join('');
                 } else {
                     etapasHtml = `<span class="${etapasCls}">${p.motivo || 'No encontrado'}</span>`;
@@ -5152,7 +4978,7 @@ function updateForecastActiveFiltersBadge() {
             gradient.addColorStop(0, 'rgba(244, 63, 94, 0.85)');
             gradient.addColorStop(1, 'rgba(244, 63, 94, 0.1)');
 
-            Chart.defaults.color = currentAppTheme === 'light' ? '#475569' : '#94a3b8'; Chart.defaults.font.family = 'Inter';
+            Chart.defaults.color = '#94a3b8'; Chart.defaults.font.family = 'Inter';
             chartForecastMonthly = new Chart(ctx, {
                 type: 'bar',
                 data: { labels, datasets: [{ label: 'Materiales programados', data: values, backgroundColor: gradient, borderRadius: 8, borderSkipped: false, maxBarThickness: 56 }] },
@@ -5160,9 +4986,9 @@ function updateForecastActiveFiltersBadge() {
                     responsive: true, maintainAspectRatio: false,
                     plugins: {
                         legend: { display: false },
-                        tooltip: { ...getChartTooltipTheme(), borderColor: 'rgba(244,63,94,0.4)', borderWidth: 1, padding: 10, displayColors: false, callbacks: { label: (c) => `${c.raw} materiales con fabricación programada` } }
+                        tooltip: { backgroundColor: 'rgba(15,23,42,0.95)', borderColor: 'rgba(244,63,94,0.4)', borderWidth: 1, padding: 10, titleColor: '#f8fafc', bodyColor: '#cbd5e1', displayColors: false, callbacks: { label: (c) => `${c.raw} materiales con fabricación programada` } }
                     },
-                    scales: { y: { grid: { color: (currentAppTheme === 'light' ? 'rgba(15,23,42,0.08)' : 'rgba(255,255,255,0.05)') }, ticks: { precision: 0 } }, x: { grid: { display: false } } }
+                    scales: { y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { precision: 0 } }, x: { grid: { display: false } } }
                 }
             });
         }
@@ -5970,12 +5796,11 @@ function tourSwitchTab(tab) {
 gooeyActiveIndex = TAB_TO_GOOEY_INDEX[tab] ?? gooeyActiveIndex;
 const activeLi = document.querySelector(`#gooeyNavList li[data-tab="${tab}"]`);
 const container = document.getElementById('gooeyNavContainer');
-const pillEl = document.getElementById('gooeyNavPill');
-if (activeLi && container && pillEl) {
+const filterEl = document.getElementById('gooeyFilter');
+if (activeLi && container && filterEl) {
     const containerRect = container.getBoundingClientRect();
     const pos = activeLi.getBoundingClientRect();
-    const styles = { left: `${pos.x - containerRect.x}px`, top: `${pos.y - containerRect.y}px`, width: `${pos.width}px`, height: `${pos.height}px` };
-    Object.assign(pillEl.style, styles);
+    Object.assign(filterEl.style, { left: `${pos.x - containerRect.x}px`, top: `${pos.y - containerRect.y}px`, width: `${pos.width}px`, height: `${pos.height}px` });
 }
 
     const glowOrb = document.getElementById('glow-orb');
@@ -6111,23 +5936,6 @@ async function maybeAutoStartTour() {
             actualizarBadgeHistorial();
             actualizarIndicadorSupabase();
             iniciarSupabaseRealtime();
-            // Reconciliar el tema con lo guardado en Supabase: si otro
-            // dispositivo lo cambió, se refleja aquí también. La caché local
-            // (localStorage) ya evitó el flash visual mientras esto llegaba.
-            (async () => {
-                try {
-                    const temaGuardado = await storeGet('app_theme');
-                    if (temaGuardado && temaGuardado !== currentAppTheme) {
-                        aplicarTema(temaGuardado, false);
-                        try { localStorage.setItem('app_theme_cache', temaGuardado); } catch (e) { /* best effort */ }
-                    } else {
-                        // Asegura que el switch visual quede sincronizado incluso
-                        // si no hubo que cambiar nada.
-                        const toggle = document.getElementById('themeToggleSwitch');
-                        if (toggle) toggle.classList.toggle('is-light', currentAppTheme === 'light');
-                    }
-                } catch (e) { /* se queda con el tema de la caché local */ }
-            })();
             // loadRMData (módulo OP sin RMD) y loadValidacionData (Base de
             // Datos + RMD Autorizados) son independientes entre sí, así que se
             // lanzan en paralelo. loadProdData sí necesita que
