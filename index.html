@@ -1635,7 +1635,7 @@
             <div id="validacionToolbar" class="flex flex-col sm:flex-row sm:items-center gap-2.5 mb-3" style="display:none;">
                 <div class="relative flex-1 min-w-[160px]">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 text-slate-500 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M17 10a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
-                    <input id="validacionBuscador" type="text" placeholder="Buscar por código o descripción..." oninput="clearTimeout(window.__validacionBuscadorDebounce); window.__validacionBuscadorDebounce = setTimeout(()=>{ validacionBusqueda = this.value; refiltrarTablaPendientes(); }, 150);" class="w-full bg-slate-900/60 border border-amber-100/10 rounded-lg pl-8 pr-8 py-1.5 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-yellow-300/60 transition-colors">
+                    <input id="validacionBuscador" type="text" placeholder="Buscar por código o descripción..." oninput="clearTimeout(window.__validacionBuscadorDebounce); window.__validacionBuscadorDebounce = setTimeout(()=>{ validacionBusqueda = this.value; refiltrarTablaPendientes(); }, 150);" style="background: rgba(51, 65, 100, 0.55);" class="w-full border border-amber-100/10 rounded-lg pl-8 pr-8 py-1.5 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-yellow-300/60 transition-colors">
                     <button type="button" onclick="abrirConsultaRMD()" title="Consultar historial RMD por descripción" class="absolute right-2 top-1/2 -translate-y-1/2 text-emerald-400 hover:text-emerald-300 transition-colors" style="line-height:0;">
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M17 10a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
                     </button>
@@ -1711,11 +1711,11 @@
                     </h2>
                     <div class="relative">
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 text-slate-500 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
-                        <input type="text" id="upcomingSearchInput" placeholder="Buscar por código o producto..." class="w-full bg-slate-900/50 border border-amber-100/10 rounded-lg pl-8 pr-3 py-1.5 text-xs text-slate-200 placeholder:text-slate-500 focus:outline-none focus:border-amber-300/50 transition-colors">
+                        <input type="text" id="upcomingSearchInput" placeholder="Buscar por código o producto..." style="background: rgba(51, 65, 100, 0.55);" class="w-full border border-amber-100/10 rounded-lg pl-8 pr-3 py-1.5 text-xs text-slate-200 placeholder:text-slate-500 focus:outline-none focus:border-amber-300/50 transition-colors">
                     </div>
                     <div class="flex items-center gap-2">
                         <label for="upcomingDateFromInput" class="text-[10px] text-slate-400 uppercase font-bold tracking-wider whitespace-nowrap">Desde</label>
-                        <input type="date" id="upcomingDateFromInput" lang="sv" class="flex-1 bg-slate-900/50 border border-amber-100/10 rounded-lg px-2 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-amber-300/50 transition-colors">
+                        <input type="date" id="upcomingDateFromInput" lang="sv" style="background: rgba(51, 65, 100, 0.55);" class="flex-1 border border-amber-100/10 rounded-lg px-2 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-amber-300/50 transition-colors">
                     </div>
                 </div>
                 <div class="overflow-y-auto p-3 space-y-2.5 flex-1 custom-scrollbar" id="upcomingListProd">
@@ -1786,7 +1786,7 @@
                         <button class="forecast-filter-btn" data-mode="desde" onclick="setForecastMonthMode('desde')">Desde</button>
                         <button class="forecast-filter-btn" data-mode="solo" onclick="setForecastMonthMode('solo')">Solo este mes</button>
                     </div>
-                    <input type="month" id="forecastMonthInput" style="display:none;" class="bg-slate-900/50 border border-rose-100/10 rounded-lg px-2 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-rose-400/60 transition-colors" onchange="setForecastMonthValue(this.value)">
+                    <input type="month" id="forecastMonthInput" style="display:none; background: rgba(51, 65, 100, 0.55);" class="border border-rose-100/10 rounded-lg px-2 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-rose-400/60 transition-colors" onchange="setForecastMonthValue(this.value)">
                 </div>
                 <button onclick="resetForecastFilters()" class="btn-clear px-3 py-1.5 rounded-lg text-[11px] font-medium flex items-center gap-1.5 active:scale-95 md:ml-auto">
                     Limpiar filtros
@@ -1882,7 +1882,7 @@
             <div id="validacionForecastToolbar" class="flex flex-col sm:flex-row sm:items-center gap-2.5 mb-3" style="display:none;">
                 <div class="relative flex-1 min-w-[160px]">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 text-slate-500 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M17 10a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
-                    <input id="validacionForecastBuscador" type="text" placeholder="Buscar por código o descripción..." oninput="clearTimeout(window.__validacionForecastBuscadorDebounce); window.__validacionForecastBuscadorDebounce = setTimeout(()=>{ validacionForecastBusqueda = this.value; refiltrarTablaPendientesForecast(); }, 150);" class="w-full bg-slate-900/60 border border-rose-100/10 rounded-lg pl-8 pr-8 py-1.5 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-rose-400/60 transition-colors">
+                    <input id="validacionForecastBuscador" type="text" placeholder="Buscar por código o descripción..." oninput="clearTimeout(window.__validacionForecastBuscadorDebounce); window.__validacionForecastBuscadorDebounce = setTimeout(()=>{ validacionForecastBusqueda = this.value; refiltrarTablaPendientesForecast(); }, 150);" style="background: rgba(51, 65, 100, 0.55);" class="w-full border border-rose-100/10 rounded-lg pl-8 pr-8 py-1.5 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-rose-400/60 transition-colors">
                     <button type="button" onclick="abrirConsultaRMD()" title="Consultar historial RMD por descripción" class="absolute right-2 top-1/2 -translate-y-1/2 text-emerald-400 hover:text-emerald-300 transition-colors" style="line-height:0;">
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M17 10a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
                     </button>
@@ -1937,11 +1937,11 @@
                     </h2>
                     <div class="relative">
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 text-slate-500 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
-                        <input type="text" id="upcomingForecastSearchInput" placeholder="Buscar por código o producto..." class="w-full bg-slate-900/50 border border-rose-100/10 rounded-lg pl-8 pr-3 py-1.5 text-xs text-slate-200 placeholder:text-slate-500 focus:outline-none focus:border-rose-400/60 transition-colors">
+                        <input type="text" id="upcomingForecastSearchInput" placeholder="Buscar por código o producto..." style="background: rgba(51, 65, 100, 0.55);" class="w-full border border-rose-100/10 rounded-lg pl-8 pr-3 py-1.5 text-xs text-slate-200 placeholder:text-slate-500 focus:outline-none focus:border-rose-400/60 transition-colors">
                     </div>
                     <div class="flex items-center gap-2">
                         <label for="upcomingForecastMonthFromInput" class="text-[10px] text-slate-400 uppercase font-bold tracking-wider whitespace-nowrap">Desde</label>
-                        <input type="month" id="upcomingForecastMonthFromInput" class="flex-1 bg-slate-900/50 border border-rose-100/10 rounded-lg px-2 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-rose-400/60 transition-colors">
+                        <input type="month" id="upcomingForecastMonthFromInput" style="background: rgba(51, 65, 100, 0.55);" class="flex-1 border border-rose-100/10 rounded-lg px-2 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-rose-400/60 transition-colors">
                     </div>
                 </div>
                 <div class="overflow-y-auto p-3 space-y-2.5 flex-1 custom-scrollbar" id="upcomingListForecast">
@@ -4329,14 +4329,33 @@ function buildDateColumnMapPlanta1(headerRow, weekLabelRow, hiddenCols) {
             // El Código por Defecto se toma al final, de la fila ganadora
             // (la de mayor versión); si esa fila no tiene código, se
             // muestra "-", nunca se hereda el código de una versión previa.
-            const porDescripcion = new Map(); // descripcion -> fila de mayor versión
+            //
+            // Desempate cuando dos filas comparten la MISMA versión: se
+            // prefiere la que NO esté en estado "Solicitado" (es decir,
+            // Ingresado o Suspendido) — en Solicitado no aplica llenar
+            // Observación, así que si ese fuera el que gana el empate, el
+            // modal mostraría "-" aunque la otra fila, con igual versión,
+            // sí tuviera una observación real cargada.
+            const porDescripcion = new Map(); // descripcion -> fila de mayor versión (con desempate por estado)
             if (agrupador) {
                 rmdAutorizadosDetalle
                     .filter(r => r.codigoAgrupador === agrupador && r.etapaNorm === etapaFija)
                     .forEach(r => {
                         const descKey = (r.descripcion || '').trim().toUpperCase();
                         const actual = porDescripcion.get(descKey);
-                        if (!actual || (r.version ?? 0) >= (actual.version ?? 0)) porDescripcion.set(descKey, r);
+                        if (!actual) { porDescripcion.set(descKey, r); return; }
+                        const vNueva = r.version ?? 0, vActual = actual.version ?? 0;
+                        if (vNueva > vActual) {
+                            porDescripcion.set(descKey, r);
+                        } else if (vNueva === vActual) {
+                            const nuevaEsSolicitado = normalizeEstadoRmd(r.estado) === 'SOLICITADO';
+                            const actualEsSolicitado = normalizeEstadoRmd(actual.estado) === 'SOLICITADO';
+                            // Solo se reemplaza si la actual era "Solicitado" y la
+                            // nueva no lo es — así, entre dos filas de igual
+                            // versión, siempre gana la que sí puede traer
+                            // Observación real.
+                            if (actualEsSolicitado && !nuevaEsSolicitado) porDescripcion.set(descKey, r);
+                        }
                     });
             }
             const filasCoincidentes = Array.from(porDescripcion.values())
@@ -4732,7 +4751,6 @@ async function downloadPlanProduccionFromCloud() {
                     const data = new Uint8Array(e.target.result);
                     const workbook = XLSX.read(data, { type: 'array', cellDates: true });
                     const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-                    const hiddenCols = getHiddenColSet(firstSheet);
                     const rows = XLSX.utils.sheet_to_json(firstSheet, { header: 1, defval: "" });
                     if (rows.length < 2) {
                         Swal.close();
@@ -4740,7 +4758,15 @@ async function downloadPlanProduccionFromCloud() {
                         return;
                     }
                     const headerRow = rows[0];
-                    const keys = headerRow.map((h, idx) => hiddenCols.has(idx) ? null : String(h || '').trim().toLowerCase());
+                    // A diferencia de los archivos de Programa de Producción (donde
+                    // sí hace falta ignorar columnas ocultas, porque ahí contienen
+                    // fechas semanales que no son relevantes), aquí NO se excluyen
+                    // columnas ocultas: es habitual que el Excel de Exportado RMD
+                    // traiga la columna "Observación" (u otras) oculta por estética,
+                    // y aun así su contenido debe leerse con normalidad. Ignorarlas
+                    // causaba que la Observación apareciera vacía en el modal de
+                    // verificación aunque el Excel sí tuviera texto en esa columna.
+                    const keys = headerRow.map((h) => String(h || '').trim().toLowerCase());
                     const colIndexByName = {};
                     keys.forEach((k, idx) => { if (k) colIndexByName[k] = idx; });
                     const findCol = (...aliases) => {
