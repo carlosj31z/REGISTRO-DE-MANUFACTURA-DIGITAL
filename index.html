@@ -636,6 +636,20 @@
             border-color: rgba(212, 175, 55, 0.65);
             background: rgba(51, 65, 100, 0.85);
         }
+        /* PEND CC es responsabilidad compartida entre ASC y PRO: el select
+           de responsable queda editable (no automático) y se resalta con
+           este borde rojo pulsante mientras el usuario no haya elegido
+           ninguno de los dos — para que la elección pendiente no pase
+           desapercibida entre el resto de controles de la fila. */
+        .etapa-estatus-select--alerta {
+            border-color: rgba(248, 113, 113, 0.75);
+            box-shadow: 0 0 0 1px rgba(248, 113, 113, 0.25);
+            animation: etapaAlertaPulse 1.8s ease-in-out infinite;
+        }
+        @keyframes etapaAlertaPulse {
+            0%, 100% { box-shadow: 0 0 0 1px rgba(248, 113, 113, 0.25); }
+            50% { box-shadow: 0 0 0 3px rgba(248, 113, 113, 0.18); }
+        }
         /* Responsable de etapa — ya no es un <select> editable, sino un
            badge de solo lectura derivado automáticamente del Estatus. Su
            estilo lo distingue claramente de un control interactivo. */
@@ -661,10 +675,50 @@
         html[data-theme="light"] .etapa-estatus-select:hover {
             background: rgba(226, 232, 240, 0.95);
         }
+        html[data-theme="light"] .etapa-estatus-select--alerta {
+            border-color: rgba(220, 38, 38, 0.7);
+            box-shadow: 0 0 0 1px rgba(220, 38, 38, 0.2);
+        }
         html[data-theme="light"] .etapa-responsable-auto {
             background: rgba(241, 245, 249, 0.8);
             border-color: rgba(11, 17, 32, 0.1);
             color: var(--slate-500, #64748b);
+        }
+
+        /* Fila con al menos una etapa YA AUTORIZADA manualmente (todas sus
+           etapas pendientes ya autorizadas), el texto tachado de esa etapa,
+           y el badge "Autorizado manual". Antes usaban directamente las
+           utilidades de Tailwind (bg-emerald-500/10, text-emerald-300/70,
+           etc.), pero quedaron reemplazadas por estas clases propias en una
+           sesión sobre un archivo de piloto distinto — al copiar ese cambio
+           aquí sin also copiar su CSS, las clases se quedaron sin ninguna
+           definición y el verde dejó de verse. Aquí quedan definidas
+           directamente, con los mismos tonos que ya usa el resto de la app
+           en cada tema. */
+        .fila-autorizada-manual { background: rgba(16, 185, 129, 0.1); }
+        .fila-autorizada-manual:hover { background: rgba(16, 185, 129, 0.15); }
+        html[data-theme="light"] .fila-autorizada-manual {
+            background: #C9E4D6;
+            box-shadow: inset 3px 0 0 #2F6F5E;
+        }
+        html[data-theme="light"] .fila-autorizada-manual:hover {
+            background: #BADACB;
+        }
+
+        .etapa-autorizada-manual { color: rgba(110, 231, 183, 0.7); }
+        html[data-theme="light"] .etapa-autorizada-manual {
+            color: #0D6A47;
+        }
+
+        .badge-autorizado-manual {
+            display: inline-flex; align-items: center; gap: 0.25rem;
+            color: #34d399; background: rgba(16, 185, 129, 0.1);
+            border: 1px solid rgba(16, 185, 129, 0.3);
+        }
+        html[data-theme="light"] .badge-autorizado-manual {
+            color: #0D6A47;
+            background: #DCEFE5;
+            border: 1px solid #A9D6BE;
         }
 
         .drop-zone-mini {
@@ -3380,6 +3434,18 @@ function containsExcludedTermPlanta1(text) {
     const upper = String(text).toUpperCase();
     return PLANTA1_EXCLUDED_TERMS.some(term => new RegExp(`\\b${term}\\b`, 'i').test(upper));
 }
+
+// Mismo mecanismo que Planta 1, pero con los términos propios del formato
+// de Planta 2: celdas que solo contienen "mmto", "mto" o "man" (variantes
+// de "mantenimiento") no son producción real y deben omitirse del cálculo,
+// igual que ya se hacía con LIMP/VAL/PIL/etc. en Planta 1.
+const PLANTA2_EXCLUDED_TERMS = ['MMTO', 'MTO', 'MAN'];
+
+function containsExcludedTermPlanta2(text) {
+    if (!text) return false;
+    const upper = String(text).toUpperCase();
+    return PLANTA2_EXCLUDED_TERMS.some(term => new RegExp(`\\b${term}\\b`, 'i').test(upper));
+}
         function filtrarFechasFuturas(f) { return f.filter(d => isTodayOrFuture(d)); }
 
         function parseExcelDateDirect(v) {
@@ -3616,10 +3682,13 @@ function buildDateColumnMapPlanta1(headerRow, weekLabelRow, hiddenCols) {
             const cellStr = (cellVal !== undefined && cellVal !== null) ? String(cellVal).trim() : "";
             if (cellStr === "") return;
             // Ignora celdas cuyo contenido sea un término de excepción
-            // (LIMP, VAL, PIL, SETUP, CAL, RES, RECUPERACION, MTTO) — solo
-            // aplica a Planta 1, donde esos códigos aparecen directamente
-            // en la celda del día en vez de una producción real.
+            // (LIMP, VAL, PIL, SETUP, CAL, RES, RECUPERACION, MTTO en
+            // Planta 1; MMTO, MTO, MAN en Planta 2) — en ambos formatos
+            // esos códigos aparecen directamente en la celda del día en
+            // vez de una producción real, y no deben contarse como fecha
+            // programada.
             if (planta1Format && containsExcludedTermPlanta1(cellStr)) return;
+            if (!planta1Format && containsExcludedTermPlanta2(cellStr)) return;
             scheduledDates.push(dateColMap[colIdx]);
         });
 
@@ -4267,13 +4336,15 @@ function buildDateColumnMapPlanta1(headerRow, weekLabelRow, hiddenCols) {
         // Mapeo FIJO estatus -> responsable. El responsable ya NO se elige
         // manualmente: se deriva siempre de este mapeo en cuanto se escoge
         // un Estatus, y vuelve a quedar vacío ("-") si el Estatus se
-        // resetea a "Estatus...".
+        // resetea a "Estatus...". EXCEPCIÓN: "PEND CC" es responsabilidad
+        // compartida entre ASC y PRO, así que no tiene un valor por
+        // defecto único — el usuario debe elegir manualmente cuál de los
+        // dos aplica (ver window.setEstatusEtapa y window.setResponsableEtapa).
         const ESTATUS_ETAPA_RESPONSABLE_DEFECTO = {
             'PENDIENTE-PRO': 'PRO',
             'POR INGRESAR': 'DOC',
             'FLUJO SAP': 'PRO',
-            'PEND RMD OFICIAL': 'DOC',
-            'PEND CC': 'ASC'
+            'PEND RMD OFICIAL': 'DOC'
         };
         // Map<"material::etapaFija", estatus>, misma clave que responsablesEtapa.
         let estatusEtapa = new Map();
@@ -4935,10 +5006,18 @@ async function downloadPlanProduccionFromCloud() {
                 // y avisamos, para no dejar al usuario creyendo que quedó
                 // guardado cuando en realidad se perdería al recargar o volver.
                 if (anterior === undefined) responsablesEtapa.delete(key); else responsablesEtapa.set(key, anterior);
-                const select = document.getElementById(`resp_${material}_${etapaFija}`);
+                // El select de PEND CC puede estar en la tabla de Producción o
+                // en la de Forecast, cada una con su propio prefijo de id.
+                const select = document.getElementById(`resppendcc_${material}_${etapaFija}`) || document.getElementById(`respfcpendcc_${material}_${etapaFija}`);
                 if (select) select.value = anterior || '';
                 Swal.fire({ icon: 'error', title: 'No se pudo guardar', text: 'El responsable no se guardó. Intenta de nuevo.', background: '#0f172a', timer: 2500, showConfirmButton: false });
+                return;
             }
+            // Se re-renderiza la tabla para que el borde de alerta rojo de
+            // PEND CC (etapa-estatus-select--alerta) desaparezca en cuanto el
+            // usuario ya eligió ASC o PRO, sin esperar a la próxima acción.
+            if (currentTab === 'produccion' && typeof refiltrarTablaPendientes === 'function') refiltrarTablaPendientes();
+            if (currentTab === 'forecast' && typeof refiltrarTablaPendientesForecast === 'function') refiltrarTablaPendientesForecast();
         };
         // Los responsables de etapa ahora tienen exactamente la misma garantía
         // de persistencia que "Autorizados manual": NUNCA se borran de forma
@@ -5006,6 +5085,15 @@ async function downloadPlanProduccionFromCloud() {
         // misma clave "material::etapaFija" que ya usa responsablesEtapa.
         async function toggleManualAutorizadoEtapa(material, etapaFija) {
             const key = responsableKey(material, etapaFija);
+            const vaAMarcarComoAutorizada = !manualAutorizados.has(key);
+            if (vaAMarcarComoAutorizada && estatusEtapa.get(key) === 'PEND CC' && !responsablesEtapa.get(key)) {
+                // PEND CC es responsabilidad compartida entre ASC y PRO: no se
+                // permite autorizar la etapa hasta que el usuario elija cuál
+                // de los dos aplica — evita dejar un registro "autorizado"
+                // sin responsable definido.
+                Swal.fire({ icon: 'warning', title: 'Falta elegir responsable', text: 'Esta etapa está en PEND CC: elige primero si el responsable es ASC o PRO antes de autorizarla.', background: '#0f172a', timer: 3000, showConfirmButton: false });
+                return;
+            }
             if (manualAutorizados.has(key)) manualAutorizados.delete(key);
             else manualAutorizados.add(key);
             await saveManualAutorizados();
@@ -5225,12 +5313,12 @@ pendientes.forEach(p => {
             body.innerHTML = visibles.map(p => {
                 const esAutorizado = p.estado === 'autorizado';
                 const rowCls = esAutorizado
-                    ? 'border-b border-slate-800/60 last:border-0 bg-emerald-500/10 hover:bg-emerald-500/15 transition-colors'
+                    ? 'border-b border-slate-800/60 last:border-0 fila-autorizada-manual transition-colors'
                     : 'border-b border-slate-800/60 last:border-0 hover:bg-slate-800/40 transition-colors';
                 const badge = esAutorizado
-                    ? '<span class="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 px-2 py-0.5 rounded-full whitespace-nowrap"><svg xmlns="http://www.w3.org/2000/svg" class="h-2.5 w-2.5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.7 5.3a1 1 0 010 1.4l-8 8a1 1 0 01-1.4 0l-4-4a1 1 0 111.4-1.4L8 12.6l7.3-7.3a1 1 0 011.4 0z" clip-rule="evenodd"/></svg>Autorizado manual</span>'
+                    ? '<span class="inline-flex items-center gap-1 text-[10px] font-semibold badge-autorizado-manual px-2 py-0.5 rounded-full whitespace-nowrap"><svg xmlns="http://www.w3.org/2000/svg" class="h-2.5 w-2.5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.7 5.3a1 1 0 010 1.4l-8 8a1 1 0 01-1.4 0l-4-4a1 1 0 111.4-1.4L8 12.6l7.3-7.3a1 1 0 011.4 0z" clip-rule="evenodd"/></svg>Autorizado manual</span>'
                     : '<span class="inline-flex items-center gap-1 text-[10px] font-semibold text-red-300 bg-red-500/10 border border-red-500/30 px-2 py-0.5 rounded-full whitespace-nowrap">Pendiente</span>';
-                const etapasCls = esAutorizado ? 'text-emerald-300/70 line-through' : 'text-red-300';
+                const etapasCls = esAutorizado ? 'etapa-autorizada-manual line-through' : 'text-red-300';
                 const fechaTxt = p.fechaProxima ? dayjs(p.fechaProxima).format('YYYY-MM-DD') : '-';
                 // La etiqueta de planta solo se muestra en la tabla cuando estamos
                 // en consolidado (en Planta 1/2 individuales sería redundante
@@ -5264,14 +5352,25 @@ pendientes.forEach(p => {
                     const estatusActual = estatusEtapa.get(key) || '';
                     const estatusSelectId = `estatus_${mat}_${fija}`;
                     const estatusOpciones = ['', ...ESTATUS_ETAPA_OPCIONES].map(e => `<option value="${e}" ${e === estatusActual ? 'selected' : ''}>${e || 'Estatus...'}</option>`).join('');
-                    // El responsable YA NO se elige manualmente: se deriva
-                    // siempre del Estatus (ver ESTATUS_ETAPA_RESPONSABLE_DEFECTO)
-                    // y se muestra como texto de solo lectura, no como <select>.
                     const valorActual = responsablesEtapa.get(key) || '';
+                    // PEND CC es responsabilidad COMPARTIDA entre ASC y PRO: a
+                    // diferencia del resto de estatus (que derivan el
+                    // responsable automáticamente), aquí el usuario debe
+                    // elegir manualmente cuál de los dos aplica — el select
+                    // queda editable y resaltado en rojo mientras no se haya
+                    // elegido ninguno, para que no pase desapercibido.
+                    const respHtml = estatusActual === 'PEND CC'
+                        ? (() => {
+                            const respSelectId = `resppendcc_${mat}_${fija}`;
+                            const sinElegir = !valorActual;
+                            const opciones = ['', 'ASC', 'PRO'].map(r => `<option value="${r}" ${r === valorActual ? 'selected' : ''}>${r || 'Elegir...'}</option>`).join('');
+                            return `<select id="${respSelectId}" onchange="setResponsableEtapa('${mat}','${fija}', this.value)" class="etapa-estatus-select${sinElegir ? ' etapa-estatus-select--alerta' : ''}" title="PEND CC: elige si el responsable es ASC o PRO">${opciones}</select>`;
+                        })()
+                        : `<span class="etapa-responsable-auto" title="Responsable asignado automáticamente según el Estatus">${valorActual || '—'}</span>`;
                     return `<div class="flex items-center gap-1.5 whitespace-nowrap">
                         <span class="${etapasCls} cursor-pointer hover:underline" onclick="mostrarVerificacionRmdConfig('${mat}','${fija}')" title="Ver verificación contra RMD Configuración">${labelTxt}</span>
                         <select id="${estatusSelectId}" onchange="setEstatusEtapa('${mat}','${fija}', this.value)" class="etapa-estatus-select" title="Estatus de ${labelTxt}">${estatusOpciones}</select>
-                        <span class="etapa-responsable-auto" title="Responsable asignado automáticamente según el Estatus">${valorActual || '—'}</span>
+                        ${respHtml}
                         ${btnAutorizarEtapa(mat, fija)}
                     </div>`;
                 };
@@ -5833,6 +5932,13 @@ function updateForecastActiveFiltersBadge() {
 
         async function toggleManualAutorizadoEtapaForecast(material, etapaFija) {
             const key = responsableKey(material, etapaFija);
+            const vaAMarcarComoAutorizada = !manualAutorizadosForecast.has(key);
+            if (vaAMarcarComoAutorizada && estatusEtapa.get(key) === 'PEND CC' && !responsablesEtapa.get(key)) {
+                // Misma regla que en Producción: PEND CC no se puede autorizar
+                // sin haber elegido antes si el responsable es ASC o PRO.
+                Swal.fire({ icon: 'warning', title: 'Falta elegir responsable', text: 'Esta etapa está en PEND CC: elige primero si el responsable es ASC o PRO antes de autorizarla.', background: '#0f172a', timer: 3000, showConfirmButton: false });
+                return;
+            }
             if (manualAutorizadosForecast.has(key)) manualAutorizadosForecast.delete(key);
             else manualAutorizadosForecast.add(key);
             await saveManualAutorizadosForecast();
@@ -6000,12 +6106,12 @@ function updateForecastActiveFiltersBadge() {
                 const mesesHtml = (p.meses || []).map(m => `<span class="mes-chip">${m}</span>`).join('');
                 const esAutorizado = p.estado === 'autorizado';
                 const rowCls = esAutorizado
-                    ? 'border-b border-slate-800/60 last:border-0 bg-emerald-500/10 hover:bg-emerald-500/15 transition-colors'
+                    ? 'border-b border-slate-800/60 last:border-0 fila-autorizada-manual transition-colors'
                     : 'border-b border-slate-800/60 last:border-0 hover:bg-slate-800/40 transition-colors';
                 const badge = esAutorizado
-                    ? '<span class="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 px-2 py-0.5 rounded-full whitespace-nowrap"><svg xmlns="http://www.w3.org/2000/svg" class="h-2.5 w-2.5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.7 5.3a1 1 0 010 1.4l-8 8a1 1 0 01-1.4 0l-4-4a1 1 0 111.4-1.4L8 12.6l7.3-7.3a1 1 0 011.4 0z" clip-rule="evenodd"/></svg>Autorizado manual</span>'
+                    ? '<span class="inline-flex items-center gap-1 text-[10px] font-semibold badge-autorizado-manual px-2 py-0.5 rounded-full whitespace-nowrap"><svg xmlns="http://www.w3.org/2000/svg" class="h-2.5 w-2.5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.7 5.3a1 1 0 010 1.4l-8 8a1 1 0 01-1.4 0l-4-4a1 1 0 111.4-1.4L8 12.6l7.3-7.3a1 1 0 011.4 0z" clip-rule="evenodd"/></svg>Autorizado manual</span>'
                     : '<span class="inline-flex items-center gap-1 text-[10px] font-semibold text-red-300 bg-red-500/10 border border-red-500/30 px-2 py-0.5 rounded-full whitespace-nowrap">Pendiente</span>';
-                const etapasCls = esAutorizado ? 'text-emerald-300/70 line-through' : 'text-red-300';
+                const etapasCls = esAutorizado ? 'etapa-autorizada-manual line-through' : 'text-red-300';
                 const btnAutorizarEtapaFc = (mat, fija) => `<button onclick="toggleManualAutorizadoEtapaForecast('${mat}','${fija}')" class="text-emerald-400 hover:text-emerald-300 border border-emerald-500/40 hover:border-emerald-400 bg-emerald-500/5 hover:bg-emerald-500/10 rounded px-1.5 py-0.5 transition-colors" title="Autorizar solo esta etapa">✓</button>`;
                 const renderFilaEtapaAutorizadaFc = (mat, et) => {
                     const fija = mapEtapaAFija(et);
@@ -6023,14 +6129,22 @@ function updateForecastActiveFiltersBadge() {
                     const estatusActual = estatusEtapa.get(key) || '';
                     const estatusSelectId = `estatusfc_${mat}_${fija}`;
                     const estatusOpciones = ['', ...ESTATUS_ETAPA_OPCIONES].map(e => `<option value="${e}" ${e === estatusActual ? 'selected' : ''}>${e || 'Estatus...'}</option>`).join('');
-                    // El responsable YA NO se elige manualmente: se deriva
-                    // siempre del Estatus (ver ESTATUS_ETAPA_RESPONSABLE_DEFECTO)
-                    // y se muestra como texto de solo lectura, no como <select>.
                     const valorActual = responsablesEtapa.get(key) || '';
+                    // PEND CC es responsabilidad COMPARTIDA entre ASC y PRO:
+                    // igual que en Producción, aquí el usuario debe elegir
+                    // manualmente cuál de los dos aplica.
+                    const respHtml = estatusActual === 'PEND CC'
+                        ? (() => {
+                            const respSelectId = `respfcpendcc_${mat}_${fija}`;
+                            const sinElegir = !valorActual;
+                            const opciones = ['', 'ASC', 'PRO'].map(r => `<option value="${r}" ${r === valorActual ? 'selected' : ''}>${r || 'Elegir...'}</option>`).join('');
+                            return `<select id="${respSelectId}" onchange="setResponsableEtapa('${mat}','${fija}', this.value)" class="etapa-estatus-select${sinElegir ? ' etapa-estatus-select--alerta' : ''}" title="PEND CC: elige si el responsable es ASC o PRO">${opciones}</select>`;
+                        })()
+                        : `<span class="etapa-responsable-auto" title="Responsable asignado automáticamente según el Estatus">${valorActual || '—'}</span>`;
                     return `<div class="flex items-center gap-1.5 whitespace-nowrap">
                         <span class="${etapasCls} cursor-pointer hover:underline" onclick="mostrarVerificacionRmdConfig('${mat}','${fija}')" title="Ver verificación contra RMD Configuración">${labelTxt}</span>
                         <select id="${estatusSelectId}" onchange="setEstatusEtapa('${mat}','${fija}', this.value)" class="etapa-estatus-select" title="Estatus de ${labelTxt}">${estatusOpciones}</select>
-                        <span class="etapa-responsable-auto" title="Responsable asignado automáticamente según el Estatus">${valorActual || '—'}</span>
+                        ${respHtml}
                         ${btnAutorizarEtapaFc(mat, fija)}
                     </div>`;
                 };
