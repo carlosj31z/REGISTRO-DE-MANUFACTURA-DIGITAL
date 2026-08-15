@@ -721,6 +721,20 @@
             border: 1px solid #A9D6BE;
         }
 
+        /* Pestañas de planta dentro del modal de Historial de Trazabilidad
+           del Programa de Producción (Planta ATE / Planta LIMA / Consolidado). */
+        .hist-prod-tabs { display: flex; gap: 6px; margin-bottom: 4px; }
+        .hist-prod-tab {
+            flex: 1; padding: 7px 10px; border-radius: 7px; font-size: 12px; font-weight: 700;
+            background: rgba(51, 65, 100, 0.35); border: 1px solid rgba(148, 163, 184, 0.25);
+            color: #94a3b8; cursor: pointer; transition: all 0.2s ease;
+        }
+        .hist-prod-tab:hover { background: rgba(51, 65, 100, 0.55); color: #e2e8f0; }
+        .hist-prod-tab.active {
+            background: rgba(212, 175, 55, 0.18); border-color: rgba(212, 175, 55, 0.55);
+            color: #f8fafc;
+        }
+
         .drop-zone-mini {
             display: flex; align-items: center; gap: 0.5rem;
             padding: 0.55rem 1rem; border: 1px dashed var(--card-border-highlight);
@@ -1441,8 +1455,8 @@
         <div class="flex items-center gap-2 flex-wrap" id="inlineUploadProd" style="display:none;">
             <!-- Selector de Planta -->
             <div class="planta-selector" id="plantaSelector">
-                <button class="planta-btn" data-planta="planta1" onclick="switchPlanta('planta1')">Planta 1</button>
-                <button class="planta-btn active" data-planta="planta2" onclick="switchPlanta('planta2')">Planta 2</button>
+                <button class="planta-btn" data-planta="planta1" onclick="switchPlanta('planta1')">Planta ATE</button>
+                <button class="planta-btn active" data-planta="planta2" onclick="switchPlanta('planta2')">Planta LIMA</button>
                 <button class="planta-btn" data-planta="consolidado" id="btnConsolidado" onclick="switchPlanta('consolidado')" disabled title="Disponible cuando ambas plantas tengan datos cargados">Consolidado</button>
             </div>
 
@@ -2388,7 +2402,7 @@
             });
         }
 
-        let currentPlanta = 'planta2'; // por defecto Planta 2 (para no romper la lógica anterior)
+        let currentPlanta = 'planta2'; // por defecto Planta LIMA (para no romper la lógica anterior)
         let productionData = [];
         let availableAreas = new Set();
         let currentAreaFilter = 'TODAS';
@@ -2770,6 +2784,185 @@ create policy "Acceso con clave anon"
             // Límite razonable para no crecer indefinidamente
             if (entradas.length > 500) entradas.length = 500;
             await storeSet('historial_trazabilidad', entradas);
+        }
+
+        // ==================== HISTORIAL DE TRAZABILIDAD DEL PROGRAMA DE PRODUCCIÓN ====================
+        // A diferencia del historial genérico de arriba (texto libre, un
+        // reloj global para toda la app), este historial es estructurado:
+        // compara la versión anterior del Programa de Producción contra la
+        // que se acaba de cargar, material por material, y clasifica cada
+        // diferencia en 3 categorías útiles para trazar el programa entre
+        // semanas:
+        //   - DESAPARECIDO: el material tenía fecha(s) programada(s) en la
+        //     versión anterior y ya no aparece en absoluto en la nueva.
+        //   - REPROGRAMADO: el material sigue apareciendo, pero al menos
+        //     una de sus fechas cambió respecto a la versión anterior.
+        //   - NUEVO: el material no existía en la versión anterior y
+        //     aparece por primera vez en esta carga.
+        // Se guarda un snapshot por cada carga (hasta un límite razonable),
+        // con fecha de carga y el detalle ya calculado, para Planta ATE,
+        // Planta LIMA y Consolidado (el consolidado se recalcula a partir de
+        // los snapshots de ambas plantas, no se guarda aparte).
+        function claveMaterial(p) { return `${p.codigo}::${p.area}`; }
+
+        function compararVersionesProduccion(anterior, nueva) {
+            const mapAnterior = new Map((anterior || []).map(p => [claveMaterial(p), p]));
+            const mapNueva = new Map((nueva || []).map(p => [claveMaterial(p), p]));
+
+            const desaparecidos = [];
+            const reprogramados = [];
+            const nuevos = [];
+
+            mapAnterior.forEach((pAnt, key) => {
+                const pNuevo = mapNueva.get(key);
+                if (!pNuevo) {
+                    desaparecidos.push({ codigo: pAnt.codigo, producto: pAnt.producto, area: pAnt.area, fechasAntes: pAnt.fechas });
+                    return;
+                }
+                const fechasAntes = new Set(pAnt.fechas || []);
+                const fechasAhora = new Set(pNuevo.fechas || []);
+                const iguales = fechasAntes.size === fechasAhora.size && [...fechasAntes].every(f => fechasAhora.has(f));
+                if (!iguales) {
+                    reprogramados.push({
+                        codigo: pAnt.codigo, producto: pAnt.producto, area: pAnt.area,
+                        fechasAntes: pAnt.fechas || [], fechasAhora: pNuevo.fechas || []
+                    });
+                }
+            });
+            mapNueva.forEach((pNuevo, key) => {
+                if (!mapAnterior.has(key)) {
+                    nuevos.push({ codigo: pNuevo.codigo, producto: pNuevo.producto, area: pNuevo.area, fechasAhora: pNuevo.fechas });
+                }
+            });
+
+            return { desaparecidos, reprogramados, nuevos };
+        }
+
+        // Guarda el snapshot de esta carga (fecha + comparación contra la
+        // anterior) en una lista por planta, más reciente primero. Se
+        // conservan hasta 30 snapshots por planta — suficiente para varias
+        // semanas de trazabilidad sin crecer indefinidamente.
+        async function registrarSnapshotProduccion(plantaKey, dataAnterior, dataNueva) {
+            const cambios = compararVersionesProduccion(dataAnterior, dataNueva);
+            const totalCambios = cambios.desaparecidos.length + cambios.reprogramados.length + cambios.nuevos.length;
+            const clave = `prod_historial_${plantaKey}`;
+            const historial = (await storeGet(clave)) || [];
+            historial.unshift({
+                fecha: new Date().toISOString(),
+                totalMaterialesAntes: (dataAnterior || []).length,
+                totalMaterialesAhora: (dataNueva || []).length,
+                totalCambios,
+                cambios
+            });
+            if (historial.length > 30) historial.length = 30;
+            await storeSet(clave, historial);
+            return historial;
+        }
+
+        function escapeHtmlHistProd(s) { const d = document.createElement('div'); d.textContent = s == null ? '' : String(s); return d.innerHTML; }
+
+        // Modal principal del historial de trazabilidad del Programa de
+        // Producción. Se abre desde el botón "🕐 Historial" del calendario
+        // de Producción, y funciona igual para Planta ATE, Planta LIMA y
+        // Consolidado (Consolidado combina los snapshots de ambas plantas
+        // en una sola línea de tiempo, ordenada por fecha de carga).
+        async function mostrarHistorialTrazabilidadProduccion() {
+            const [histAte, histLima] = await Promise.all([
+                storeGet('prod_historial_planta1'),
+                storeGet('prod_historial_planta2')
+            ]);
+            const plantaInicial = currentPlanta === 'planta2' ? 'planta2' : (currentPlanta === 'consolidado' ? 'consolidado' : 'planta1');
+            await renderHistorialTrazabilidadModal(plantaInicial, histAte || [], histLima || []);
+        }
+
+        // Combina los snapshots de ambas plantas en una sola lista, marcando
+        // de qué planta viene cada snapshot, ordenada de más reciente a más
+        // antigua — es lo que se muestra en la pestaña "Consolidado".
+        function combinarHistorialesPlantas(histAte, histLima) {
+            const combinado = [
+                ...histAte.map(h => ({ ...h, plantaOrigen: 'planta1' })),
+                ...histLima.map(h => ({ ...h, plantaOrigen: 'planta2' }))
+            ];
+            combinado.sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
+            return combinado;
+        }
+
+        async function renderHistorialTrazabilidadModal(plantaActiva, histAte, histLima, snapshotIdx) {
+            const listas = { planta1: histAte, planta2: histLima, consolidado: combinarHistorialesPlantas(histAte, histLima) };
+            const listaActiva = listas[plantaActiva];
+            const idx = (snapshotIdx !== undefined && snapshotIdx < listaActiva.length) ? snapshotIdx : 0;
+            const snap = listaActiva[idx];
+
+            const tabBtn = (key, label) => `<button onclick="window.__cambiarPlantaHistorialProd('${key}')" class="hist-prod-tab${plantaActiva === key ? ' active' : ''}">${label}</button>`;
+            const tabsHtml = `<div class="hist-prod-tabs">${tabBtn('planta1', 'Planta ATE')}${tabBtn('planta2', 'Planta LIMA')}${tabBtn('consolidado', 'Consolidado')}</div>`;
+
+            if (!snap) {
+                Swal.fire({
+                    title: 'Historial de Trazabilidad — Programa de Producción',
+                    html: `<div style="text-align:left;">${tabsHtml}<div style="padding:24px 8px;text-align:center;color:#94a3b8;font-size:13px;">Todavía no hay comparaciones disponibles para esta vista. El historial se genera automáticamente a partir de la <strong>segunda</strong> vez que se cargue el Programa de Producción de esta planta — la primera carga no tiene ninguna versión anterior contra la cual comparar.</div></div>`,
+                    width: 'min(720px, 95vw)', background: '#0f172a', confirmButtonText: 'Cerrar'
+                });
+                return;
+            }
+
+            const selectorSnapshots = listaActiva.map((h, i) => {
+                const f = dayjs(h.fecha);
+                const plantaTxt = h.plantaOrigen ? (h.plantaOrigen === 'planta1' ? ' — Planta ATE' : ' — Planta LIMA') : '';
+                return `<option value="${i}" ${i === idx ? 'selected' : ''}>${f.format('DD/MM/YYYY HH:mm')}${plantaTxt} (${h.totalCambios} cambio${h.totalCambios === 1 ? '' : 's'})</option>`;
+            }).join('');
+
+            const seccion = (titulo, color, icono, filas, renderFila) => {
+                if (filas.length === 0) return '';
+                return `<div style="margin-top:14px;">
+                    <div style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:700;color:${color};margin-bottom:6px;text-transform:uppercase;letter-spacing:0.03em;">${icono} ${escapeHtmlHistProd(titulo)} (${filas.length})</div>
+                    <div style="border:1px solid rgba(255,255,255,0.1);border-radius:8px;overflow:hidden;">
+                        <table style="width:100%;border-collapse:collapse;font-size:12px;">
+                            <tbody>${filas.map(renderFila).join('')}</tbody>
+                        </table>
+                    </div>
+                </div>`;
+            };
+
+            const filaBase = (codigo, producto, area) => `<td style="padding:7px 10px;white-space:nowrap;font-weight:600;">${escapeHtmlHistProd(codigo)}</td><td style="padding:7px 10px;">${escapeHtmlHistProd(producto)}</td><td style="padding:7px 10px;white-space:nowrap;color:#94a3b8;">${escapeHtmlHistProd(area)}</td>`;
+
+            const htmlDesaparecidos = seccion('Desaparecieron del programa', '#f87171', '⊘', snap.cambios.desaparecidos,
+                d => `<tr style="border-bottom:1px solid rgba(255,255,255,0.06);">${filaBase(d.codigo, d.producto, d.area)}<td style="padding:7px 10px;color:#94a3b8;">Antes: ${(d.fechasAntes || []).join(', ') || '-'}</td></tr>`);
+
+            const htmlReprogramados = seccion('Reprogramados (fecha distinta)', '#fbbf24', '↻', snap.cambios.reprogramados,
+                r => `<tr style="border-bottom:1px solid rgba(255,255,255,0.06);">${filaBase(r.codigo, r.producto, r.area)}<td style="padding:7px 10px;color:#94a3b8;"><span style="text-decoration:line-through;opacity:0.7;">${(r.fechasAntes || []).join(', ') || '-'}</span> → <span style="color:#fbbf24;font-weight:600;">${(r.fechasAhora || []).join(', ') || '-'}</span></td></tr>`);
+
+            const htmlNuevos = seccion('Nuevos en el programa', '#34d399', '＋', snap.cambios.nuevos,
+                n => `<tr style="border-bottom:1px solid rgba(255,255,255,0.06);">${filaBase(n.codigo, n.producto, n.area)}<td style="padding:7px 10px;color:#34d399;font-weight:600;">${(n.fechasAhora || []).join(', ') || '-'}</td></tr>`);
+
+            const sinCambios = snap.totalCambios === 0
+                ? `<div style="padding:20px 8px;text-align:center;color:#94a3b8;font-size:13px;">Sin diferencias entre esta carga y la anterior: el programa se mantuvo exactamente igual.</div>` : '';
+
+            Swal.fire({
+                title: 'Historial de Trazabilidad — Programa de Producción',
+                html: `<div style="text-align:left;">
+                    ${tabsHtml}
+                    <div style="display:flex;align-items:center;gap:8px;margin:12px 0 4px;">
+                        <label style="font-size:11px;color:#94a3b8;text-transform:uppercase;font-weight:700;letter-spacing:0.03em;white-space:nowrap;">Comparación</label>
+                        <select id="histProdSnapshotSelect" style="flex:1;background:rgba(51,65,100,0.55);border:1px solid rgba(148,163,184,0.35);color:#e2e8f0;border-radius:6px;font-size:12px;padding:6px 8px;">${selectorSnapshots}</select>
+                    </div>
+                    <div style="font-size:11px;color:#64748b;margin-bottom:4px;">${snap.totalMaterialesAntes} materiales antes → ${snap.totalMaterialesAhora} materiales ahora</div>
+                    <div style="max-height:48vh;overflow-y:auto;">
+                        ${sinCambios}${htmlDesaparecidos}${htmlReprogramados}${htmlNuevos}
+                    </div>
+                </div>`,
+                width: 'min(820px, 96vw)', background: '#0f172a', confirmButtonText: 'Cerrar',
+                didOpen: () => {
+                    document.getElementById('histProdSnapshotSelect').addEventListener('change', (e) => {
+                        Swal.close();
+                        renderHistorialTrazabilidadModal(plantaActiva, histAte, histLima, Number(e.target.value));
+                    });
+                }
+            });
+
+            window.__cambiarPlantaHistorialProd = (nuevaPlanta) => {
+                Swal.close();
+                renderHistorialTrazabilidadModal(nuevaPlanta, histAte, histLima, 0);
+            };
         }
 
         // Punto único usado antes de cualquier carga o borrado de archivo: pide
@@ -3435,10 +3628,10 @@ function containsExcludedTermPlanta1(text) {
     return PLANTA1_EXCLUDED_TERMS.some(term => new RegExp(`\\b${term}\\b`, 'i').test(upper));
 }
 
-// Mismo mecanismo que Planta 1, pero con los términos propios del formato
-// de Planta 2: celdas que solo contienen "mmto", "mto" o "man" (variantes
+// Mismo mecanismo que Planta ATE, pero con los términos propios del formato
+// de Planta LIMA: celdas que solo contienen "mmto", "mto" o "man" (variantes
 // de "mantenimiento") no son producción real y deben omitirse del cálculo,
-// igual que ya se hacía con LIMP/VAL/PIL/etc. en Planta 1.
+// igual que ya se hacía con LIMP/VAL/PIL/etc. en Planta ATE.
 const PLANTA2_EXCLUDED_TERMS = ['MMTO', 'MTO', 'MAN'];
 
 function containsExcludedTermPlanta2(text) {
@@ -3471,7 +3664,7 @@ function isoWeekMonday(weekNum) {
     return jan4.subtract(jan4Dow, 'day').add((weekNum - 1) * 7, 'day');
 }
 
-// Construye { colIdx -> "YYYY-MM-DD" } para Planta 1, usando solo la posición
+// Construye { colIdx -> "YYYY-MM-DD" } para Planta ATE, usando solo la posición
 // de la columna dentro del bloque semanal (0=Lunes ... 6=Domingo), sin
 // depender del valor literal de la celda (que puede venir corrupto o con
 // formatos mixtos dentro de la misma hoja).
@@ -3563,7 +3756,7 @@ function buildDateColumnMapPlanta1(headerRow, weekLabelRow, hiddenCols) {
             const file = e.target.files[0];
             e.target.value = '';
             if (!file) return;
-            const plantaTxt = currentPlanta === 'planta1' ? 'Planta 1' : (currentPlanta === 'planta2' ? 'Planta 2' : 'Producción');
+            const plantaTxt = currentPlanta === 'planta1' ? 'Planta ATE' : (currentPlanta === 'planta2' ? 'Planta LIMA' : 'Producción');
             const ok = await autorizarYRegistrar('Carga de archivo', `Excel de Producción (${plantaTxt}): ${file.name}`);
             if (ok) processFileProd(file);
         }
@@ -3575,7 +3768,7 @@ function buildDateColumnMapPlanta1(headerRow, weekLabelRow, hiddenCols) {
             // planta que estaba activa cuando se inició la carga — evita que el
             // archivo se guarde o parsee con el formato/planta equivocada.
             const plantaObjetivo = currentPlanta;
-            Swal.fire({ title: `Analizando (${plantaObjetivo === 'planta1' ? 'Planta 1' : 'Planta 2'})...`, allowOutsideClick: false, didOpen: () => Swal.showLoading(), background: '#0f172a' });
+            Swal.fire({ title: `Analizando (${plantaObjetivo === 'planta1' ? 'Planta ATE' : 'Planta LIMA'})...`, allowOutsideClick: false, didOpen: () => Swal.showLoading(), background: '#0f172a' });
             const reader = new FileReader();
             reader.onload = async (ev) => {
                 try {
@@ -3590,10 +3783,10 @@ function buildDateColumnMapPlanta1(headerRow, weekLabelRow, hiddenCols) {
                     wb.SheetNames.forEach(sn => {
     const sh = wb.Sheets[sn];
 
-    // Excluir el área "REA" (Reacondicionado) solo para Planta 2
+    // Excluir el área "REA" (Reacondicionado) solo para Planta LIMA
     if (plantaObjetivo === 'planta2' && sn.trim().toUpperCase() === 'REA') return;
 
-    // Excluir las áreas SOP BEB, SOP P1 y SOP P2 solo para Planta 1 (no
+    // Excluir las áreas SOP BEB, SOP P1 y SOP P2 solo para Planta ATE (no
     // corresponden a producción real, se excluyen del cálculo completo:
     // calendario, KPIs, gráficos, validación RMD y resumen).
     const PLANTA1_AREAS_EXCLUIDAS = ['SOP BEB', 'SOP P1', 'SOP P2'];
@@ -3613,13 +3806,13 @@ function buildDateColumnMapPlanta1(headerRow, weekLabelRow, hiddenCols) {
     let weekLabelRow, headerRow, headerRowIdx;
  
     if (planta1Format) {
-        // Formato Planta 1: fila "SEM" arriba, fila CODIGO, y una fila aparte
+        // Formato Planta ATE: fila "SEM" arriba, fila CODIGO, y una fila aparte
         // debajo con los números de día. Se mantiene el comportamiento original.
         weekLabelRow = rows[labelRowIdx - 1] || [];
         headerRowIdx = labelRowIdx + 1;
         headerRow = rows[headerRowIdx] || [];
     } else {
-        // Formato Planta 2: las fechas pueden venir en la MISMA fila que
+        // Formato Planta LIMA: las fechas pueden venir en la MISMA fila que
         // "Código" (formato actual, con objetos Date directos) o en la fila
         // siguiente (formato anterior con números de día). Se detecta
         // automáticamente comparando cuántas celdas de cada fila son fechas
@@ -3663,7 +3856,7 @@ function buildDateColumnMapPlanta1(headerRow, weekLabelRow, hiddenCols) {
         : buildDateColumnMap(headerRow, weekLabelRow, globalWeekMondayMap, hiddenCols);
  
     // dataStartIdx: arranca justo después de la fila que realmente tiene el
-    // header/fechas (que puede coincidir con labelRowIdx en Planta 2 nueva).
+    // header/fechas (que puede coincidir con labelRowIdx en Planta LIMA nueva).
     const dataStartIdx = Math.max(labelRowIdx, headerRowIdx) + 1;
     const dataRows = rows.slice(dataStartIdx);
     dataRows.forEach((row, relIdx) => {
@@ -3683,7 +3876,7 @@ function buildDateColumnMapPlanta1(headerRow, weekLabelRow, hiddenCols) {
             if (cellStr === "") return;
             // Ignora celdas cuyo contenido sea un término de excepción
             // (LIMP, VAL, PIL, SETUP, CAL, RES, RECUPERACION, MTTO en
-            // Planta 1; MMTO, MTO, MAN en Planta 2) — en ambos formatos
+            // Planta ATE; MMTO, MTO, MAN en Planta LIMA) — en ambos formatos
             // esos códigos aparecen directamente en la celda del día en
             // vez de una producción real, y no deben contarse como fecha
             // programada.
@@ -3705,11 +3898,28 @@ function buildDateColumnMapPlanta1(headerRow, weekLabelRow, hiddenCols) {
 
                     const nuevaProductionData = Array.from(pmap.values()).map(p => ({ ...p, fechas: Array.from(p.fechas).sort((a, b) => new Date(a) - new Date(b)) }));
 
+                    // Se captura la versión anterior ANTES de sobrescribirla,
+                    // para poder comparar y generar el historial de
+                    // trazabilidad (desaparecidos / reprogramados / nuevos)
+                    // entre esta carga y la anterior de la misma planta.
+                    const versionAnterior = await storeGet(`prod_data_${plantaObjetivo}`);
+                    const dataAnteriorParaComparar = (versionAnterior && versionAnterior.data) ? versionAnterior.data : [];
+
                     // Se guarda SIEMPRE bajo la key de la planta que originó la
                     // carga (plantaObjetivo), sin importar en qué planta esté
                     // parado el usuario en este momento.
                     const guardadoOk = await storeSet(`prod_data_${plantaObjetivo}`, { data: nuevaProductionData, areas: Array.from(areasDeEstaCarga) });
                     await updateConsolidadoBtnState();
+
+                    // Solo se registra snapshot de trazabilidad si YA existía
+                    // una versión anterior real (dataAnteriorParaComparar con
+                    // contenido): la primerísima carga de una planta no tiene
+                    // nada contra qué comparar, así que no generaría ningún
+                    // dato útil — y evita ensuciar el historial con un
+                    // snapshot inicial donde "todo es nuevo".
+                    if (guardadoOk && dataAnteriorParaComparar.length > 0) {
+                        await registrarSnapshotProduccion(plantaObjetivo, dataAnteriorParaComparar, nuevaProductionData);
+                    }
 
                     if (currentPlanta === plantaObjetivo) {
                         // El usuario sigue viendo la misma planta: reflejamos el
@@ -3735,7 +3945,7 @@ function buildDateColumnMapPlanta1(headerRow, weekLabelRow, hiddenCols) {
                     // próxima vez que vuelva a esa planta.
 
                     if (guardadoOk) {
-                        Swal.fire({ icon: 'success', title: 'Completado', text: `${nuevaProductionData.length} productos vigentes (${plantaObjetivo === 'planta1' ? 'Planta 1' : 'Planta 2'}).`, timer: 2200, showConfirmButton: false, background: '#0f172a' });
+                        Swal.fire({ icon: 'success', title: 'Completado', text: `${nuevaProductionData.length} productos vigentes (${plantaObjetivo === 'planta1' ? 'Planta ATE' : 'Planta LIMA'}).`, timer: 2200, showConfirmButton: false, background: '#0f172a' });
                     } else {
                         Swal.fire({ icon: 'warning', title: 'Cargado, pero no se pudo guardar', text: 'Los datos se cargaron en pantalla, pero no se guardaron para la próxima vez que abras la página. Intenta cargar el archivo de nuevo.', background: '#0f172a' });
                     }
@@ -3755,7 +3965,7 @@ function buildDateColumnMapPlanta1(headerRow, weekLabelRow, hiddenCols) {
             const myToken = ++__loadProdDataToken;
             const saved = await storeGet(key);
             // Si mientras se leía el storage el usuario ya cambió de planta otra
-            // vez (doble clic rápido entre Planta 1/2), esta respuesta llegó
+            // vez (doble clic rápido entre Planta ATE/2), esta respuesta llegó
             // "tarde" y no debe pisar lo que ya se está mostrando ahora.
             if (myToken !== __loadProdDataToken || currentPlanta !== plantaObjetivo) return;
             if (saved) {
@@ -3772,7 +3982,7 @@ function buildDateColumnMapPlanta1(headerRow, weekLabelRow, hiddenCols) {
             }
         }
 
-        // Carga y fusiona los datos guardados de Planta 1 y Planta 2 en la
+        // Carga y fusiona los datos guardados de Planta ATE y Planta LIMA en la
         // misma forma que espera el resto del pipeline (productionData /
         // availableAreas), etiquetando cada producto con su planta de origen
         // para poder mostrarla en el detalle sin afectar los cruces por código.
@@ -3798,10 +4008,10 @@ function buildDateColumnMapPlanta1(headerRow, weekLabelRow, hiddenCols) {
 
         // Nombre legible de la planta/vista activa, usado en todos los textos
         // dinámicos (empty states, resúmenes, mensajes de carga) para que el
-        // modo Consolidado se identifique igual de claro que Planta 1 / 2.
+        // modo Consolidado se identifique igual de claro que Planta ATE / 2.
         function plantaLabel() {
-            if (currentPlanta === 'consolidado') return 'Consolidado (Planta 1 + Planta 2)';
-            return currentPlanta === 'planta1' ? 'Planta 1' : 'Planta 2';
+            if (currentPlanta === 'consolidado') return 'Consolidado (Planta ATE + Planta LIMA)';
+            return currentPlanta === 'planta1' ? 'Planta ATE' : 'Planta LIMA';
         }
 
         // Revisa si existen datos guardados para ambas plantas y habilita o
@@ -3813,8 +4023,8 @@ function buildDateColumnMapPlanta1(headerRow, weekLabelRow, hiddenCols) {
             const [d1, d2] = await Promise.all([storeGet('prod_data_planta1'), storeGet('prod_data_planta2')]);
             const ready = !!(d1 && Array.isArray(d1.data) && d1.data.length > 0) && !!(d2 && Array.isArray(d2.data) && d2.data.length > 0);
             btn.disabled = !ready;
-            btn.title = ready ? 'Ver Planta 1 + Planta 2 consolidadas' : 'Disponible cuando ambas plantas tengan datos cargados';
-            // Si estábamos en consolidado y una planta se quedó sin datos, volvemos a Planta 2 para no dejar la vista vacía sin aviso.
+            btn.title = ready ? 'Ver Planta ATE + Planta LIMA consolidadas' : 'Disponible cuando ambas plantas tengan datos cargados';
+            // Si estábamos en consolidado y una planta se quedó sin datos, volvemos a Planta LIMA para no dejar la vista vacía sin aviso.
             if (!ready && currentPlanta === 'consolidado') {
                 currentPlanta = null; // fuerza que switchPlanta no haga early-return por "planta === currentPlanta"
                 switchPlanta('planta2');
@@ -3829,7 +4039,7 @@ function buildDateColumnMapPlanta1(headerRow, weekLabelRow, hiddenCols) {
             document.querySelectorAll('.planta-btn').forEach(btn => {
                 btn.classList.toggle('active', btn.dataset.planta === planta);
             });
-            // En consolidado no se sube archivo directo (se arma a partir de Planta 1 + Planta 2 ya guardadas)
+            // En consolidado no se sube archivo directo (se arma a partir de Planta ATE + Planta LIMA ya guardadas)
             const dropZoneProd = document.getElementById('dropZoneProd');
             const prodStatusBadge = document.getElementById('prodStatusBadge');
             if (planta === 'consolidado') {
@@ -3838,7 +4048,7 @@ function buildDateColumnMapPlanta1(headerRow, weekLabelRow, hiddenCols) {
             } else {
                 dropZoneProd.style.display = '';
                 // Actualizar etiqueta del drop zone
-                document.getElementById('prodDropLabel').textContent = `Programa de Producción (${planta === 'planta1' ? 'Planta 1' : 'Planta 2'})`;
+                document.getElementById('prodDropLabel').textContent = `Programa de Producción (${planta === 'planta1' ? 'Planta ATE' : 'Planta LIMA'})`;
             }
             // Cargar datos de la planta seleccionada (o el consolidado)
             loadProdData();
@@ -3876,7 +4086,13 @@ function buildDateColumnMapPlanta1(headerRow, weekLabelRow, hiddenCols) {
         function initCalendarProd() {
             calendarProd = new FullCalendar.Calendar(document.getElementById('calendarProd'), {
                 initialView: window.innerWidth < 768 ? 'listMonth' : 'dayGridMonth', locale: 'es',
-                headerToolbar: { left: 'prev,next today', center: 'title', right: window.innerWidth < 768 ? 'dayGridMonth,listMonth' : 'dayGridMonth,dayGridWeek' },
+                headerToolbar: { left: 'prev,next today', center: 'title', right: (window.innerWidth < 768 ? 'dayGridMonth,listMonth' : 'dayGridMonth,dayGridWeek') + ' historialProdBtn' },
+                customButtons: {
+                    historialProdBtn: {
+                        text: '🕐 Historial',
+                        click: () => mostrarHistorialTrazabilidadProduccion()
+                    }
+                },
                 buttonText: { today: 'Hoy', month: 'Mes', week: 'Semana', list: 'Lista' },
                 firstDay: 1, height: 'auto', contentHeight: window.innerWidth < 768 ? 420 : 500,
                 eventClick: (i) => showModalProd(i.event.extendedProps),
@@ -4249,7 +4465,7 @@ function buildDateColumnMapPlanta1(headerRow, weekLabelRow, hiddenCols) {
 
         function showModalProd(item) {
             const c = getAreaColor(item.area);
-            const plantaBadge = item.planta ? `<div><span class="text-slate-400 block text-xs uppercase">Planta de origen</span><span class="font-medium text-slate-200">${item.planta === 'planta1' ? 'Planta 1' : 'Planta 2'}</span></div>` : '';
+            const plantaBadge = item.planta ? `<div><span class="text-slate-400 block text-xs uppercase">Planta de origen</span><span class="font-medium text-slate-200">${item.planta === 'planta1' ? 'Planta ATE' : 'Planta LIMA'}</span></div>` : '';
             Swal.fire({
                 title: `<div class="text-base font-bold text-left border-b border-slate-700/50 pb-2 flex justify-between" style="color: var(--app-text);"><span>Detalle</span><span class="text-xs px-2 py-0.5 rounded text-white" style="background-color:${c}">${item.area}</span></div>`,
                 html: `<div class="text-left space-y-3 text-sm mt-2"><div><span class="text-slate-400 block text-xs uppercase">Código</span><span class="font-bold text-slate-200">${item.codigo}</span></div><div><span class="text-slate-400 block text-xs uppercase">Producto</span><span class="font-medium text-slate-200">${item.producto}</span></div>${plantaBadge}<div><span class="text-slate-400 block text-xs uppercase mb-1.5">Días</span><div class="flex flex-wrap gap-1.5">${item.fechas.map(d => `<span class="bg-slate-800 border border-slate-600 px-2 py-0.5 rounded text-xs text-emerald-400">${dayjs(d).format('YYYY-MM-DD')}</span>`).join('')}</div></div></div>`,
@@ -4261,16 +4477,16 @@ function buildDateColumnMapPlanta1(headerRow, weekLabelRow, hiddenCols) {
 
         function clearProdData() {
             if (currentPlanta === 'consolidado') {
-                Swal.fire({ icon: 'info', title: 'Vista consolidada', text: 'El consolidado se arma automáticamente a partir de Planta 1 y Planta 2. Para borrar datos, cambia primero a la planta específica.', background: '#0f172a', color: '#f8fafc' });
+                Swal.fire({ icon: 'info', title: 'Vista consolidada', text: 'El consolidado se arma automáticamente a partir de Planta ATE y Planta LIMA. Para borrar datos, cambia primero a la planta específica.', background: '#0f172a', color: '#f8fafc' });
                 return;
             }
             // Se captura ANTES del diálogo de confirmación: si el usuario tarda
             // en confirmar y mientras tanto cambia de planta, esta acción sigue
             // apuntando a la planta que tenía activa cuando pidió limpiar.
             const plantaObjetivo = currentPlanta;
-            Swal.fire({ title: `¿Limpiar datos de ${plantaObjetivo === 'planta1' ? 'Planta 1' : 'Planta 2'}?`, text: 'Se borrará el programa.', icon: 'warning', showCancelButton: true, confirmButtonText: 'Sí', cancelButtonText: 'No', background: '#0f172a', color: '#f8fafc', width: 'min(420px, 92vw)', customClass: { confirmButton: 'bg-red-600 px-4 py-2.5 rounded text-white mr-2 text-xs min-w-[44px]', cancelButton: 'bg-slate-600 px-4 py-2.5 rounded text-white text-xs min-w-[44px]' }, buttonsStyling: false }).then(async r => {
+            Swal.fire({ title: `¿Limpiar datos de ${plantaObjetivo === 'planta1' ? 'Planta ATE' : 'Planta LIMA'}?`, text: 'Se borrará el programa.', icon: 'warning', showCancelButton: true, confirmButtonText: 'Sí', cancelButtonText: 'No', background: '#0f172a', color: '#f8fafc', width: 'min(420px, 92vw)', customClass: { confirmButton: 'bg-red-600 px-4 py-2.5 rounded text-white mr-2 text-xs min-w-[44px]', cancelButton: 'bg-slate-600 px-4 py-2.5 rounded text-white text-xs min-w-[44px]' }, buttonsStyling: false }).then(async r => {
                 if (r.isConfirmed) {
-                    const ok = await autorizarYRegistrar('Eliminación de datos', `Excel de Producción (${plantaObjetivo === 'planta1' ? 'Planta 1' : 'Planta 2'})`);
+                    const ok = await autorizarYRegistrar('Eliminación de datos', `Excel de Producción (${plantaObjetivo === 'planta1' ? 'Planta ATE' : 'Planta LIMA'})`);
                     if (!ok) return;
                     await storeRemove(`prod_data_${plantaObjetivo}`);
                     if (currentPlanta === plantaObjetivo) {
@@ -4307,7 +4523,7 @@ function buildDateColumnMapPlanta1(headerRow, weekLabelRow, hiddenCols) {
         let validacionBusqueda = '';
         // Filtro de "Inicio de Producción": Set de fechas en formato
         // YYYY-MM-DD. Vacío = sin filtro (se muestran todas). Permite elegir
-        // 1 o más fechas puntuales, y funciona igual en Planta 1, Planta 2
+        // 1 o más fechas puntuales, y funciona igual en Planta ATE, Planta LIMA
         // y Consolidado porque filtra sobre las filas ya cargadas de cada
         // vista, sin depender de qué planta esté activa.
         let validacionFiltroFechas = new Set();
@@ -4986,7 +5202,7 @@ async function downloadPlanProduccionFromCloud() {
 
         // ==================== RESPONSABLES POR ETAPA (RMD Pendientes) ====================
         // Map<"MATERIAL::ETAPA_FIJA", "DOC"|"PRO"|"ASC"|"IDE"> — es GLOBAL (no por
-        // planta), así que se ve y se edita igual en Planta 1, Planta 2 y
+        // planta), así que se ve y se edita igual en Planta ATE, Planta LIMA y
         // Consolidado. Persiste aunque se recarguen nuevos Excel, se recargue la
         // página, o se cambie de planta — igual que "Autorizados manual", nunca
         // se borra de forma automática. Solo desaparece si el propio usuario
@@ -5022,7 +5238,7 @@ async function downloadPlanProduccionFromCloud() {
         // Los responsables de etapa ahora tienen exactamente la misma garantía
         // de persistencia que "Autorizados manual": NUNCA se borran de forma
         // automática, sin importar cuántas veces se recargue la página, se
-        // cargue un archivo nuevo, o se cambie entre Planta 1/Planta 2/
+        // cargue un archivo nuevo, o se cambie entre Planta ATE/Planta LIMA/
         // Consolidado. La única forma de que un responsable desaparezca es
         // que el propio usuario lo cambie a vacío manualmente desde el
         // selector (ver window.setResponsableEtapa). Antes existía aquí una
@@ -5136,7 +5352,7 @@ productionData.forEach(p => {
     if (!materialAreas.has(cod)) materialAreas.set(cod, new Set());
     materialAreas.get(cod).add(p.area);
     // p.planta solo viene seteado en modo consolidado (ver
-    // loadProdDataConsolidado); en Planta 1 / Planta 2 individuales se usa
+    // loadProdDataConsolidado); en Planta ATE / Planta LIMA individuales se usa
     // currentPlanta, ya que en esas vistas TODO lo cargado pertenece a esa
     // única planta. Así, materialPlantas queda disponible en los 3 modos,
     // no solo en consolidado, para poder exportar la columna Planta siempre.
@@ -5202,7 +5418,7 @@ pendientes.sort((a, b) => {
 });
 
 // Cada fila lleva de qué planta(s) proviene el material, en los 3 modos
-// (Planta 1, Planta 2, Consolidado). En vistas individuales siempre será una
+// (Planta ATE, Planta LIMA, Consolidado). En vistas individuales siempre será una
 // sola planta; en consolidado puede ser una o ambas si el mismo código se
 // programó en las dos.
 pendientes.forEach(p => {
@@ -5321,7 +5537,7 @@ pendientes.forEach(p => {
                 const etapasCls = esAutorizado ? 'etapa-autorizada-manual line-through' : 'text-red-300';
                 const fechaTxt = p.fechaProxima ? dayjs(p.fechaProxima).format('YYYY-MM-DD') : '-';
                 // La etiqueta de planta solo se muestra en la tabla cuando estamos
-                // en consolidado (en Planta 1/2 individuales sería redundante
+                // en consolidado (en Planta ATE/2 individuales sería redundante
                 // repetirla en cada fila, ya que sería siempre la misma). El dato
                 // p.plantas en sí siempre está disponible para el export a Excel.
                 const plantaTag = (currentPlanta === 'consolidado' && p.plantas) ? ` <span class="text-[9px] text-purple-300/80 bg-purple-500/10 border border-purple-500/30 px-1 py-0.5 rounded whitespace-nowrap" title="Planta(s) de origen">${p.plantas}</span>` : '';
@@ -5414,7 +5630,7 @@ return `<tr class="${rowCls}" title="${p.motivo || ''}">
         // ==================== FILTRO DE FECHA: "Inicio de Producción" ====================
         // Popup sutil (mismo espíritu que los filtros estilo Excel de
         // Seguimiento RMD) que permite elegir 1 o más fechas puntuales de la
-        // columna "Inicio de Producción". Funciona igual en Planta 1, Planta
+        // columna "Inicio de Producción". Funciona igual en Planta ATE, Planta
         // 2 y Consolidado porque las fechas disponibles se recalculan cada
         // vez a partir de window.__ultimasFilasValidacion — el conjunto de
         // filas ya cargado para la vista activa en ese momento.
@@ -6600,6 +6816,7 @@ function updateForecastActiveFiltersBadge() {
         const BACKUP_ALL_KEYS = [
             'dashboard_products_rmd', 'dashboard_activity_rmd',
             'prod_data_planta1', 'prod_data_planta2',
+            'prod_historial_planta1', 'prod_historial_planta2',
             'forecast_data', 'forecast_months_meta',
             'val_database_materials', 'val_agrupador_etapas', 'val_flags',
             'val_rmd_autorizados_raw', 'val_rmd_autorizados_detalle', 'val_rmd_autorizados_etapas_por_agrupador',
@@ -6732,7 +6949,7 @@ function updateForecastActiveFiltersBadge() {
             };
             setupZone('dropZoneRMD', 'fileInputRMD', processFileRMD, (file) => autorizarYRegistrar('Carga de archivo', `Excel RMD (OP sin RMD): ${file.name}`));
             setupZone('dropZoneProd', 'fileInputProd', processFileProd, (file) => {
-                const plantaTxt = currentPlanta === 'planta1' ? 'Planta 1' : (currentPlanta === 'planta2' ? 'Planta 2' : 'Producción');
+                const plantaTxt = currentPlanta === 'planta1' ? 'Planta ATE' : (currentPlanta === 'planta2' ? 'Planta LIMA' : 'Producción');
                 return autorizarYRegistrar('Carga de archivo', `Excel de Producción (${plantaTxt}): ${file.name}`);
             });
             setupZone('dropZoneBaseDatos', 'fileInputBaseDatos', processFileBaseDatos, (file) => autorizarYRegistrar('Carga de archivo', `Base de Datos de materiales: ${file.name}`));
@@ -6754,9 +6971,9 @@ const TOUR_STEPS = [
     { tab: 'forecast', selector: '#calendarForecast', title: 'Calendario Anual de Forecast', text: 'A diferencia del calendario de Producción (que es diario), este muestra los 12 meses del año de un vistazo, cada uno con la cantidad de materiales programados. Usa las flechas para navegar entre años, y haz clic en un mes para ver el detalle de esos materiales.' },
 
     // ---- Pestaña Producción ----
-    { tab: 'produccion', selector: '#inlineUploadProd', title: 'Carga de archivos de Producción', text: 'Sube el Programa de Producción (elige Planta 1 o 2), la Base de Datos de materiales y los RMD Autorizados. Cuando ambas plantas tengan datos cargados, se habilita un tercer botón "Consolidado" que junta todo: calendario, productos, RMD pendientes, gráficos y resumen.' },
+    { tab: 'produccion', selector: '#inlineUploadProd', title: 'Carga de archivos de Producción', text: 'Sube el Programa de Producción (elige Planta ATE o 2), la Base de Datos de materiales y los RMD Autorizados. Cuando ambas plantas tengan datos cargados, se habilita un tercer botón "Consolidado" que junta todo: calendario, productos, RMD pendientes, gráficos y resumen.' },
     { tab: 'produccion', selector: '#areaFiltersContainer', title: 'Filtro por área', text: 'Filtra todo el dashboard (calendario, gráficos y tabla) por una sola área de producción.' },
-    { tab: 'produccion', selector: '#cardValidacionMateriales', title: 'RMD Pendientes de Autorización', text: 'Es lo más importante de esta pestaña, por eso va justo aquí arriba: cruza automáticamente los tres archivos y te dice qué materiales programados aún no tienen su RMD autorizado. En cada etapa pendiente puedes asignar un responsable (DOC, PRO, ASC o IDE); se guarda de forma permanente y se refleja igual en Planta 1, Planta 2 y Consolidado. La lupa verde del buscador abre "Consultar RMD": busca por Descripción RMD y muestra el historial de versiones tal como lo lleva Seguimiento RMD.' },
+    { tab: 'produccion', selector: '#cardValidacionMateriales', title: 'RMD Pendientes de Autorización', text: 'Es lo más importante de esta pestaña, por eso va justo aquí arriba: cruza automáticamente los tres archivos y te dice qué materiales programados aún no tienen su RMD autorizado. En cada etapa pendiente puedes asignar un responsable (DOC, PRO, ASC o IDE); se guarda de forma permanente y se refleja igual en Planta ATE, Planta LIMA y Consolidado. La lupa verde del buscador abre "Consultar RMD": busca por Descripción RMD y muestra el historial de versiones tal como lo lleva Seguimiento RMD.' },
     { tab: 'produccion', selector: '#cardUpcomingProd', title: 'Próximas a Producir', text: 'Lista de lo próximo a producir, con buscador y filtro de fecha "Desde" para ubicar rápidamente un producto o revisar solo lo que viene.' },
     { tab: 'produccion', selector: '#calendarProd', title: 'Calendario de producción', text: 'Visualiza qué se produce cada día por área. Haz clic en cualquier evento para ver el detalle del producto.' },
     { tab: 'produccion', selector: '#cardAreaDistribution', title: 'Gráficos de distribución y tendencia', text: 'Más abajo encontrarás la distribución de carga por área, la comparativa entre secciones y la tendencia de producción de los próximos días.' },
@@ -7037,7 +7254,7 @@ async function maybeAutoStartTour() {
             document.querySelectorAll('.planta-btn').forEach(btn => {
                 btn.classList.toggle('active', btn.dataset.planta === currentPlanta);
             });
-            document.getElementById('prodDropLabel').textContent = `Programa de Producción (${currentPlanta === 'planta1' ? 'Planta 1' : 'Planta 2'})`;
+            document.getElementById('prodDropLabel').textContent = `Programa de Producción (${currentPlanta === 'planta1' ? 'Planta ATE' : 'Planta LIMA'})`;
 
             gsap.fromTo('.gsap-header', { y: -20, opacity: 0 }, { y: 0, opacity: 1, duration: 0.8, ease: "power3.out" });
             gsap.fromTo('#tab-nav-row', { y: 15, opacity: 0 }, { y: 0, opacity: 1, duration: 0.6, delay: 0.2, ease: "power2.out" });
