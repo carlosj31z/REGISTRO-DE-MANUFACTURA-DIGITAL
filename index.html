@@ -4613,24 +4613,65 @@ function buildDateColumnMapPlanta1(headerRow, weekLabelRow, hiddenCols) {
             // la penúltima versión cuando la última, sin código, ya estaba
             // Autorizada). La descripción sí es estable entre versiones del
             // mismo producto, así que es el identificador confiable aquí.
-            // El Código por Defecto se toma al final, de la fila ganadora
-            // (la de mayor versión); si esa fila no tiene código, se
-            // muestra "-", nunca se hereda el código de una versión previa.
+            // El Código por Defecto se toma al final, de la fila que se use
+            // como vigente; si esa fila no tiene código, se muestra "-",
+            // nunca se hereda el código de una versión previa.
             //
-            // Las filas en estado "Solicitado" se OMITEN por completo desde
-            // el inicio, como si no existieran en el Excel: una solicitud
-            // aún no aceptada puede rechazarse, así que no corresponde
-            // tratarla como una versión real del producto.
-            const porDescripcion = new Map(); // descripcion -> fila de mayor versión, ignorando "Solicitado"
+            // Regla para "Solicitado" como ÚLTIMA versión de un producto:
+            // una solicitud aún no aceptada puede rechazarse, así que no se
+            // trata sola como si ya fuera la versión real — en su lugar se
+            // consulta la PENÚLTIMA versión (la inmediatamente anterior) y:
+            //   - si esa penúltima está AUTORIZADA (o cualquier otro estado
+            //     resuelto), el producto NO se marca como pendiente — se
+            //     asume que ya está cubierto mientras la solicitud se
+            //     resuelve.
+            //   - si esa penúltima está SUSPENDIDA o INGRESADA, el producto
+            //     SÍ se marca como pendiente, usando esa penúltima versión
+            //     como la fila vigente (con su propio código/descripción/
+            //     observación).
+            // Si "Solicitado" NO es la última versión (hay algo más nuevo
+            // después), no aplica ninguna excepción: se sigue el flujo
+            // normal con la versión más alta real.
+            const versionesPorDescripcion = new Map(); // descripcion -> array de TODAS sus filas (todas las versiones)
             if (agrupador) {
                 rmdAutorizadosDetalle
-                    .filter(r => r.codigoAgrupador === agrupador && r.etapaNorm === etapaFija && normalizeEstadoRmd(r.estado) !== 'SOLICITADO')
+                    .filter(r => r.codigoAgrupador === agrupador && r.etapaNorm === etapaFija)
                     .forEach(r => {
                         const descKey = (r.descripcion || '').trim().toUpperCase();
-                        const actual = porDescripcion.get(descKey);
-                        if (!actual || (r.version ?? 0) >= (actual.version ?? 0)) porDescripcion.set(descKey, r);
+                        if (!versionesPorDescripcion.has(descKey)) versionesPorDescripcion.set(descKey, []);
+                        versionesPorDescripcion.get(descKey).push(r);
                     });
             }
+            const porDescripcion = new Map(); // descripcion -> fila vigente ya resuelta con la regla de arriba
+            versionesPorDescripcion.forEach((filas, descKey) => {
+                // Orden ascendente por versión, para poder mirar "la última" y
+                // "la penúltima" con claridad.
+                const ordenadas = [...filas].sort((a, b) => (a.version ?? 0) - (b.version ?? 0));
+                const ultima = ordenadas[ordenadas.length - 1];
+                if (normalizeEstadoRmd(ultima.estado) !== 'SOLICITADO') {
+                    // Caso normal: la última versión no es una solicitud sin
+                    // resolver, así que ella misma es la fila vigente.
+                    porDescripcion.set(descKey, ultima);
+                    return;
+                }
+                const penultima = ordenadas.length >= 2 ? ordenadas[ordenadas.length - 2] : null;
+                if (!penultima) {
+                    // Solo existe una versión, y es Solicitado: no hay ninguna
+                    // versión previa resuelta ni pendiente que mostrar, así
+                    // que este producto no entra al resultado.
+                    return;
+                }
+                const penultimaEstado = normalizeEstadoRmd(penultima.estado);
+                if (ESTADOS_RESUELTOS_RMD.has(penultimaEstado)) {
+                    // La penúltima ya está resuelta (Autorizado, Solicitud
+                    // Aprobada o Rechazada): no se marca como pendiente. No se
+                    // agrega nada a porDescripcion para este producto.
+                    return;
+                }
+                // La penúltima está Suspendido o Ingresado: sí es pendiente,
+                // y se usa esa penúltima versión como la fila vigente.
+                porDescripcion.set(descKey, penultima);
+            });
             const filasCoincidentes = Array.from(porDescripcion.values())
                 .filter(r => ESTADOS_PENDIENTES_RMD.has(normalizeEstadoRmd(r.estado)));
             // Orden estable por Descripción, para que la lista sea fácil de
