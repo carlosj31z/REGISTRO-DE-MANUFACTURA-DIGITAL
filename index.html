@@ -4623,7 +4623,16 @@ function buildDateColumnMapPlanta1(headerRow, weekLabelRow, hiddenCols) {
             // Observación, así que si ese fuera el que gana el empate, el
             // modal mostraría "-" aunque la otra fila, con igual versión,
             // sí tuviera una observación real cargada.
-            const porDescripcion = new Map(); // descripcion -> fila de mayor versión (con desempate por estado)
+            //
+            // Caso adicional (versión distinta, no empate): si la versión
+            // MÁS ALTA está en estado "Solicitado" pero la versión anterior
+            // ya está RESUELTA (Autorizado / Solicitud Aprobada / Solicitud
+            // Rechazada), la anterior sigue prevaleciendo. Una solicitud
+            // todavía puede rechazarse — mientras eso no se confirme, no es
+            // seguro que llegue a existir una nueva versión real, así que no
+            // corresponde tratar el material como si ya hubiera avanzado a
+            // una versión posterior pendiente.
+            const porDescripcion = new Map(); // descripcion -> fila vigente (con las 2 reglas de desempate de arriba)
             if (agrupador) {
                 rmdAutorizadosDetalle
                     .filter(r => r.codigoAgrupador === agrupador && r.etapaNorm === etapaFija)
@@ -4633,8 +4642,28 @@ function buildDateColumnMapPlanta1(headerRow, weekLabelRow, hiddenCols) {
                         if (!actual) { porDescripcion.set(descKey, r); return; }
                         const vNueva = r.version ?? 0, vActual = actual.version ?? 0;
                         if (vNueva > vActual) {
-                            porDescripcion.set(descKey, r);
-                        } else if (vNueva === vActual) {
+                            const nuevaEsSolicitado = normalizeEstadoRmd(r.estado) === 'SOLICITADO';
+                            const actualEsResuelto = ESTADOS_RESUELTOS_RMD.has(normalizeEstadoRmd(actual.estado));
+                            // Si la versión nueva (más alta) es Solicitado y la
+                            // que tenemos hasta ahora ya está resuelta, NO se
+                            // reemplaza: se mantiene la resuelta como vigente.
+                            if (!(nuevaEsSolicitado && actualEsResuelto)) {
+                                porDescripcion.set(descKey, r);
+                            }
+                        } else if (vNueva < vActual) {
+                            // Mismo caso que arriba, pero con las filas en el
+                            // orden inverso dentro del Excel: si lo que ya
+                            // teníamos guardado (mayor versión) es Solicitado y
+                            // esta fila de versión menor ya está resuelta,
+                            // igual debe prevalecer la resuelta — el resultado
+                            // no puede depender del orden en que aparecen las
+                            // filas en el archivo.
+                            const actualEsSolicitadoV = normalizeEstadoRmd(actual.estado) === 'SOLICITADO';
+                            const nuevaEsResuelta = ESTADOS_RESUELTOS_RMD.has(normalizeEstadoRmd(r.estado));
+                            if (actualEsSolicitadoV && nuevaEsResuelta) {
+                                porDescripcion.set(descKey, r);
+                            }
+                        } else {
                             const nuevaEsSolicitado = normalizeEstadoRmd(r.estado) === 'SOLICITADO';
                             const actualEsSolicitado = normalizeEstadoRmd(actual.estado) === 'SOLICITADO';
                             // Solo se reemplaza si la actual era "Solicitado" y la
