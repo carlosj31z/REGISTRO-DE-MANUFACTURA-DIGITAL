@@ -4617,32 +4617,18 @@ function buildDateColumnMapPlanta1(headerRow, weekLabelRow, hiddenCols) {
             // (la de mayor versión); si esa fila no tiene código, se
             // muestra "-", nunca se hereda el código de una versión previa.
             //
-            // Desempate cuando dos filas comparten la MISMA versión: se
-            // prefiere la que NO esté en estado "Solicitado" (es decir,
-            // Ingresado o Suspendido) — en Solicitado no aplica llenar
-            // Observación, así que si ese fuera el que gana el empate, el
-            // modal mostraría "-" aunque la otra fila, con igual versión,
-            // sí tuviera una observación real cargada.
-            const porDescripcion = new Map(); // descripcion -> fila de mayor versión (con desempate por estado)
+            // Las filas en estado "Solicitado" se OMITEN por completo desde
+            // el inicio, como si no existieran en el Excel: una solicitud
+            // aún no aceptada puede rechazarse, así que no corresponde
+            // tratarla como una versión real del producto.
+            const porDescripcion = new Map(); // descripcion -> fila de mayor versión, ignorando "Solicitado"
             if (agrupador) {
                 rmdAutorizadosDetalle
-                    .filter(r => r.codigoAgrupador === agrupador && r.etapaNorm === etapaFija)
+                    .filter(r => r.codigoAgrupador === agrupador && r.etapaNorm === etapaFija && normalizeEstadoRmd(r.estado) !== 'SOLICITADO')
                     .forEach(r => {
                         const descKey = (r.descripcion || '').trim().toUpperCase();
                         const actual = porDescripcion.get(descKey);
-                        if (!actual) { porDescripcion.set(descKey, r); return; }
-                        const vNueva = r.version ?? 0, vActual = actual.version ?? 0;
-                        if (vNueva > vActual) {
-                            porDescripcion.set(descKey, r);
-                        } else if (vNueva === vActual) {
-                            const nuevaEsSolicitado = normalizeEstadoRmd(r.estado) === 'SOLICITADO';
-                            const actualEsSolicitado = normalizeEstadoRmd(actual.estado) === 'SOLICITADO';
-                            // Solo se reemplaza si la actual era "Solicitado" y la
-                            // nueva no lo es — así, entre dos filas de igual
-                            // versión, siempre gana la que sí puede traer
-                            // Observación real.
-                            if (actualEsSolicitado && !nuevaEsSolicitado) porDescripcion.set(descKey, r);
-                        }
+                        if (!actual || (r.version ?? 0) >= (actual.version ?? 0)) porDescripcion.set(descKey, r);
                     });
             }
             const filasCoincidentes = Array.from(porDescripcion.values())
