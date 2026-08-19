@@ -5807,21 +5807,25 @@ return `<tr class="${rowCls}" title="${p.motivo || ''}">
                     const estaPendiente = pendientesFijasSet.has(fija);
                     if (sinDatosDeEtapa) {
                         row[label] = 'SIN DATOS';
+                        row[`Actividad Pendiente ${label}`] = 'NO APLICA';
                         row[`Responsable ${label}`] = 'NO APLICA';
                     } else {
                         row[label] = estaPendiente ? 'X' : 'AUTORIZADO';
+                        row[`Actividad Pendiente ${label}`] = estaPendiente ? (estatusEtapa.get(responsableKey(p.material, fija)) || '') : 'NO APLICA';
                         row[`Responsable ${label}`] = estaPendiente ? (responsablesEtapa.get(responsableKey(p.material, fija)) || '') : 'NO APLICA';
                     }
                 });
                 return row;
             });
             const ws = XLSX.utils.json_to_sheet(wsData);
-            // Anchos: Material, Descripción, Planta, Área(s), Inicio, luego 2 columnas (etapa+responsable) x 5 etapas.
+            // Anchos: Material, Descripción, Planta, Área(s), Inicio, luego 3 columnas
+            // (etapa + actividad pendiente + responsable) x 5 etapas.
             ws['!cols'] = [{ wch: 14 }, { wch: 45 }, { wch: 10 }, { wch: 20 }, { wch: 16 },
-                ...ETAPAS_FIJAS.flatMap(() => [{ wch: 14 }, { wch: 16 }])];
+                ...ETAPAS_FIJAS.flatMap(() => [{ wch: 14 }, { wch: 20 }, { wch: 16 }])];
             // Autofiltro sobre todo el rango de datos, para poder filtrar por
-            // Planta (ATE/LIMA), Etapa, Responsable, etc. directamente en Excel.
-            const numCols = 5 + ETAPAS_FIJAS.length * 2;
+            // Planta (ATE/LIMA), Etapa, Actividad Pendiente, Responsable, etc.
+            // directamente en Excel.
+            const numCols = 5 + ETAPAS_FIJAS.length * 3;
             const lastColLetter = XLSX.utils.encode_col(numCols - 1);
             ws['!autofilter'] = { ref: `A1:${lastColLetter}${wsData.length + 1}` };
             // Congela la fila de encabezado para que quede visible al hacer scroll.
@@ -6473,9 +6477,11 @@ function updateForecastActiveFiltersBadge() {
             const estaPendiente = pendientesFijasSet.has(fija);
             if (sinDatosDeEtapa) {
                 row[label] = 'SIN DATOS';
+                row[`Actividad Pendiente ${label}`] = 'NO APLICA';
                 row[`Responsable ${label}`] = 'NO APLICA';
             } else {
                 row[label] = estaPendiente ? 'X' : 'AUTORIZADO';
+                row[`Actividad Pendiente ${label}`] = estaPendiente ? (estatusEtapa.get(responsableKey(p.material, fija)) || '') : 'NO APLICA';
                 row[`Responsable ${label}`] = estaPendiente ? (responsablesEtapa.get(responsableKey(p.material, fija)) || '') : 'NO APLICA';
             }
         });
@@ -6483,13 +6489,13 @@ function updateForecastActiveFiltersBadge() {
         return row;
     });
     const wsDetalle = XLSX.utils.json_to_sheet(wsData);
-    // Anchos: Material, Descripción, Planta, Mes(es), luego 2 columnas
-    // (etapa+responsable) x 5 etapas, y por último Motivo.
+    // Anchos: Material, Descripción, Planta, Mes(es), luego 3 columnas
+    // (etapa + actividad pendiente + responsable) x 5 etapas, y por último Motivo.
     wsDetalle['!cols'] = [{ wch: 14 }, { wch: 42 }, { wch: 16 }, { wch: 34 },
-        ...ETAPAS_FIJAS.flatMap(() => [{ wch: 14 }, { wch: 16 }]),
+        ...ETAPAS_FIJAS.flatMap(() => [{ wch: 14 }, { wch: 20 }, { wch: 16 }]),
         { wch: 50 }];
     // Autofiltro sobre todo el rango de datos (mismo patrón que Producción).
-    const numColsForecast = 4 + ETAPAS_FIJAS.length * 2 + 1;
+    const numColsForecast = 4 + ETAPAS_FIJAS.length * 3 + 1;
     const lastColLetterForecast = XLSX.utils.encode_col(numColsForecast - 1);
     wsDetalle['!autofilter'] = { ref: `A1:${lastColLetterForecast}${wsData.length + 1}` };
     wsDetalle['!views'] = [{ state: 'frozen', ySplit: 1 }];
