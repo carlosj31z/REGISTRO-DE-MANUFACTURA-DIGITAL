@@ -1465,7 +1465,10 @@
                 <span id="prodDropLabel">Cargar Excel</span>
             </div>
             <input type="file" id="fileInputProd" class="hidden" accept=".xlsx, .xls" onchange="handleFileProd(event)">
-            <span class="text-xs text-emerald-400 font-medium" id="prodStatusBadge" style="display:none;">✓ Cargado</span>
+            <button type="button" id="prodStatusBadge" onclick="descargarArchivoOriginalProd()" class="text-xs text-emerald-400 font-medium hover:text-emerald-300 hover:underline transition-colors" style="display:none;" title="Descargar el Excel de Producción tal como se cargó">
+                ✓ Cargado <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 inline-block ml-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 15V3m0 12l-4-4m4 4l4-4M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2" /></svg>
+            </button>
+            <span class="text-[10px] text-slate-500" id="prodUltimaCargaTxt" style="display:none;"></span>
 
             <!-- Base de Datos (ahora con diálogo unificado) -->
             <div class="db-group" id="dbGroup">
@@ -3267,6 +3270,19 @@ let gooeyActiveIndex = 0; // arranca en "forecast" (pestaña activa por defecto)
             return d.isValid() && d.isSameOrAfter(dayjs().startOf('day'), 'day');
         }
 
+        // Usada SOLO por el Programa de Producción (Planta ATE y Planta
+        // LIMA): a diferencia de isTodayOrFuture (que corta exactamente en
+        // "hoy" y se usa también en OP sin RMD), aquí se admite hasta 2
+        // semanas hacia atrás desde hoy — así el usuario sigue viendo el
+        // programa reciente aunque lo revise unos días después de que
+        // arrancó la semana, sin arrastrar fechas indefinidamente viejas.
+        function isDentroDeVentanaProduccion(dateLike) {
+            const d = dayjs(dateLike);
+            if (!d.isValid()) return false;
+            const limiteInferior = dayjs().startOf('day').subtract(2, 'week');
+            return d.isSameOrAfter(limiteInferior, 'day');
+        }
+
         function getHiddenRowSet(sheet) {
             const hidden = new Set();
             (sheet['!rows'] || []).forEach((r, idx) => { if (r && r.hidden) hidden.add(idx); });
@@ -3639,7 +3655,10 @@ function containsExcludedTermPlanta2(text) {
     const upper = String(text).toUpperCase();
     return PLANTA2_EXCLUDED_TERMS.some(term => new RegExp(`\\b${term}\\b`, 'i').test(upper));
 }
-        function filtrarFechasFuturas(f) { return f.filter(d => isTodayOrFuture(d)); }
+        // El nombre se conserva por compatibilidad con el resto del código
+        // que ya la llama, aunque ahora admite hasta 2 semanas hacia atrás
+        // (ver isDentroDeVentanaProduccion), no solo "hoy en adelante".
+        function filtrarFechasFuturas(f) { return f.filter(d => isDentroDeVentanaProduccion(d)); }
 
         function parseExcelDateDirect(v) {
             if (v === null || v === undefined || v === '') return null;
@@ -3759,6 +3778,57 @@ function buildDateColumnMapPlanta1(headerRow, weekLabelRow, hiddenCols) {
             const plantaTxt = currentPlanta === 'planta1' ? 'Planta ATE' : (currentPlanta === 'planta2' ? 'Planta LIMA' : 'Producción');
             const ok = await autorizarYRegistrar('Carga de archivo', `Excel de Producción (${plantaTxt}): ${file.name}`);
             if (ok) processFileProd(file);
+        }
+
+        // Convierte una cadena base64 de vuelta a un Blob descargable, y
+        // dispara la descarga en el navegador con el nombre original del
+        // archivo que el usuario cargó.
+        function base64ADescargaBlob(base64, nombreArchivo) {
+            const binStr = atob(base64);
+            const bytes = new Uint8Array(binStr.length);
+            for (let i = 0; i < binStr.length; i++) bytes[i] = binStr.charCodeAt(i);
+            const blob = new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = nombreArchivo || 'Programa_de_Produccion.xlsx';
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
+        }
+
+        // Botón "✓ Cargado" del drop-zone de Producción: descarga el Excel
+        // exactamente como se subió por última vez, para la planta que esté
+        // activa en ese momento (o, en Consolidado, no aplica — no hay un
+        // único archivo que descargar).
+        async function descargarArchivoOriginalProd() {
+            if (currentPlanta === 'consolidado') {
+                Swal.fire({ icon: 'info', title: 'No disponible en Consolidado', text: 'Cambia a Planta ATE o Planta LIMA para descargar el archivo que se cargó en esa planta.', background: '#0f172a', timer: 3000, showConfirmButton: false });
+                return;
+            }
+            const registro = await storeGet(`prod_archivo_original_${currentPlanta}`);
+            if (!registro || !registro.base64) {
+                Swal.fire({ icon: 'info', title: 'Sin archivo guardado', text: 'Aún no hay ningún Excel guardado para esta planta (puede que se haya cargado antes de esta función existir).', background: '#0f172a', timer: 3000, showConfirmButton: false });
+                return;
+            }
+            base64ADescargaBlob(registro.base64, registro.nombre);
+        }
+
+        // Actualiza el texto de "Última carga: ..." debajo del botón, para
+        // la planta activa. Se llama al terminar de cargar un archivo nuevo,
+        // al cambiar de planta, y al arrancar la app.
+        async function actualizarUltimaCargaProdUI() {
+            const txt = document.getElementById('prodUltimaCargaTxt');
+            if (!txt) return;
+            if (currentPlanta === 'consolidado') { txt.style.display = 'none'; return; }
+            const registro = await storeGet(`prod_archivo_original_${currentPlanta}`);
+            if (registro && registro.fechaCarga) {
+                txt.textContent = `Última carga: ${dayjs(registro.fechaCarga).format('DD/MM/YYYY HH:mm')}`;
+                txt.style.display = 'inline';
+            } else {
+                txt.style.display = 'none';
+            }
         }
 
         function processFileProd(file) {
@@ -3911,6 +3981,34 @@ function buildDateColumnMapPlanta1(headerRow, weekLabelRow, hiddenCols) {
                     const guardadoOk = await storeSet(`prod_data_${plantaObjetivo}`, { data: nuevaProductionData, areas: Array.from(areasDeEstaCarga) });
                     await updateConsolidadoBtnState();
 
+                    // Se guarda también el ARCHIVO ORIGINAL (en base64, ya que
+                    // el storage solo admite JSON serializable) junto con su
+                    // nombre y la fecha/hora exacta de esta carga — así el
+                    // botón "✓ Cargado" del drop-zone puede ofrecer la
+                    // descarga del Excel tal como se subió, y mostrar cuándo
+                    // fue la última vez que se cargó, sin depender de que el
+                    // usuario conserve el archivo original en su computadora.
+                    let base64Original = '';
+                    try {
+                        const bytesForB64 = new Uint8Array(ev.target.result);
+                        let binStr = '';
+                        const chunkSize = 0x8000;
+                        for (let i = 0; i < bytesForB64.length; i += chunkSize) {
+                            binStr += String.fromCharCode.apply(null, bytesForB64.subarray(i, i + chunkSize));
+                        }
+                        base64Original = btoa(binStr);
+                    } catch (b64Err) {
+                        console.error('No se pudo codificar el archivo original para guardarlo:', b64Err);
+                    }
+                    if (base64Original) {
+                        await storeSet(`prod_archivo_original_${plantaObjetivo}`, {
+                            nombre: file.name,
+                            fechaCarga: new Date().toISOString(),
+                            base64: base64Original
+                        });
+                    }
+                    if (currentPlanta === plantaObjetivo) actualizarUltimaCargaProdUI();
+
                     // Solo se registra snapshot de trazabilidad si YA existía
                     // una versión anterior real (dataAnteriorParaComparar con
                     // contenido): la primerísima carga de una planta no tiene
@@ -4042,13 +4140,16 @@ function buildDateColumnMapPlanta1(headerRow, weekLabelRow, hiddenCols) {
             // En consolidado no se sube archivo directo (se arma a partir de Planta ATE + Planta LIMA ya guardadas)
             const dropZoneProd = document.getElementById('dropZoneProd');
             const prodStatusBadge = document.getElementById('prodStatusBadge');
+            const prodUltimaCargaTxt = document.getElementById('prodUltimaCargaTxt');
             if (planta === 'consolidado') {
                 dropZoneProd.style.display = 'none';
                 prodStatusBadge.style.display = 'none';
+                if (prodUltimaCargaTxt) prodUltimaCargaTxt.style.display = 'none';
             } else {
                 dropZoneProd.style.display = '';
                 // Actualizar etiqueta del drop zone
                 document.getElementById('prodDropLabel').textContent = `Programa de Producción (${planta === 'planta1' ? 'Planta ATE' : 'Planta LIMA'})`;
+                actualizarUltimaCargaProdUI();
             }
             // Cargar datos de la planta seleccionada (o el consolidado)
             loadProdData();
@@ -6849,6 +6950,7 @@ function updateForecastActiveFiltersBadge() {
         const BACKUP_ALL_KEYS = [
             'dashboard_products_rmd', 'dashboard_activity_rmd',
             'prod_data_planta1', 'prod_data_planta2',
+            'prod_archivo_original_planta1', 'prod_archivo_original_planta2',
             'prod_historial_planta1', 'prod_historial_planta2',
             'forecast_data', 'forecast_months_meta',
             'val_database_materials', 'val_agrupador_etapas', 'val_flags',
@@ -7288,6 +7390,7 @@ async function maybeAutoStartTour() {
                 btn.classList.toggle('active', btn.dataset.planta === currentPlanta);
             });
             document.getElementById('prodDropLabel').textContent = `Programa de Producción (${currentPlanta === 'planta1' ? 'Planta ATE' : 'Planta LIMA'})`;
+            if (currentPlanta !== 'consolidado') actualizarUltimaCargaProdUI();
 
             gsap.fromTo('.gsap-header', { y: -20, opacity: 0 }, { y: 0, opacity: 1, duration: 0.8, ease: "power3.out" });
             gsap.fromTo('#tab-nav-row', { y: 15, opacity: 0 }, { y: 0, opacity: 1, duration: 0.6, delay: 0.2, ease: "power2.out" });
