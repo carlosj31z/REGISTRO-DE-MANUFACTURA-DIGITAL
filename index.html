@@ -760,6 +760,28 @@
             box-shadow: 0 0 0 3px rgba(59,130,246,0.15);
         }
 
+        /* Label del drop-zone de Producción partido en 2 líneas cortas
+           ("Programa de" / "Producción [Planta]"), para ahorrar ancho
+           horizontal en vez de una sola línea larga sin cortar. */
+        .drop-zone-label-2l {
+            display: flex; flex-direction: column; line-height: 1.15;
+            white-space: normal; text-align: left;
+        }
+
+        /* "✓ Cargado" y la fecha de última carga apilados verticalmente
+           (uno debajo del otro), en vez de en línea junto al botón —
+           ahorra ancho horizontal en la barra de carga de Producción. */
+        .prod-carga-info {
+            display: flex; flex-direction: column; align-items: flex-start;
+            gap: 0.05rem; line-height: 1.1;
+        }
+        /* Fecha de última carga: abreviada y sutil, claramente secundaria
+           respecto al "✓ Cargado" de arriba. */
+        .prod-ultima-carga-txt {
+            font-size: 9.5px; color: var(--slate-500, #64748b);
+            white-space: nowrap; opacity: 0.85;
+        }
+
         .db-group {
             display: flex; align-items: stretch; gap: 0;
             border-radius: 0.7rem;
@@ -1462,13 +1484,15 @@
 
             <div class="drop-zone-mini prod-style" id="dropZoneProd" onclick="document.getElementById('fileInputProd').click()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();document.getElementById('fileInputProd').click();}" role="button" tabindex="0" title="Cargar Excel Producción para la planta activa" aria-label="Cargar Excel Producción">
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-emerald-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-                <span id="prodDropLabel">Cargar Excel</span>
+                <span id="prodDropLabel" class="drop-zone-label-2l">Cargar Excel</span>
             </div>
             <input type="file" id="fileInputProd" class="hidden" accept=".xlsx, .xls" onchange="handleFileProd(event)">
-            <button type="button" id="prodStatusBadge" onclick="descargarArchivoOriginalProd()" class="text-xs text-emerald-400 font-medium hover:text-emerald-300 hover:underline transition-colors" style="display:none;" title="Descargar el Excel de Producción tal como se cargó">
-                ✓ Cargado <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 inline-block ml-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 15V3m0 12l-4-4m4 4l4-4M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2" /></svg>
-            </button>
-            <span class="text-[10px] text-slate-500" id="prodUltimaCargaTxt" style="display:none;"></span>
+            <div class="prod-carga-info">
+                <button type="button" id="prodStatusBadge" onclick="descargarArchivoOriginalProd()" class="text-xs text-emerald-400 font-medium hover:text-emerald-300 hover:underline transition-colors" style="display:none;" title="Descargar el Excel de Producción tal como se cargó">
+                    ✓ Cargado <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 inline-block ml-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 15V3m0 12l-4-4m4 4l4-4M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2" /></svg>
+                </button>
+                <span class="prod-ultima-carga-txt" id="prodUltimaCargaTxt" style="display:none;"></span>
+            </div>
 
             <!-- Base de Datos (ahora con diálogo unificado) -->
             <div class="db-group" id="dbGroup">
@@ -3834,8 +3858,11 @@ function buildDateColumnMapPlanta1(headerRow, weekLabelRow, hiddenCols) {
             if (currentPlanta === 'consolidado') { txt.style.display = 'none'; return; }
             const registro = await storeGet(`prod_archivo_original_${currentPlanta}`);
             if (registro && registro.fechaCarga) {
-                txt.textContent = `Última carga: ${dayjs(registro.fechaCarga).format('DD/MM/YYYY HH:mm')}`;
-                txt.style.display = 'inline';
+                // Formato abreviado y sutil: sin el prefijo "Última carga:"
+                // (el contexto de estar justo debajo de "✓ Cargado" ya lo
+                // deja claro), y con año a 2 dígitos para ahorrar espacio.
+                txt.textContent = dayjs(registro.fechaCarga).format('DD/MM/YY HH:mm');
+                txt.style.display = 'block';
             } else {
                 txt.style.display = 'none';
             }
@@ -4157,8 +4184,9 @@ function buildDateColumnMapPlanta1(headerRow, weekLabelRow, hiddenCols) {
                 if (prodUltimaCargaTxt) prodUltimaCargaTxt.style.display = 'none';
             } else {
                 dropZoneProd.style.display = '';
-                // Actualizar etiqueta del drop zone
-                document.getElementById('prodDropLabel').textContent = `Programa de Producción (${planta === 'planta1' ? 'Planta ATE' : 'Planta LIMA'})`;
+                // Actualizar etiqueta del drop zone, en 2 líneas cortas para
+                // ahorrar ancho ("Programa de" / "Producción (Planta X)").
+                document.getElementById('prodDropLabel').innerHTML = `Programa de<br>Producción (${planta === 'planta1' ? 'Planta ATE' : 'Planta LIMA'})`;
                 actualizarUltimaCargaProdUI();
             }
             // Cargar datos de la planta seleccionada (o el consolidado)
@@ -7399,7 +7427,7 @@ async function maybeAutoStartTour() {
             document.querySelectorAll('.planta-btn').forEach(btn => {
                 btn.classList.toggle('active', btn.dataset.planta === currentPlanta);
             });
-            document.getElementById('prodDropLabel').textContent = `Programa de Producción (${currentPlanta === 'planta1' ? 'Planta ATE' : 'Planta LIMA'})`;
+            document.getElementById('prodDropLabel').innerHTML = `Programa de<br>Producción (${currentPlanta === 'planta1' ? 'Planta ATE' : 'Planta LIMA'})`;
             if (currentPlanta !== 'consolidado') actualizarUltimaCargaProdUI();
 
             gsap.fromTo('.gsap-header', { y: -20, opacity: 0 }, { y: 0, opacity: 1, duration: 0.8, ease: "power3.out" });
