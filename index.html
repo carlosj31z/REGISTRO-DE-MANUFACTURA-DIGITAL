@@ -3271,16 +3271,26 @@ let gooeyActiveIndex = 0; // arranca en "forecast" (pestaña activa por defecto)
         }
 
         // Usada SOLO por el Programa de Producción (Planta ATE y Planta
-        // LIMA): a diferencia de isTodayOrFuture (que corta exactamente en
-        // "hoy" y se usa también en OP sin RMD), aquí se admite hasta 2
-        // semanas hacia atrás desde hoy — así el usuario sigue viendo el
-        // programa reciente aunque lo revise unos días después de que
-        // arrancó la semana, sin arrastrar fechas indefinidamente viejas.
+        // LIMA): en vez de cortar en "hoy" (como isTodayOrFuture, que
+        // además se usa en OP sin RMD), aquí se admite cualquier fecha
+        // desde el LUNES de la semana en que el usuario está cargando el
+        // archivo — así, si se sube el Excel un jueves, por ejemplo,
+        // igual se conservan lunes/martes/miércoles de esa misma semana en
+        // vez de perderlos, sin arrastrar semanas anteriores completas.
+        // El cálculo del lunes es manual (no usa .startOf('week'), que
+        // depende de la configuración regional/locale activa) para que el
+        // resultado sea siempre el mismo sin importar el locale de dayjs.
+        function lunesDeLaSemanaActual() {
+            const hoy = dayjs().startOf('day');
+            const diaSemana = hoy.day(); // 0=domingo, 1=lunes, ..., 6=sábado
+            const diasDesdeElLunes = diaSemana === 0 ? 6 : diaSemana - 1;
+            return hoy.subtract(diasDesdeElLunes, 'day');
+        }
+
         function isDentroDeVentanaProduccion(dateLike) {
             const d = dayjs(dateLike);
             if (!d.isValid()) return false;
-            const limiteInferior = dayjs().startOf('day').subtract(2, 'week');
-            return d.isSameOrAfter(limiteInferior, 'day');
+            return d.isSameOrAfter(lunesDeLaSemanaActual(), 'day');
         }
 
         function getHiddenRowSet(sheet) {
