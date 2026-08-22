@@ -65,8 +65,13 @@
     <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
-    <!-- SheetJS (XLSX) -->
-    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <!-- SheetJS (XLSX) con soporte de estilos de celda (xlsx-js-style es
+         un fork de SheetJS 0.18.5 — misma API, misma versión base — que
+         agrega fill/font/border/alignment por celda. Se usa para poder
+         replicar directamente en la exportación el mismo formato que
+         antes solo se lograba con la macro de Excel (colores por estado,
+         encabezado oscuro, bordes, etc.), sin depender de VBA. -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
 
     <!-- Day.js -->
     <script src="https://cdn.jsdelivr.net/npm/dayjs@1.11.10/dayjs.min.js"></script>
@@ -1434,13 +1439,13 @@
         <div class="gooey-nav-container" id="gooeyNavContainer">
             <nav>
                 <ul id="gooeyNavList">
-                    <li class="active" data-tab="forecast">
+                    <li data-tab="forecast">
                         <a href="#" onclick="return false;">
                             <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>
                             <span class="gooey-nav-label">Forecast</span>
                         </a>
                     </li>
-                    <li data-tab="produccion">
+                    <li class="active" data-tab="produccion">
                         <a href="#" onclick="return false;">
                             <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 002-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
                             <span class="gooey-nav-label">Producción</span>
@@ -1655,7 +1660,7 @@
     </div>
 
     <!-- ==================== TAB 2: Programa de Producción ==================== -->
-    <div class="tab-content" id="tab-produccion">
+    <div class="tab-content active" id="tab-produccion">
         <div class="info-badge opacity-0 section-spacing" id="dateFilterInfo" style="display: none;">
             <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
             <span id="dateFilterText" class="text-xs"></span>
@@ -1676,6 +1681,10 @@
                     RMD Pendientes de Autorización
                 </h2>
                 <div class="flex items-center gap-2">
+                    <button onclick="mostrarGraficoResponsableModal('produccion')" class="bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-600 px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 active:scale-95" title="Ver el gráfico de Actividades Pendientes por Responsable">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>
+                        Gráfico por Responsable
+                    </button>
                     <button onclick="exportPendientesToExcel()" class="bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-600 px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 active:scale-95">
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3" /></svg>
                         Exportar Excel
@@ -1857,7 +1866,7 @@
     </div>
 
     <!-- ==================== TAB 3: FORECAST ==================== -->
-    <div class="tab-content active" id="tab-forecast">
+    <div class="tab-content" id="tab-forecast">
         <div class="info-badge opacity-0 section-spacing" id="forecastInfoBadge" style="display:none; border-color: rgba(244,63,94,0.3); background: rgba(244,63,94,0.12); color: #fda4af;">
             <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
             <span id="forecastInfoText" class="text-xs"></span>
@@ -1922,6 +1931,10 @@
                     RMD Pendientes de Autorización — Forecast
                 </h2>
                 <div class="flex items-center gap-2">
+                    <button onclick="mostrarGraficoResponsableModal('forecast')" class="bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-600 px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 active:scale-95" title="Ver el gráfico de Actividades Pendientes por Responsable">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>
+                        Gráfico por Responsable
+                    </button>
                     <button onclick="exportPendientesForecastToExcel()" class="bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-600 px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 active:scale-95">
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3" /></svg>
                         Exportar Excel
@@ -2178,7 +2191,7 @@
             };
         })();
 
-        let currentTab = 'forecast';
+        let currentTab = 'produccion';
         let seguimientoRmdLoaded = false;
         // Código completo de la app "SEGUIMIENTO RMD" (aportada por el usuario), embebido en Base64
         // para poder cargarla de forma aislada (sin colisiones de variables/IDs) dentro de un iframe.
@@ -3164,7 +3177,7 @@ create policy "Acceso con clave anon"
         const TAB_ORDER = ['forecast', 'produccion', 'rmd', 'seguimiento'];
 // índice de cada pestaña dentro de la lista visual del gooey nav (li[0]=forecast, li[1]=produccion, li[2]=rmd, li[3]=seguimiento)
 const TAB_TO_GOOEY_INDEX = { forecast: 0, produccion: 1, rmd: 2, seguimiento: 3 };
-let gooeyActiveIndex = 0; // arranca en "forecast" (pestaña activa por defecto), posición 0
+let gooeyActiveIndex = 1; // arranca en "produccion" (pestaña activa por defecto), que está en la posición 1 del DOM (Forecast sigue siendo el primer <li> visualmente, sin permutar el orden del nav)
 
         function switchTab(tab) {
             if (currentTab === tab) return;
@@ -4748,85 +4761,84 @@ function buildDateColumnMapPlanta1(headerRow, weekLabelRow, hiddenCols) {
             // se agrupara por código esa fila quedaría separada como su
             // propio grupo (bajo código vacío), haciendo que el sistema
             // termine mostrando una versión anterior con código como si
-            // fuera la última — el bug reportado (mostraba "Suspendido" de
-            // la penúltima versión cuando la última, sin código, ya estaba
-            // Autorizada). La descripción sí es estable entre versiones del
-            // mismo producto, así que es el identificador confiable aquí.
-            // El Código por Defecto se toma al final, de la fila que se use
-            // como vigente; si esa fila no tiene código, se muestra "-",
-            // nunca se hereda el código de una versión previa.
+            // fuera la última. La descripción sí es estable entre versiones
+            // del mismo producto, así que es el identificador confiable
+            // aquí. El Código por Defecto se toma al final, de la fila que
+            // se use; si esa fila no tiene código, se muestra "-", nunca se
+            // hereda el código de una versión previa.
             //
-            // Regla para "Solicitado" como ÚLTIMA versión de un producto:
-            // una solicitud aún no aceptada puede rechazarse, así que no se
-            // trata sola como si ya fuera la versión real — en su lugar se
-            // consulta la PENÚLTIMA versión (la inmediatamente anterior) y:
-            //   - si esa penúltima está AUTORIZADA (o cualquier otro estado
-            //     resuelto), el producto NO se marca como pendiente — se
-            //     asume que ya está cubierto mientras la solicitud se
-            //     resuelve.
-            //   - si esa penúltima está SUSPENDIDA o INGRESADA, el producto
-            //     SÍ se marca como pendiente, usando esa penúltima versión
-            //     como la fila vigente (con su propio código/descripción/
-            //     observación).
-            // Si "Solicitado" NO es la última versión (hay algo más nuevo
-            // después), no aplica ninguna excepción: se sigue el flujo
-            // normal con la versión más alta real.
+            // CAMBIO DE ENFOQUE respecto a versiones anteriores: antes, si
+            // la versión más reciente estaba en "Solicitado", el sistema
+            // intentaba adivinar y mostrar la PENÚLTIMA versión en su
+            // lugar (o, si no había penúltima, el producto desaparecía del
+            // todo sin ninguna explicación) — eso es justo lo que generaba
+            // el mensaje desconcertante de "no hay ningún código
+            // pendiente" cuando en realidad sí existía un registro, solo
+            // que en Solicitado. Ahora se muestra SIEMPRE la versión más
+            // reciente real, sea cual sea su estado (incluyendo
+            // Solicitado), con un aviso visual claro cuando corresponda —
+            // nunca se oculta información ni se sustituye en silencio.
             const versionesPorDescripcion = new Map(); // descripcion -> array de TODAS sus filas (todas las versiones)
             if (agrupador) {
                 rmdAutorizadosDetalle
-                    .filter(r => r.codigoAgrupador === agrupador && r.etapaNorm === etapaFija)
+                    // Se traduce con mapEtapaAFija (no comparación directa):
+                    // r.etapaNorm es el texto CRUDO tal como viene escrito en
+                    // el Excel de RMD Configuración (por ejemplo "ENVASADO",
+                    // "ACONDICIONAMIENTO", "RECUBRIMIENTOS"), mientras que
+                    // etapaFija es siempre una de las 5 etiquetas FIJAS ya
+                    // traducidas ("ENVASE", "ACONDICIONADO",
+                    // "RECUBRIMIENTO"). Comparar el texto crudo directamente
+                    // contra la etiqueta fija fallaba siempre que el Excel
+                    // usara cualquier variante reconocida por ETAPA_ALIASES.
+                    .filter(r => r.codigoAgrupador === agrupador && mapEtapaAFija(r.etapaNorm) === etapaFija)
                     .forEach(r => {
                         const descKey = (r.descripcion || '').trim().toUpperCase();
                         if (!versionesPorDescripcion.has(descKey)) versionesPorDescripcion.set(descKey, []);
                         versionesPorDescripcion.get(descKey).push(r);
                     });
             }
-            const porDescripcion = new Map(); // descripcion -> fila vigente ya resuelta con la regla de arriba
+            const porDescripcion = new Map(); // descripcion -> { fila: la versión más reciente real, penultimaSiResuelta: fila penúltima cuando la última es Solicitado y la penúltima ya está resuelta (Autorizado/etc.), para dar contexto adicional }
             versionesPorDescripcion.forEach((filas, descKey) => {
-                // Orden ascendente por versión, para poder mirar "la última" y
-                // "la penúltima" con claridad.
                 const ordenadas = [...filas].sort((a, b) => (a.version ?? 0) - (b.version ?? 0));
                 const ultima = ordenadas[ordenadas.length - 1];
-                if (normalizeEstadoRmd(ultima.estado) !== 'SOLICITADO') {
-                    // Caso normal: la última versión no es una solicitud sin
-                    // resolver, así que ella misma es la fila vigente.
-                    porDescripcion.set(descKey, ultima);
-                    return;
-                }
                 const penultima = ordenadas.length >= 2 ? ordenadas[ordenadas.length - 2] : null;
-                if (!penultima) {
-                    // Solo existe una versión, y es Solicitado: no hay ninguna
-                    // versión previa resuelta ni pendiente que mostrar, así
-                    // que este producto no entra al resultado.
-                    return;
-                }
-                const penultimaEstado = normalizeEstadoRmd(penultima.estado);
-                if (ESTADOS_RESUELTOS_RMD.has(penultimaEstado)) {
-                    // La penúltima ya está resuelta (Autorizado, Solicitud
-                    // Aprobada o Rechazada): no se marca como pendiente. No se
-                    // agrega nada a porDescripcion para este producto.
-                    return;
-                }
-                // La penúltima está Suspendido o Ingresado: sí es pendiente,
-                // y se usa esa penúltima versión como la fila vigente.
-                porDescripcion.set(descKey, penultima);
+                porDescripcion.set(descKey, { fila: ultima, penultima });
             });
+            // Se muestran TODAS las versiones más recientes que estén en un
+            // estado pendiente real (Suspendido, Ingresado o Solicitado) —
+            // incluyendo Solicitado, que antes se ocultaba o se sustituía.
             const filasCoincidentes = Array.from(porDescripcion.values())
-                .filter(r => ESTADOS_PENDIENTES_RMD.has(normalizeEstadoRmd(r.estado)));
-            // Orden estable por Descripción, para que la lista sea fácil de
-            // escanear visualmente.
-            filasCoincidentes.sort((a, b) => (a.descripcion || '').localeCompare(b.descripcion || ''));
+                .filter(entry => ESTADOS_PENDIENTES_RMD.has(normalizeEstadoRmd(entry.fila.estado)));
+            filasCoincidentes.sort((a, b) => (a.fila.descripcion || '').localeCompare(b.fila.descripcion || ''));
             const filasHtml = filasCoincidentes.length > 0
-                ? filasCoincidentes.map(r => `
+                ? filasCoincidentes.map(({ fila: r, penultima }) => {
+                    const estadoNorm = normalizeEstadoRmd(r.estado);
+                    let avisoHtml = '';
+                    if (estadoNorm === 'SOLICITADO') {
+                        const penultimaEstado = penultima ? normalizeEstadoRmd(penultima.estado) : null;
+                        const contextoPenultima = penultima
+                            ? (ESTADOS_RESUELTOS_RMD.has(penultimaEstado)
+                                ? ` La versión anterior (v${penultima.version ?? '?'}) ya estaba <strong>${escapeHtmlRmdConfig(penultima.estado || '-')}</strong>, así que este producto seguía cubierto hasta que se resuelva la nueva solicitud.`
+                                : ` La versión anterior (v${penultima.version ?? '?'}) estaba <strong>${escapeHtmlRmdConfig(penultima.estado || '-')}</strong> — tampoco estaba resuelta.`)
+                            : ' No existe ninguna versión anterior registrada para este producto en esta etapa.';
+                        avisoHtml = `<div style="margin-top:6px;padding:6px 8px;background:rgba(251,191,36,0.12);border:1px solid rgba(251,191,36,0.35);border-radius:6px;font-size:11px;color:#fbbf24;">⚠ Esta es la versión más reciente y está en estado <strong>Solicitado</strong> — todavía no ha sido aceptada, y la solicitud podría rechazarse.${contextoPenultima}</div>`;
+                    }
+                    return `
                     <tr>
                         <td style="padding:9px 12px;border-bottom:1px solid rgba(255,255,255,0.08);">${escapeHtmlRmdConfig(r.codigoPorDefecto || '-')}</td>
                         <td style="padding:9px 12px;border-bottom:1px solid rgba(255,255,255,0.08);">${escapeHtmlRmdConfig(r.descripcion || '-')}</td>
                         <td style="padding:9px 12px;border-bottom:1px solid rgba(255,255,255,0.08);">${escapeHtmlRmdConfig(r.etapa || '-')}</td>
                         <td style="padding:9px 12px;border-bottom:1px solid rgba(255,255,255,0.08);white-space:nowrap;">v${r.version ?? '?'}</td>
                         <td style="padding:9px 12px;border-bottom:1px solid rgba(255,255,255,0.08);white-space:nowrap;">${escapeHtmlRmdConfig(r.estado || '-')}</td>
-                        <td style="padding:9px 12px;border-bottom:1px solid rgba(255,255,255,0.08);">${escapeHtmlRmdConfig(r.observacion || '-')}</td>
-                    </tr>`).join('')
-                : `<tr><td colspan="6" style="padding:16px;text-align:center;color:#94a3b8;">No hay ningún código pendiente de RMD Configuración para este agrupador/etapa (puede que todos ya estén resueltos, o que no exista en el archivo).</td></tr>`;
+                        <td style="padding:9px 12px;border-bottom:1px solid rgba(255,255,255,0.08);">${escapeHtmlRmdConfig(r.observacion || '-')}${avisoHtml}</td>
+                    </tr>`;
+                }).join('')
+                : `<tr><td colspan="6" style="padding:16px;text-align:center;color:#94a3b8;">
+                    <div>No hay ningún código pendiente de RMD Configuración para este agrupador/etapa (puede que todos ya estén resueltos, o que no exista en el archivo).</div>
+                    <div style="margin-top:8px;padding:8px 10px;background:rgba(251,191,36,0.1);border:1px solid rgba(251,191,36,0.3);border-radius:6px;font-size:11.5px;color:#fbbf24;text-align:left;">
+                        💡 Si en tu Excel de RMD Configuración este producto aparece con estado <strong>"Solicitado"</strong>, revisa bien: ese estado a veces no llega a coincidir con la etapa exacta que estás consultando aquí, o el agrupador/descripción no calzan exactamente entre el Programa de Producción y el Excel de RMD Configuración. Verifica el Código Agrupador (arriba) y la Descripción tal como aparecen en ambos archivos.
+                    </div>
+                </td></tr>`;
             Swal.fire({
                 title: 'Verificación contra RMD Configuración',
                 html: `<div style="text-align:left;">
@@ -5919,28 +5931,467 @@ return `<tr class="${rowCls}" title="${p.motivo || ''}">
             setStatus('fuenteStatusRmd', rmdAutorizadosLoaded && rmdAutorizadosEtapasPorAgrupador.size > 0);
         }
 
-        function exportPendientesToExcel() {
+        // ==================== FORMATO ESTILO MACRO (portado de GenerarTablaDinamica.bas) ====================
+        // Todo este bloque replica, directamente en la exportación de Excel,
+        // el mismo resultado que antes solo se lograba ejecutando la macro
+        // VBA sobre el archivo ya exportado. Así el usuario deja de depender
+        // de instalar/ejecutar el macro (y del riesgo de que Excel se cierre
+        // por conflictos con Acrobat en algunos equipos): descarga un Excel
+        // que ya viene formateado, con hoja de Resumen, acumulado por
+        // Responsable, tabla de contraste y gráfico incluidos.
+
+        // Colores RGB portados 1:1 desde las constantes RGB(r,g,b) del macro.
+        const MACRO_COLOR = {
+            encabezadoFondo: '1F2937', encabezadoTexto: 'FFFFFF',
+            filaAlterna: 'F9FAFB',
+            bordeSuave: 'D1D5DB', bordeFuerte: '9CA3AF',
+            etapaXTexto: 'B91C1C', etapaXFondo: 'FEE2E2',
+            etapaAutorizadoTexto: '15803D', etapaAutorizadoFondo: 'DCFCE7',
+            etapaSinDatosTexto: '6B7280', etapaSinDatosFondo: 'F3F4F6',
+            actPendienteProTexto: '92400E', actPendienteProFondo: 'FEF3C7',
+            actPorIngresarTexto: '1E40AF', actPorIngresarFondo: 'DBEAFE',
+            actFlujoSapTexto: '5B21B6', actFlujoSapFondo: 'EDE9FE',
+            actPendRmdOficialTexto: '9D174D', actPendRmdOficialFondo: 'FCE7F3',
+            actPendCcTexto: 'B45309', actPendCcFondo: 'FFEDD5',
+            actNoAplicaTexto: '6B7280', actNoAplicaFondo: 'F3F4F6',
+            totalFondo: 'E5E7EB'
+        };
+
+        // Mismo criterio que EsColumnaDeEtapa en VBA: coincidencia EXACTA
+        // con el nombre de una de las 5 etapas fijas.
+        function macroEsColumnaDeEtapa(nombreCol) {
+            return ['FABRICACIÓN', 'RECUBRIMIENTO', 'INSPECCIÓN', 'ENVASE', 'ACONDICIONADO'].includes((nombreCol || '').trim().toUpperCase());
+        }
+        // Mismo criterio que EsColumnaDeActividadPendiente: prefijo exacto.
+        function macroEsColumnaDeActividadPendiente(nombreCol) {
+            return (nombreCol || '').trim().toUpperCase().startsWith('ACTIVIDAD PENDIENTE ');
+        }
+
+        // Aplica el mismo formato que FormatearHojaDatos: encabezado oscuro,
+        // bordes, filas alternas, colores condicionales por valor en las
+        // columnas de Etapa y de Actividad Pendiente, columna Planta
+        // centrada y en negrita, autofiltro y panel congelado.
+        // `headers` es el array de nombres de columna en orden (mismo orden
+        // que las claves del primer objeto de wsData).
+        function aplicarFormatoEstiloMacro(ws, headers, cantidadFilas) {
+            const numCols = headers.length;
+            const styleHeader = {
+                fill: { patternType: 'solid', fgColor: { rgb: MACRO_COLOR.encabezadoFondo } },
+                font: { bold: true, sz: 10, color: { rgb: MACRO_COLOR.encabezadoTexto } },
+                alignment: { horizontal: 'center', vertical: 'center', wrapText: true },
+                border: bordeCompleto(MACRO_COLOR.bordeSuave)
+            };
+            for (let c = 0; c < numCols; c++) {
+                const addr = XLSX.utils.encode_cell({ r: 0, c });
+                if (ws[addr]) ws[addr].s = styleHeader;
+            }
+            if (!ws['!rows']) ws['!rows'] = [];
+            ws['!rows'][0] = { hpt: 30 };
+
+            const colPlantaIdx = headers.findIndex(h => h.trim().toUpperCase() === 'PLANTA');
+
+            for (let f = 1; f <= cantidadFilas; f++) {
+                const filaPar = (f + 1) % 2 === 0; // (f Mod 2) = 0 en VBA, con f empezando en 2
+                for (let c = 0; c < numCols; c++) {
+                    const addr = XLSX.utils.encode_cell({ r: f, c });
+                    const cell = ws[addr];
+                    if (!cell) continue;
+                    const nombreCol = headers[c];
+                    const valorCelda = String(cell.v == null ? '' : cell.v).trim().toUpperCase();
+                    let s = {
+                        font: { sz: 10, name: 'Calibri' },
+                        alignment: { vertical: 'center' },
+                        border: bordeCompleto(MACRO_COLOR.bordeSuave)
+                    };
+                    if (filaPar) s.fill = { patternType: 'solid', fgColor: { rgb: MACRO_COLOR.filaAlterna } };
+
+                    if (macroEsColumnaDeEtapa(nombreCol)) {
+                        s.alignment.horizontal = 'center';
+                        s.font.bold = true;
+                        if (valorCelda === 'X') { s.font.color = { rgb: MACRO_COLOR.etapaXTexto }; s.fill = { patternType: 'solid', fgColor: { rgb: MACRO_COLOR.etapaXFondo } }; }
+                        else if (valorCelda === 'AUTORIZADO') { s.font.color = { rgb: MACRO_COLOR.etapaAutorizadoTexto }; s.fill = { patternType: 'solid', fgColor: { rgb: MACRO_COLOR.etapaAutorizadoFondo } }; }
+                        else if (valorCelda === 'SIN DATOS') { s.font.color = { rgb: MACRO_COLOR.etapaSinDatosTexto }; s.fill = { patternType: 'solid', fgColor: { rgb: MACRO_COLOR.etapaSinDatosFondo } }; }
+                    } else if (macroEsColumnaDeActividadPendiente(nombreCol)) {
+                        s.alignment.horizontal = 'center';
+                        s.font.bold = true;
+                        if (valorCelda === 'PENDIENTE-PRO') { s.font.color = { rgb: MACRO_COLOR.actPendienteProTexto }; s.fill = { patternType: 'solid', fgColor: { rgb: MACRO_COLOR.actPendienteProFondo } }; }
+                        else if (valorCelda === 'POR INGRESAR') { s.font.color = { rgb: MACRO_COLOR.actPorIngresarTexto }; s.fill = { patternType: 'solid', fgColor: { rgb: MACRO_COLOR.actPorIngresarFondo } }; }
+                        else if (valorCelda === 'FLUJO SAP') { s.font.color = { rgb: MACRO_COLOR.actFlujoSapTexto }; s.fill = { patternType: 'solid', fgColor: { rgb: MACRO_COLOR.actFlujoSapFondo } }; }
+                        else if (valorCelda === 'PEND RMD OFICIAL') { s.font.color = { rgb: MACRO_COLOR.actPendRmdOficialTexto }; s.fill = { patternType: 'solid', fgColor: { rgb: MACRO_COLOR.actPendRmdOficialFondo } }; }
+                        else if (valorCelda === 'PEND CC') { s.font.color = { rgb: MACRO_COLOR.actPendCcTexto }; s.fill = { patternType: 'solid', fgColor: { rgb: MACRO_COLOR.actPendCcFondo } }; }
+                        else if (valorCelda === 'NO APLICA') { s.font.color = { rgb: MACRO_COLOR.actNoAplicaTexto }; s.fill = { patternType: 'solid', fgColor: { rgb: MACRO_COLOR.actNoAplicaFondo } }; }
+                    } else if (c === colPlantaIdx) {
+                        s.alignment.horizontal = 'center';
+                        s.font.bold = true;
+                    }
+                    cell.s = s;
+                }
+            }
+
+            // Ancho de la columna Descripción, igual que ColumnWidth = 42 en VBA.
+            const colDescIdx = headers.findIndex(h => h.trim().toUpperCase().startsWith('DESCRIPCI'));
+            if (colDescIdx !== -1 && ws['!cols'] && ws['!cols'][colDescIdx]) {
+                ws['!cols'][colDescIdx].wch = 42;
+            }
+        }
+
+        function bordeCompleto(colorHex) {
+            const b = { style: 'thin', color: { rgb: colorHex } };
+            return { top: b, bottom: b, left: b, right: b };
+        }
+
+        // Construye la hoja "Resumen" completa: tabla Planta x Etapa (con
+        // Total general), acumulado de pendientes por Responsable, tabla de
+        // contraste Actividad Pendiente x Responsable, y el gráfico de esa
+        // tabla insertado como imagen. `filas` son los objetos de datos ya
+        // usados para construir la hoja principal (antes de pasar por
+        // json_to_sheet), así se evita releer celda por celda.
+        // Calcula solo la matriz cruzada Actividad Pendiente x Responsable a
+        // partir de las filas ya construidas (mismo objeto `row` que arma
+        // exportPendientesToExcel/exportPendientesForecastToExcel antes de
+        // pasar por json_to_sheet). Se extrajo de construirHojaResumenMacro
+        // para poder reutilizarla también en el modal que muestra el
+        // gráfico dentro de la página, sin tener que generar la hoja de
+        // Excel completa solo para verlo en pantalla.
+        function calcularMatrizActividadResponsable(filasObjeto) {
+            const ETAPAS = ['FABRICACIÓN', 'RECUBRIMIENTO', 'INSPECCIÓN', 'ENVASE', 'ACONDICIONADO'];
+            const ACTIVIDADES = ['PENDIENTE-PRO', 'POR INGRESAR', 'FLUJO SAP', 'PEND RMD OFICIAL', 'PEND CC'];
+            const RESPONSABLES = ['DOC', 'PRO', 'ASC', 'IDE'];
+            const matrizActResp = {};
+            ACTIVIDADES.forEach(a => { matrizActResp[a] = {}; RESPONSABLES.forEach(r => matrizActResp[a][r] = 0); });
+
+            filasObjeto.forEach(row => {
+                ETAPAS.forEach(etapa => {
+                    const valorResp = String(row[`Responsable ${etapa}`] || '').trim().toUpperCase();
+                    const valorAct = String(row[`Actividad Pendiente ${etapa}`] || '').trim().toUpperCase();
+                    if (ACTIVIDADES.includes(valorAct) && RESPONSABLES.includes(valorResp)) {
+                        matrizActResp[valorAct][valorResp]++;
+                    }
+                });
+            });
+            return { ACTIVIDADES, RESPONSABLES, matrizActResp };
+        }
+
+        async function construirHojaResumenMacro(filasObjeto, headers) {
+            const ETAPAS = ['FABRICACIÓN', 'RECUBRIMIENTO', 'INSPECCIÓN', 'ENVASE', 'ACONDICIONADO'];
+            const { ACTIVIDADES, RESPONSABLES, matrizActResp } = calcularMatrizActividadResponsable(filasObjeto);
+            const colPlantaKey = headers.find(h => h.trim().toUpperCase() === 'PLANTA');
+
+            // Lista de plantas distintas presentes, en orden de aparición —
+            // igual que el macro, sin asumir nombres fijos.
+            const plantas = [];
+            filasObjeto.forEach(row => {
+                const v = String(row[colPlantaKey] || '').trim();
+                if (v && !plantas.includes(v)) plantas.push(v);
+            });
+
+            // Conteo de pendientes ("X") por Planta y Etapa, y acumulado por
+            // Responsable (la matriz cruzada ya se calculó arriba).
+            const conteo = {}; // conteo[planta][etapa] = n
+            plantas.forEach(p => { conteo[p] = {}; ETAPAS.forEach(e => conteo[p][e] = 0); });
+            const conteoResp = { DOC: 0, PRO: 0, ASC: 0, IDE: 0 };
+
+            filasObjeto.forEach(row => {
+                const planta = String(row[colPlantaKey] || '').trim();
+                ETAPAS.forEach(etapa => {
+                    if (planta && conteo[planta] && String(row[etapa] || '').trim().toUpperCase() === 'X') {
+                        conteo[planta][etapa]++;
+                    }
+                    const valorResp = String(row[`Responsable ${etapa}`] || '').trim().toUpperCase();
+                    if (RESPONSABLES.includes(valorResp)) conteoResp[valorResp]++;
+                });
+            });
+
+            const aoa = [];
+            const merges = [];
+            const styleMap = {}; // 'r,c' -> style object, aplicado al final
+
+            const setCell = (r, c, v, s) => {
+                if (!aoa[r]) aoa[r] = [];
+                aoa[r][c] = v;
+                if (s) styleMap[`${r},${c}`] = s;
+            };
+            const styleEncabezado = {
+                fill: { patternType: 'solid', fgColor: { rgb: MACRO_COLOR.encabezadoFondo } },
+                font: { bold: true, sz: 10, color: { rgb: MACRO_COLOR.encabezadoTexto } },
+                alignment: { horizontal: 'center' }
+            };
+            const styleCuerpo = (par) => ({
+                font: { sz: 10, name: 'Calibri' },
+                alignment: { horizontal: 'center' },
+                border: bordeCompleto(MACRO_COLOR.bordeSuave),
+                ...(par ? { fill: { patternType: 'solid', fgColor: { rgb: MACRO_COLOR.filaAlterna } } } : {})
+            });
+            const styleTotal = {
+                font: { bold: true, sz: 10, name: 'Calibri' },
+                alignment: { horizontal: 'center' },
+                fill: { patternType: 'solid', fgColor: { rgb: MACRO_COLOR.totalFondo } },
+                border: bordeCompleto(MACRO_COLOR.bordeFuerte)
+            };
+
+            // --- Título ---
+            setCell(0, 0, 'Resumen: cantidad de pendientes (X) por Planta y Etapa', { font: { bold: true, sz: 12 } });
+
+            // --- Tabla Planta x Etapa ---
+            const filaEnc = 2;
+            setCell(filaEnc, 0, 'Planta', styleEncabezado);
+            ETAPAS.forEach((e, i) => setCell(filaEnc, 1 + i, `Pend. ${e}`, styleEncabezado));
+            const colTotalPlanta = 1 + ETAPAS.length;
+            setCell(filaEnc, colTotalPlanta, 'Total general', styleEncabezado);
+
+            const totalPorEtapa = ETAPAS.map(() => 0);
+            let totalGeneral = 0;
+            plantas.forEach((p, idxP) => {
+                const filaAct = filaEnc + 1 + idxP;
+                const par = (idxP % 2) === 1;
+                setCell(filaAct, 0, p, styleCuerpo(par));
+                let totalFila = 0;
+                ETAPAS.forEach((e, i) => {
+                    const n = conteo[p][e];
+                    setCell(filaAct, 1 + i, n, styleCuerpo(par));
+                    totalFila += n; totalPorEtapa[i] += n;
+                });
+                setCell(filaAct, colTotalPlanta, totalFila, styleCuerpo(par));
+                totalGeneral += totalFila;
+            });
+            const filaTotalPlanta = filaEnc + 1 + plantas.length;
+            setCell(filaTotalPlanta, 0, 'Total general', styleTotal);
+            totalPorEtapa.forEach((n, i) => setCell(filaTotalPlanta, 1 + i, n, styleTotal));
+            setCell(filaTotalPlanta, colTotalPlanta, totalGeneral, styleTotal);
+
+            // --- Acumulado por Responsable ---
+            const filaResp = filaTotalPlanta + 3;
+            setCell(filaResp, 0, 'Acumulado de RMD pendientes por Responsable', { font: { bold: true, sz: 12 } });
+            const filaRespEnc = filaResp + 1;
+            setCell(filaRespEnc, 0, 'Responsable', styleEncabezado);
+            setCell(filaRespEnc, 1, 'Pendientes', styleEncabezado);
+            RESPONSABLES.forEach((r, i) => {
+                const filaR = filaRespEnc + 1 + i;
+                const par = (i % 2) === 1;
+                setCell(filaR, 0, r, styleCuerpo(par));
+                setCell(filaR, 1, conteoResp[r], styleCuerpo(par));
+            });
+
+            // --- Tabla de contraste Actividad Pendiente x Responsable ---
+            const filaMatrizTitulo = filaRespEnc + 1 + RESPONSABLES.length + 2;
+            setCell(filaMatrizTitulo, 0, 'Contraste: Actividad Pendiente x Responsable', { font: { bold: true, sz: 12 } });
+            const filaMatrizEnc = filaMatrizTitulo + 2;
+            setCell(filaMatrizEnc, 0, 'Actividad Pendiente', styleEncabezado);
+            RESPONSABLES.forEach((r, i) => setCell(filaMatrizEnc, 1 + i, r, styleEncabezado));
+            const colTotalMatriz = 1 + RESPONSABLES.length;
+            setCell(filaMatrizEnc, colTotalMatriz, 'Total', styleEncabezado);
+
+            ACTIVIDADES.forEach((act, idxA) => {
+                const filaAct = filaMatrizEnc + 1 + idxA;
+                const par = (idxA % 2) === 1;
+                setCell(filaAct, 0, act, styleCuerpo(par));
+                let totalFilaAct = 0;
+                RESPONSABLES.forEach((r, i) => {
+                    const n = matrizActResp[act][r];
+                    setCell(filaAct, 1 + i, n, styleCuerpo(par));
+                    totalFilaAct += n;
+                });
+                setCell(filaAct, colTotalMatriz, totalFilaAct, styleCuerpo(par));
+            });
+            const filaMatrizTotal = filaMatrizEnc + 1 + ACTIVIDADES.length;
+            setCell(filaMatrizTotal, 0, 'Total general', styleTotal);
+            let totalGeneralMatriz = 0;
+            RESPONSABLES.forEach((r, i) => {
+                let totalColResp = 0;
+                ACTIVIDADES.forEach(act => totalColResp += matrizActResp[act][r]);
+                setCell(filaMatrizTotal, 1 + i, totalColResp, styleTotal);
+                totalGeneralMatriz += totalColResp;
+            });
+            setCell(filaMatrizTotal, colTotalMatriz, totalGeneralMatriz, styleTotal);
+
+            const ws = XLSX.utils.aoa_to_sheet(aoa);
+            Object.entries(styleMap).forEach(([key, s]) => {
+                const [r, c] = key.split(',').map(Number);
+                const addr = XLSX.utils.encode_cell({ r, c });
+                if (ws[addr]) ws[addr].s = s;
+            });
+            ws['!cols'] = [{ wch: 22 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 14 }];
+
+            // --- Gráfico de contraste ---
+            // xlsx-js-style (a diferencia de la macro de Excel) no soporta
+            // insertar imágenes embebidas dentro del propio .xlsx de forma
+            // confiable — solo estilos de celda. Por eso el gráfico se deja
+            // como una nota de texto en la hoja apuntando al PNG que se
+            // descarga junto al Excel en la misma acción de exportar, en
+            // vez de intentar embeberlo (lo que podría corromper el
+            // archivo).
+            const filaGrafico = filaMatrizTotal + 2;
+            setCell(filaGrafico, 0, 'Gráfico "Actividades Pendientes por Responsable": disponible dentro de la página, en el botón "Gráfico por Responsable" junto a Exportar Excel.', { font: { italic: true, sz: 9, color: { rgb: '6B7280' } } });
+            let imagenGraficoBase64 = null;
+            try {
+                imagenGraficoBase64 = await generarImagenGraficoContraste(ACTIVIDADES, RESPONSABLES, matrizActResp);
+            } catch (imgErr) {
+                console.error('No se pudo generar la imagen del gráfico de contraste:', imgErr);
+            }
+
+            return { ws, imagenGraficoBase64 };
+        }
+
+        // Renderiza el mismo gráfico de columnas apiladas que hacía el
+        // macro (Actividad Pendiente en X, una serie por Responsable) con
+        // Chart.js sobre un canvas oculto, y devuelve el PNG en base64
+        // listo para insertar en la hoja de Excel.
+        // Configuración de Chart.js compartida entre el gráfico visible en
+        // pantalla (modal) y el que se genera como imagen para descargar —
+        // así ambos se ven exactamente igual.
+        function construirConfigGraficoContraste(actividades, responsables, matrizActResp, paraImagen) {
+            const coloresResp = { DOC: '#3b82f6', PRO: '#10b981', ASC: '#f59e0b', IDE: '#a855f7' };
+            const datasets = responsables.map(r => ({
+                label: r,
+                data: actividades.map(a => matrizActResp[a][r]),
+                backgroundColor: coloresResp[r] || '#94a3b8'
+            }));
+            return {
+                type: 'bar',
+                data: { labels: actividades, datasets },
+                options: {
+                    responsive: !paraImagen,
+                    maintainAspectRatio: false,
+                    animation: paraImagen ? false : undefined,
+                    plugins: {
+                        title: { display: true, text: 'Actividades Pendientes por Responsable', font: { size: 16 } },
+                        legend: { position: 'bottom' }
+                    },
+                    scales: {
+                        x: { stacked: true, title: { display: true, text: 'Actividad Pendiente' } },
+                        y: { stacked: true, title: { display: true, text: 'Cantidad' }, beginAtZero: true, ticks: { precision: 0 } }
+                    }
+                }
+            };
+        }
+
+        function generarImagenGraficoContraste(actividades, responsables, matrizActResp) {
+            return new Promise((resolve) => {
+                const canvas = document.createElement('canvas');
+                canvas.width = 900; canvas.height = 500;
+                canvas.style.position = 'fixed';
+                canvas.style.left = '-9999px';
+                document.body.appendChild(canvas);
+
+                const chart = new Chart(canvas.getContext('2d'), construirConfigGraficoContraste(actividades, responsables, matrizActResp, true));
+
+                // Chart.js necesita un tick de renderizado antes de que el
+                // canvas tenga contenido real que exportar a imagen.
+                setTimeout(() => {
+                    const base64 = canvas.toDataURL('image/png').split(',')[1];
+                    chart.destroy();
+                    canvas.remove();
+                    resolve(base64);
+                }, 60);
+            });
+        }
+
+        async function exportPendientesToExcel() {
             const { pendientes } = ultimoResultadoValidacion;
             if (!pendientes || pendientes.length === 0) {
                 Swal.fire({ icon: 'info', title: 'Nada que exportar', text: 'No hay materiales pendientes para exportar en este momento.', background: '#0f172a', timer: 2000, showConfirmButton: false });
                 return;
             }
-            const wsData = pendientes.map(p => {
-                // Set de etapas fijas que SÍ están pendientes para este material
-                // (traduciendo cada etapa cruda del material a una de las 5 fijas).
+            Swal.fire({ title: 'Generando Excel...', allowOutsideClick: false, didOpen: () => Swal.showLoading(), background: '#0f172a' });
+            try {
+                const wsData = pendientes.map(p => {
+                    // Set de etapas fijas que SÍ están pendientes para este material
+                    // (traduciendo cada etapa cruda del material a una de las 5 fijas).
+                    const pendientesFijasSet = new Set((p.etapasPendientes || []).map(mapEtapaAFija).filter(Boolean));
+                    // Caso especial: el material está en la lista de pendientes pero
+                    // no por una etapa concreta (no se encontró en Base de Datos, o
+                    // no tiene agrupador válido) — no hay que marcar "AUTORIZADO" en
+                    // ese caso, porque induciría a pensar que está todo en regla.
+                    const sinDatosDeEtapa = (!p.etapasPendientes || p.etapasPendientes.length === 0);
+                    // Columna Planta: ATE / LIMA / ATE + LIMA (si el material se
+                    // programó en ambas plantas, solo posible en modo Consolidado).
+                    const plantaTxt = p.plantas || '';
+                    const row = {
+                        'Material': p.material, 'Descripción': p.descripcion, 'Planta': plantaTxt, 'Área(s)': p.areas,
+                        'Inicio de Producción': p.fechaProxima ? dayjs(p.fechaProxima).format('YYYY-MM-DD') : '-'
+                    };
+                    ETAPAS_FIJAS.forEach(fija => {
+                        const label = ETAPAS_FIJAS_LABEL[fija];
+                        const estaPendiente = pendientesFijasSet.has(fija);
+                        if (sinDatosDeEtapa) {
+                            row[label] = 'SIN DATOS';
+                            row[`Actividad Pendiente ${label}`] = 'NO APLICA';
+                            row[`Responsable ${label}`] = 'NO APLICA';
+                        } else {
+                            row[label] = estaPendiente ? 'X' : 'AUTORIZADO';
+                            row[`Actividad Pendiente ${label}`] = estaPendiente ? (estatusEtapa.get(responsableKey(p.material, fija)) || '') : 'NO APLICA';
+                            row[`Responsable ${label}`] = estaPendiente ? (responsablesEtapa.get(responsableKey(p.material, fija)) || '') : 'NO APLICA';
+                        }
+                    });
+                    return row;
+                });
+                const headers = Object.keys(wsData[0]);
+                const ws = XLSX.utils.json_to_sheet(wsData);
+                // Anchos: Material, Descripción, Planta, Área(s), Inicio, luego 3 columnas
+                // (etapa + actividad pendiente + responsable) x 5 etapas.
+                ws['!cols'] = [{ wch: 14 }, { wch: 45 }, { wch: 10 }, { wch: 20 }, { wch: 16 },
+                    ...ETAPAS_FIJAS.flatMap(() => [{ wch: 14 }, { wch: 20 }, { wch: 16 }])];
+                // Autofiltro sobre todo el rango de datos, para poder filtrar por
+                // Planta (ATE/LIMA), Etapa, Actividad Pendiente, Responsable, etc.
+                // directamente en Excel.
+                const numCols = 5 + ETAPAS_FIJAS.length * 3;
+                const lastColLetter = XLSX.utils.encode_col(numCols - 1);
+                ws['!autofilter'] = { ref: `A1:${lastColLetter}${wsData.length + 1}` };
+                // Congela la fila de encabezado para que quede visible al hacer scroll.
+                ws['!freeze'] = { xSplit: 0, ySplit: 1, topLeftCell: 'A2', activePane: 'bottomLeft', state: 'frozen' };
+
+                // Formato de colores por celda — mismo resultado visual que
+                // antes solo se lograba ejecutando la macro sobre el archivo
+                // ya exportado. Ya no hace falta ningún paso manual aparte.
+                aplicarFormatoEstiloMacro(ws, headers, wsData.length);
+
+                const wb = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb, ws, 'Materiales Pendientes');
+
+                // Hoja "Resumen": tabla Planta x Etapa, acumulado por
+                // Responsable y tabla de contraste — mismo contenido que
+                // generaba la macro, calculado aquí directamente.
+                const { ws: wsResumen } = await construirHojaResumenMacro(wsData, headers);
+                XLSX.utils.book_append_sheet(wb, wsResumen, 'Resumen');
+
+                const plantaSufijo = currentPlanta === 'consolidado' ? 'Consolidado' : (currentPlanta === 'planta1' ? 'Planta1' : 'Planta2');
+                const nombreBase = `Materiales_Pendientes_RMD_${plantaSufijo}_${dayjs().format('YYYYMMDD_HHmm')}`;
+                XLSX.writeFile(wb, `${nombreBase}.xlsx`);
+
+                // El gráfico de contraste ya NO se descarga automáticamente
+                // aquí — el usuario lo ve dentro de la página con el botón
+                // "Gráfico por Responsable" (ver mostrarGraficoResponsableModal),
+                // y desde ahí puede descargarlo como PNG si lo necesita.
+
+                Swal.close();
+            } catch (err) {
+                console.error('Error al generar el Excel de Producción:', err);
+                Swal.fire({ icon: 'error', title: 'No se pudo generar el Excel', text: 'Ocurrió un error al aplicar el formato o generar el resumen. Intenta de nuevo.', background: '#0f172a' });
+            }
+        }
+
+        // Descarga una imagen PNG (en base64, sin el prefijo data:) con el
+        // nombre indicado, usando el mismo patrón de <a download> que ya usa
+        // el resto de la app para descargar archivos generados en el navegador.
+        function descargarImagenBase64(base64, nombreArchivo) {
+            const a = document.createElement('a');
+            a.href = `data:image/png;base64,${base64}`;
+            a.download = nombreArchivo;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+        }
+
+        // Construye las mismas filas de datos (Material, Etapa, Actividad
+        // Pendiente, Responsable, etc.) que usan las funciones de
+        // exportación a Excel, a partir de la lista de pendientes ya
+        // calculada en pantalla — sin depender de generar el Excel. Se usa
+        // tanto para exportar como para el modal del gráfico.
+        function construirFilasPendientesParaResumen(pendientes, origen) {
+            return pendientes.map(p => {
                 const pendientesFijasSet = new Set((p.etapasPendientes || []).map(mapEtapaAFija).filter(Boolean));
-                // Caso especial: el material está en la lista de pendientes pero
-                // no por una etapa concreta (no se encontró en Base de Datos, o
-                // no tiene agrupador válido) — no hay que marcar "AUTORIZADO" en
-                // ese caso, porque induciría a pensar que está todo en regla.
                 const sinDatosDeEtapa = (!p.etapasPendientes || p.etapasPendientes.length === 0);
-                // Columna Planta: ATE / LIMA / ATE + LIMA (si el material se
-                // programó en ambas plantas, solo posible en modo Consolidado).
-                const plantaTxt = p.plantas || '';
-                const row = {
-                    'Material': p.material, 'Descripción': p.descripcion, 'Planta': plantaTxt, 'Área(s)': p.areas,
-                    'Inicio de Producción': p.fechaProxima ? dayjs(p.fechaProxima).format('YYYY-MM-DD') : '-'
-                };
+                const row = { 'Material': p.material, 'Planta': origen === 'forecast' ? p.centros : (p.plantas || '') };
                 ETAPAS_FIJAS.forEach(fija => {
                     const label = ETAPAS_FIJAS_LABEL[fija];
                     const estaPendiente = pendientesFijasSet.has(fija);
@@ -5956,29 +6407,58 @@ return `<tr class="${rowCls}" title="${p.motivo || ''}">
                 });
                 return row;
             });
-            const ws = XLSX.utils.json_to_sheet(wsData);
-            // Anchos: Material, Descripción, Planta, Área(s), Inicio, luego 3 columnas
-            // (etapa + actividad pendiente + responsable) x 5 etapas.
-            ws['!cols'] = [{ wch: 14 }, { wch: 45 }, { wch: 10 }, { wch: 20 }, { wch: 16 },
-                ...ETAPAS_FIJAS.flatMap(() => [{ wch: 14 }, { wch: 20 }, { wch: 16 }])];
-            // Autofiltro sobre todo el rango de datos, para poder filtrar por
-            // Planta (ATE/LIMA), Etapa, Actividad Pendiente, Responsable, etc.
-            // directamente en Excel.
-            const numCols = 5 + ETAPAS_FIJAS.length * 3;
-            const lastColLetter = XLSX.utils.encode_col(numCols - 1);
-            ws['!autofilter'] = { ref: `A1:${lastColLetter}${wsData.length + 1}` };
-            // Congela la fila de encabezado para que quede visible al hacer scroll.
-            ws['!freeze'] = { xSplit: 0, ySplit: 1, topLeftCell: 'A2', activePane: 'bottomLeft', state: 'frozen' };
+        }
 
-            const wb = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(wb, ws, 'Materiales Pendientes');
-            // Nota: ya no se genera aquí ninguna hoja de resumen/tabla dinámica.
-            // Esa parte ahora la hace exclusivamente la macro del archivo .xlsm
-            // (GenerarTablaDinamica.bas), que trabaja directamente sobre esta
-            // misma hoja "Materiales Pendientes".
+        // Modal "Gráfico por Responsable": muestra dentro de la misma página
+        // el mismo gráfico que antes solo se podía ver descargando la
+        // imagen al exportar Excel — con Chart.js en un <canvas> real,
+        // interactivo (tooltips al pasar el mouse), y un botón para
+        // descargarlo como PNG si el usuario lo necesita para un reporte.
+        let chartResponsableModalInst = null;
+        function mostrarGraficoResponsableModal(origen) {
+            const { pendientes } = origen === 'forecast' ? ultimoResultadoValidacionForecast : ultimoResultadoValidacion;
+            if (!pendientes || pendientes.length === 0) {
+                Swal.fire({ icon: 'info', title: 'Nada que graficar', text: 'No hay materiales pendientes en este momento.', background: '#0f172a', timer: 2200, showConfirmButton: false });
+                return;
+            }
+            const filas = construirFilasPendientesParaResumen(pendientes, origen);
+            const { ACTIVIDADES, RESPONSABLES, matrizActResp } = calcularMatrizActividadResponsable(filas);
+            const totalCasos = ACTIVIDADES.reduce((acc, a) => acc + RESPONSABLES.reduce((acc2, r) => acc2 + matrizActResp[a][r], 0), 0);
 
-            const plantaSufijo = currentPlanta === 'consolidado' ? 'Consolidado' : (currentPlanta === 'planta1' ? 'Planta1' : 'Planta2');
-            XLSX.writeFile(wb, `Materiales_Pendientes_RMD_${plantaSufijo}_${dayjs().format('YYYYMMDD_HHmm')}.xlsx`);
+            Swal.fire({
+                title: 'Actividades Pendientes por Responsable',
+                html: `<div style="text-align:left;">
+                    ${totalCasos === 0 ? '<div style="padding:12px;text-align:center;color:#94a3b8;font-size:13px;">Ningún material pendiente tiene, a la vez, un Estatus de etapa y un Responsable elegidos todavía — el gráfico se llena a medida que se van completando.</div>' : ''}
+                    <div style="height:360px;position:relative;">
+                        <canvas id="canvasGraficoResponsableModal"></canvas>
+                    </div>
+                </div>`,
+                width: 'min(720px, 96vw)',
+                background: '#0f172a',
+                showConfirmButton: true,
+                confirmButtonText: 'Cerrar',
+                showDenyButton: true,
+                denyButtonText: '⬇ Descargar PNG',
+                customClass: {
+                    confirmButton: 'bg-slate-600 hover:bg-slate-500 px-4 py-2.5 rounded-lg text-white text-xs min-w-[44px]',
+                    denyButton: 'bg-amber-600 hover:bg-amber-500 px-4 py-2.5 rounded-lg text-white text-xs min-w-[44px] mr-2'
+                },
+                buttonsStyling: false,
+                didOpen: () => {
+                    const canvas = document.getElementById('canvasGraficoResponsableModal');
+                    if (chartResponsableModalInst) { chartResponsableModalInst.destroy(); chartResponsableModalInst = null; }
+                    chartResponsableModalInst = new Chart(canvas.getContext('2d'), construirConfigGraficoContraste(ACTIVIDADES, RESPONSABLES, matrizActResp, false));
+                },
+                willClose: () => {
+                    if (chartResponsableModalInst) { chartResponsableModalInst.destroy(); chartResponsableModalInst = null; }
+                }
+            }).then(async (res) => {
+                if (res.isDenied) {
+                    const base64 = await generarImagenGraficoContraste(ACTIVIDADES, RESPONSABLES, matrizActResp);
+                    const prefijo = origen === 'forecast' ? 'Forecast' : 'Produccion';
+                    descargarImagenBase64(base64, `Grafico_Responsable_${prefijo}_${dayjs().format('YYYYMMDD_HHmm')}.png`);
+                }
+            });
         }
 
         async function copyPendientesToClipboard() {
@@ -6570,79 +7050,83 @@ function updateForecastActiveFiltersBadge() {
 
         function refiltrarTablaPendientesForecast() { if (window.__ultimasFilasValidacionForecast) renderTablaPendientesForecast(window.__ultimasFilasValidacionForecast); }
 
-        function exportPendientesForecastToExcel() {
-    const { pendientes, revisados, autorizados, rmdPendientes } = ultimoResultadoValidacionForecast;
+        async function exportPendientesForecastToExcel() {
+    const { pendientes } = ultimoResultadoValidacionForecast;
     if (!pendientes || pendientes.length === 0) {
         Swal.fire({ icon: 'info', title: 'Nada que exportar', text: 'No hay materiales pendientes para exportar con los filtros actuales.', background: '#0f172a', timer: 2200, showConfirmButton: false });
         return;
     }
-    const filtroPlantaTxt = currentForecastPlantFilter === 'TODAS' ? 'Todas' : `${getCentroLabel(currentForecastPlantFilter)} (${currentForecastPlantFilter})`;
-    const filtroMesTxt = forecastMonthFilterMode === 'todos' ? 'Todos los meses'
-        : forecastMonthFilterMode === 'desde' ? `Desde ${dayjs((forecastMonthFilterValue || '') + '-01').format('MMMM YYYY')}`
-        : `Solo ${dayjs((forecastMonthFilterValue || '') + '-01').format('MMMM YYYY')}`;
-
-    const resumenAOA = [
-        ['RMD Pendientes de Autorización — Forecast'],
-        [`Generado: ${dayjs().format('YYYY-MM-DD HH:mm')}`],
-        [],
-        ['Filtro de Planta', filtroPlantaTxt],
-        ['Filtro de Mes', filtroMesTxt],
-        [],
-        ['Indicador', 'Valor'],
-        ['Materiales revisados', revisados || 0],
-        ['Materiales autorizados', autorizados || 0],
-        ['Productos pendientes', pendientes.length],
-        ['RMD (etapas) pendientes', rmdPendientes || 0]
-    ];
-    const wsResumen = XLSX.utils.aoa_to_sheet(resumenAOA);
-    wsResumen['!cols'] = [{ wch: 32 }, { wch: 28 }];
-    wsResumen['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 1 } }];
-
-    const wsData = pendientes.map(p => {
-        // Mismo patrón que exportPendientesToExcel (Producción): se desglosa
-        // cada una de las 5 etapas fijas en su propia columna, junto con su
-        // responsable — asignado a mano, o autocompletado por defecto al
-        // elegir un Estatus de etapa (ver window.setEstatusEtapa).
-        const pendientesFijasSet = new Set((p.etapasPendientes || []).map(mapEtapaAFija).filter(Boolean));
-        const sinDatosDeEtapa = (!p.etapasPendientes || p.etapasPendientes.length === 0);
-        const row = {
-            'Material': p.material,
-            'Descripción': p.descripcion,
-            'Planta': p.centros,
-            'Mes(es) Programado(s)': (p.meses || []).join(', ')
-        };
-        ETAPAS_FIJAS.forEach(fija => {
-            const label = ETAPAS_FIJAS_LABEL[fija];
-            const estaPendiente = pendientesFijasSet.has(fija);
-            if (sinDatosDeEtapa) {
-                row[label] = 'SIN DATOS';
-                row[`Actividad Pendiente ${label}`] = 'NO APLICA';
-                row[`Responsable ${label}`] = 'NO APLICA';
-            } else {
-                row[label] = estaPendiente ? 'X' : 'AUTORIZADO';
-                row[`Actividad Pendiente ${label}`] = estaPendiente ? (estatusEtapa.get(responsableKey(p.material, fija)) || '') : 'NO APLICA';
-                row[`Responsable ${label}`] = estaPendiente ? (responsablesEtapa.get(responsableKey(p.material, fija)) || '') : 'NO APLICA';
-            }
+    Swal.fire({ title: 'Generando Excel...', allowOutsideClick: false, didOpen: () => Swal.showLoading(), background: '#0f172a' });
+    try {
+        const wsData = pendientes.map(p => {
+            // Mismo patrón que exportPendientesToExcel (Producción): se desglosa
+            // cada una de las 5 etapas fijas en su propia columna, junto con su
+            // responsable — asignado a mano, o autocompletado por defecto al
+            // elegir un Estatus de etapa (ver window.setEstatusEtapa).
+            const pendientesFijasSet = new Set((p.etapasPendientes || []).map(mapEtapaAFija).filter(Boolean));
+            const sinDatosDeEtapa = (!p.etapasPendientes || p.etapasPendientes.length === 0);
+            const row = {
+                'Material': p.material,
+                'Descripción': p.descripcion,
+                'Planta': p.centros,
+                'Mes(es) Programado(s)': (p.meses || []).join(', ')
+            };
+            ETAPAS_FIJAS.forEach(fija => {
+                const label = ETAPAS_FIJAS_LABEL[fija];
+                const estaPendiente = pendientesFijasSet.has(fija);
+                if (sinDatosDeEtapa) {
+                    row[label] = 'SIN DATOS';
+                    row[`Actividad Pendiente ${label}`] = 'NO APLICA';
+                    row[`Responsable ${label}`] = 'NO APLICA';
+                } else {
+                    row[label] = estaPendiente ? 'X' : 'AUTORIZADO';
+                    row[`Actividad Pendiente ${label}`] = estaPendiente ? (estatusEtapa.get(responsableKey(p.material, fija)) || '') : 'NO APLICA';
+                    row[`Responsable ${label}`] = estaPendiente ? (responsablesEtapa.get(responsableKey(p.material, fija)) || '') : 'NO APLICA';
+                }
+            });
+            row['Motivo'] = p.motivo || '';
+            return row;
         });
-        row['Motivo'] = p.motivo || '';
-        return row;
-    });
-    const wsDetalle = XLSX.utils.json_to_sheet(wsData);
-    // Anchos: Material, Descripción, Planta, Mes(es), luego 3 columnas
-    // (etapa + actividad pendiente + responsable) x 5 etapas, y por último Motivo.
-    wsDetalle['!cols'] = [{ wch: 14 }, { wch: 42 }, { wch: 16 }, { wch: 34 },
-        ...ETAPAS_FIJAS.flatMap(() => [{ wch: 14 }, { wch: 20 }, { wch: 16 }]),
-        { wch: 50 }];
-    // Autofiltro sobre todo el rango de datos (mismo patrón que Producción).
-    const numColsForecast = 4 + ETAPAS_FIJAS.length * 3 + 1;
-    const lastColLetterForecast = XLSX.utils.encode_col(numColsForecast - 1);
-    wsDetalle['!autofilter'] = { ref: `A1:${lastColLetterForecast}${wsData.length + 1}` };
-    wsDetalle['!views'] = [{ state: 'frozen', ySplit: 1 }];
+        const headersForecast = Object.keys(wsData[0]);
+        const wsDetalle = XLSX.utils.json_to_sheet(wsData);
+        // Anchos: Material, Descripción, Planta, Mes(es), luego 3 columnas
+        // (etapa + actividad pendiente + responsable) x 5 etapas, y por último Motivo.
+        wsDetalle['!cols'] = [{ wch: 14 }, { wch: 42 }, { wch: 16 }, { wch: 34 },
+            ...ETAPAS_FIJAS.flatMap(() => [{ wch: 14 }, { wch: 20 }, { wch: 16 }]),
+            { wch: 50 }];
+        // Autofiltro sobre todo el rango de datos (mismo patrón que Producción).
+        const numColsForecast = 4 + ETAPAS_FIJAS.length * 3 + 1;
+        const lastColLetterForecast = XLSX.utils.encode_col(numColsForecast - 1);
+        wsDetalle['!autofilter'] = { ref: `A1:${lastColLetterForecast}${wsData.length + 1}` };
+        wsDetalle['!views'] = [{ state: 'frozen', ySplit: 1 }];
 
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, wsResumen, 'Resumen');
-    XLSX.utils.book_append_sheet(wb, wsDetalle, 'Detalle Pendientes');
-    XLSX.writeFile(wb, `Forecast_Materiales_Pendientes_RMD_${dayjs().format('YYYYMMDD_HHmm')}.xlsx`);
+        // Formato de colores por celda — mismo resultado visual que antes
+        // solo se lograba ejecutando la macro sobre el archivo ya exportado.
+        aplicarFormatoEstiloMacro(wsDetalle, headersForecast, wsData.length);
+
+        const wb = XLSX.utils.book_new();
+
+        // Hoja "Resumen": tabla Planta x Etapa, acumulado por Responsable y
+        // tabla de contraste — igual que en Producción. El resumen anterior
+        // de filtros/KPIs se quitó por no ser útil; esta es ahora la única
+        // hoja de resumen del libro.
+        const { ws: wsResumen } = await construirHojaResumenMacro(wsData, headersForecast);
+        XLSX.utils.book_append_sheet(wb, wsResumen, 'Resumen');
+        XLSX.utils.book_append_sheet(wb, wsDetalle, 'Detalle Pendientes');
+
+        const nombreBase = `Forecast_Materiales_Pendientes_RMD_${dayjs().format('YYYYMMDD_HHmm')}`;
+        XLSX.writeFile(wb, `${nombreBase}.xlsx`);
+
+        // El gráfico de contraste ya NO se descarga automáticamente aquí —
+        // el usuario lo ve dentro de la página con el botón "Gráfico por
+        // Responsable" (ver mostrarGraficoResponsableModal), y desde ahí
+        // puede descargarlo como PNG si lo necesita.
+
+        Swal.close();
+    } catch (err) {
+        console.error('Error al generar el Excel de Forecast:', err);
+        Swal.fire({ icon: 'error', title: 'No se pudo generar el Excel', text: 'Ocurrió un error al aplicar el formato o generar el resumen. Intenta de nuevo.', background: '#0f172a' });
+    }
 }
 
         async function copyPendientesForecastToClipboard() {
@@ -7419,9 +7903,16 @@ async function maybeAutoStartTour() {
                 setTimeout(() => loaderOverlay.remove(), 450);
             }
 
-            document.getElementById('inlineUploadRMD').style.display = 'none';
-            document.getElementById('inlineUploadProd').style.display = 'none';
-            document.getElementById('inlineUploadForecast').style.display = 'flex';
+            // Se muestra la barra de carga que corresponde a la pestaña
+            // REALMENTE activa al arrancar (currentTab), no un valor fijo.
+            // Antes estaba hardcodeado a mostrar siempre la de Forecast
+            // ('inlineUploadForecast' en 'flex'), residuo de cuando esa era
+            // la pestaña por defecto — por eso la barra "Plan de
+            // Producción" (Forecast) quedaba pegada en pantalla aunque el
+            // contenido visible fuera el de Producción.
+            document.getElementById('inlineUploadRMD').style.display = currentTab === 'rmd' ? 'flex' : 'none';
+            document.getElementById('inlineUploadProd').style.display = currentTab === 'produccion' ? 'flex' : 'none';
+            document.getElementById('inlineUploadForecast').style.display = currentTab === 'forecast' ? 'flex' : 'none';
 
             // Asegurar que el botón de planta activa esté correcto
             document.querySelectorAll('.planta-btn').forEach(btn => {
