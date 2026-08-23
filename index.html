@@ -436,7 +436,7 @@
         }
         .brand-mark svg { width: 1.3rem; height: 1.3rem; color: #93c5fd; position: relative; z-index: 1; }
 
-        .title-heading { display: flex; flex-direction: column; gap: 0.05em; }
+        .title-heading { display: flex; flex-direction: row; flex-wrap: wrap; align-items: baseline; gap: 0.4em; }
         .title-line {
             font-weight: 800; text-transform: uppercase;
             letter-spacing: 0.05em; line-height: 1.05;
@@ -1412,11 +1412,6 @@
                     <span class="title-line title-line-primary">RMD Pendientes</span>
                     <span class="title-line title-line-accent">de Autorización</span>
                 </h1>
-                <div class="area-badge" aria-label="Área QA - DOC">
-                    <span class="area-badge-seg">QA</span>
-                    <span class="area-badge-sep" aria-hidden="true"></span>
-                    <span class="area-badge-seg">DOC</span>
-                </div>
             </div>
         </div>
         <div class="flex items-center gap-2 w-full md:w-auto">
@@ -1702,8 +1697,13 @@
                 </div>
             </div>
 
-            <!-- Estado de carga de las 3 fuentes -->
-            <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5 mb-4" id="validacionFuentesStatus">
+            <!-- Estado de carga de las 3 fuentes: oculto — esta misma
+                 información (Cargado / Pendiente de cada archivo) ya se ve
+                 en la toolbar superior (Plan de Producción / Base de Datos
+                 / Exportado RMD), así que mostrarla otra vez aquí abajo era
+                 redundante. El espacio que ocupaba se aprovecha para dar
+                 más altura a la tabla de productos pendientes. -->
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5 mb-4" id="validacionFuentesStatus" style="display:none;">
                 <div class="bg-slate-900/40 border border-slate-700/50 rounded-lg px-3 py-2 flex items-center justify-between text-xs">
                     <span class="text-slate-400">Programa de Producción</span>
                     <span id="fuenteStatusProd" class="text-slate-500 font-semibold">Pendiente</span>
@@ -1718,22 +1718,24 @@
                 </div>
             </div>
 
-            <!-- KPIs de validación -->
+            <!-- KPIs de validación: tarjetas menos altas (py-1.5 en vez de
+                 py-2.5) para ganar espacio vertical adicional para la
+                 tabla de pendientes. -->
             <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mb-4">
-                <div class="bg-slate-900/50 border border-slate-700/50 rounded-lg px-3 py-2.5 text-center">
-                    <p class="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Revisados</p>
+                <div class="bg-slate-900/50 border border-slate-700/50 rounded-lg px-3 py-1.5 text-center">
+                    <p class="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Productos Revisados</p>
                     <p id="kpi-val-revisados" class="text-xl font-bold mt-0.5 text-slate-100">0</p>
                 </div>
-                <div class="bg-slate-900/50 border border-emerald-700/30 rounded-lg px-3 py-2.5 text-center">
-                    <p class="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Autorizados</p>
+                <div class="bg-slate-900/50 border border-emerald-700/30 rounded-lg px-3 py-1.5 text-center">
+                    <p class="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Productos Autorizados</p>
                     <p id="kpi-val-autorizados" class="text-xl font-bold mt-0.5 text-emerald-400">0</p>
                 </div>
-                <div class="bg-slate-900/50 border border-red-700/30 rounded-lg px-3 py-2.5 text-center">
+                <div class="bg-slate-900/50 border border-red-700/30 rounded-lg px-3 py-1.5 text-center">
                     <p class="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Productos Pendientes</p>
                     <p id="kpi-val-pendientes" class="text-xl font-bold mt-0.5 text-red-400">0</p>
                 </div>
-                <div class="rmd-pendientes-highlight rounded-lg px-3 py-2.5 text-center relative">
-                    <p class="text-[10px] text-orange-300/90 uppercase font-bold tracking-wider">RMD Pendientes</p>
+                <div class="rmd-pendientes-highlight rounded-lg px-3 py-1.5 text-center relative">
+                    <p class="text-xs text-orange-300/90 uppercase font-bold tracking-wider">RMD Pendientes</p>
                     <p id="kpi-val-rmd" class="text-3xl font-bold mt-0.5 text-orange-400">0</p>
                 </div>
             </div>
@@ -1758,7 +1760,7 @@
                 <span id="validacionContadorFilas" class="text-[11px] text-slate-500 whitespace-nowrap sm:ml-auto"></span>
             </div>
 
-            <div class="overflow-x-auto overflow-y-auto max-h-96 rounded-lg border border-slate-700/50 custom-scrollbar" id="tablaPendientesWrapper" style="display:none;">
+            <div class="overflow-x-auto overflow-y-auto rounded-lg border border-slate-700/50 custom-scrollbar" id="tablaPendientesWrapper" style="display:none; max-height:70vh;">
                 <table class="w-full text-xs table-fixed" id="tablaPendientes">
     <colgroup>
         <col style="width:12%">
@@ -1952,8 +1954,13 @@
                 </div>
             </div>
 
-                    <!-- Estado de carga de las 3 fuentes -->
-            <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5 mb-4">
+                    <!-- Estado de carga de las 3 fuentes: oculto — esta
+                         misma información ya se ve en la toolbar superior
+                         (Plan de Producción / Base de Datos / Exportado
+                         RMD), así que mostrarla otra vez aquí abajo era
+                         redundante. El espacio se aprovecha para dar más
+                         altura a la tabla de productos pendientes. -->
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5 mb-4" style="display:none;">
                 <div class="bg-slate-900/40 border border-slate-700/50 rounded-lg px-3 py-2 flex items-center justify-between text-xs">
                     <span class="text-slate-400">Plan de Producción (Forecast)</span>
                     <span id="fuenteStatusForecastPlan" class="text-slate-500 font-semibold">Pendiente</span>
@@ -1968,22 +1975,24 @@
                 </div>
             </div>
 
-            <!-- KPIs de validación -->
+            <!-- KPIs de validación: tarjetas menos altas (py-1.5 en vez de
+                 py-2.5) para ganar espacio vertical adicional para la
+                 tabla de pendientes. -->
             <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mb-4">
-                <div class="bg-slate-900/50 border border-slate-700/50 rounded-lg px-3 py-2.5 text-center">
-                    <p class="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Revisados</p>
+                <div class="bg-slate-900/50 border border-slate-700/50 rounded-lg px-3 py-1.5 text-center">
+                    <p class="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Productos Revisados</p>
                     <p id="kpi-val-revisados-forecast" class="text-xl font-bold mt-0.5 text-slate-100">0</p>
                 </div>
-                <div class="bg-slate-900/50 border border-emerald-700/30 rounded-lg px-3 py-2.5 text-center">
-                    <p class="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Autorizados</p>
+                <div class="bg-slate-900/50 border border-emerald-700/30 rounded-lg px-3 py-1.5 text-center">
+                    <p class="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Productos Autorizados</p>
                     <p id="kpi-val-autorizados-forecast" class="text-xl font-bold mt-0.5 text-emerald-400">0</p>
                 </div>
-                <div class="bg-slate-900/50 border border-red-700/30 rounded-lg px-3 py-2.5 text-center">
+                <div class="bg-slate-900/50 border border-red-700/30 rounded-lg px-3 py-1.5 text-center">
                     <p class="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Productos Pendientes</p>
                     <p id="kpi-val-pendientes-forecast" class="text-xl font-bold mt-0.5 text-red-400">0</p>
                 </div>
-                <div class="rmd-pendientes-highlight rounded-lg px-3 py-2.5 text-center relative">
-                    <p class="text-[10px] text-orange-300/90 uppercase font-bold tracking-wider">RMD Pendientes</p>
+                <div class="rmd-pendientes-highlight rounded-lg px-3 py-1.5 text-center relative">
+                    <p class="text-xs text-orange-300/90 uppercase font-bold tracking-wider">RMD Pendientes</p>
                     <p id="kpi-val-rmd-forecast" class="text-3xl font-bold mt-0.5 text-orange-400">0</p>
                 </div>
             </div>
@@ -2009,7 +2018,7 @@
                 <span id="validacionForecastContadorFilas" class="text-[11px] text-slate-500 whitespace-nowrap sm:ml-auto"></span>
             </div>
 
-            <div class="overflow-x-auto overflow-y-auto max-h-96 rounded-lg border border-slate-700/50 custom-scrollbar" id="tablaPendientesForecastWrapper" style="display:none;">
+            <div class="overflow-x-auto overflow-y-auto rounded-lg border border-slate-700/50 custom-scrollbar" id="tablaPendientesForecastWrapper" style="display:none; max-height:70vh;">
                 <table class="w-full text-xs" id="tablaPendientesForecast">
                     <thead class="sticky top-0 bg-slate-900/95 backdrop-blur z-10">
                         <tr class="text-left text-slate-400 uppercase text-[10px] tracking-wider border-b border-slate-700/50">
@@ -6252,6 +6261,16 @@ return `<tr class="${rowCls}" title="${p.motivo || ''}">
                 data: actividades.map(a => matrizActResp[a][r]),
                 backgroundColor: coloresResp[r] || '#94a3b8'
             }));
+            // Cuando el gráfico se genera para copiar/descargar como imagen
+            // (paraImagen=true), el texto se fuerza SIEMPRE a negro — la
+            // imagen se va a pegar sobre fondos claros (Word, PowerPoint,
+            // correo), y antes heredaba Chart.defaults.color, que cambia
+            // según el tema oscuro/claro activo en la app en ese momento;
+            // en modo oscuro eso dejaba el texto casi invisible sobre
+            // fondo blanco. El gráfico interactivo del modal (paraImagen
+            // falso) sigue usando el color de tema normal, ya que ese sí
+            // se ve sobre el fondo oscuro del propio modal.
+            const colorTexto = paraImagen ? '#111827' : undefined;
             return {
                 type: 'bar',
                 data: { labels: actividades, datasets },
@@ -6259,13 +6278,14 @@ return `<tr class="${rowCls}" title="${p.motivo || ''}">
                     responsive: !paraImagen,
                     maintainAspectRatio: false,
                     animation: paraImagen ? false : undefined,
+                    color: colorTexto,
                     plugins: {
-                        title: { display: true, text: 'Actividades Pendientes por Responsable', font: { size: 16 } },
-                        legend: { position: 'bottom' }
+                        title: { display: true, text: 'Actividades Pendientes por Responsable', font: { size: 16 }, color: colorTexto },
+                        legend: { position: 'bottom', labels: { color: colorTexto } }
                     },
                     scales: {
-                        x: { stacked: true, title: { display: true, text: 'Actividad Pendiente' } },
-                        y: { stacked: true, title: { display: true, text: 'Cantidad' }, beginAtZero: true, ticks: { precision: 0 } }
+                        x: { stacked: true, title: { display: true, text: 'Actividad Pendiente', color: colorTexto }, ticks: { color: colorTexto }, grid: paraImagen ? { color: '#e5e7eb' } : undefined },
+                        y: { stacked: true, title: { display: true, text: 'Cantidad', color: colorTexto }, beginAtZero: true, ticks: { precision: 0, color: colorTexto }, grid: paraImagen ? { color: '#e5e7eb' } : undefined }
                     }
                 }
             };
@@ -6279,10 +6299,65 @@ return `<tr class="${rowCls}" title="${p.motivo || ''}">
                 canvas.style.left = '-9999px';
                 document.body.appendChild(canvas);
 
-                const chart = new Chart(canvas.getContext('2d'), construirConfigGraficoContraste(actividades, responsables, matrizActResp, true));
+                // Fondo blanco sólido detrás del gráfico: la imagen se
+                // pega sobre documentos con fondo claro, así que no debe
+                // depender de la transparencia del canvas ni del color de
+                // fondo de donde se pegue.
+                const fondoBlancoPlugin = {
+                    id: 'fondoBlancoExport',
+                    beforeDraw: (chartInst) => {
+                        const ctx = chartInst.canvas.getContext('2d');
+                        ctx.save();
+                        ctx.globalCompositeOperation = 'destination-over';
+                        ctx.fillStyle = '#ffffff';
+                        ctx.fillRect(0, 0, chartInst.width, chartInst.height);
+                        ctx.restore();
+                    }
+                };
+                const config = construirConfigGraficoContraste(actividades, responsables, matrizActResp, true);
+                config.plugins = [fondoBlancoPlugin];
+                const chart = new Chart(canvas.getContext('2d'), config);
 
                 // Chart.js necesita un tick de renderizado antes de que el
                 // canvas tenga contenido real que exportar a imagen.
+                setTimeout(() => {
+                    const base64 = canvas.toDataURL('image/png').split(',')[1];
+                    chart.destroy();
+                    canvas.remove();
+                    resolve(base64);
+                }, 60);
+            });
+        }
+
+        // Misma lógica que generarImagenGraficoContraste, pero para el
+        // gráfico circular de responsabilidad por área. IMPORTANTE: la
+        // config de la dona para imagen (paraImagen=true) ya trae su
+        // propio plugin de porcentajes (porcentajesDona) — aquí se
+        // COMBINAN ambos plugins (fondo blanco + porcentajes) en vez de
+        // sobrescribir el array, o se perdería uno de los dos.
+        function generarImagenGraficoDona(responsables, totalesPorResponsable) {
+            return new Promise((resolve) => {
+                const canvas = document.createElement('canvas');
+                canvas.width = 700; canvas.height = 500;
+                canvas.style.position = 'fixed';
+                canvas.style.left = '-9999px';
+                document.body.appendChild(canvas);
+
+                const fondoBlancoPlugin = {
+                    id: 'fondoBlancoExportDona',
+                    beforeDraw: (chartInst) => {
+                        const ctx = chartInst.canvas.getContext('2d');
+                        ctx.save();
+                        ctx.globalCompositeOperation = 'destination-over';
+                        ctx.fillStyle = '#ffffff';
+                        ctx.fillRect(0, 0, chartInst.width, chartInst.height);
+                        ctx.restore();
+                    }
+                };
+                const config = construirConfigGraficoDonaResponsable(responsables, totalesPorResponsable, true);
+                config.plugins = [fondoBlancoPlugin, ...(config.plugins || [])];
+                const chart = new Chart(canvas.getContext('2d'), config);
+
                 setTimeout(() => {
                     const base64 = canvas.toDataURL('image/png').split(',')[1];
                     chart.destroy();
@@ -6420,7 +6495,75 @@ return `<tr class="${rowCls}" title="${p.motivo || ''}">
         // imagen al exportar Excel — con Chart.js en un <canvas> real,
         // interactivo (tooltips al pasar el mouse), y un botón para
         // descargarlo como PNG si el usuario lo necesita para un reporte.
+        // Gráfico circular (dona) de porcentaje de responsabilidad: cuánto
+        // del total de actividades pendientes le corresponde a cada
+        // responsable (DOC, PRO, ASC, IDE). Chart.js ya calcula el
+        // porcentaje solo con los datos crudos (no hace falta calcularlo
+        // a mano); el tooltip se personaliza para mostrarlo explícitamente
+        // junto con la cantidad real.
+        function construirConfigGraficoDonaResponsable(responsables, totalesPorResponsable, paraImagen) {
+            const coloresResp = { DOC: '#3b82f6', PRO: '#10b981', ASC: '#f59e0b', IDE: '#a855f7' };
+            const colorTexto = paraImagen ? '#111827' : undefined;
+            const totalGeneral = responsables.reduce((acc, r) => acc + totalesPorResponsable[r], 0);
+            return {
+                type: 'doughnut',
+                data: {
+                    labels: responsables,
+                    datasets: [{
+                        data: responsables.map(r => totalesPorResponsable[r]),
+                        backgroundColor: responsables.map(r => coloresResp[r] || '#94a3b8'),
+                        borderColor: paraImagen ? '#ffffff' : '#0f172a',
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: !paraImagen,
+                    maintainAspectRatio: false,
+                    animation: paraImagen ? false : undefined,
+                    color: colorTexto,
+                    plugins: {
+                        title: { display: true, text: 'Responsabilidad de Actividades Pendientes por Área', font: { size: 16 }, color: colorTexto },
+                        legend: { position: 'bottom', labels: { color: colorTexto } },
+                        tooltip: {
+                            callbacks: {
+                                label: (ctx) => {
+                                    const valor = ctx.parsed;
+                                    const pct = totalGeneral > 0 ? ((valor / totalGeneral) * 100).toFixed(1) : '0.0';
+                                    return `${ctx.label}: ${valor} (${pct}%)`;
+                                }
+                            }
+                        }
+                    }
+                },
+                // En la imagen exportada no hay interacción posible (no hay
+                // tooltip al pasar el mouse), así que el porcentaje se
+                // imprime directamente sobre cada porción con este plugin
+                // propio, solo activo cuando paraImagen es true.
+                plugins: paraImagen ? [{
+                    id: 'porcentajesDona',
+                    afterDraw: (chartInst) => {
+                        const ctx = chartInst.ctx;
+                        const meta = chartInst.getDatasetMeta(0);
+                        ctx.save();
+                        ctx.font = 'bold 13px Inter, sans-serif';
+                        ctx.fillStyle = '#111827';
+                        ctx.textAlign = 'center';
+                        ctx.textBaseline = 'middle';
+                        meta.data.forEach((arc, i) => {
+                            const valor = totalesPorResponsable[responsables[i]];
+                            if (!valor) return;
+                            const pct = totalGeneral > 0 ? ((valor / totalGeneral) * 100).toFixed(0) : '0';
+                            const pos = arc.tooltipPosition();
+                            ctx.fillText(`${pct}%`, pos.x, pos.y);
+                        });
+                        ctx.restore();
+                    }
+                }] : undefined
+            };
+        }
+
         let chartResponsableModalInst = null;
+        let chartDonaResponsableModalInst = null;
         function mostrarGraficoResponsableModal(origen) {
             const { pendientes } = origen === 'forecast' ? ultimoResultadoValidacionForecast : ultimoResultadoValidacion;
             if (!pendientes || pendientes.length === 0) {
@@ -6430,39 +6573,58 @@ return `<tr class="${rowCls}" title="${p.motivo || ''}">
             const filas = construirFilasPendientesParaResumen(pendientes, origen);
             const { ACTIVIDADES, RESPONSABLES, matrizActResp } = calcularMatrizActividadResponsable(filas);
             const totalCasos = ACTIVIDADES.reduce((acc, a) => acc + RESPONSABLES.reduce((acc2, r) => acc2 + matrizActResp[a][r], 0), 0);
+            // Total de actividades pendientes por responsable (suma de su
+            // columna en la matriz), base del segundo gráfico — cuánto del
+            // total le corresponde a cada área (DOC, PRO, ASC, IDE).
+            const totalesPorResponsable = {};
+            RESPONSABLES.forEach(r => {
+                totalesPorResponsable[r] = ACTIVIDADES.reduce((acc, a) => acc + matrizActResp[a][r], 0);
+            });
 
             Swal.fire({
                 title: 'Actividades Pendientes por Responsable',
                 html: `<div style="text-align:left;">
-                    ${totalCasos === 0 ? '<div style="padding:12px;text-align:center;color:#94a3b8;font-size:13px;">Ningún material pendiente tiene, a la vez, un Estatus de etapa y un Responsable elegidos todavía — el gráfico se llena a medida que se van completando.</div>' : ''}
-                    <div style="height:360px;position:relative;">
+                    ${totalCasos === 0 ? '<div style="padding:12px;text-align:center;color:#94a3b8;font-size:13px;">Ningún material pendiente tiene, a la vez, un Estatus de etapa y un Responsable elegidos todavía — los gráficos se llenan a medida que se van completando.</div>' : ''}
+                    <div style="height:320px;position:relative;">
                         <canvas id="canvasGraficoResponsableModal"></canvas>
                     </div>
+                    <button type="button" id="btnDescargarGraficoBarras" style="margin:8px auto 4px;display:block;background:rgba(245,158,11,0.15);border:1px solid rgba(245,158,11,0.4);color:#fbbf24;font-size:11px;font-weight:600;padding:6px 14px;border-radius:6px;cursor:pointer;">⬇ Descargar este gráfico (PNG)</button>
+                    <hr style="border-color:rgba(255,255,255,0.1);margin:14px 0;">
+                    <div style="height:320px;position:relative;">
+                        <canvas id="canvasGraficoDonaResponsableModal"></canvas>
+                    </div>
+                    <button type="button" id="btnDescargarGraficoDona" style="margin:8px auto 0;display:block;background:rgba(245,158,11,0.15);border:1px solid rgba(245,158,11,0.4);color:#fbbf24;font-size:11px;font-weight:600;padding:6px 14px;border-radius:6px;cursor:pointer;">⬇ Descargar este gráfico (PNG)</button>
                 </div>`,
                 width: 'min(720px, 96vw)',
                 background: '#0f172a',
                 showConfirmButton: true,
                 confirmButtonText: 'Cerrar',
-                showDenyButton: true,
-                denyButtonText: '⬇ Descargar PNG',
-                customClass: {
-                    confirmButton: 'bg-slate-600 hover:bg-slate-500 px-4 py-2.5 rounded-lg text-white text-xs min-w-[44px]',
-                    denyButton: 'bg-amber-600 hover:bg-amber-500 px-4 py-2.5 rounded-lg text-white text-xs min-w-[44px] mr-2'
-                },
                 buttonsStyling: false,
+                customClass: {
+                    confirmButton: 'bg-slate-600 hover:bg-slate-500 px-4 py-2.5 rounded-lg text-white text-xs min-w-[44px]'
+                },
                 didOpen: () => {
-                    const canvas = document.getElementById('canvasGraficoResponsableModal');
+                    const canvasBarras = document.getElementById('canvasGraficoResponsableModal');
                     if (chartResponsableModalInst) { chartResponsableModalInst.destroy(); chartResponsableModalInst = null; }
-                    chartResponsableModalInst = new Chart(canvas.getContext('2d'), construirConfigGraficoContraste(ACTIVIDADES, RESPONSABLES, matrizActResp, false));
+                    chartResponsableModalInst = new Chart(canvasBarras.getContext('2d'), construirConfigGraficoContraste(ACTIVIDADES, RESPONSABLES, matrizActResp, false));
+
+                    const canvasDona = document.getElementById('canvasGraficoDonaResponsableModal');
+                    if (chartDonaResponsableModalInst) { chartDonaResponsableModalInst.destroy(); chartDonaResponsableModalInst = null; }
+                    chartDonaResponsableModalInst = new Chart(canvasDona.getContext('2d'), construirConfigGraficoDonaResponsable(RESPONSABLES, totalesPorResponsable, false));
+
+                    const prefijo = origen === 'forecast' ? 'Forecast' : 'Produccion';
+                    document.getElementById('btnDescargarGraficoBarras').addEventListener('click', async () => {
+                        const base64 = await generarImagenGraficoContraste(ACTIVIDADES, RESPONSABLES, matrizActResp);
+                        descargarImagenBase64(base64, `Grafico_Responsable_${prefijo}_${dayjs().format('YYYYMMDD_HHmm')}.png`);
+                    });
+                    document.getElementById('btnDescargarGraficoDona').addEventListener('click', async () => {
+                        const base64 = await generarImagenGraficoDona(RESPONSABLES, totalesPorResponsable);
+                        descargarImagenBase64(base64, `Grafico_Responsabilidad_Area_${prefijo}_${dayjs().format('YYYYMMDD_HHmm')}.png`);
+                    });
                 },
                 willClose: () => {
                     if (chartResponsableModalInst) { chartResponsableModalInst.destroy(); chartResponsableModalInst = null; }
-                }
-            }).then(async (res) => {
-                if (res.isDenied) {
-                    const base64 = await generarImagenGraficoContraste(ACTIVIDADES, RESPONSABLES, matrizActResp);
-                    const prefijo = origen === 'forecast' ? 'Forecast' : 'Produccion';
-                    descargarImagenBase64(base64, `Grafico_Responsable_${prefijo}_${dayjs().format('YYYYMMDD_HHmm')}.png`);
+                    if (chartDonaResponsableModalInst) { chartDonaResponsableModalInst.destroy(); chartDonaResponsableModalInst = null; }
                 }
             });
         }
