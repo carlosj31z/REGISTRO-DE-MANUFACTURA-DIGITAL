@@ -2400,7 +2400,7 @@
                 return filtradas.slice(0, 200).map(d => {
                     const c = estadoColorConsulta(d.estado);
                     return `
-                    <button type="button" class="consulta-rmd-item" onclick="verHistorialConsultaRMD(${JSON.stringify(d.descripcion).replace(/"/g, '&quot;')})" style="width:100%;text-align:left;padding:10px 14px;border:none;border-bottom:1px solid var(--card-border-highlight);background:transparent;color:var(--app-text);font-size:12.5px;cursor:pointer;transition:background .15s;">
+                    <button type="button" class="consulta-rmd-item" onclick="verHistorialConsultaRMD(${JSON.stringify(d.descripcion).replace(/"/g, '&quot;')}, ${JSON.stringify(d.etapa || '').replace(/"/g, '&quot;')})" style="width:100%;text-align:left;padding:10px 14px;border:none;border-bottom:1px solid var(--card-border-highlight);background:transparent;color:var(--app-text);font-size:12.5px;cursor:pointer;transition:background .15s;">
                         <div style="margin-bottom:4px;">${escapeHtmlConsulta(d.descripcion)}</div>
                         <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
                             ${d.etapa ? `<span style="font-size:10px;color:var(--slate-400);background:rgba(255,255,255,0.05);border-radius:5px;padding:1.5px 7px;">${escapeHtmlConsulta(d.etapa)}</span>` : ''}
@@ -2418,7 +2418,10 @@
                     <div id="consultaRmdLista" style="max-height:50vh;overflow-y:auto;border:1px solid var(--card-border-highlight);border-radius:8px;">${filasHtml(filtroInicial)}</div>
                 </div>`,
                 width: 'min(520px, 94vw)',
-                showConfirmButton: false,
+                showConfirmButton: true,
+                confirmButtonText: 'Cerrar',
+                customClass: { confirmButton: 'bg-slate-700 hover:bg-slate-600 text-white px-4 py-2.5 rounded-lg text-xs min-w-[44px]' },
+                buttonsStyling: false,
                 showCloseButton: true,
                 background: '#0f172a', color: '#f8fafc',
                 didOpen: () => {
@@ -2428,7 +2431,16 @@
                     let debounceId = null;
                     input.addEventListener('input', () => {
                         clearTimeout(debounceId);
-                        debounceId = setTimeout(() => { lista.innerHTML = filasHtml(input.value); }, 120);
+                        debounceId = setTimeout(() => {
+                            consultaRmdUltimoFiltro = input.value;
+                            lista.innerHTML = filasHtml(input.value);
+                            // Los listeners de hover se re-aplican porque el
+                            // innerHTML acaba de reemplazar los items.
+                            lista.querySelectorAll('.consulta-rmd-item').forEach(btn => {
+                                btn.addEventListener('mouseenter', () => btn.style.background = 'rgba(16,185,129,0.08)');
+                                btn.addEventListener('mouseleave', () => btn.style.background = 'transparent');
+                            });
+                        }, 120);
                     });
                     // Estilo hover simple para los items, ya que Swal no permite <style> embebido de forma confiable
                     lista.querySelectorAll('.consulta-rmd-item').forEach(btn => {
@@ -2445,17 +2457,43 @@
             return div.innerHTML;
         }
 
-        async function verHistorialConsultaRMD(descripcion) {
+        // Último texto buscado en la lista de Consultar RMD: se guarda para
+        // que al VOLVER desde el detalle de un producto la lista reaparezca
+        // con el mismo filtro, en vez de vacía.
+        let consultaRmdUltimoFiltro = '';
+
+        async function verHistorialConsultaRMD(descripcion, etapa) {
             Swal.fire({ title: 'Cargando historial...', allowOutsideClick: false, didOpen: () => Swal.showLoading(), background: '#0f172a' });
             try {
                 const resp = await consultarSeguimientoRMD('RMD_SEGUIMIENTO_QUERY_HISTORIAL', { descripcion });
-                mostrarHistorialRMDEstilizado(descripcion, resp.historial || []);
+                mostrarHistorialRMDEstilizado(descripcion, resp.historial || [], etapa);
             } catch (err) {
                 Swal.fire({ icon: 'error', title: 'No se pudo cargar el historial', text: 'Seguimiento RMD no respondió a tiempo.', background: '#0f172a' });
             }
         }
 
-        function mostrarHistorialRMDEstilizado(descripcion, historial) {
+        // Arma el texto tabulado (TSV) del historial completo del producto,
+        // listo para pegar directo en Excel: una fila por versión, con el
+        // producto, la etapa, la versión, el estado y la observación de ESA
+        // versión. Se limpian tabulaciones y saltos de línea dentro de cada
+        // celda, porque romperían la separación de columnas al pegar.
+        function construirTsvHistorialRMD(descripcion, historial, etapa) {
+            const limpiar = (v) => String(v == null ? '' : v).replace(/[\t\r\n]+/g, ' ').trim();
+            const encabezado = ['Producto', 'Etapa', 'Versión', 'Estado', 'Observación'].join('\t');
+            const filas = (historial || [])
+                .slice()
+                .sort((a, b) => (a.version ?? 0) - (b.version ?? 0))
+                .map(h => [
+                    limpiar(descripcion),
+                    limpiar(etapa || h.etapa || ''),
+                    `v${h.version ?? '?'}`,
+                    limpiar(h.estado),
+                    limpiar(h.observacion)
+                ].join('\t'));
+            return [encabezado, ...filas].join('\n');
+        }
+
+        function mostrarHistorialRMDEstilizado(descripcion, historial, etapa) {
             const estadoColor = (estado) => {
                 const e = (estado || '').toLowerCase();
                 if (e.includes('autoriz')) return { bg: 'rgba(16,185,129,0.12)', fg: '#6ee7b7', border: 'rgba(16,185,129,0.3)' };
@@ -2490,15 +2528,57 @@
             Swal.fire({
                 title: 'Historial RMD',
                 html: `<div style="text-align:left;">
-                    <div style="font-size:12.5px;color:var(--app-text);font-weight:600;margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid var(--card-border-highlight);">${escapeHtmlConsulta(descripcion)}</div>
+                    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid var(--card-border-highlight);">
+                        <div style="font-size:12.5px;color:var(--app-text);font-weight:600;min-width:0;">
+                            ${escapeHtmlConsulta(descripcion)}
+                            ${etapa ? `<div style="font-size:10px;color:var(--slate-400);font-weight:500;margin-top:2px;">Etapa: ${escapeHtmlConsulta(etapa)}</div>` : ''}
+                        </div>
+                        <button type="button" id="btnCopiarHistorialRmd" title="Copiar todo el historial (una fila por versión) listo para pegar en Excel"
+                            style="flex-shrink:0;display:inline-flex;align-items:center;gap:5px;background:rgba(16,185,129,0.12);border:1px solid rgba(16,185,129,0.35);color:#6ee7b7;font-size:11px;font-weight:600;padding:5px 10px;border-radius:6px;cursor:pointer;">
+                            <svg xmlns="http://www.w3.org/2000/svg" style="width:12px;height:12px;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+                            <span id="btnCopiarHistorialRmdLabel">Copiar para Excel</span>
+                        </button>
+                    </div>
                     <div style="max-height:55vh;overflow-y:auto;">${timelineHtml}</div>
                 </div>`,
                 width: 'min(560px, 94vw)',
-                confirmButtonText: 'Cerrar',
+                confirmButtonText: '← Volver',
                 showCloseButton: true,
                 background: '#0f172a', color: '#f8fafc',
                 customClass: { confirmButton: 'bg-slate-700 hover:bg-slate-600 text-white px-4 py-2.5 rounded-lg text-xs min-w-[44px]' },
-                buttonsStyling: false
+                buttonsStyling: false,
+                didOpen: () => {
+                    const btn = document.getElementById('btnCopiarHistorialRmd');
+                    const label = document.getElementById('btnCopiarHistorialRmdLabel');
+                    if (!btn) return;
+                    btn.addEventListener('click', async () => {
+                        const tsv = construirTsvHistorialRMD(descripcion, historial, etapa);
+                        try {
+                            await navigator.clipboard.writeText(tsv);
+                            const original = label.textContent;
+                            label.textContent = '✓ Copiado';
+                            setTimeout(() => { label.textContent = original; }, 1600);
+                        } catch (err) {
+                            // Si el navegador bloquea el portapapeles (permisos,
+                            // contexto no seguro), se ofrece el texto para
+                            // copiarlo a mano en vez de fallar en silencio.
+                            Swal.fire({
+                                icon: 'info', title: 'Copia manual',
+                                html: `<textarea readonly style="width:100%;height:180px;font-family:monospace;font-size:11px;background:#1c2128;color:#e7ebf0;border-radius:6px;padding:8px;">${escapeHtmlConsulta(tsv)}</textarea>`,
+                                width: 'min(560px, 94vw)', background: '#0f172a', confirmButtonText: 'Cerrar'
+                            });
+                        }
+                    });
+                }
+            }).then((res) => {
+                // "← Volver" NO cierra del todo: retrocede a la lista de
+                // Consultar RMD (conservando el texto que se había buscado),
+                // para poder revisar otra etapa/producto sin tener que abrir
+                // la consulta de nuevo desde cero. Recién el "Cerrar" de esa
+                // lista, o la X, cierran por completo.
+                if (res.isConfirmed && seguimientoRmdDescripcionesCache) {
+                    renderModalConsultaRMD(seguimientoRmdDescripcionesCache, consultaRmdUltimoFiltro);
+                }
             });
         }
 
