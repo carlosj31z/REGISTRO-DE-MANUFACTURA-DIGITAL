@@ -63,7 +63,7 @@
 
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
 
     <!-- FullCalendar -->
     <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.js"></script>
@@ -134,8 +134,8 @@
             --slate-300: #cbd5e1; --slate-400: #94a3b8; --slate-500: #64748b;
             --slate-600: #475569; --slate-700: #334155; --slate-800: #1e293b;
             --slate-900: #0b1120;
-            --app-bg: #0b1120;
-            --app-bg-glow: #1e293b;
+            --app-bg: #080d18;
+            --app-bg-glow: #080d18;
             --app-text: #f8fafc;
             --theme-switch-track: rgba(30, 41, 59, 0.55);
             --theme-switch-border: rgba(255, 255, 255, 0.14);
@@ -271,26 +271,22 @@
             overflow: hidden;
         }
 
+        /* Orbe de brillo desactivado: seguía al mouse por toda la pantalla
+           con un halo rojo/naranja en movimiento constante. Es justo el
+           tipo de estímulo permanente que cansa la vista en jornadas
+           largas, así que se oculta para dejar el fondo plano y uniforme. */
         #glow-orb {
-            position: absolute;
-            width: 800px;
-            height: 800px;
-            border-radius: 50%;
-            background: radial-gradient(circle, rgba(244, 63, 94, 0.15) 0%, rgba(249, 115, 22, 0.1) 40%, rgba(0, 0, 0, 0) 70%);
-            filter: blur(80px);
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            will-change: transform;
-            transition: background 0.6s ease;
+            display: none;
         }
 
+        /* Grano de textura reducido a la mitad: aportaba un ruido sutil
+           pero constante sobre toda la pantalla. */
         #grain-overlay {
             position: fixed;
             inset: 0;
             z-index: 40;
             pointer-events: none;
-            opacity: 0.025;
+            opacity: 0.012;
             background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
         }
 
@@ -333,25 +329,27 @@
             transform: translateY(-2px);
         }
 
+        /* Panel destacado: se conserva el tinte ámbar sutil y el borde,
+           pero se retiran los halos de brillo (glow) que rodeaban la
+           tarjeta y el ícono. Esos resplandores mantenían un estímulo
+           luminoso permanente alrededor del contenido más consultado de la
+           pantalla, que es justo lo que cansa la vista en jornadas largas. */
         .card-rmd-highlight {
-            background: linear-gradient(150deg, rgba(120, 53, 15, 0.16), var(--card-bg-2) 55%);
-            border: 1px solid rgba(245, 158, 11, 0.28);
+            background: linear-gradient(150deg, rgba(120, 53, 15, 0.10), var(--card-bg-2) 55%);
+            border: 1px solid rgba(245, 158, 11, 0.22);
             box-shadow:
-                0 1px 0 0 rgba(255,255,255,0.05) inset,
-                0 24px 48px -14px rgba(0, 0, 0, 0.5),
-                0 0 0 1px rgba(245, 158, 11, 0.08),
-                0 0 40px -12px rgba(245, 158, 11, 0.22);
+                0 1px 0 0 rgba(255,255,255,0.04) inset,
+                0 20px 40px -16px rgba(0, 0, 0, 0.45);
         }
         .card-rmd-highlight::before {
-            background: linear-gradient(160deg, rgba(245, 158, 11, 0.22), rgba(255,255,255,0) 45%);
+            background: linear-gradient(160deg, rgba(245, 158, 11, 0.10), rgba(255,255,255,0) 45%);
         }
         .rmd-icon-badge {
             display: flex; align-items: center; justify-content: center;
             width: 2.05rem; height: 2.05rem; flex-shrink: 0; border-radius: 0.65rem;
             color: #fbbf24;
-            background: linear-gradient(150deg, rgba(245,158,11,0.24), rgba(245,158,11,0.06));
-            border: 1px solid rgba(245,158,11,0.3);
-            box-shadow: 0 0 16px -4px rgba(245,158,11,0.35);
+            background: linear-gradient(150deg, rgba(245,158,11,0.18), rgba(245,158,11,0.05));
+            border: 1px solid rgba(245,158,11,0.25);
         }
         .rmd-icon-badge svg { width: 1.1rem; height: 1.1rem; }
 
@@ -359,28 +357,21 @@
            importante de la validación, así que se distingue del resto con
            el mismo lenguaje visual ámbar/glow que .card-rmd-highlight, pero
            a escala de una caja de KPI pequeña. */
+        /* KPI destacado (RMD Pendientes): conserva el tinte y el borde
+           ámbar que lo distinguen del resto, pero SIN la animación de
+           pulso infinita ni el halo de brillo. Ese latido cada 2.6s en un
+           elemento siempre visible era una fuente constante de estímulo
+           periférico — la causa más directa de fatiga visual en la
+           pantalla. La jerarquía se mantiene por color, borde y por el
+           tamaño de letra más grande del número. */
         .rmd-pendientes-highlight {
-            background: linear-gradient(150deg, rgba(120, 53, 15, 0.28), var(--card-bg-2) 60%);
-            border: 1px solid rgba(245, 158, 11, 0.45);
-            box-shadow:
-                0 1px 0 0 rgba(255,255,255,0.06) inset,
-                0 0 0 1px rgba(245, 158, 11, 0.12),
-                0 0 26px -6px rgba(245, 158, 11, 0.4);
-            animation: rmdPendientesPulse 2.6s ease-in-out infinite;
+            background: linear-gradient(150deg, rgba(120, 53, 15, 0.22), var(--card-bg-2) 60%);
+            border: 1px solid rgba(245, 158, 11, 0.38);
+            box-shadow: 0 1px 0 0 rgba(255,255,255,0.05) inset;
         }
         @keyframes rmdPendientesPulse {
-            0%, 100% {
-                box-shadow:
-                    0 1px 0 0 rgba(255,255,255,0.06) inset,
-                    0 0 0 1px rgba(245, 158, 11, 0.12),
-                    0 0 26px -6px rgba(245, 158, 11, 0.4);
-            }
-            50% {
-                box-shadow:
-                    0 1px 0 0 rgba(255,255,255,0.06) inset,
-                    0 0 0 1px rgba(245, 158, 11, 0.22),
-                    0 0 34px -4px rgba(245, 158, 11, 0.58);
-            }
+            0%, 100% { box-shadow: 0 1px 0 0 rgba(255,255,255,0.05) inset; }
+            50% { box-shadow: 0 1px 0 0 rgba(255,255,255,0.05) inset; }
         }
         @media (prefers-reduced-motion: reduce) {
             .rmd-pendientes-highlight { animation: none; }
@@ -436,21 +427,22 @@
         }
         .brand-mark svg { width: 1.3rem; height: 1.3rem; color: #93c5fd; position: relative; z-index: 1; }
 
-        .title-heading { display: flex; flex-direction: row; flex-wrap: wrap; align-items: baseline; gap: 0.4em; }
+        .title-heading { display: flex; flex-direction: row; flex-wrap: wrap; align-items: baseline; gap: 0.35em; }
         .title-line {
-            font-weight: 800; text-transform: uppercase;
-            letter-spacing: 0.05em; line-height: 1.05;
-            font-size: 1.05rem;
+            font-family: 'Playfair Display', Georgia, serif;
+            font-weight: 700; text-transform: none;
+            letter-spacing: 0; line-height: 1.1;
+            font-size: 1.3rem;
         }
         .title-line-primary {
             color: var(--app-text);
-            text-shadow: 0 1px 16px rgba(148, 163, 184, 0.18);
         }
+        /* Acento en azul claro SÓLIDO (sin degradado animado con brillo):
+           el shimmer anterior llamaba la atención de forma constante, que
+           es justo lo que se busca evitar para reducir la fatiga visual. */
         .title-line-accent {
-            background: linear-gradient(100deg, #7dd3fc 0%, #93c5fd 35%, #c4b5fd 70%, #7dd3fc 100%);
-            background-size: 220% auto;
-            -webkit-background-clip: text; background-clip: text; color: transparent;
-            animation: titleShimmer 7s linear infinite;
+            color: #93c5fd;
+            font-weight: 600;
         }
         @keyframes titleShimmer { to { background-position: -220% center; } }
 
@@ -472,7 +464,7 @@
         }
 
         @media (min-width: 768px) {
-            .title-line { font-size: 1.55rem; }
+            .title-line { font-size: 1.75rem; }
         }
 
         .btn-clear {
@@ -630,6 +622,34 @@
            (bg-slate-800 + border-slate-600), ahora un azul-acero translúcido
            con acento dorado al enfocar, coherente con el borde dorado del
            panel "RMD Pendientes de Autorización". */
+        /* Grilla de columnas fijas para cada fila de etapa pendiente:
+           nombre de etapa | selector de estatus | responsable | botón ✓.
+           Antes era un flex suelto, así que el ancho de cada elemento
+           dependía de su contenido y las columnas quedaban desalineadas
+           entre una fila y otra (una etapa larga como "ACONDICIONADO"
+           empujaba su selector más a la derecha que el de "ENVASE"). Con
+           anchos fijos, todo queda alineado verticalmente y la columna se
+           lee de corrido. */
+        .etapa-fila-grid {
+            display: grid;
+            grid-template-columns: 7.5rem minmax(8.5rem, 10rem) minmax(3.2rem, 5.5rem) auto;
+            align-items: center;
+            gap: 0.4rem;
+            white-space: nowrap;
+            margin-bottom: 0.2rem;
+        }
+
+        /* Barra lateral de color en el selector de Estatus, según la
+           actividad elegida — permite identificar el tipo de pendiente de
+           un vistazo, sin leer el texto del desplegable. Es un borde
+           izquierdo grueso, deliberadamente sutil (no un fondo saturado)
+           para no sumar carga visual. */
+        .etapa-estatus-select.est-pendiente-pro { border-left: 3px solid #f59e0b; }
+        .etapa-estatus-select.est-por-ingresar  { border-left: 3px solid #3b82f6; }
+        .etapa-estatus-select.est-flujo-sap     { border-left: 3px solid #8b5cf6; }
+        .etapa-estatus-select.est-pend-rmd      { border-left: 3px solid #ec4899; }
+        .etapa-estatus-select.est-pend-cc       { border-left: 3px solid #f97316; }
+
         .etapa-estatus-select {
             background: rgba(51, 65, 100, 0.55);
             border: 1px solid rgba(148, 163, 184, 0.35);
@@ -978,6 +998,21 @@
             display: flex;
             align-items: center;
             gap: 0.5rem;
+        }
+
+        /* Chip compacto que reemplaza la barra verde de ancho completo con
+           el aviso de productos programados. Tono neutro y discreto (no el
+           verde saturado de .info-badge): es información de contexto, no
+           una alerta que deba competir por atención. */
+        .date-filter-chip {
+            display: inline-flex; align-items: center; gap: 0.35rem;
+            padding: 0.2rem 0.6rem;
+            border-radius: 999px;
+            font-size: 0.68rem; font-weight: 600;
+            background: rgba(148, 163, 184, 0.1);
+            border: 1px solid rgba(148, 163, 184, 0.2);
+            color: var(--slate-400);
+            white-space: nowrap;
         }
 
         .badge { padding: 0.25rem 0.75rem; border-radius: 9999px; font-size: 0.75rem; font-weight: 600; }
@@ -1662,9 +1697,15 @@
 
     <!-- ==================== TAB 2: Programa de Producción ==================== -->
     <div class="tab-content active" id="tab-produccion">
+        <!-- Barra de aviso de fecha: oculta — su mensaje ahora se muestra
+             como un chip compacto junto al título del panel (ver
+             #dateFilterChip más abajo), para no gastar una fila completa
+             de altura en una sola línea de texto. El texto se sigue
+             escribiendo en #dateFilterText, que ahora vive dentro del
+             chip. -->
         <div class="info-badge opacity-0 section-spacing" id="dateFilterInfo" style="display: none;">
             <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-            <span id="dateFilterText" class="text-xs"></span>
+            <span id="dateFilterTextLegacy" class="text-xs"></span>
         </div>
 
         <!-- Filtros de Áreas -->
@@ -1680,6 +1721,10 @@
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-4.5 w-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
                     </span>
                     RMD Pendientes de Autorización
+                    <span class="date-filter-chip" id="dateFilterChip" style="display:none;">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                        <span id="dateFilterText"></span>
+                    </span>
                 </h2>
                 <div class="flex items-center gap-2">
                     <button onclick="mostrarGraficoResponsableModal('produccion')" class="bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-600 px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 active:scale-95" title="Ver el gráfico de Actividades Pendientes por Responsable">
@@ -4090,10 +4135,14 @@ function buildDateColumnMapPlanta1(headerRow, weekLabelRow, hiddenCols) {
                         productionData = nuevaProductionData;
                         availableAreas = areasDeEstaCarga;
                         document.getElementById('prodStatusBadge').style.display = 'inline';
-                        const ib = document.getElementById('dateFilterInfo');
-                        if (productionData.length > 0) {
-                            ib.style.display = 'flex';
-                            document.getElementById('dateFilterText').textContent = `${productionData.length} productos programados desde hoy (${dayjs().format('YYYY-MM-DD')}) en adelante.`;
+                        // El aviso ahora es un chip compacto junto al título
+                        // del panel, con el texto acortado ("121 desde hoy")
+                        // en vez de la frase completa que ocupaba una fila.
+                        const chip = document.getElementById('dateFilterChip');
+                        if (productionData.length > 0 && chip) {
+                            chip.style.display = 'inline-flex';
+                            document.getElementById('dateFilterText').textContent = `${productionData.length} desde hoy`;
+                            chip.title = `${productionData.length} productos programados desde hoy (${dayjs().format('YYYY-MM-DD')}) en adelante.`;
                         }
                         updateDashboardProd();
                     } else if (currentPlanta === 'consolidado') {
@@ -4225,12 +4274,15 @@ function buildDateColumnMapPlanta1(headerRow, weekLabelRow, hiddenCols) {
             runValidacionMateriales();
             renderFiltersProd(); renderKPIsProd(); renderCalendarProd(); renderUpcomingProd();
             renderAreaDistributionChart(); renderPie3DChart(); renderTrendChartProd(); renderSummaryProd();
-            const ib = document.getElementById('dateFilterInfo');
-            if (productionData.length > 0) {
-                ib.style.display = 'flex';
-                document.getElementById('dateFilterText').textContent = `${productionData.length} productos programados desde hoy (${dayjs().format('YYYY-MM-DD')}) en adelante.`;
-            } else {
-                ib.style.display = 'none';
+            const chip = document.getElementById('dateFilterChip');
+            if (chip) {
+                if (productionData.length > 0) {
+                    chip.style.display = 'inline-flex';
+                    document.getElementById('dateFilterText').textContent = `${productionData.length} desde hoy`;
+                    chip.title = `${productionData.length} productos programados desde hoy (${dayjs().format('YYYY-MM-DD')}) en adelante.`;
+                } else {
+                    chip.style.display = 'none';
+                }
             }
         }
 
@@ -4658,7 +4710,8 @@ function buildDateColumnMapPlanta1(headerRow, weekLabelRow, hiddenCols) {
                     await storeRemove(`prod_data_${plantaObjetivo}`);
                     if (currentPlanta === plantaObjetivo) {
                         productionData = []; availableAreas.clear(); currentAreaFilter = 'TODAS';
-                        document.getElementById('dateFilterInfo').style.display = 'none';
+                        const chipLimpiar = document.getElementById('dateFilterChip');
+                        if (chipLimpiar) chipLimpiar.style.display = 'none';
                         document.getElementById('prodStatusBadge').style.display = 'none';
                         updateDashboardProd();
                     } else if (currentPlanta === 'consolidado') {
@@ -4716,6 +4769,21 @@ function buildDateColumnMapPlanta1(headerRow, weekLabelRow, hiddenCols) {
         // lista de opciones y responsable por defecto que se usa allá, pero
         // totalmente independiente y editable en cada etapa.
         const ESTATUS_ETAPA_OPCIONES = ['PENDIENTE-PRO', 'POR INGRESAR', 'FLUJO SAP', 'PEND RMD OFICIAL', 'PEND CC'];
+
+        // Devuelve la clase CSS que pinta la barra lateral de color del
+        // selector de Estatus, según la actividad elegida — así se puede
+        // identificar de un vistazo qué tipo de pendiente es cada fila sin
+        // tener que leer el texto del desplegable.
+        function claseColorEstatus(estatus) {
+            switch (estatus) {
+                case 'PENDIENTE-PRO': return 'est-pendiente-pro';
+                case 'POR INGRESAR': return 'est-por-ingresar';
+                case 'FLUJO SAP': return 'est-flujo-sap';
+                case 'PEND RMD OFICIAL': return 'est-pend-rmd';
+                case 'PEND CC': return 'est-pend-cc';
+                default: return '';
+            }
+        }
         // Mapeo FIJO estatus -> responsable. El responsable ya NO se elige
         // manualmente: se deriva siempre de este mapeo en cuanto se escoge
         // un Estatus, y vuelve a quedar vacío ("-") si el Estatus se
@@ -5749,13 +5817,13 @@ pendientes.forEach(p => {
                     const fija = mapEtapaAFija(et);
                     const labelTxt = fija ? ETAPAS_FIJAS_LABEL[fija] : et;
                     const btnRevertir = fija ? `<button onclick="toggleManualAutorizadoEtapa('${mat}','${fija}')" class="text-[10px] font-medium text-slate-400 hover:text-slate-200 border border-slate-600 hover:border-slate-400 px-1.5 py-0.5 rounded transition-colors" title="Revertir autorización de esta etapa">Revertir</button>` : '';
-                    return `<div class="flex items-center gap-1.5 whitespace-nowrap"><span class="text-emerald-300/70 line-through">${labelTxt}</span>${btnRevertir}</div>`;
+                    return `<div class="etapa-fila-grid"><span class="etapa-autorizada-manual line-through">${labelTxt}</span>${btnRevertir}</div>`;
                 };
                 const renderFilaEtapaPendiente = (mat, et) => {
                     const fija = mapEtapaAFija(et);
                     const labelTxt = fija ? ETAPAS_FIJAS_LABEL[fija] : et;
                     if (!fija) {
-                        return `<div class="flex items-center gap-1.5 whitespace-nowrap"><span class="${etapasCls}">${labelTxt}</span></div>`;
+                        return `<div class="etapa-fila-grid"><span class="${etapasCls}">${labelTxt}</span></div>`;
                     }
                     const key = responsableKey(mat, fija);
                     const estatusActual = estatusEtapa.get(key) || '';
@@ -5776,9 +5844,9 @@ pendientes.forEach(p => {
                             return `<select id="${respSelectId}" onchange="setResponsableEtapa('${mat}','${fija}', this.value)" class="etapa-estatus-select${sinElegir ? ' etapa-estatus-select--alerta' : ''}" title="PEND CC: elige si el responsable es ASC o PRO">${opciones}</select>`;
                         })()
                         : `<span class="etapa-responsable-auto" title="Responsable asignado automáticamente según el Estatus">${valorActual || '—'}</span>`;
-                    return `<div class="flex items-center gap-1.5 whitespace-nowrap">
+                    return `<div class="etapa-fila-grid">
                         <span class="${etapasCls} cursor-pointer hover:underline" onclick="mostrarVerificacionRmdConfig('${mat}','${fija}')" title="Ver verificación contra RMD Configuración">${labelTxt}</span>
-                        <select id="${estatusSelectId}" onchange="setEstatusEtapa('${mat}','${fija}', this.value)" class="etapa-estatus-select" title="Estatus de ${labelTxt}">${estatusOpciones}</select>
+                        <select id="${estatusSelectId}" onchange="setEstatusEtapa('${mat}','${fija}', this.value)" class="etapa-estatus-select ${claseColorEstatus(estatusActual)}" title="Estatus de ${labelTxt}">${estatusOpciones}</select>
                         ${respHtml}
                         ${btnAutorizarEtapa(mat, fija)}
                     </div>`;
@@ -7151,13 +7219,13 @@ function updateForecastActiveFiltersBadge() {
                     const fija = mapEtapaAFija(et);
                     const labelTxt = fija ? ETAPAS_FIJAS_LABEL[fija] : et;
                     const btnRevertir = fija ? `<button onclick="toggleManualAutorizadoEtapaForecast('${mat}','${fija}')" class="text-[10px] font-medium text-slate-400 hover:text-slate-200 border border-slate-600 hover:border-slate-400 px-1.5 py-0.5 rounded transition-colors" title="Revertir autorización de esta etapa">Revertir</button>` : '';
-                    return `<div class="flex items-center gap-1.5 whitespace-nowrap"><span class="text-emerald-300/70 line-through">${labelTxt}</span>${btnRevertir}</div>`;
+                    return `<div class="etapa-fila-grid"><span class="etapa-autorizada-manual line-through">${labelTxt}</span>${btnRevertir}</div>`;
                 };
                 const renderFilaEtapaPendienteFc = (mat, et) => {
                     const fija = mapEtapaAFija(et);
                     const labelTxt = fija ? ETAPAS_FIJAS_LABEL[fija] : et;
                     if (!fija) {
-                        return `<div class="flex items-center gap-1.5 whitespace-nowrap"><span class="${etapasCls}">${labelTxt}</span></div>`;
+                        return `<div class="etapa-fila-grid"><span class="${etapasCls}">${labelTxt}</span></div>`;
                     }
                     const key = responsableKey(mat, fija);
                     const estatusActual = estatusEtapa.get(key) || '';
@@ -7175,9 +7243,9 @@ function updateForecastActiveFiltersBadge() {
                             return `<select id="${respSelectId}" onchange="setResponsableEtapa('${mat}','${fija}', this.value)" class="etapa-estatus-select${sinElegir ? ' etapa-estatus-select--alerta' : ''}" title="PEND CC: elige si el responsable es ASC o PRO">${opciones}</select>`;
                         })()
                         : `<span class="etapa-responsable-auto" title="Responsable asignado automáticamente según el Estatus">${valorActual || '—'}</span>`;
-                    return `<div class="flex items-center gap-1.5 whitespace-nowrap">
+                    return `<div class="etapa-fila-grid">
                         <span class="${etapasCls} cursor-pointer hover:underline" onclick="mostrarVerificacionRmdConfig('${mat}','${fija}')" title="Ver verificación contra RMD Configuración">${labelTxt}</span>
-                        <select id="${estatusSelectId}" onchange="setEstatusEtapa('${mat}','${fija}', this.value)" class="etapa-estatus-select" title="Estatus de ${labelTxt}">${estatusOpciones}</select>
+                        <select id="${estatusSelectId}" onchange="setEstatusEtapa('${mat}','${fija}', this.value)" class="etapa-estatus-select ${claseColorEstatus(estatusActual)}" title="Estatus de ${labelTxt}">${estatusOpciones}</select>
                         ${respHtml}
                         ${btnAutorizarEtapaFc(mat, fija)}
                     </div>`;
