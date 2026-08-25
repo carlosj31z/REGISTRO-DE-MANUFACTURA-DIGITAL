@@ -2472,6 +2472,29 @@
             }
         }
 
+        // El historial que devuelve Seguimiento RMD no incluye el Código por
+        // Defecto (solo versión, estado, fechas, usuarios y observación).
+        // Ese dato sí está en el Exportado RMD que ya carga esta app, así
+        // que se cruza por Descripción + Versión contra rmdAutorizadosDetalle
+        // en vez de pedirle el campo al iframe. Si una misma versión tuviera
+        // más de un código (mismo producto en varias etapas), se listan
+        // todos separados por coma para no perder información.
+        function buscarCodigoPorDefectoRmd(descripcion, version) {
+            if (!Array.isArray(rmdAutorizadosDetalle) || rmdAutorizadosDetalle.length === 0) return '';
+            const descKey = String(descripcion || '').trim().toUpperCase();
+            const codigos = new Set();
+            rmdAutorizadosDetalle.forEach(r => {
+                if (String(r.descripcion || '').trim().toUpperCase() !== descKey) return;
+                // Se normalizan ambos lados a número antes de comparar: si por
+                // alguna carga antigua una de las dos fuentes guardó la versión
+                // como texto ("3" en vez de 3), una comparación estricta
+                // fallaría en silencio y el código nunca aparecería.
+                if (Number(r.version ?? -1) !== Number(version ?? -2)) return;
+                if (r.codigoPorDefecto) codigos.add(String(r.codigoPorDefecto).trim());
+            });
+            return Array.from(codigos).join(', ');
+        }
+
         // Arma el texto tabulado (TSV) del historial completo del producto,
         // listo para pegar directo en Excel: una fila por versión, con el
         // producto, la etapa, la versión, el estado y la observación de ESA
@@ -2479,12 +2502,13 @@
         // celda, porque romperían la separación de columnas al pegar.
         function construirTsvHistorialRMD(descripcion, historial, etapa) {
             const limpiar = (v) => String(v == null ? '' : v).replace(/[\t\r\n]+/g, ' ').trim();
-            const encabezado = ['Producto', 'Etapa', 'Versión', 'Estado', 'Observación'].join('\t');
+            const encabezado = ['Producto', 'Código por Defecto', 'Etapa', 'Versión', 'Estado', 'Observación'].join('\t');
             const filas = (historial || [])
                 .slice()
                 .sort((a, b) => (a.version ?? 0) - (b.version ?? 0))
                 .map(h => [
                     limpiar(descripcion),
+                    limpiar(buscarCodigoPorDefectoRmd(descripcion, h.version)),
                     limpiar(etapa || h.etapa || ''),
                     `v${h.version ?? '?'}`,
                     limpiar(h.estado),
@@ -2507,11 +2531,13 @@
                 : historial.map(h => {
                     const c = estadoColor(h.estado);
                     const isLatest = h.version === maxVersion;
+                    const codigoDefecto = buscarCodigoPorDefectoRmd(descripcion, h.version);
                     return `<div style="display:flex;gap:12px;padding:12px 4px;border-bottom:1px solid var(--card-border-highlight);${isLatest ? 'background:rgba(16,185,129,0.04);' : ''}">
                         <div style="flex-shrink:0;width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;background:${c.bg};color:${c.fg};border:1px solid ${c.border};">v${h.version ?? '?'}</div>
                         <div style="flex:1;min-width:0;">
                             <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:3px;">
                                 <span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:999px;background:${c.bg};color:${c.fg};border:1px solid ${c.border};text-transform:uppercase;letter-spacing:.03em;">${escapeHtmlConsulta(h.estado || '-')}</span>
+                                ${codigoDefecto ? `<span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:999px;background:rgba(148,163,184,0.12);color:var(--slate-300);border:1px solid rgba(148,163,184,0.25);" title="Código por Defecto de esta versión (según el Exportado RMD)">${escapeHtmlConsulta(codigoDefecto)}</span>` : ''}
                                 ${isLatest ? '<span style="font-size:9.5px;color:#a78bfa;font-weight:600;">· versión actual</span>' : ''}
                             </div>
                             <div style="font-size:11px;color:var(--slate-400);display:grid;grid-template-columns:1fr 1fr;gap:2px 10px;">
