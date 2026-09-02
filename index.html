@@ -5475,10 +5475,21 @@ async function downloadPlanProduccionFromCloud() {
 
                         detalle.push({ codigoAgrupador: agr, codigoPorDefecto, estado: estadoRaw, descripcion: desc, etapa: etapaRaw, etapaNorm, version, observacion });
 
-                        const key = agr + '::' + etapaNorm;
+                        // La clave de agrupación incluye el CÓDIGO POR DEFECTO
+                        // (es decir, el producto concreto), no solo Agrupador +
+                        // Etapa. Antes se colapsaba únicamente por Agrupador +
+                        // Etapa y se conservaba la versión más alta de TODO el
+                        // grupo: cuando un mismo agrupador cubre varias
+                        // presentaciones (por ejemplo TUB5g, TUB20g y TUB100g),
+                        // la versión más alta de una presentación ya autorizada
+                        // TAPABA la versión suspendida de otra, y esa etapa
+                        // nunca se mostraba como pendiente. Al separar por
+                        // producto, cada presentación conserva su propio estado.
+                        const codKey = codigoPorDefecto || '(sin código)';
+                        const key = agr + '::' + etapaNorm + '::' + codKey;
                         const actual = grupos.get(key);
                         if (!actual) {
-                            grupos.set(key, { version, estado: estadoRaw, agr, etapaNorm, etapaRaw, desc, codigosPorDefecto: new Set(codigoPorDefecto ? [codigoPorDefecto] : []) });
+                            grupos.set(key, { version, estado: estadoRaw, agr, etapaNorm, etapaRaw, desc, codKey, codigosPorDefecto: new Set(codigoPorDefecto ? [codigoPorDefecto] : []) });
                         } else {
                             if (codigoPorDefecto) actual.codigosPorDefecto.add(codigoPorDefecto);
                             if (version >= actual.version) {
@@ -5495,21 +5506,58 @@ async function downloadPlanProduccionFromCloud() {
                     const etapasByAgrupador = new Map(); // solo las RESUELTAS entran aquí (mismo mapa que usa el resto del sistema)
                     const raw = [];
                     let countResueltos = 0, countPendientes = 0, countEstadoNoReconocido = 0;
+
+                    // Los grupos vienen separados por PRODUCTO (Agrupador +
+                    // Etapa + Código por Defecto). Para decidir si una ETAPA
+                    // completa está resuelta para un agrupador, se juntan
+                    // todos los productos de esa etapa y se aplica una regla
+                    // conservadora: la etapa se considera resuelta SOLO si
+                    // TODOS sus productos lo están. Basta con que una sola
+                    // presentación siga Suspendida/Ingresada/Solicitada para
+                    // que la etapa siga contando como pendiente — antes, la
+                    // versión más alta de cualquier presentación autorizada
+                    // ocultaba a las demás.
+                    const porAgrEtapa = new Map();
                     grupos.forEach(g => {
-                        const estadoNorm = normalizeEstadoRmd(g.estado);
-                        raw.push({ codigoAgrupador: g.agr, estado: g.estado, descripcion: g.desc, etapa: g.etapaRaw, version: g.version, codigosPorDefecto: Array.from(g.codigosPorDefecto) });
-                        if (ESTADOS_RESUELTOS_RMD.has(estadoNorm)) {
-                            if (!etapasByAgrupador.has(g.agr)) etapasByAgrupador.set(g.agr, new Set());
-                            etapasByAgrupador.get(g.agr).add(g.etapaNorm);
-                            countResueltos++;
-                        } else if (ESTADOS_PENDIENTES_RMD.has(estadoNorm)) {
-                            countPendientes++;
-                        } else {
-                            // Estado no reconocido (no es ninguno de los 6 esperados):
-                            // por seguridad, NO se marca como resuelto (se trata como
-                            // si no tuviera RMD para esa etapa), para no ocultar un
-                            // caso raro de forma silenciosa.
-                            countEstadoNoReconocido++;
+                        const k = g.agr + '::' + g.etapaNorm;
+                        if (!porAgrEtapa.has(k)) porAgrEtapa.set(k, []);
+                        porAgrEtapa.get(k).push(g);
+                    });
+
+                    porAgrEtapa.forEach(listaProductos => {
+                        const agr = listaProductos[0].agr;
+                        const etapaNorm = listaProductos[0].etapaNorm;
+
+                        let hayPendiente = false, hayNoReconocido = false;
+                        listaProductos.forEach(g => {
+                            const estadoNorm = normalizeEstadoRmd(g.estado);
+                            if (ESTADOS_RESUELTOS_RMD.has(estadoNorm)) countResueltos++;
+                            else if (ESTADOS_PENDIENTES_RMD.has(estadoNorm)) { countPendientes++; hayPendiente = true; }
+                            else {
+                                // Estado no reconocido (no es ninguno de los 6
+                                // esperados): por seguridad NO se da por
+                                // resuelto, para no ocultar un caso raro.
+                                countEstadoNoReconocido++; hayNoReconocido = true;
+                            }
+                        });
+
+                        // Para la vista de detalle se conserva UNA entrada por
+                        // Agrupador+Etapa: si hay algún producto pendiente se
+                        // muestra ese (es el que bloquea la etapa); si están
+                        // todos resueltos, el de versión más alta.
+                        const bloqueante = listaProductos.find(g => ESTADOS_PENDIENTES_RMD.has(normalizeEstadoRmd(g.estado)));
+                        const representante = bloqueante || listaProductos.reduce((a, b) => (b.version >= a.version ? b : a));
+                        const codigosDeLaEtapa = new Set();
+                        listaProductos.forEach(g => g.codigosPorDefecto.forEach(cod => codigosDeLaEtapa.add(cod)));
+                        raw.push({
+                            codigoAgrupador: agr, estado: representante.estado, descripcion: representante.desc,
+                            etapa: representante.etapaRaw, version: representante.version,
+                            codigosPorDefecto: Array.from(codigosDeLaEtapa)
+                        });
+
+                        if (!hayPendiente && !hayNoReconocido) {
+                            if (!etapasByAgrupador.has(agr)) etapasByAgrupador.set(agr, new Set());
+                            etapasByAgrupador.get(agr).add(etapaNorm);
                         }
                     });
 
