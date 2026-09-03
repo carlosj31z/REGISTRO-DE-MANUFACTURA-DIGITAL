@@ -4967,7 +4967,17 @@ function buildDateColumnMapPlanta1(headerRow, weekLabelRow, hiddenCols) {
             // reciente real, sea cual sea su estado (incluyendo
             // Solicitado), con un aviso visual claro cuando corresponda —
             // nunca se oculta información ni se sustituye en silencio.
-            const versionesPorDescripcion = new Map(); // descripcion -> array de TODAS sus filas (todas las versiones)
+            // Se agrupa por CÓDIGO POR DEFECTO (el producto concreto), NO por
+            // Descripción. Varios códigos distintos comparten la misma
+            // descripción — por ejemplo "EVACLEAN PVO SOB 109.6g" cubre los
+            // códigos 5000001260, 5000001265 y filas sin código — así que
+            // agrupar por descripción hacía que la versión más alta de un
+            // código ya autorizado ocultara las versiones suspendidas de los
+            // otros, y el modal salía vacío aunque la tabla marcara la etapa
+            // como pendiente. Esta es la MISMA clave que usa el cálculo de la
+            // tabla, para que lo que se ve aquí siempre coincida con lo que
+            // allí se marca como pendiente.
+            const versionesPorDescripcion = new Map(); // códigoPorDefecto -> array de TODAS sus filas (todas las versiones)
             if (agrupador) {
                 rmdAutorizadosDetalle
                     // Se traduce con mapEtapaAFija (no comparación directa):
@@ -4981,14 +4991,23 @@ function buildDateColumnMapPlanta1(headerRow, weekLabelRow, hiddenCols) {
                     // usara cualquier variante reconocida por ETAPA_ALIASES.
                     .filter(r => r.codigoAgrupador === agrupador && mapEtapaAFija(r.etapaNorm) === etapaFija)
                     .forEach(r => {
-                        const descKey = (r.descripcion || '').trim().toUpperCase();
+                        const descKey = (r.codigoPorDefecto || '').trim() || '(sin código)';
                         if (!versionesPorDescripcion.has(descKey)) versionesPorDescripcion.set(descKey, []);
                         versionesPorDescripcion.get(descKey).push(r);
                     });
             }
             const porDescripcion = new Map(); // descripcion -> { fila: la versión más reciente real, penultimaSiResuelta: fila penúltima cuando la última es Solicitado y la penúltima ya está resuelta (Autorizado/etc.), para dar contexto adicional }
             versionesPorDescripcion.forEach((filas, descKey) => {
-                const ordenadas = [...filas].sort((a, b) => (a.version ?? 0) - (b.version ?? 0));
+                // Orden ascendente por versión; en empate de versión, la fila
+                // PENDIENTE queda al final para que sea la que se tome como
+                // vigente — mismo criterio conservador que usa la tabla.
+                const ordenadas = [...filas].sort((a, b) => {
+                    const dif = (a.version ?? 0) - (b.version ?? 0);
+                    if (dif !== 0) return dif;
+                    const aPend = ESTADOS_PENDIENTES_RMD.has(normalizeEstadoRmd(a.estado)) ? 1 : 0;
+                    const bPend = ESTADOS_PENDIENTES_RMD.has(normalizeEstadoRmd(b.estado)) ? 1 : 0;
+                    return aPend - bPend;
+                });
                 const ultima = ordenadas[ordenadas.length - 1];
                 const penultima = ordenadas.length >= 2 ? ordenadas[ordenadas.length - 2] : null;
                 porDescripcion.set(descKey, { fila: ultima, penultima });
@@ -5492,7 +5511,17 @@ async function downloadPlanProduccionFromCloud() {
                             grupos.set(key, { version, estado: estadoRaw, agr, etapaNorm, etapaRaw, desc, codKey, codigosPorDefecto: new Set(codigoPorDefecto ? [codigoPorDefecto] : []) });
                         } else {
                             if (codigoPorDefecto) actual.codigosPorDefecto.add(codigoPorDefecto);
-                            if (version >= actual.version) {
+                            // Desempate cuando el mismo producto tiene VARIAS filas
+                            // con la MISMA versión y estados distintos (pasa en los
+                            // exportados reales): gana siempre el estado PENDIENTE.
+                            // Antes ganaba la última fila leída, así que el
+                            // resultado dependía del orden del Excel y una fila
+                            // resuelta podía tapar una pendiente de la misma versión.
+                            const nuevoEsPendiente = ESTADOS_PENDIENTES_RMD.has(normalizeEstadoRmd(estadoRaw));
+                            const actualEsPendiente = ESTADOS_PENDIENTES_RMD.has(normalizeEstadoRmd(actual.estado));
+                            const ganaPorVersion = version > actual.version;
+                            const ganaPorEmpate = version === actual.version && nuevoEsPendiente && !actualEsPendiente;
+                            if (ganaPorVersion || ganaPorEmpate) {
                                 actual.version = version;
                                 actual.estado = estadoRaw;
                                 actual.desc = desc;
