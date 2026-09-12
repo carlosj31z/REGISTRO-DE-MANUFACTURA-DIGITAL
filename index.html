@@ -5034,7 +5034,14 @@ function buildDateColumnMapPlanta1(headerRow, weekLabelRow, hiddenCols) {
         // lista completa (el respaldo actual) se mantiene intacta — nunca se
         // oculta nada por una consulta que no se pudo confirmar.
         const ARBOL_MATERIALES_API = 'https://listas-de-materiales.vercel.app/api/arbol?codigo=';
-        const ARBOL_MATERIALES_CACHE_KEY = 'arbolMaterialesCacheV1';
+        // v2: la v1 llegó a guardar como "sin árbol" fallos que en realidad
+        // eran temporales (el bloqueo de file:// al abrir el HTML localmente,
+        // y los 503 de arranque en frío de la API). Esos registros quedaban
+        // pegados en el navegador y hacían que la consulta ni siquiera se
+        // intentara de nuevo — devolvía el fallo cacheado al instante, sin
+        // tocar la red. Al subir la versión de la clave, todo lo guardado por
+        // la v1 se ignora y se vuelve a consultar limpio.
+        const ARBOL_MATERIALES_CACHE_KEY = 'arbolMaterialesCacheV2';
         const ARBOL_MATERIALES_TIMEOUT_MS = 6000;
 
         function cargarArbolMaterialesCache() {
@@ -5091,20 +5098,19 @@ function buildDateColumnMapPlanta1(headerRow, weekLabelRow, hiddenCols) {
                 }
 
                 if (!resp || !resp.ok) {
-                    // Cualquier otro fallo (400/404/CORS/timeout/sin red, o un
-                    // 503 que persiste tras agotar los reintentos): se cachea
-                    // como "sin árbol" SOLO si hubo una respuesta HTTP real
-                    // (400/404 — el código no existe, no va a cambiar). Un
-                    // fallo de red/timeout/503 persistente NO se cachea,
-                    // para que un intento posterior sí pueda funcionar si el
-                    // servicio se recupera más tarde.
+                    // NINGÚN fallo se cachea, sea 404, 503, CORS, timeout o
+                    // falta de red. Cachear resultados negativos resultó
+                    // frágil: en las pruebas reales, un bloqueo temporal (el
+                    // file:// al abrir el HTML localmente, y los 503 de
+                    // arranque en frío de la API) quedó guardado como "este
+                    // material no tiene árbol", y a partir de ahí la consulta
+                    // ni siquiera se reintentaba — devolvía el fallo cacheado
+                    // al instante, sin tocar la red.
                     //
-                    // Se cachea SOLO un error de cliente real (400/404/etc,
-                    // httpStatus < 500): esos no cambian por reintentar, es
-                    // el propio código el que no existe o está mal formado.
-                    // Un 5xx (503 persistente tras agotar los reintentos) o
-                    // un fallo de red/timeout NUNCA se cachea.
-                    if (httpStatus !== null && httpStatus < 500) { cache[codigo] = null; guardarArbolMaterialesCache(cache); }
+                    // Solo se cachean los árboles obtenidos CON ÉXITO (abajo).
+                    // Reconsultar un código sin árbol cuesta una petición, y
+                    // solo ocurre cuando el usuario hace clic a propósito;
+                    // es un precio bajo frente a quedar bloqueado en falso.
                     return null;
                 }
 
@@ -5113,8 +5119,7 @@ function buildDateColumnMapPlanta1(headerRow, weekLabelRow, hiddenCols) {
                 // cualquier otra forma de respuesta se trata como "sin árbol"
                 // y activa el respaldo, en vez de arriesgarse a interpretarla mal.
                 const valido = data && data.estado === 'ok' && Array.isArray(data.nodos) && data.nodos.length > 0;
-                cache[codigo] = valido ? data : null;
-                guardarArbolMaterialesCache(cache);
+                if (valido) { cache[codigo] = data; guardarArbolMaterialesCache(cache); }
                 return valido ? data : null;
             }
             return null;
