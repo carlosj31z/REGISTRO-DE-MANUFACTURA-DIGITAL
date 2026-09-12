@@ -709,6 +709,16 @@
            empujaba su selector más a la derecha que el de "ENVASE"). Con
            anchos fijos, todo queda alineado verticalmente y la columna se
            lee de corrido. */
+        .btn-autocompletar-arbol {
+            display: inline-flex; align-items: center; gap: 0.25rem;
+            margin-left: 0.5rem; padding: 0.15rem 0.5rem;
+            font-size: 0.68rem; font-weight: 600; border-radius: 999px;
+            background: rgba(132, 204, 22, 0.12); border: 1px solid rgba(132, 204, 22, 0.35);
+            color: #a3e635; cursor: pointer; white-space: nowrap;
+        }
+        .btn-autocompletar-arbol:hover { background: rgba(132, 204, 22, 0.2); }
+        .btn-autocompletar-arbol:disabled { opacity: 0.6; cursor: default; }
+
         .etapa-fila-grid {
             display: grid;
             grid-template-columns: 7.5rem minmax(8.5rem, 10rem) minmax(3.2rem, 5.5rem) auto;
@@ -1806,6 +1816,10 @@
                     </span>
                 </h2>
                 <div class="flex items-center gap-2">
+                    <button onclick="filtrarTodosPorArbol('produccion')" id="btnFiltrarArbolGlobalProd" class="bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-600 px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 active:scale-95" title="Consultar el árbol de materiales (BOM de SAP) de TODOS los productos pendientes y quitar de forma permanente las presentaciones que no corresponden">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 text-lime-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 4v6l-4 8a2 2 0 002 2h10a2 2 0 002-2l-4-8V4M9 4h6M9 4H7m8 0h2M9 10h6" /></svg>
+                        <span id="btnFiltrarArbolGlobalProdLabel">Filtrar todos por árbol</span>
+                    </button>
                     <button onclick="mostrarGraficoResponsableModal('produccion')" class="bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-600 px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 active:scale-95" title="Ver el gráfico de Actividades Pendientes por Responsable">
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>
                         Gráfico por Responsable
@@ -2063,6 +2077,10 @@
                     RMD Pendientes de Autorización — Forecast
                 </h2>
                 <div class="flex items-center gap-2">
+                    <button onclick="filtrarTodosPorArbol('forecast')" id="btnFiltrarArbolGlobalFc" class="bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-600 px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 active:scale-95" title="Consultar el árbol de materiales (BOM de SAP) de TODOS los productos pendientes y quitar de forma permanente las presentaciones que no corresponden">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 text-lime-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 4v6l-4 8a2 2 0 002 2h10a2 2 0 002-2l-4-8V4M9 4h6M9 4H7m8 0h2M9 10h6" /></svg>
+                        <span id="btnFiltrarArbolGlobalFcLabel">Filtrar todos por árbol</span>
+                    </button>
                     <button onclick="mostrarGraficoResponsableModal('forecast')" class="bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-600 px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 active:scale-95" title="Ver el gráfico de Actividades Pendientes por Responsable">
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>
                         Gráfico por Responsable
@@ -4924,6 +4942,19 @@ function buildDateColumnMapPlanta1(headerRow, weekLabelRow, hiddenCols) {
         let rmdAutorizadosLoaded = false;
         let ultimoResultadoValidacion = { revisados: 0, autorizados: 0, pendientes: [] };
         let manualAutorizados = new Set();
+
+        // Etapas pendientes que el árbol de materiales (BOM real de SAP)
+        // confirmó que NO corresponden al producto terminado — por ejemplo,
+        // la versión Suspendida de "CLINDESS T3" cuando el material del
+        // Programa de Producción es en realidad "CLINDESS T7". Mismo patrón
+        // que manualAutorizados: un Set de claves "material::etapaFija",
+        // persistido en Supabase, consultado al calcular qué sigue pendiente
+        // de verdad. La diferencia de fondo es CÓMO se llega a esta decisión
+        // (una consulta automática al árbol, no un clic manual del usuario),
+        // así que se guarda aparte para poder distinguir el origen si hiciera
+        // falta más adelante (por ejemplo, para deshacerlo o auditarlo).
+        let descartadosPorArbol = new Set();
+        async function saveDescartadosPorArbol() { await storeSet('val_descartados_por_arbol', Array.from(descartadosPorArbol)); }
         let validacionFiltroEstado = 'todos';
         let validacionBusqueda = '';
         // Filtro de "Inicio de Producción": Set de fechas en formato
@@ -5086,9 +5117,22 @@ function buildDateColumnMapPlanta1(headerRow, weekLabelRow, hiddenCols) {
 
         const ARBOL_MATERIALES_MAX_REINTENTOS = 2; // hasta 2 reintentos ante 503 (3 intentos en total)
 
+        // Devuelve { arbol, motivo }. `motivo` viaja en el valor de retorno
+        // (no solo en la variable global ultimoMotivoArbol) a propósito:
+        // filtrarTodosPorArbol() consulta varios materiales EN PARALELO
+        // (concurrencia limitada), y si el motivo solo viviera en una
+        // variable global compartida, una consulta concurrente podría
+        // sobrescribirla antes de que la que la originó llegara a leerla —
+        // el resumen agrupado reportaría la causa equivocada para ese
+        // material. ultimoMotivoArbol se sigue actualizando igual, porque el
+        // modal individual (sin concurrencia) ya lo usa así.
         async function consultarArbolMaterial(codigo) {
             const cache = cargarArbolMaterialesCache();
-            if (cache[codigo] !== undefined) { ultimoMotivoArbol = { tipo: 'ok' }; return cache[codigo]; }
+            if (cache[codigo] !== undefined) {
+                const motivo = { tipo: 'ok' };
+                ultimoMotivoArbol = motivo;
+                return { arbol: cache[codigo], motivo };
+            }
             ultimoMotivoArbol = null;
 
             for (let intento = 0; intento <= ARBOL_MATERIALES_MAX_REINTENTOS; intento++) {
@@ -5106,9 +5150,9 @@ function buildDateColumnMapPlanta1(headerRow, weekLabelRow, hiddenCols) {
 
                 if (!resp || !resp.ok) {
                     // Fallo de transporte real (sin red, timeout, CORS, 4xx,
-                    // o 5xx persistente). Se devuelve el motivo para que la
-                    // interfaz pueda decir QUÉ pasó en vez de un genérico.
-                    ultimoMotivoArbol = { tipo: 'error_red', httpStatus };
+                    // o 5xx persistente).
+                    const motivo = { tipo: 'error_red', httpStatus };
+                    ultimoMotivoArbol = motivo;
                     // NINGÚN fallo se cachea, sea 404, 503, CORS, timeout o
                     // falta de red. Cachear resultados negativos resultó
                     // frágil: en las pruebas reales, un bloqueo temporal (el
@@ -5122,7 +5166,7 @@ function buildDateColumnMapPlanta1(headerRow, weekLabelRow, hiddenCols) {
                     // Reconsultar un código sin árbol cuesta una petición, y
                     // solo ocurre cuando el usuario hace clic a propósito;
                     // es un precio bajo frente a quedar bloqueado en falso.
-                    return null;
+                    return { arbol: null, motivo };
                 }
 
                 const data = await resp.json();
@@ -5130,10 +5174,11 @@ function buildDateColumnMapPlanta1(headerRow, weekLabelRow, hiddenCols) {
                 // cualquier otra forma de respuesta se trata como "sin árbol"
                 // y activa el respaldo, en vez de arriesgarse a interpretarla mal.
                 const valido = data && data.estado === 'ok' && Array.isArray(data.nodos) && data.nodos.length > 0;
+                let motivo;
                 if (valido) {
                     cache[codigo] = data;
                     guardarArbolMaterialesCache(cache);
-                    ultimoMotivoArbol = { tipo: 'ok' };
+                    motivo = { tipo: 'ok' };
                 } else {
                     // La API respondió BIEN (HTTP 200) pero no tiene árbol
                     // para este código — por ejemplo {"estado":"no_encontrado"}.
@@ -5141,11 +5186,12 @@ function buildDateColumnMapPlanta1(headerRow, weekLabelRow, hiddenCols) {
                     // fue lo que hizo que el mensaje anterior desorientara:
                     // decía "no se pudo consultar" cuando en realidad sí se
                     // consultó y la respuesta fue "este material no está".
-                    ultimoMotivoArbol = { tipo: 'sin_arbol', apiEstado: (data && data.estado) || 'respuesta inesperada' };
+                    motivo = { tipo: 'sin_arbol', apiEstado: (data && data.estado) || 'respuesta inesperada' };
                 }
-                return valido ? data : null;
+                ultimoMotivoArbol = motivo;
+                return { arbol: valido ? data : null, motivo };
             }
-            return null;
+            return { arbol: null, motivo: { tipo: 'error_red', httpStatus: null } };
         }
 
         // Extrae, de la respuesta de la API, el set de códigos de material
@@ -5158,6 +5204,289 @@ function buildDateColumnMapPlanta1(headerRow, weekLabelRow, hiddenCols) {
 
         function limpiarCacheArbolMateriales() {
             try { localStorage.removeItem(ARBOL_MATERIALES_CACHE_KEY); } catch (err) {}
+        }
+
+        // Aplica el filtrado por árbol de materiales de forma PERSISTENTE
+        // para un material: consulta su árbol (usando la caché si ya se
+        // había consultado), y por cada una de sus etapas pendientes revisa,
+        // dentro de rmdAutorizadosDetalle, si existe alguna fila cuyo Código
+        // por Defecto NO pertenece al árbol — es decir, una presentación
+        // distinta a la de este producto. Esas combinaciones material+etapa
+        // se agregan a descartadosPorArbol, así que a partir de este momento
+        // dejan de contar como pendientes para SIEMPRE (hasta que se
+        // reviertan), sin importar si el modal está abierto o cerrado.
+        //
+        // Devuelve { ok, motivo, descartes } donde `descartes` es la lista de
+        // { etapaFija, descripcion, version, estado } que se marcaron — con
+        // eso el llamador arma el aviso agrupado en vez de uno por fila.
+        // Respaldo para materiales "(no encontrado en Base de Datos)": se
+        // consulta su árbol y, si alguno de sus códigos HERMANOS (el
+        // Acondicionado, Envase o Fabricación del mismo árbol) SÍ está en la
+        // Base de Datos con un Agrupador conocido, se usa ese Agrupador para
+        // completar la entrada faltante — el árbol no trae directamente el
+        // "Código Agrupador" de RMD Configuración, pero como todos los nodos
+        // de un mismo árbol pertenecen al mismo producto, comparten
+        // agrupador. Si ninguno de los hermanos está en la Base de Datos
+        // tampoco, no hay de dónde inferirlo y se informa al usuario.
+        // Handler del botón "🌳 Buscar en árbol" de cada fila "(no encontrado
+        // en Base de Datos)": deshabilita el botón mientras consulta,
+        // informa el resultado en el mismo lugar, y si tuvo éxito refresca
+        // la tabla completa para que el material recién completado se
+        // evalúe ya con su Agrupador real.
+        async function autocompletarFilaDesdeArbol(btnEl, material, origen) {
+            const textoOriginal = btnEl.textContent;
+            btnEl.disabled = true;
+            btnEl.textContent = 'Buscando...';
+            const r = await autocompletarDesdeArbol(material);
+            if (r.ok) {
+                Swal.fire({
+                    icon: 'success', title: 'Base de Datos completada',
+                    html: `El material <strong>${escapeHtmlRmdConfig(material)}</strong> se agregó a la Base de Datos con Agrupador <strong>${escapeHtmlRmdConfig(r.agrupador)}</strong>${r.etapaPropia ? ` y Etapa <strong>${escapeHtmlRmdConfig(r.etapaPropia)}</strong>` : ''}, tomado del árbol de materiales (a partir del código hermano ${escapeHtmlRmdConfig(r.hermanoUsado || '-')}). Se guardó de forma permanente.`,
+                    background: '#0f172a', confirmButtonText: 'Aceptar'
+                }).then(() => {
+                    if (origen === 'forecast') { if (typeof runValidacionForecast === 'function') runValidacionForecast(); }
+                    else if (typeof runValidacionMateriales === 'function') runValidacionMateriales();
+                });
+                return;
+            }
+            btnEl.disabled = false;
+            btnEl.textContent = textoOriginal;
+            if (r.motivo === 'sin_arbol') {
+                Swal.fire({ icon: 'info', title: 'Sin árbol registrado', text: `El servicio de árbol no tiene información para el material ${material}.`, background: '#0f172a' });
+            } else if (r.motivo === 'sin_hermano_en_bd') {
+                Swal.fire({
+                    icon: 'warning', title: 'No se pudo completar automáticamente',
+                    html: `El árbol de materiales sí existe (códigos relacionados: ${r.hermanos && r.hermanos.length ? r.hermanos.map(h => escapeHtmlRmdConfig(h)).join(', ') : '—'}), pero ninguno de esos códigos está en la Base de Datos con un Agrupador conocido, así que no hay de dónde tomarlo. Habría que completarlo manualmente en el Excel de Base de Datos.`,
+                    background: '#0f172a', confirmButtonText: 'Entendido'
+                });
+            } else {
+                Swal.fire({ icon: 'warning', title: 'No se pudo consultar el árbol', text: 'Intenta de nuevo en unos segundos.', background: '#0f172a' });
+            }
+        }
+
+        async function autocompletarDesdeArbol(material) {
+            const { arbol, motivo } = await consultarArbolMaterial(material);
+            if (!arbol) return { ok: false, motivo: motivo.tipo || 'error_red' };
+
+            const hermanos = codigosDelArbol(arbol);
+            let agrupadorEncontrado = null, etapaPropiaEncontrada = null, hermanoUsado = null;
+            for (const cod of hermanos) {
+                if (cod === material) continue;
+                const info = databaseMaterials.get(cod);
+                if (info && info.agrupador) { agrupadorEncontrado = info.agrupador; hermanoUsado = cod; break; }
+            }
+            if (!agrupadorEncontrado) return { ok: false, motivo: 'sin_hermano_en_bd', hermanos: Array.from(hermanos) };
+
+            // La etapa propia de este material específico es la que le
+            // corresponde según el nodo del árbol que lo nombra a él mismo.
+            const nodoPropio = (arbol.nodos || []).find(n => String(n.material || '').trim() === material);
+            etapaPropiaEncontrada = nodoPropio ? normalizeEtapa(nodoPropio.etapa) : null;
+
+            const descripcionPrevia = (databaseMaterials.get(material) || {}).descripcion || '';
+            databaseMaterials.set(material, {
+                material, descripcion: descripcionPrevia, agrupador: agrupadorEncontrado,
+                etapaPropia: etapaPropiaEncontrada
+            });
+            if (etapaPropiaEncontrada) {
+                if (!agrupadorEtapasMap.has(agrupadorEncontrado)) agrupadorEtapasMap.set(agrupadorEncontrado, new Set());
+                agrupadorEtapasMap.get(agrupadorEncontrado).add(etapaPropiaEncontrada);
+            }
+            // Persistencia real en Supabase, mismo mecanismo que usa el
+            // resto de la Base de Datos cargada desde Excel — no es una
+            // marca aparte, pasa a ser parte de databaseMaterials tal cual.
+            await storeSet('val_database_materials', Array.from(databaseMaterials.entries()));
+            await storeSet('val_agrupador_etapas', Array.from(agrupadorEtapasMap.entries()).map(([k, v]) => [k, Array.from(v)]));
+
+            return { ok: true, agrupador: agrupadorEncontrado, etapaPropia: etapaPropiaEncontrada, hermanoUsado };
+        }
+
+        async function aplicarFiltroArbolPersistente(material, etapaFijaUnica) {
+            const info = databaseMaterials.get(material);
+            const agrupador = info && info.agrupador;
+            if (!agrupador) return { ok: false, motivo: 'sin_agrupador', descartes: [] };
+
+            // Se usa el motivo devuelto DIRECTAMENTE (no la variable global
+            // ultimoMotivoArbol), para que el resultado sea correcto incluso
+            // cuando filtrarTodosPorArbol() llama a esta función para varios
+            // materiales en paralelo.
+            const { arbol, motivo: motivoConsulta } = await consultarArbolMaterial(material);
+            if (!arbol) return { ok: false, motivo: motivoConsulta.tipo || 'error_red', descartes: [] };
+
+            const codigosValidos = codigosDelArbol(arbol);
+            // Si se pasó una etapa concreta (filtrado desde el modal
+            // individual), solo se evalúa esa; si no (filtrado global), se
+            // evalúan las 5 etapas fijas.
+            const etapasAEvaluar = etapaFijaUnica ? [etapaFijaUnica] : ETAPAS_FIJAS;
+            const descartes = [];
+
+            etapasAEvaluar.forEach(etapaFija => {
+                const key = responsableKey(material, etapaFija);
+                if (descartadosPorArbol.has(key)) return; // ya se había descartado antes
+
+                const filasDeEstaEtapa = rmdAutorizadosDetalle.filter(r =>
+                    r.codigoAgrupador === agrupador && mapEtapaAFija(r.etapaNorm) === etapaFija);
+                if (filasDeEstaEtapa.length === 0) return; // no hay nada que descartar
+
+                // ¿Existen, entre las filas de esta etapa, versiones
+                // PENDIENTES cuyo Código por Defecto no está en el árbol de
+                // este material? Si es así, esa etapa se descarta para este
+                // material — pertenece a otra(s) presentación(es). Se
+                // recogen TODAS las que apliquen (no solo la primera), para
+                // que el aviso al usuario sea completo.
+                const pendientesDeOtraPresentacion = filasDeEstaEtapa.filter(r => {
+                    const cod = (r.codigoPorDefecto || '').trim();
+                    if (!cod) return false; // sin código: no se puede confirmar que sea de otro producto, se deja como está (respaldo)
+                    if (codigosValidos.has(cod)) return false; // sí es de este producto
+                    return ESTADOS_PENDIENTES_RMD.has(normalizeEstadoRmd(r.estado));
+                });
+
+                if (pendientesDeOtraPresentacion.length > 0) {
+                    descartadosPorArbol.add(key);
+                    pendientesDeOtraPresentacion.forEach(r => {
+                        descartes.push({
+                            etapaFija, material,
+                            descripcion: r.descripcion,
+                            version: r.version,
+                            estado: r.estado
+                        });
+                    });
+                }
+            });
+
+            if (descartes.length > 0) await saveDescartadosPorArbol();
+            return { ok: true, motivo: 'ok', descartes };
+        }
+
+        // Revierte todos los descartes de un material (por si el árbol
+        // estaba mal o la relación cambió en SAP) — se expone en consola
+        // como red de seguridad manual; no hay botón de UI para esto porque
+        // no se pidió, pero es trivial de invocar si hiciera falta.
+        async function revertirDescartesPorArbol(material) {
+            let removidos = 0;
+            ETAPAS_FIJAS.forEach(fija => {
+                const key = responsableKey(material, fija);
+                if (descartadosPorArbol.has(key)) { descartadosPorArbol.delete(key); removidos++; }
+            });
+            if (removidos > 0) await saveDescartadosPorArbol();
+            return removidos;
+        }
+
+        // Botón "Filtrar todos por árbol": aplica aplicarFiltroArbolPersistente
+        // a CADA producto pendiente de la lista actual (Producción o
+        // Forecast), una etapa a la vez. Se consulta con concurrencia
+        // limitada (no las ~120 de golpe) para no saturar un servicio
+        // externo que ya vimos que responde 503 bajo carga, y se muestra
+        // progreso porque el proceso completo puede tardar bastante.
+        //
+        // Al terminar, se agrupan TODOS los avisos de TODOS los productos en
+        // un solo resumen — el pedido explícito era "si son varios mensajes
+        // similares agruparlos", y aquí el caso extremo es precisamente ese:
+        // decenas de descartes a la vez.
+        const ARBOL_FILTRADO_MASIVO_CONCURRENCIA = 4;
+
+        async function filtrarTodosPorArbol(origen) {
+            const resultado = origen === 'forecast' ? ultimoResultadoValidacionForecast : ultimoResultadoValidacion;
+            const pendientes = (resultado && resultado.pendientes) || [];
+            if (pendientes.length === 0) {
+                Swal.fire({ icon: 'info', title: 'Nada que filtrar', text: 'No hay materiales pendientes en este momento.', background: '#0f172a', timer: 2200, showConfirmButton: false });
+                return;
+            }
+
+            // Solo tiene sentido consultar materiales con agrupador y con
+            // al menos una etapa fija reconocible — el resto (sin datos,
+            // sin agrupador) no tiene con qué contrastar el árbol.
+            const candidatos = pendientes.filter(p => {
+                const info = databaseMaterials.get(p.material);
+                return info && info.agrupador && Array.isArray(p.etapasPendientes) && p.etapasPendientes.length > 0;
+            });
+            if (candidatos.length === 0) {
+                Swal.fire({ icon: 'info', title: 'Nada que filtrar', text: 'Ningún producto pendiente tiene agrupador y etapas reconocibles para contrastar contra el árbol.', background: '#0f172a', timer: 2600, showConfirmButton: false });
+                return;
+            }
+
+            let procesados = 0;
+            const total = candidatos.length;
+            Swal.fire({
+                title: 'Consultando árbol de materiales...',
+                html: `<div id="arbolMasivoProgresoTxt" style="font-size:12px;color:#94a3b8;">0 / ${total} productos</div>`,
+                allowOutsideClick: false,
+                showConfirmButton: false,
+                background: '#0f172a',
+                didOpen: () => Swal.showLoading()
+            });
+            const actualizarProgreso = () => {
+                const el = document.getElementById('arbolMasivoProgresoTxt');
+                if (el) el.textContent = `${procesados} / ${total} productos`;
+            };
+
+            const descartesTotales = []; // { material, descripcion(producto), etapaFija, descripcion(descartada), version, estado }
+            const sinArbol = [];         // materiales donde la API respondió pero no tiene árbol
+            const conError = [];         // materiales donde no se pudo consultar (red/503 persistente)
+
+            // Concurrencia limitada: se procesan de a
+            // ARBOL_FILTRADO_MASIVO_CONCURRENCIA a la vez, no las ~120 juntas.
+            let indice = 0;
+            async function procesarSiguiente() {
+                while (indice < candidatos.length) {
+                    const p = candidatos[indice++];
+                    const r = await aplicarFiltroArbolPersistente(p.material, null); // null = evaluar sus 5 etapas fijas
+                    if (r.ok) {
+                        r.descartes.forEach(d => descartesTotales.push({ ...d, materialDescripcion: p.descripcion }));
+                        if (r.descartes.length === 0) { /* confirmado sin nada que descartar, no se reporta individualmente */ }
+                    } else if (r.motivo === 'sin_arbol') {
+                        sinArbol.push({ material: p.material, descripcion: p.descripcion });
+                    } else if (r.motivo !== 'sin_agrupador') {
+                        conError.push({ material: p.material, descripcion: p.descripcion, motivo: r.motivo });
+                    }
+                    procesados++;
+                    actualizarProgreso();
+                }
+            }
+            const workers = Array.from({ length: Math.min(ARBOL_FILTRADO_MASIVO_CONCURRENCIA, candidatos.length) }, procesarSiguiente);
+            await Promise.all(workers);
+
+            // Refrescar la tabla principal UNA sola vez al final (no en cada
+            // producto), para no recalcular todo ~120 veces durante el proceso.
+            if (origen === 'forecast') { if (typeof runValidacionForecast === 'function') runValidacionForecast(); }
+            else if (typeof runValidacionMateriales === 'function') runValidacionMateriales();
+
+            // ---- Resumen agrupado ----
+            const seccionDescartes = descartesTotales.length > 0
+                ? `<div style="margin-bottom:10px;">
+                    <div style="font-weight:600;color:#6ee7b7;margin-bottom:4px;">🌳 ${descartesTotales.length} etapa(s) descartada(s) — no correspondían al producto terminado:</div>
+                    <ul style="margin:0;padding-left:18px;max-height:220px;overflow-y:auto;">
+                        ${descartesTotales.map(d => `<li><strong>${escapeHtmlRmdConfig(d.material)}</strong> (${escapeHtmlRmdConfig(d.materialDescripcion || '')}) — ${escapeHtmlRmdConfig(d.etapaFija)}: se quitó "${escapeHtmlRmdConfig(d.descripcion)}" v${d.version ?? '?'} (${escapeHtmlRmdConfig(d.estado || '-')})</li>`).join('')}
+                    </ul>
+                   </div>`
+                : '';
+            const seccionSinArbol = sinArbol.length > 0
+                ? `<div style="margin-bottom:10px;">
+                    <div style="font-weight:600;color:#93c5fd;margin-bottom:4px;">ℹ ${sinArbol.length} producto(s) sin árbol registrado en el servicio — se mantuvo su lista completa:</div>
+                    <ul style="margin:0;padding-left:18px;max-height:140px;overflow-y:auto;">
+                        ${sinArbol.map(m => `<li>${escapeHtmlRmdConfig(m.material)} — ${escapeHtmlRmdConfig(m.descripcion || '')}</li>`).join('')}
+                    </ul>
+                   </div>`
+                : '';
+            const seccionError = conError.length > 0
+                ? `<div>
+                    <div style="font-weight:600;color:#fbbf24;margin-bottom:4px;">⚠ ${conError.length} producto(s) no se pudieron consultar (problema de conexión) — se mantuvo su lista completa:</div>
+                    <ul style="margin:0;padding-left:18px;max-height:140px;overflow-y:auto;">
+                        ${conError.map(m => `<li>${escapeHtmlRmdConfig(m.material)} — ${escapeHtmlRmdConfig(m.descripcion || '')}</li>`).join('')}
+                    </ul>
+                   </div>`
+                : '';
+
+            Swal.fire({
+                title: 'Filtrado por árbol completado',
+                html: `<div style="text-align:left;font-size:12.5px;">
+                    <div style="color:#94a3b8;margin-bottom:10px;">${total} producto(s) evaluado(s).</div>
+                    ${seccionDescartes}${seccionSinArbol}${seccionError}
+                    ${(descartesTotales.length === 0 && sinArbol.length === 0 && conError.length === 0) ? '<div style="color:#6ee7b7;">Todas las presentaciones ya correspondían al producto correcto — no se descartó nada.</div>' : ''}
+                </div>`,
+                width: 'min(640px, 95vw)',
+                background: '#0f172a',
+                confirmButtonText: 'Cerrar'
+            });
         }
 
         function mostrarVerificacionRmdConfig(material, etapaFija) {
@@ -5315,49 +5644,59 @@ function buildDateColumnMapPlanta1(headerRow, weekLabelRow, hiddenCols) {
                     const estadoTxt = document.getElementById('arbolMaterialEstadoTxt');
                     const tbody = document.getElementById('arbolMaterialTbody');
                     if (!btn) return;
-                    let filtroActivo = false;
                     btn.addEventListener('click', async () => {
-                        // Segundo clic: vuelve a mostrar la lista completa
-                        // (respaldo), sin necesidad de otra consulta.
-                        if (filtroActivo) {
-                            tbody.innerHTML = renderFilas(filasCoincidentes);
-                            estadoTxt.textContent = '';
-                            label.textContent = 'Filtrar por árbol';
-                            filtroActivo = false;
-                            return;
-                        }
                         label.textContent = 'Consultando árbol...';
                         btn.disabled = true;
-                        const arbol = await consultarArbolMaterial(material);
+                        const resultado = await aplicarFiltroArbolPersistente(material, etapaFija);
                         btn.disabled = false;
-                        if (!arbol) {
-                            // Respaldo: la lista completa NUNCA se toca. Pero
-                            // el mensaje ahora distingue la causa real, porque
-                            // "la API no tiene este código" y "no se pudo
-                            // llegar a la API" son problemas totalmente
-                            // distintos y exigen acciones distintas.
-                            const motivo = ultimoMotivoArbol || {};
-                            if (motivo.tipo === 'sin_arbol') {
-                                estadoTxt.innerHTML = `ℹ El servicio de árbol respondió correctamente, pero <strong>no tiene un árbol registrado para el material ${escapeHtmlRmdConfig(material)}</strong> (respuesta: ${escapeHtmlRmdConfig(motivo.apiEstado || '-')}). Se mantiene la lista completa.`;
+                        label.textContent = 'Filtrar por árbol';
+
+                        if (!resultado.ok) {
+                            // Respaldo: la lista completa NUNCA se toca. El
+                            // mensaje distingue la causa real, porque "la API
+                            // no tiene este código" y "no se pudo llegar a la
+                            // API" son problemas distintos con acciones distintas.
+                            if (resultado.motivo === 'sin_arbol') {
+                                estadoTxt.innerHTML = `ℹ El servicio de árbol respondió correctamente, pero <strong>no tiene un árbol registrado para el material ${escapeHtmlRmdConfig(material)}</strong> (respuesta: ${escapeHtmlRmdConfig((ultimoMotivoArbol && ultimoMotivoArbol.apiEstado) || '-')}). Se mantiene la lista completa.`;
                                 estadoTxt.style.color = '#93c5fd';
-                            } else if (motivo.tipo === 'error_red') {
-                                const detalle = motivo.httpStatus ? `HTTP ${motivo.httpStatus}` : 'sin respuesta (tiempo agotado, sin red o bloqueado por el navegador)';
+                            } else if (resultado.motivo === 'error_red') {
+                                const detalle = (ultimoMotivoArbol && ultimoMotivoArbol.httpStatus) ? `HTTP ${ultimoMotivoArbol.httpStatus}` : 'sin respuesta (tiempo agotado, sin red o bloqueado por el navegador)';
                                 estadoTxt.innerHTML = `⚠ No se pudo conectar con el servicio de árbol — ${escapeHtmlRmdConfig(detalle)}. Se mantiene la lista completa; puedes reintentar.`;
+                                estadoTxt.style.color = '#fbbf24';
+                            } else if (resultado.motivo === 'sin_agrupador') {
+                                estadoTxt.innerHTML = `⚠ Este material no tiene Código Agrupador en la Base de Datos, así que no se puede confirmar el árbol.`;
                                 estadoTxt.style.color = '#fbbf24';
                             } else {
                                 estadoTxt.innerHTML = '⚠ No se pudo consultar el árbol de materiales — se mantiene la lista completa.';
                                 estadoTxt.style.color = '#fbbf24';
                             }
-                            label.textContent = 'Filtrar por árbol';
                             return;
                         }
-                        const codigosValidos = codigosDelArbol(arbol);
-                        const filtradas = filasCoincidentes.filter(({ fila: r }) => codigosValidos.has(String(r.codigoPorDefecto || '').trim()));
-                        tbody.innerHTML = renderFilas(filtradas);
-                        estadoTxt.innerHTML = `🌳 Mostrando solo la presentación del árbol de materiales de <strong>${escapeHtmlRmdConfig(material)}</strong> (${codigosValidos.size} código(s) de proceso). Clic de nuevo para ver todas.`;
+
+                        if (resultado.descartes.length === 0) {
+                            estadoTxt.innerHTML = `🌳 El árbol de materiales confirmó que todas las presentaciones mostradas corresponden a <strong>${escapeHtmlRmdConfig(material)}</strong> — no se descartó nada.`;
+                            estadoTxt.style.color = '#6ee7b7';
+                            return;
+                        }
+
+                        // Se descartó al menos una etapa: se refresca la
+                        // tabla del modal (ya no incluye lo descartado) y la
+                        // tabla principal de pendientes, y se muestra el
+                        // aviso AGRUPADO — una lista de lo que se quitó, no
+                        // un mensaje por cada fila.
+                        const filasVigentes = filasCoincidentes.filter(({ fila: r }) =>
+                            !resultado.descartes.some(d => d.descripcion === r.descripcion && d.version === r.version));
+                        tbody.innerHTML = renderFilas(filasVigentes);
+                        const listaDescartesHtml = resultado.descartes
+                            .map(d => `<li>${escapeHtmlRmdConfig(d.descripcion)} — v${d.version ?? '?'} (${escapeHtmlRmdConfig(d.estado || '-')})</li>`)
+                            .join('');
+                        estadoTxt.innerHTML = `🌳 Confirmado por el árbol de materiales: ${resultado.descartes.length} presentación(es) NO corresponden a <strong>${escapeHtmlRmdConfig(material)}</strong> y se quitaron de sus pendientes de forma permanente:<ul style="margin:4px 0 0 18px;padding:0;">${listaDescartesHtml}</ul>`;
                         estadoTxt.style.color = '#6ee7b7';
-                        label.textContent = 'Ver todas';
-                        filtroActivo = true;
+                        // La tabla principal de pendientes debe reflejar el
+                        // cambio de inmediato (la etapa recién descartada ya
+                        // no debe seguir apareciendo como pendiente ahí).
+                        if (typeof runValidacionMateriales === 'function') runValidacionMateriales();
+                        if (typeof runValidacionForecast === 'function' && currentTab === 'forecast') runValidacionForecast();
                     });
                 }
             });
@@ -5994,7 +6333,7 @@ async function downloadPlanProduccionFromCloud() {
             // en paralelo: con Supabase de por medio (llamadas de red reales),
             // hacerlas una tras otra sumaría varios round-trips innecesarios al
             // tiempo de carga inicial de la página.
-            const [ma, re, flags, dm, ae, rr, rd, ea, es] = await Promise.all([
+            const [ma, re, flags, dm, ae, rr, rd, ea, es, dpa] = await Promise.all([
                 storeGet('val_manual_autorizados'),
                 storeGet('val_responsables_etapa'),
                 storeGet('val_flags'),
@@ -6003,11 +6342,13 @@ async function downloadPlanProduccionFromCloud() {
                 storeGet('val_rmd_autorizados_raw'),
                 storeGet('val_rmd_autorizados_detalle'),
                 storeGet('val_rmd_autorizados_etapas_por_agrupador'),
-                storeGet('val_estatus_etapa')
+                storeGet('val_estatus_etapa'),
+                storeGet('val_descartados_por_arbol')
             ]);
             if (ma) manualAutorizados = new Set(ma);
             if (re) responsablesEtapa = new Map(re);
             if (es) estatusEtapa = new Map(es);
+            if (dpa) descartadosPorArbol = new Set(dpa);
 
             if (!flags) return;
 
@@ -6175,7 +6516,12 @@ pendientes.forEach(p => {
                 }
                 const etapasAunPendientes = p.etapasPendientes.filter(et => {
                     const fija = mapEtapaAFija(et);
-                    return !fija || !manualAutorizados.has(responsableKey(p.material, fija));
+                    if (!fija) return true;
+                    // Se descarta una etapa si fue autorizada manualmente O si
+                    // el árbol de materiales (BOM real de SAP) ya confirmó que
+                    // esa presentación no corresponde a este producto.
+                    return !manualAutorizados.has(responsableKey(p.material, fija))
+                        && !descartadosPorArbol.has(responsableKey(p.material, fija));
                 });
                 const etapasYaAutorizadasManual = p.etapasPendientes.filter(et => {
                     const fija = mapEtapaAFija(et);
@@ -6335,7 +6681,9 @@ pendientes.forEach(p => {
                     const partesAutorizadas = tieneAutorizadasManual ? p.etapasAutorizadasManual.map(et => renderFilaEtapaAutorizada(p.material, et)).join('') : '';
                     etapasHtml = partesPendientes + partesAutorizadas;
                 } else {
-                    etapasHtml = `<span class="${etapasCls}">${p.motivo || 'No encontrado'}</span>`;
+                    const esNoEncontrado = (p.motivo || '').toLowerCase().includes('no encontrado en base de datos');
+                    etapasHtml = `<span class="${etapasCls}">${p.motivo || 'No encontrado'}</span>`
+                        + (esNoEncontrado ? `<button type="button" class="btn-autocompletar-arbol" onclick="autocompletarFilaDesdeArbol(this, '${p.material}', 'produccion')" title="Buscar este material en el árbol de materiales (BOM de SAP) y completar su Agrupador en la Base de Datos">🌳 Buscar en árbol</button>` : '');
                 }
 
 return `<tr class="${rowCls}" title="${p.motivo || ''}">
@@ -7607,14 +7955,19 @@ function updateForecastActiveFiltersBadge() {
                 }
                 const etapasAunPendientes = p.etapasPendientes.filter(et => {
                     const fija = mapEtapaAFija(et);
-                    return !fija || !manualAutorizadosForecast.has(responsableKey(p.material, fija));
+                    if (!fija) return true;
+                    return !manualAutorizadosForecast.has(responsableKey(p.material, fija))
+                        && !descartadosPorArbol.has(responsableKey(p.material, fija));
                 });
                 const etapasYaAutorizadasManualFc = p.etapasPendientes.filter(et => {
                     const fija = mapEtapaAFija(et);
                     return fija && manualAutorizadosForecast.has(responsableKey(p.material, fija));
                 });
-                if (etapasAunPendientes.length === 0) {
+                if (etapasAunPendientes.length === 0 && etapasYaAutorizadasManualFc.length > 0) {
                     autorizadosManualLista.push({ ...p, etapasAutorizadasManual: p.etapasPendientes });
+                } else if (etapasAunPendientes.length === 0) {
+                    // Todas las etapas descartadas por el árbol: el producto
+                    // sale de la lista sin contarlo como autorizado.
                 } else if (etapasAunPendientes.length < p.etapasPendientes.length) {
                     pendientesReales.push({ ...p, etapasPendientes: etapasAunPendientes, etapasAutorizadasManual: etapasYaAutorizadasManualFc });
                 } else {
@@ -7734,7 +8087,9 @@ function updateForecastActiveFiltersBadge() {
                     const partesAutorizadas = tieneAutorizadasManualFc ? p.etapasAutorizadasManual.map(et => renderFilaEtapaAutorizadaFc(p.material, et)).join('') : '';
                     etapasHtml = partesPendientes + partesAutorizadas;
                 } else {
-                    etapasHtml = `<span class="${etapasCls}">${p.motivo || 'No encontrado'}</span>`;
+                    const esNoEncontrado = (p.motivo || '').toLowerCase().includes('no encontrado en base de datos');
+                    etapasHtml = `<span class="${etapasCls}">${p.motivo || 'No encontrado'}</span>`
+                        + (esNoEncontrado ? `<button type="button" class="btn-autocompletar-arbol" onclick="autocompletarFilaDesdeArbol(this, '${p.material}', 'forecast')" title="Buscar este material en el árbol de materiales (BOM de SAP) y completar su Agrupador en la Base de Datos">🌳 Buscar en árbol</button>` : '');
                 }
                 return `<tr class="${rowCls}" title="${p.motivo || ''}">
                     <td class="font-medium text-slate-200 whitespace-nowrap py-2">${p.material}</td>
@@ -8188,7 +8543,8 @@ function updateForecastActiveFiltersBadge() {
             'val_database_materials', 'val_agrupador_etapas', 'val_flags',
             'val_rmd_autorizados_raw', 'val_rmd_autorizados_detalle', 'val_rmd_autorizados_etapas_por_agrupador',
             'val_manual_autorizados', 'val_manual_autorizados_forecast',
-            'val_responsables_etapa', 'historial_trazabilidad', 'tour_completed'
+            'val_responsables_etapa', 'val_estatus_etapa', 'val_descartados_por_arbol',
+            'historial_trazabilidad', 'tour_completed'
         ];
 
         async function exportAllDataAsJson() {
