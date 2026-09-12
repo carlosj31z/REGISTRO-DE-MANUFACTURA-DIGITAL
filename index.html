@@ -5327,18 +5327,39 @@ function buildDateColumnMapPlanta1(headerRow, weekLabelRow, hiddenCols) {
                     r.codigoAgrupador === agrupador && mapEtapaAFija(r.etapaNorm) === etapaFija);
                 if (filasDeEstaEtapa.length === 0) return; // no hay nada que descartar
 
-                // ¿Existen, entre las filas de esta etapa, versiones
-                // PENDIENTES cuyo Código por Defecto no está en el árbol de
-                // este material? Si es así, esa etapa se descarta para este
-                // material — pertenece a otra(s) presentación(es). Se
-                // recogen TODAS las que apliquen (no solo la primera), para
-                // que el aviso al usuario sea completo.
-                const pendientesDeOtraPresentacion = filasDeEstaEtapa.filter(r => {
+                // CORRECCIÓN IMPORTANTE: el descarte se decide mirando SOLO
+                // la fila que corresponde al material que se está evaluando
+                // — nunca por la existencia de filas de OTRAS presentaciones
+                // pendientes. La versión anterior comparaba "¿hay alguna fila
+                // ajena pendiente?" y con eso descartaba la etapa del
+                // material actual, lo cual es un error de lógica: que otra
+                // presentación (p. ej. T2 MM) esté pendiente no dice nada
+                // sobre si la propia (p. ej. T7) también lo está — de hecho,
+                // en el caso real que reveló este bug, T7 SÍ tenía su propia
+                // versión Ingresada, con datos correctos y propios, y aun
+                // así se estaba descartando solo porque T2 MM también
+                // aparecía pendiente en el mismo agrupador/etapa.
+                //
+                // Aquí sí importa el Código por Defecto de CADA fila para
+                // decidir cuál es "la fila de este material": se toma la
+                // versión más alta cuyo código pertenece al árbol de este
+                // material (esa es la vigente y real de este producto). Si
+                // NINGUNA fila de esta etapa tiene un código que pertenezca
+                // al árbol de este material, entonces sí se puede concluir
+                // que todo lo que aparece ahí es de otra(s) presentación(es)
+                // y no corresponde a este material — recién ahí se descarta.
+                const filasDeEsteMaterial = filasDeEstaEtapa.filter(r => {
                     const cod = (r.codigoPorDefecto || '').trim();
-                    if (!cod) return false; // sin código: no se puede confirmar que sea de otro producto, se deja como está (respaldo)
-                    if (codigosValidos.has(cod)) return false; // sí es de este producto
-                    return ESTADOS_PENDIENTES_RMD.has(normalizeEstadoRmd(r.estado));
+                    return cod && codigosValidos.has(cod);
                 });
+                if (filasDeEsteMaterial.length > 0) return; // este material SÍ tiene su propia fila aquí: nada que descartar
+
+                // Ninguna fila de esta etapa pertenece al árbol de este
+                // material — todo lo que hay ahí es de otras presentaciones.
+                // Se reportan como descarte las que además estén pendientes,
+                // para que el aviso explique qué se estaba mostrando de más.
+                const pendientesDeOtraPresentacion = filasDeEstaEtapa.filter(r =>
+                    ESTADOS_PENDIENTES_RMD.has(normalizeEstadoRmd(r.estado)));
 
                 if (pendientesDeOtraPresentacion.length > 0) {
                     descartadosPorArbol.add(key);
@@ -6348,7 +6369,31 @@ async function downloadPlanProduccionFromCloud() {
             if (ma) manualAutorizados = new Set(ma);
             if (re) responsablesEtapa = new Map(re);
             if (es) estatusEtapa = new Map(es);
-            if (dpa) descartadosPorArbol = new Set(dpa);
+            // BUGFIX: versiones anteriores de aplicarFiltroArbolPersistente
+            // descartaban una etapa con solo comprobar que EXISTIERA alguna
+            // fila ajena pendiente en el mismo agrupador/etapa — sin fijarse
+            // si el material que se estaba filtrando tenía su PROPIA versión
+            // pendiente real. Eso borró etapas que sí eran pendientes
+            // genuinas (caso confirmado: CLINDESS T7 en ACONDICIONADO). Como
+            // no hay forma de distinguir, dentro de los datos ya guardados,
+            // cuáles descartes se hicieron bien y cuáles por el bug, se
+            // limpia TODO lo guardado por versiones previas una sola vez:
+            // el usuario puede volver a correr el filtro (ya corregido) y
+            // los descartes genuinos se reconstruyen solos, sin arrastrar
+            // los incorrectos.
+            const ARBOL_DESCARTES_VERSION_ACTUAL = 2;
+            if (dpa) {
+                const versionGuardada = await storeGet('val_descartados_por_arbol_version');
+                if (Number(versionGuardada) !== ARBOL_DESCARTES_VERSION_ACTUAL) {
+                    descartadosPorArbol = new Set(); // se descarta todo lo de la versión anterior (bug)
+                    await storeSet('val_descartados_por_arbol', []);
+                    await storeSet('val_descartados_por_arbol_version', ARBOL_DESCARTES_VERSION_ACTUAL);
+                } else {
+                    descartadosPorArbol = new Set(dpa);
+                }
+            } else {
+                await storeSet('val_descartados_por_arbol_version', ARBOL_DESCARTES_VERSION_ACTUAL);
+            }
 
             if (!flags) return;
 
@@ -8543,7 +8588,7 @@ function updateForecastActiveFiltersBadge() {
             'val_database_materials', 'val_agrupador_etapas', 'val_flags',
             'val_rmd_autorizados_raw', 'val_rmd_autorizados_detalle', 'val_rmd_autorizados_etapas_por_agrupador',
             'val_manual_autorizados', 'val_manual_autorizados_forecast',
-            'val_responsables_etapa', 'val_estatus_etapa', 'val_descartados_por_arbol',
+            'val_responsables_etapa', 'val_estatus_etapa', 'val_descartados_por_arbol', 'val_descartados_por_arbol_version',
             'historial_trazabilidad', 'tour_completed'
         ];
 
