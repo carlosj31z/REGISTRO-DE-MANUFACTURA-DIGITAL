@@ -5078,11 +5078,18 @@ function buildDateColumnMapPlanta1(headerRow, weekLabelRow, hiddenCols) {
             }
         }
 
+        // Motivo del último intento de consulta, para que el modal pueda
+        // distinguir "la API dice que no hay árbol" de "no se pudo llegar a
+        // la API" — dos situaciones muy distintas que antes se mostraban con
+        // el mismo mensaje genérico.
+        let ultimoMotivoArbol = null;
+
         const ARBOL_MATERIALES_MAX_REINTENTOS = 2; // hasta 2 reintentos ante 503 (3 intentos en total)
 
         async function consultarArbolMaterial(codigo) {
             const cache = cargarArbolMaterialesCache();
-            if (cache[codigo] !== undefined) return cache[codigo];
+            if (cache[codigo] !== undefined) { ultimoMotivoArbol = { tipo: 'ok' }; return cache[codigo]; }
+            ultimoMotivoArbol = null;
 
             for (let intento = 0; intento <= ARBOL_MATERIALES_MAX_REINTENTOS; intento++) {
                 const { httpStatus, resp } = await intentarConsultaArbol(codigo);
@@ -5098,6 +5105,10 @@ function buildDateColumnMapPlanta1(headerRow, weekLabelRow, hiddenCols) {
                 }
 
                 if (!resp || !resp.ok) {
+                    // Fallo de transporte real (sin red, timeout, CORS, 4xx,
+                    // o 5xx persistente). Se devuelve el motivo para que la
+                    // interfaz pueda decir QUÉ pasó en vez de un genérico.
+                    ultimoMotivoArbol = { tipo: 'error_red', httpStatus };
                     // NINGÚN fallo se cachea, sea 404, 503, CORS, timeout o
                     // falta de red. Cachear resultados negativos resultó
                     // frágil: en las pruebas reales, un bloqueo temporal (el
@@ -5119,7 +5130,19 @@ function buildDateColumnMapPlanta1(headerRow, weekLabelRow, hiddenCols) {
                 // cualquier otra forma de respuesta se trata como "sin árbol"
                 // y activa el respaldo, en vez de arriesgarse a interpretarla mal.
                 const valido = data && data.estado === 'ok' && Array.isArray(data.nodos) && data.nodos.length > 0;
-                if (valido) { cache[codigo] = data; guardarArbolMaterialesCache(cache); }
+                if (valido) {
+                    cache[codigo] = data;
+                    guardarArbolMaterialesCache(cache);
+                    ultimoMotivoArbol = { tipo: 'ok' };
+                } else {
+                    // La API respondió BIEN (HTTP 200) pero no tiene árbol
+                    // para este código — por ejemplo {"estado":"no_encontrado"}.
+                    // Esto NO es un fallo de conexión, y confundirlo con uno
+                    // fue lo que hizo que el mensaje anterior desorientara:
+                    // decía "no se pudo consultar" cuando en realidad sí se
+                    // consultó y la respuesta fue "este material no está".
+                    ultimoMotivoArbol = { tipo: 'sin_arbol', apiEstado: (data && data.estado) || 'respuesta inesperada' };
+                }
                 return valido ? data : null;
             }
             return null;
@@ -5308,11 +5331,23 @@ function buildDateColumnMapPlanta1(headerRow, weekLabelRow, hiddenCols) {
                         const arbol = await consultarArbolMaterial(material);
                         btn.disabled = false;
                         if (!arbol) {
-                            // Respaldo: la API no respondió, no reconoció el
-                            // código, o tardó más de lo esperado. La lista
-                            // completa NUNCA se toca en este caso.
-                            estadoTxt.innerHTML = '⚠ No se pudo consultar el árbol de materiales para este código — se mantiene la lista completa.';
-                            estadoTxt.style.color = '#fbbf24';
+                            // Respaldo: la lista completa NUNCA se toca. Pero
+                            // el mensaje ahora distingue la causa real, porque
+                            // "la API no tiene este código" y "no se pudo
+                            // llegar a la API" son problemas totalmente
+                            // distintos y exigen acciones distintas.
+                            const motivo = ultimoMotivoArbol || {};
+                            if (motivo.tipo === 'sin_arbol') {
+                                estadoTxt.innerHTML = `ℹ El servicio de árbol respondió correctamente, pero <strong>no tiene un árbol registrado para el material ${escapeHtmlRmdConfig(material)}</strong> (respuesta: ${escapeHtmlRmdConfig(motivo.apiEstado || '-')}). Se mantiene la lista completa.`;
+                                estadoTxt.style.color = '#93c5fd';
+                            } else if (motivo.tipo === 'error_red') {
+                                const detalle = motivo.httpStatus ? `HTTP ${motivo.httpStatus}` : 'sin respuesta (tiempo agotado, sin red o bloqueado por el navegador)';
+                                estadoTxt.innerHTML = `⚠ No se pudo conectar con el servicio de árbol — ${escapeHtmlRmdConfig(detalle)}. Se mantiene la lista completa; puedes reintentar.`;
+                                estadoTxt.style.color = '#fbbf24';
+                            } else {
+                                estadoTxt.innerHTML = '⚠ No se pudo consultar el árbol de materiales — se mantiene la lista completa.';
+                                estadoTxt.style.color = '#fbbf24';
+                            }
                             label.textContent = 'Filtrar por árbol';
                             return;
                         }
