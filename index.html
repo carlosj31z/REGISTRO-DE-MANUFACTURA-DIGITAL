@@ -5054,16 +5054,60 @@ function buildDateColumnMapPlanta1(headerRow, weekLabelRow, hiddenCols) {
         // Fabricación de SAP no cambia de un momento a otro, así que el
         // caché no tiene fecha de expiración; se limpia manualmente con
         // limpiarCacheArbolMateriales() si algún día hiciera falta.
-        async function consultarArbolMaterial(codigo) {
-            const cache = cargarArbolMaterialesCache();
-            if (cache[codigo] !== undefined) return cache[codigo];
-
+        // Un único intento de red, sin reintentos ni caché — la separación
+        // permite que consultarArbolMaterial() decida cuándo vale la pena
+        // reintentar (solo ante 503, "Service Unavailable") y cuándo no
+        // (un 400/404 no va a cambiar por reintentar).
+        async function intentarConsultaArbol(codigo) {
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), ARBOL_MATERIALES_TIMEOUT_MS);
             try {
                 const resp = await fetch(ARBOL_MATERIALES_API + encodeURIComponent(codigo), { signal: controller.signal });
                 clearTimeout(timeoutId);
-                if (!resp.ok) { cache[codigo] = null; guardarArbolMaterialesCache(cache); return null; }
+                return { httpStatus: resp.status, resp };
+            } catch (err) {
+                clearTimeout(timeoutId);
+                return { httpStatus: null, resp: null }; // sin red, timeout o CORS
+            }
+        }
+
+        const ARBOL_MATERIALES_MAX_REINTENTOS = 2; // hasta 2 reintentos ante 503 (3 intentos en total)
+
+        async function consultarArbolMaterial(codigo) {
+            const cache = cargarArbolMaterialesCache();
+            if (cache[codigo] !== undefined) return cache[codigo];
+
+            for (let intento = 0; intento <= ARBOL_MATERIALES_MAX_REINTENTOS; intento++) {
+                const { httpStatus, resp } = await intentarConsultaArbol(codigo);
+
+                // 503 = "Service Unavailable": típico de un servicio en
+                // arranque en frío o momentáneamente saturado — justo lo que
+                // se observó en pruebas reales con esta API. Vale la pena
+                // reintentar con una breve espera creciente (300ms, 600ms)
+                // antes de rendirse.
+                if (httpStatus === 503 && intento < ARBOL_MATERIALES_MAX_REINTENTOS) {
+                    await new Promise(r => setTimeout(r, 300 * (intento + 1)));
+                    continue;
+                }
+
+                if (!resp || !resp.ok) {
+                    // Cualquier otro fallo (400/404/CORS/timeout/sin red, o un
+                    // 503 que persiste tras agotar los reintentos): se cachea
+                    // como "sin árbol" SOLO si hubo una respuesta HTTP real
+                    // (400/404 — el código no existe, no va a cambiar). Un
+                    // fallo de red/timeout/503 persistente NO se cachea,
+                    // para que un intento posterior sí pueda funcionar si el
+                    // servicio se recupera más tarde.
+                    //
+                    // Se cachea SOLO un error de cliente real (400/404/etc,
+                    // httpStatus < 500): esos no cambian por reintentar, es
+                    // el propio código el que no existe o está mal formado.
+                    // Un 5xx (503 persistente tras agotar los reintentos) o
+                    // un fallo de red/timeout NUNCA se cachea.
+                    if (httpStatus !== null && httpStatus < 500) { cache[codigo] = null; guardarArbolMaterialesCache(cache); }
+                    return null;
+                }
+
                 const data = await resp.json();
                 // Solo se acepta un árbol con estado "ok" y al menos un nodo;
                 // cualquier otra forma de respuesta se trata como "sin árbol"
@@ -5072,13 +5116,8 @@ function buildDateColumnMapPlanta1(headerRow, weekLabelRow, hiddenCols) {
                 cache[codigo] = valido ? data : null;
                 guardarArbolMaterialesCache(cache);
                 return valido ? data : null;
-            } catch (err) {
-                clearTimeout(timeoutId);
-                // Sin red, timeout, o CORS: NO se cachea el fallo (podría ser
-                // temporal), para que un reintento posterior sí pueda
-                // funcionar si la API vuelve a responder.
-                return null;
             }
+            return null;
         }
 
         // Extrae, de la respuesta de la API, el set de códigos de material
