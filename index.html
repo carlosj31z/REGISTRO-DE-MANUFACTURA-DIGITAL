@@ -5724,10 +5724,10 @@ function buildDateColumnMapPlanta1(headerRow, weekLabelRow, hiddenCols) {
             const etapasAEvaluar = etapaFijaUnica ? [etapaFijaUnica] : ETAPAS_FIJAS;
             const descartes = [];
 
-            etapasAEvaluar.forEach(etapaFija => {
+            for (const etapaFija of etapasAEvaluar) {
                 const filasDeEstaEtapa = rmdAutorizadosDetalle.filter(r =>
                     r.codigoAgrupador === agrupador && mapEtapaAFija(r.etapaNorm) === etapaFija);
-                if (filasDeEstaEtapa.length === 0) return; // no hay nada que descartar
+                if (filasDeEstaEtapa.length === 0) continue; // no hay nada que descartar
 
                 // BUGFIX (2 rondas): la primera versión comparaba contra el
                 // código de CUALQUIER nodo del árbol (Fabricación+Envase+
@@ -5754,12 +5754,60 @@ function buildDateColumnMapPlanta1(headerRow, weekLabelRow, hiddenCols) {
 
                 const codigoPropioDeEstaEtapa = codigoDelArbolParaEtapa(arbol, etapaFija);
 
-                filasDeEstaEtapa.forEach(r => {
+                // Códigos ajenos que se descartarían "de entrada" (no
+                // coinciden con el código propio de esta etapa) — se
+                // recolectan primero, sin tocar descartadosPorArbol todavía,
+                // porque la excepción de código único (más abajo) necesita
+                // saber cuántos quedan ANTES de decidir cuál descartar.
+                const filasAjenasPendientes = filasDeEstaEtapa.filter(r => {
                     const cod = (r.codigoPorDefecto || '').trim();
-                    if (!cod) return; // sin código: no se puede confirmar a quién pertenece, se deja como respaldo
-                    if (!ESTADOS_PENDIENTES_RMD.has(normalizeEstadoRmd(r.estado))) return; // ya resuelta, nada que descartar
+                    if (!cod) return false; // sin código: no se puede confirmar a quién pertenece, se deja como respaldo
+                    if (!ESTADOS_PENDIENTES_RMD.has(normalizeEstadoRmd(r.estado))) return false; // ya resuelta
+                    return cod !== codigoPropioDeEstaEtapa; // no es del material que se está filtrando
+                });
 
-                    if (cod === codigoPropioDeEstaEtapa) return; // esta fila SÍ es del material que se está filtrando
+                // EXCEPCIÓN — código único de licitación/venta: en la
+                // práctica, SAP suele generar un código de material aparte
+                // para licitaciones (con otra terminación) que en realidad
+                // usa el MISMO registro de manufactura que el producto de
+                // venta — el árbol de ese código de licitación puede no
+                // mencionar explícitamente al material que se está
+                // filtrando, aunque comparten Envase y Fabricación.
+                //
+                // Si, tras identificar las filas ajenas pendientes, SOLO
+                // QUEDA UNA (un único código candidato, no varios — con
+                // varios seguiría siendo ambiguo y no se puede asumir nada),
+                // y ADEMÁS el material que se está filtrando NO tiene su
+                // propia fila aquí, se consulta el árbol de ese único
+                // candidato y se confronta su Envase y Fabricación contra
+                // los del material original: si ambos coinciden, se
+                // considera el mismo producto y esa fila NO se descarta —
+                // se conserva como si fuera propia.
+                const tieneFilaPropia = filasDeEstaEtapa.some(r => (r.codigoPorDefecto || '').trim() === codigoPropioDeEstaEtapa);
+                let codigoConfirmadoPorHermanos = null;
+                if (!tieneFilaPropia && filasAjenasPendientes.length === 1) {
+                    const candidato = filasAjenasPendientes[0];
+                    const codCandidato = (candidato.codigoPorDefecto || '').trim();
+                    const { arbol: arbolCandidato } = await consultarArbolMaterial(codCandidato);
+                    if (arbolCandidato) {
+                        const envasePropio = codigoDelArbolParaEtapa(arbol, 'ENVASE');
+                        const fabricacionPropia = codigoDelArbolParaEtapa(arbol, 'FABRICACION');
+                        const envaseCandidato = codigoDelArbolParaEtapa(arbolCandidato, 'ENVASE');
+                        const fabricacionCandidato = codigoDelArbolParaEtapa(arbolCandidato, 'FABRICACION');
+                        // Ambas comparaciones deben tener valor en ambos lados
+                        // para contar como confirmación — si a alguno le
+                        // falta el dato, no se puede afirmar coincidencia.
+                        const envaseCoincide = envasePropio && envaseCandidato && envasePropio === envaseCandidato;
+                        const fabricacionCoincide = fabricacionPropia && fabricacionCandidato && fabricacionPropia === fabricacionCandidato;
+                        if (envaseCoincide && fabricacionCoincide) {
+                            codigoConfirmadoPorHermanos = codCandidato;
+                        }
+                    }
+                }
+
+                filasAjenasPendientes.forEach(r => {
+                    const cod = (r.codigoPorDefecto || '').trim();
+                    if (cod === codigoConfirmadoPorHermanos) return; // confirmado como el mismo producto: no se descarta
 
                     // Esta fila no pertenece al material que originó el
                     // filtrado. Se marca como descartada para ESE OTRO
@@ -5775,11 +5823,14 @@ function buildDateColumnMapPlanta1(headerRow, weekLabelRow, hiddenCols) {
                 // material que originó el filtrado, esa combinación también
                 // se marca descartada para él — es el caso donde ese
                 // material no tiene ninguna fila propia ahí en absoluto.
-                if (!yaDescartadaParaEsteMaterial) {
-                    const tieneFilaPropia = filasDeEstaEtapa.some(r => (r.codigoPorDefecto || '').trim() === codigoPropioDeEstaEtapa);
-                    if (!tieneFilaPropia) descartadosPorArbol.add(key);
+                // EXCEPCIÓN: si se confirmó por hermanos (Envase+Fabricación
+                // coinciden) que el único candidato es en realidad el mismo
+                // producto, entonces SÍ hay una fila que le corresponde
+                // (aunque bajo otro código), y no se descarta la etapa.
+                if (!yaDescartadaParaEsteMaterial && !tieneFilaPropia && !codigoConfirmadoPorHermanos) {
+                    descartadosPorArbol.add(key);
                 }
-            });
+            }
 
             if (descartes.length > 0) await saveDescartadosPorArbol();
             return { ok: true, motivo: 'ok', descartes };
