@@ -4215,13 +4215,44 @@ function buildDateColumnMapPlanta1(headerRow, weekLabelRow, hiddenCols) {
     } else {
         // Formato Planta LIMA: las fechas pueden venir en la MISMA fila que
         // "Código" (formato actual, con objetos Date directos) o en la fila
-        // siguiente (formato anterior con números de día). Se detecta
-        // automáticamente comparando cuántas celdas de cada fila son fechas
-        // reales, en vez de asumir un offset fijo.
+        // siguiente (formato anterior con números de día sueltos, ej. 7, 8,
+        // 9...). Se detecta automáticamente comparando cuántas celdas de
+        // cada fila son fechas reales, en vez de asumir un offset fijo.
+        //
+        // BUGFIX: scoreDirectDates usaba solo parseExcelDateDirect, que
+        // exige "typeof v === 'number' && v > 1000" para aceptar un número
+        // como fecha (así excluye números seriales de Excel de verdaderos
+        // números de día sueltos como 7 u 8). Pero en el formato antiguo la
+        // fila de fechas trae exactamente esos números sueltos — nunca
+        // pasaban ese umbral, nextRowScore quedaba en 0 SIEMPRE, y la
+        // detección de headerRowIdx caía por defecto a la fila de "CODIGO"
+        // en vez de la fila real de fechas. Resultado: buildDateColumnMap no
+        // encontraba ninguna columna de fecha válida, y la hoja completa
+        // quedaba con 0 productos — sin ningún error visible, la pestaña
+        // simplemente aparecía vacía (caso real: SOL, ACO, Pef, SOL HORM,
+        // SOL COLOR, CAP BLAND, Iny, Sem Horm, todas con este formato
+        // antiguo, frente a SEM/MENT/Cosm/Rea que ya usaban el formato
+        // nuevo y por eso sí funcionaban).
+        //
+        // Se agrega un reconocimiento adicional, SOLO para esta detección de
+        // fila: un número entero entre 1 y 31 en una celda que cae bajo un
+        // encabezado de día de la semana (L, M, M, J, V, S, D en la fila de
+        // labelRowIdx) cuenta como fecha también — sin tocar
+        // parseExcelDateDirect en sí, que sigue sirviendo igual para su uso
+        // en el resto del parseo de columnas.
+        const DIAS_SEMANA_HEADER = /^[LMJVSD]$|^(lun|mar|mi[eé]|jue|vie|s[aá]b|dom)/i;
+        const esNumeroDeDiaSuelto = (v, colIdx) => {
+            if (typeof v !== 'number' || v < 1 || v > 31 || !Number.isInteger(v)) return false;
+            const headerDeEstaCol = labelRow[colIdx];
+            return headerDeEstaCol != null && DIAS_SEMANA_HEADER.test(String(headerDeEstaCol).trim());
+        };
         const scoreDirectDates = (row) => {
             if (!row) return 0;
             let c = 0;
-            row.forEach((v, i) => { if (!hiddenColsForRow.has(i) && parseExcelDateDirect(v)) c++; });
+            row.forEach((v, i) => {
+                if (hiddenColsForRow.has(i)) return;
+                if (parseExcelDateDirect(v) || esNumeroDeDiaSuelto(v, i)) c++;
+            });
             return c;
         };
         const sameRowScore = scoreDirectDates(rows[labelRowIdx]);
