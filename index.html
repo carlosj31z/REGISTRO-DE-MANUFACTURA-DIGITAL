@@ -1822,10 +1822,6 @@
                     </span>
                 </h2>
                 <div class="flex items-center gap-2">
-                    <button onclick="filtrarTodosPorArbol('produccion')" id="btnFiltrarArbolGlobalProd" class="bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-600 px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 active:scale-95" title="Consultar el árbol de materiales (BOM de SAP) de TODOS los productos pendientes y quitar de forma permanente las presentaciones que no corresponden">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 text-lime-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 3v5m0 0a2 2 0 100 4 2 2 0 000-4zm0 6v3m-5 0a2 2 0 100 4 2 2 0 000-4zm10 0a2 2 0 100 4 2 2 0 000-4zm-5-3v3m0 0H7m5 0h5" /></svg>
-                        <span id="btnFiltrarArbolGlobalProdLabel">Filtrar todos por árbol</span>
-                    </button>
                     <div class="relative" id="menuRevertirProdWrapper">
                         <button onclick="document.getElementById('menuRevertirProdDropdown').classList.toggle('hidden')" class="bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-600 px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 active:scale-95" title="Revertir de forma global un filtrado o autorización masiva">
                             <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 text-rose-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 15L3 9m0 0l6-6M3 9h12a6 6 0 010 12h-3" /></svg>
@@ -2093,10 +2089,6 @@
                     RMD Pendientes de Autorización — Forecast
                 </h2>
                 <div class="flex items-center gap-2">
-                    <button onclick="filtrarTodosPorArbol('forecast')" id="btnFiltrarArbolGlobalFc" class="bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-600 px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 active:scale-95" title="Consultar el árbol de materiales (BOM de SAP) de TODOS los productos pendientes y quitar de forma permanente las presentaciones que no corresponden">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 text-lime-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 3v5m0 0a2 2 0 100 4 2 2 0 000-4zm0 6v3m-5 0a2 2 0 100 4 2 2 0 000-4zm10 0a2 2 0 100 4 2 2 0 000-4zm-5-3v3m0 0H7m5 0h5" /></svg>
-                        <span id="btnFiltrarArbolGlobalFcLabel">Filtrar todos por árbol</span>
-                    </button>
                     <div class="relative" id="menuRevertirFcWrapper">
                         <button onclick="document.getElementById('menuRevertirFcDropdown').classList.toggle('hidden')" class="bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-600 px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 active:scale-95" title="Revertir de forma global un filtrado o autorización masiva">
                             <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 text-rose-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 15L3 9m0 0l6-6M3 9h12a6 6 0 010 12h-3" /></svg>
@@ -5107,12 +5099,30 @@ function buildDateColumnMapPlanta1(headerRow, weekLabelRow, hiddenCols) {
         // remota que ya existía, sin que el usuario note la diferencia.
         const ARBOL_LOCAL_SUPABASE_URL = 'https://wjlryrqkcnvjlrdibzol.supabase.co';
         const ARBOL_LOCAL_SUPABASE_ANON_KEY = 'sb_publishable_2Qm4zOkdHeSMOYvatAyNiA_K5crlvFc';
-        const ARBOL_LOCAL_CACHE_KEY = 'arbolLocalTablasCacheV1';
+        const ARBOL_LOCAL_CACHE_KEY = 'arbolLocalTablasCacheV2';
         // 12 horas: las 4 tablas se actualizan cuando alguien vuelve a
         // exportar de SAP a esa página, no en cada sesión — un TTL moderado
         // evita repetir la descarga completa en cada carga de esta app sin
         // arriesgarse a trabajar con datos de días atrás.
         const ARBOL_LOCAL_CACHE_TTL_MS = 12 * 60 * 60 * 1000;
+
+        // BUGFIX de rendimiento: la v1 guardaba las 4 tablas completas (BOM +
+        // Componentes + Versiones de Fabricación + Maestro de Materiales,
+        // potencialmente miles de filas de SAP) en localStorage, que tiene un
+        // límite típico de 5-10 MB por dominio. Si el JSON superaba ese
+        // límite, localStorage.setItem lanzaba QuotaExceededError, el catch
+        // lo absorbía EN SILENCIO, y la caché nunca llegaba a persistir entre
+        // sesiones — el motor sí se construía en memoria para esa consulta,
+        // pero en la siguiente carga de la página (o el siguiente filtro tras
+        // recargar) había que volver a descargar las 4 tablas desde cero. Por
+        // fuera, eso se sentía exactamente como "sigue lento" en el filtro
+        // por árbol, sin que la app avisara nada raro.
+        //
+        // Se cambia a IndexedDB (vía la misma librería localforage que ya usa
+        // esta app para el Programa de Producción) — su límite es muchísimo
+        // mayor y no depende de que el JSON entero quepa en una sola cadena
+        // de texto síncrona.
+        const arbolLocalDbStore = localforage.createInstance({ name: 'arbolMaterialesLocalDB', storeName: 'tablas_cache' });
 
         let arbolLocalClient = null;
         let arbolLocalMotor = null;      // instancia ya construida (se reconstruye solo si cambian los datos)
@@ -5163,18 +5173,23 @@ function buildDateColumnMapPlanta1(headerRow, weekLabelRow, hiddenCols) {
             return { columnas, filas };
         }
 
-        function cargarArbolLocalCache() {
+        async function cargarArbolLocalCache() {
             try {
-                const raw = localStorage.getItem(ARBOL_LOCAL_CACHE_KEY);
-                if (!raw) return null;
-                const parsed = JSON.parse(raw);
-                if (!parsed || (Date.now() - (parsed.guardadoEn || 0)) > ARBOL_LOCAL_CACHE_TTL_MS) return null;
+                const parsed = await arbolLocalDbStore.getItem(ARBOL_LOCAL_CACHE_KEY);
+                if (!parsed) return null;
+                if ((Date.now() - (parsed.guardadoEn || 0)) > ARBOL_LOCAL_CACHE_TTL_MS) return null;
                 return parsed;
             } catch (err) { return null; }
         }
-        function guardarArbolLocalCache(payload) {
-            try { localStorage.setItem(ARBOL_LOCAL_CACHE_KEY, JSON.stringify({ ...payload, guardadoEn: Date.now() })); }
-            catch (err) { /* localStorage lleno: se sigue sin caché entre sesiones, sin romper la consulta actual */ }
+        async function guardarArbolLocalCache(payload) {
+            try { await arbolLocalDbStore.setItem(ARBOL_LOCAL_CACHE_KEY, { ...payload, guardadoEn: Date.now() }); }
+            catch (err) {
+                // IndexedDB también puede fallar (navegador en modo privado,
+                // cuota del dispositivo agotada, etc.) — se registra para
+                // poder diagnosticarlo, a diferencia del fallo silencioso
+                // anterior con localStorage.
+                console.error('No se pudo guardar la caché del árbol local (se seguirá sin caché entre sesiones):', err);
+            }
         }
 
         // Trae las 4 tablas (con caché de 12h) y construye el motor UNA sola
@@ -5188,7 +5203,7 @@ function buildDateColumnMapPlanta1(headerRow, weekLabelRow, hiddenCols) {
 
             arbolLocalCargando = (async () => {
                 try {
-                    let cache = forzarRefresco ? null : cargarArbolLocalCache();
+                    let cache = forzarRefresco ? null : await cargarArbolLocalCache();
                     let datosMotor;
                     if (cache) {
                         datosMotor = cache.datosMotor;
@@ -5215,7 +5230,7 @@ function buildDateColumnMapPlanta1(headerRow, weekLabelRow, hiddenCols) {
                             BOM_VFAB_ROWS: vfab.filas, BOM_VFAB_COLUMNS: vfab.columnas,
                             MM_ESTADO_MAP: mmEstadoMap
                         };
-                        guardarArbolLocalCache({ datosMotor });
+                        await guardarArbolLocalCache({ datosMotor });
                     }
                     arbolLocalMotor = window.crearMotorArbol(datosMotor);
                     return arbolLocalMotor;
@@ -5321,8 +5336,8 @@ function buildDateColumnMapPlanta1(headerRow, weekLabelRow, hiddenCols) {
             }
         }
 
-        function limpiarCacheArbolLocal() {
-            try { localStorage.removeItem(ARBOL_LOCAL_CACHE_KEY); } catch (err) {}
+        async function limpiarCacheArbolLocal() {
+            try { await arbolLocalDbStore.removeItem(ARBOL_LOCAL_CACHE_KEY); } catch (err) {}
             arbolLocalMotor = null;
         }
 
@@ -5772,15 +5787,17 @@ function buildDateColumnMapPlanta1(headerRow, weekLabelRow, hiddenCols) {
                 // usa el MISMO registro de manufactura que el producto de
                 // venta — el árbol de ese código de licitación puede no
                 // mencionar explícitamente al material que se está
-                // filtrando, aunque comparten Envase y Fabricación.
+                // filtrando, aunque comparten Fabricación.
                 //
                 // Si, tras identificar las filas ajenas pendientes, SOLO
                 // QUEDA UNA (un único código candidato, no varios — con
                 // varios seguiría siendo ambiguo y no se puede asumir nada),
                 // y ADEMÁS el material que se está filtrando NO tiene su
                 // propia fila aquí, se consulta el árbol de ese único
-                // candidato y se confronta su Envase y Fabricación contra
-                // los del material original: si ambos coinciden, se
+                // candidato y se confronta SOLO su Fabricación contra la del
+                // material original (no todas las etapas anteriores — el
+                // usuario pidió específicamente que la validación sea nada
+                // más contra el código de Fabricación): si coincide, se
                 // considera el mismo producto y esa fila NO se descarta —
                 // se conserva como si fuera propia.
                 const tieneFilaPropia = filasDeEstaEtapa.some(r => (r.codigoPorDefecto || '').trim() === codigoPropioDeEstaEtapa);
@@ -5790,32 +5807,48 @@ function buildDateColumnMapPlanta1(headerRow, weekLabelRow, hiddenCols) {
                     const codCandidato = (candidato.codigoPorDefecto || '').trim();
                     const { arbol: arbolCandidato } = await consultarArbolMaterial(codCandidato);
                     if (arbolCandidato) {
-                        const envasePropio = codigoDelArbolParaEtapa(arbol, 'ENVASE');
                         const fabricacionPropia = codigoDelArbolParaEtapa(arbol, 'FABRICACION');
-                        const envaseCandidato = codigoDelArbolParaEtapa(arbolCandidato, 'ENVASE');
                         const fabricacionCandidato = codigoDelArbolParaEtapa(arbolCandidato, 'FABRICACION');
-                        // Ambas comparaciones deben tener valor en ambos lados
-                        // para contar como confirmación — si a alguno le
-                        // falta el dato, no se puede afirmar coincidencia.
-                        const envaseCoincide = envasePropio && envaseCandidato && envasePropio === envaseCandidato;
+                        // Ambos lados deben tener valor para contar como
+                        // confirmación — si a alguno le falta el dato, no se
+                        // puede afirmar coincidencia.
                         const fabricacionCoincide = fabricacionPropia && fabricacionCandidato && fabricacionPropia === fabricacionCandidato;
-                        if (envaseCoincide && fabricacionCoincide) {
+                        if (fabricacionCoincide) {
                             codigoConfirmadoPorHermanos = codCandidato;
                         }
                     }
                 }
 
+                // BUGFIX (4 rondas): las rondas anteriores mejoraron QUÉ se
+                // compara y CUÁNDO se descarta, pero la clave de descarte
+                // seguía siendo GLOBAL sobre la fila ajena misma
+                // (responsableKey(codAjeno, etapaFija)) — así que al filtrar
+                // el material de VENTA y descartar la fila de MUESTRA MÉDICA
+                // (por no corresponderle a Venta), esa marca quedaba fija
+                // para el código de Muestra Médica en general. El resultado:
+                // si después se entraba directamente al material de Muestra
+                // Médica, su propia fila legítima ya aparecía descartada —
+                // un dato erróneo, porque esa fila SÍ le corresponde a
+                // Muestra Médica; solo no le correspondía a Venta.
+                //
+                // Corrección: el descarte de una fila ajena ahora es
+                // ESPECÍFICO a la combinación (material que originó el
+                // filtrado, etapa, código de la fila ajena) — nunca una marca
+                // sobre el código ajeno en sí. Así, "descartar desde Venta"
+                // solo oculta esa fila en la VISTA de Venta; el estado
+                // propio de Muestra Médica como material independiente
+                // queda intacto, sin importar cuántas veces se filtre Venta.
                 filasAjenasPendientes.forEach(r => {
                     const cod = (r.codigoPorDefecto || '').trim();
                     if (cod === codigoConfirmadoPorHermanos) return; // confirmado como el mismo producto: no se descarta
 
-                    // Esta fila no pertenece al material que originó el
-                    // filtrado. Se marca como descartada para ESE OTRO
-                    // material (no para `material`) — solo si no se había
-                    // descartado ya, para no repetir el aviso.
-                    const keyAjena = responsableKey(cod, etapaFija);
-                    if (descartadosPorArbol.has(keyAjena)) return;
-                    descartadosPorArbol.add(keyAjena);
+                    // La clave incluye el material que originó el filtrado
+                    // (`material`, NO `cod`) — esta marca solo afecta lo que
+                    // ve `material` en esta etapa, nunca el estado propio del
+                    // material dueño real de la fila (`cod`).
+                    const keyVistaAjena = responsableKeyVistaArbol(material, etapaFija, cod);
+                    if (descartadosPorArbol.has(keyVistaAjena)) return;
+                    descartadosPorArbol.add(keyVistaAjena);
                     descartes.push({ etapaFija, material: cod, descripcion: r.descripcion, version: r.version, estado: r.estado });
                 });
 
@@ -5845,6 +5878,16 @@ function buildDateColumnMapPlanta1(headerRow, weekLabelRow, hiddenCols) {
             ETAPAS_FIJAS.forEach(fija => {
                 const key = responsableKey(material, fija);
                 if (descartadosPorArbol.has(key)) { descartadosPorArbol.delete(key); removidos++; }
+            });
+            // También se revierten las claves de VISTA que este material
+            // haya generado al filtrar (las filas ajenas que dejó de ver en
+            // su propio modal) — si no se revierten aquí, quedarían
+            // huérfanas para siempre: nadie más las borra, y la vista de
+            // este material seguiría sin mostrar esas filas aunque el
+            // usuario haya pedido explícitamente revertir su filtrado.
+            const prefijoVista = `VISTA::${material}::`;
+            Array.from(descartadosPorArbol).forEach(k => {
+                if (k.startsWith(prefijoVista)) { descartadosPorArbol.delete(k); removidos++; }
             });
             if (removidos > 0) await saveDescartadosPorArbol();
             return removidos;
@@ -5914,7 +5957,27 @@ function buildDateColumnMapPlanta1(headerRow, weekLabelRow, hiddenCols) {
         // un solo resumen — el pedido explícito era "si son varios mensajes
         // similares agruparlos", y aquí el caso extremo es precisamente ese:
         // decenas de descartes a la vez.
-        const ARBOL_FILTRADO_MASIVO_CONCURRENCIA = 4;
+        // BUGFIX crítico: la concurrencia (varios materiales evaluándose EN
+        // PARALELO) causaba que dos presentaciones del MISMO agrupador se
+        // descartaran mutuamente. Ejemplo real reproducido: al filtrar T7 y
+        // T2 MM (mismo agrupador 12348) al mismo tiempo, la llamada de T7
+        // recorría la etapa ACONDICIONADO, encontraba la fila de T2 MM como
+        // "ajena pendiente" y la descartaba — correcto en sí mismo, PERO al
+        // mismo tiempo la llamada de T2 MM hacía exactamente lo mismo en
+        // sentido contrario, descartando la fila de T7. Cada llamada tenía
+        // razón desde su propia perspectiva aislada, sin saber que el otro
+        // material también estaba siendo evaluado con su propio árbol en ese
+        // mismo instante — el resultado neto era que AMBOS terminaban
+        // descartados, borrando etapas pendientes reales (el caso reportado:
+        // el Acondicionado de CLINDESS desaparecía por completo).
+        //
+        // El filtro INDIVIDUAL (un material a la vez, sin nada corriendo en
+        // paralelo) nunca tuvo este problema porque nunca hay dos llamadas
+        // "compitiendo" al mismo tiempo. La corrección es procesar el
+        // filtrado global de la misma forma: estrictamente secuencial, uno
+        // por uno, sin concurrencia — más lento para ~120 materiales, pero
+        // sin el riesgo de que dos presentaciones del mismo agrupador se
+        // pisen entre sí.
 
         async function filtrarTodosPorArbol(origen) {
             const resultado = origen === 'forecast' ? ultimoResultadoValidacionForecast : ultimoResultadoValidacion;
@@ -5955,27 +6018,23 @@ function buildDateColumnMapPlanta1(headerRow, weekLabelRow, hiddenCols) {
             const sinArbol = [];         // materiales donde la API respondió pero no tiene árbol
             const conError = [];         // materiales donde no se pudo consultar (red/503 persistente)
 
-            // Concurrencia limitada: se procesan de a
-            // ARBOL_FILTRADO_MASIVO_CONCURRENCIA a la vez, no las ~120 juntas.
-            let indice = 0;
-            async function procesarSiguiente() {
-                while (indice < candidatos.length) {
-                    const p = candidatos[indice++];
-                    const r = await aplicarFiltroArbolPersistente(p.material, null); // null = evaluar sus 5 etapas fijas
-                    if (r.ok) {
-                        r.descartes.forEach(d => descartesTotales.push({ ...d, materialDescripcion: p.descripcion }));
-                        if (r.descartes.length === 0) { /* confirmado sin nada que descartar, no se reporta individualmente */ }
-                    } else if (r.motivo === 'sin_arbol') {
-                        sinArbol.push({ material: p.material, descripcion: p.descripcion });
-                    } else if (r.motivo !== 'sin_agrupador') {
-                        conError.push({ material: p.material, descripcion: p.descripcion, motivo: r.motivo });
-                    }
-                    procesados++;
-                    actualizarProgreso();
+            // Procesamiento SECUENCIAL, uno por uno — sin Promise.all ni
+            // workers en paralelo. Cada material termina de evaluarse (y de
+            // actualizar descartadosPorArbol) antes de que el siguiente
+            // empiece, así que nunca hay dos materiales del mismo agrupador
+            // compitiendo por descartarse mutuamente.
+            for (const p of candidatos) {
+                const r = await aplicarFiltroArbolPersistente(p.material, null); // null = evaluar sus 5 etapas fijas
+                if (r.ok) {
+                    r.descartes.forEach(d => descartesTotales.push({ ...d, materialDescripcion: p.descripcion }));
+                } else if (r.motivo === 'sin_arbol') {
+                    sinArbol.push({ material: p.material, descripcion: p.descripcion });
+                } else if (r.motivo !== 'sin_agrupador') {
+                    conError.push({ material: p.material, descripcion: p.descripcion, motivo: r.motivo });
                 }
+                procesados++;
+                actualizarProgreso();
             }
-            const workers = Array.from({ length: Math.min(ARBOL_FILTRADO_MASIVO_CONCURRENCIA, candidatos.length) }, procesarSiguiente);
-            await Promise.all(workers);
 
             // Refrescar la tabla principal UNA sola vez al final (no en cada
             // producto), para no recalcular todo ~120 veces durante el proceso.
@@ -6098,8 +6157,23 @@ function buildDateColumnMapPlanta1(headerRow, weekLabelRow, hiddenCols) {
             // Se muestran TODAS las versiones más recientes que estén en un
             // estado pendiente real (Suspendido, Ingresado o Solicitado) —
             // incluyendo Solicitado, que antes se ocultaba o se sustituía.
+            //
+            // BUGFIX: este modal leía directamente de rmdAutorizadosDetalle
+            // sin consultar descartadosPorArbol en ningún momento — así que
+            // una presentación ya descartada de forma PERSISTENTE por el
+            // filtro de árbol (guardada en Supabase, y que la tabla principal
+            // sí respeta al calcular pendientes) seguía apareciendo aquí cada
+            // vez que se reabría el modal, como si el filtro nunca se hubiera
+            // aplicado. Ahora se excluye toda fila cuyo código, para esta
+            // etapa, ya esté marcado en descartadosPorArbol — la misma
+            // condición que ya usa runValidacionMateriales/Forecast.
             const filasCoincidentes = Array.from(porDescripcion.values())
-                .filter(entry => ESTADOS_PENDIENTES_RMD.has(normalizeEstadoRmd(entry.fila.estado)));
+                .filter(entry => ESTADOS_PENDIENTES_RMD.has(normalizeEstadoRmd(entry.fila.estado)))
+                .filter(entry => {
+                    const codFila = (entry.fila.codigoPorDefecto || '').trim();
+                    if (!codFila) return true; // sin código: nunca se pudo descartar por árbol, se deja
+                    return !descartadosPorArbol.has(responsableKeyVistaArbol(material, etapaFija, codFila));
+                });
             filasCoincidentes.sort((a, b) => (a.fila.descripcion || '').localeCompare(b.fila.descripcion || ''));
 
             // Construye las filas <tr> del cuerpo del modal a partir de la
@@ -6146,11 +6220,18 @@ function buildDateColumnMapPlanta1(headerRow, weekLabelRow, hiddenCols) {
                         <div style="font-size:12px;color:#94a3b8;">Material (Programa de Producción): <strong style="color:#f8fafc;">${escapeHtmlRmdConfig(material)}</strong> — Código Agrupador: <strong style="color:#f8fafc;">${escapeHtmlRmdConfig(agrupador || 'no encontrado')}</strong>
                             <div id="arbolMaterialEstadoTxt" style="margin-top:4px;font-size:11px;color:#6b7280;"></div>
                         </div>
-                        <button type="button" id="btnFiltrarArbolMaterial" title="Mostrar solo la presentación que corresponde a este material según el árbol de materiales (BOM) real de SAP"
-                            style="flex-shrink:0;display:inline-flex;align-items:center;gap:5px;background:rgba(148,163,184,0.1);border:1px solid rgba(148,163,184,0.3);color:#cbd5e1;font-size:11px;font-weight:600;padding:5px 10px;border-radius:6px;cursor:pointer;white-space:nowrap;">
-                            <svg xmlns="http://www.w3.org/2000/svg" style="width:13px;height:13px;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 3v5m0 0a2 2 0 100 4 2 2 0 000-4zm0 6v3m-5 0a2 2 0 100 4 2 2 0 000-4zm10 0a2 2 0 100 4 2 2 0 000-4zm-5-3v3m0 0H7m5 0h5" /></svg>
-                            <span id="btnFiltrarArbolMaterialLabel">Filtrar por árbol</span>
-                        </button>
+                        <div style="flex-shrink:0;display:flex;gap:6px;">
+                            <button type="button" id="btnFiltrarArbolMaterial" title="Mostrar solo la presentación que corresponde a este material según el árbol de materiales (BOM) real de SAP"
+                                style="display:inline-flex;align-items:center;gap:5px;background:rgba(148,163,184,0.1);border:1px solid rgba(148,163,184,0.3);color:#cbd5e1;font-size:11px;font-weight:600;padding:5px 10px;border-radius:6px;cursor:pointer;white-space:nowrap;">
+                                <svg xmlns="http://www.w3.org/2000/svg" style="width:13px;height:13px;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 3v5m0 0a2 2 0 100 4 2 2 0 000-4zm0 6v3m-5 0a2 2 0 100 4 2 2 0 000-4zm10 0a2 2 0 100 4 2 2 0 000-4zm-5-3v3m0 0H7m5 0h5" /></svg>
+                                <span id="btnFiltrarArbolMaterialLabel">Filtrar por árbol</span>
+                            </button>
+                            <button type="button" id="btnRevertirArbolMaterial" title="Revertir el filtrado por árbol aplicado a este material — vuelven a aparecer todas las presentaciones que se hayan descartado"
+                                style="display:inline-flex;align-items:center;gap:5px;background:rgba(244,63,94,0.1);border:1px solid rgba(244,63,94,0.3);color:#fca5a5;font-size:11px;font-weight:600;padding:5px 10px;border-radius:6px;cursor:pointer;white-space:nowrap;">
+                                <svg xmlns="http://www.w3.org/2000/svg" style="width:13px;height:13px;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 15L3 9m0 0l6-6M3 9h12a6 6 0 010 12h-3" /></svg>
+                                Revertir
+                            </button>
+                        </div>
                     </div>
                     <div style="max-height:70vh;overflow-y:auto;border:1px solid rgba(255,255,255,0.1);border-radius:8px;">
                         <table style="width:100%;border-collapse:collapse;table-layout:fixed;font-size:13px;">
@@ -6230,6 +6311,32 @@ function buildDateColumnMapPlanta1(headerRow, weekLabelRow, hiddenCols) {
                         if (typeof runValidacionMateriales === 'function') runValidacionMateriales();
                         if (typeof runValidacionForecast === 'function' && currentTab === 'forecast') runValidacionForecast();
                     });
+
+                    const btnRevertir = document.getElementById('btnRevertirArbolMaterial');
+                    if (btnRevertir) {
+                        btnRevertir.addEventListener('click', async () => {
+                            btnRevertir.disabled = true;
+                            const removidos = await revertirDescartesPorArbol(material);
+                            btnRevertir.disabled = false;
+                            if (removidos === 0) {
+                                estadoTxt.innerHTML = `ℹ No había ningún filtrado por árbol aplicado a <strong>${escapeHtmlRmdConfig(material)}</strong> para revertir.`;
+                                estadoTxt.style.color = '#94a3b8';
+                                return;
+                            }
+                            // Se vuelve a construir la lista completa desde
+                            // rmdAutorizadosDetalle (sin el filtro que se
+                            // acaba de revertir) y se refresca tanto el
+                            // modal como la tabla principal.
+                            const filasRestauradas = Array.from(porDescripcion.values())
+                                .filter(entry => ESTADOS_PENDIENTES_RMD.has(normalizeEstadoRmd(entry.fila.estado)));
+                            filasRestauradas.sort((a, b) => (a.fila.descripcion || '').localeCompare(b.fila.descripcion || ''));
+                            tbody.innerHTML = renderFilas(filasRestauradas);
+                            estadoTxt.innerHTML = `↩ Se revirtió el filtrado por árbol de <strong>${escapeHtmlRmdConfig(material)}</strong> — ${removidos} etapa(s) volvieron a su estado pendiente.`;
+                            estadoTxt.style.color = '#fca5a5';
+                            if (typeof runValidacionMateriales === 'function') runValidacionMateriales();
+                            if (typeof runValidacionForecast === 'function' && currentTab === 'forecast') runValidacionForecast();
+                        });
+                    }
                 }
             });
         }
@@ -6816,6 +6923,19 @@ async function downloadPlanProduccionFromCloud() {
         const RESPONSABLES_VALIDOS = ['DOC', 'PRO', 'ASC', 'IDE'];
         let responsablesEtapa = new Map();
         function responsableKey(material, etapaFija) { return `${material}::${etapaFija}`; }
+
+        // Clave de descarte "por vista": específica a la combinación
+        // (material que originó el filtrado, etapa, código de la fila
+        // ajena). A diferencia de responsableKey (que marca el ESTADO PROPIO
+        // de un material), esta clave solo describe "desde la vista de
+        // `materialQueFiltra`, la fila `codigoAjeno` en `etapaFija` no le
+        // corresponde" — nunca toca el estado real del material dueño de esa
+        // fila. Ver aplicarFiltroArbolPersistente para el caso que esto
+        // corrige: descartar Venta no debe borrar Muestra Médica como
+        // material independiente.
+        function responsableKeyVistaArbol(materialQueFiltra, etapaFija, codigoAjeno) {
+            return `VISTA::${materialQueFiltra}::${etapaFija}::${codigoAjeno}`;
+        }
         async function saveResponsablesEtapa() { return await storeSet('val_responsables_etapa', Array.from(responsablesEtapa.entries())); }
         window.setResponsableEtapa = async function (material, etapaFija, valor) {
             const key = responsableKey(material, etapaFija);
