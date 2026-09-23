@@ -810,6 +810,18 @@
             margin-bottom: 0.2rem;
         }
 
+        /* Modo preciso (por receta): bajo el nombre de cada etapa pendiente,
+           el estado REAL de su RMD en SAP (Ingresado v8, Suspendido v2, Sin
+           RMD…). El detalle completo (RMD, versión, recetas y cómo se
+           identificó) va en el tooltip. */
+        .etapa-label-celda { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; min-width: 0; }
+        .chip-sap { display: inline-block; max-width: 7.5rem; overflow: hidden; text-overflow: ellipsis; font-size: 9.5px; line-height: 1.3; font-weight: 600; padding: 0 0.3rem; border-radius: 0.3rem; border: 1px solid transparent; cursor: help; }
+        .chip-sap--ing  { color: rgb(var(--info-rgb));   background: rgb(var(--info-rgb) / 0.12);   border-color: rgb(var(--info-rgb) / 0.35); }
+        .chip-sap--susp { color: rgb(var(--danger-rgb)); background: rgb(var(--danger-rgb) / 0.12); border-color: rgb(var(--danger-rgb) / 0.35); }
+        .chip-sap--sol  { color: rgb(var(--plum-rgb));   background: rgb(var(--plum-rgb) / 0.12);   border-color: rgb(var(--plum-rgb) / 0.35); }
+        .chip-sap--sin  { color: rgb(var(--danger-rgb)); background: transparent; border-color: rgb(var(--danger-rgb) / 0.5); border-style: dashed; }
+        .chip-sap--otro { color: rgb(var(--copper-rgb)); background: rgb(var(--copper-rgb) / 0.12); border-color: rgb(var(--copper-rgb) / 0.35); }
+
         /* Barra lateral de color en el selector de Estatus, según la
            actividad elegida — permite identificar el tipo de pendiente de
            un vistazo, sin leer el texto del desplegable. Es un borde
@@ -2573,6 +2585,22 @@
         window.addEventListener('message', (event) => {
             const data = event.data;
             if (!data || typeof data !== 'object') return;
+            // Enlace con el portal SAP (script "RMD · mejoras de interfaz"): solo desde el origen EXACTO del portal.
+            if (data.type === 'STATUS_RMD_PING' || data.type === 'RMD_SAP_MAESTRO') {
+                if (event.origin !== PORTAL_SAP_ORIGIN || !event.source) return;
+                // Se responde "listo" recién cuando la carga inicial terminó: así los datos de SAP nunca quedan
+                // pisados por los datos guardados que todavía se estaban leyendo al abrir la página.
+                if (data.type === 'STATUS_RMD_PING') { if (window.__statusRmdAppLista) event.source.postMessage({ type: 'STATUS_RMD_LISTO' }, event.origin); return; }
+                if (!window.__statusRmdAppLista) return;
+                recibirMaestroDesdeSap(data, event.source, event.origin);
+                return;
+            }
+            // Los mensajes de Seguimiento RMD solo se aceptan del propio iframe de Seguimiento: antes cualquier página
+            // que abriera esta podía enviar un "archivo compartido" y cargarlo sin pasar por el DNI.
+            if (typeof data.type === 'string' && data.type.indexOf('RMD_SEGUIMIENTO_') === 0) {
+                const iframeSeg = document.getElementById('iframeSeguimientoRMD');
+                if (!iframeSeg || event.source !== iframeSeg.contentWindow) return;
+            }
             if (data.type === 'RMD_SEGUIMIENTO_DATA_READY') {
                 seguimientoRmdDataReady = true;
                 seguimientoRmdDescripcionesCache = null; // invalidar caché: hay datos nuevos/actualizados
@@ -3179,6 +3207,9 @@ create policy "Acceso con clave anon"
         // Vuelve a cargar en memoria y a refrescar en pantalla solo la parte
         // afectada por la key que cambió en otro dispositivo, sin recargar toda
         // la página ni perder el estado de navegación actual del usuario.
+        const CLAVES_DATOS_VALIDACION = new Set(['val_database_materials', 'val_agrupador_etapas', 'val_rmd_autorizados_raw', 'val_rmd_autorizados_detalle',
+            'val_rmd_autorizados_etapas_por_agrupador', 'val_rmd_preciso', 'val_flags']);
+        let recargaDatosValidacionTimer = null;
         async function onRemoteKeyChanged(key) {
             if (key === 'dashboard_products_rmd') {
                 const saved = await storeGet('dashboard_products_rmd');
@@ -3193,6 +3224,17 @@ create policy "Acceso con clave anon"
                 const [fd, fm] = await Promise.all([storeGet('forecast_data'), storeGet('forecast_months_meta')]);
                 forecastData = fd || []; forecastMonthsMeta = fm || [];
                 if (currentTab === 'forecast') updateDashboardForecast();
+            } else if (CLAVES_DATOS_VALIDACION.has(key)) {
+                // Otro dispositivo cargó un Exportado RMD / Base de Datos (o sincronizó con SAP): cada carga escribe
+                // varias claves seguidas, así que se recarga TODO una sola vez (con una pequeña espera), para no quedarse
+                // con datos viejos ni mezclar datos de una carga con los de otra.
+                clearTimeout(recargaDatosValidacionTimer);
+                recargaDatosValidacionTimer = setTimeout(async () => {
+                    await loadValidacionData();
+                    updateFuentesStatusUI();
+                    if (currentTab === 'produccion') runValidacionMateriales();
+                    if (currentTab === 'forecast') runValidacionForecast();
+                }, 1500);
             } else if (key.startsWith('val_') || key === 'historial_trazabilidad') {
                 if (key === 'val_responsables_etapa') {
                     const re = await storeGet('val_responsables_etapa');
@@ -7179,6 +7221,340 @@ async function downloadPlanProduccionFromCloud() {
             return String(raw || '').trim().toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
         }
 
+        // ==================== MODO PRECISO: estado de cada etapa por RECETA (no por Código Agrupador) ====================
+        // El Exportado RMD clásico trae UN solo "Código por Defecto" por RMD, así que la validación decidía por Código
+        // Agrupador + Etapa: bastaba que UNA presentación de la familia siguiera pendiente para que TODAS las que comparten
+        // agrupador salieran pendientes en esa etapa. Caso real: CLINDESS 100mg OVU T3 CJA x3 (6000000218) tiene su
+        // Acondicionado AUTORIZADO (v2), pero salía pendiente porque T7 y T2 MM tienen su v3 Ingresada. Además, 3 900 RMD
+        // tienen más de una receta asociada que el Excel clásico no muestra, algunos RMD tienen el Código por Defecto vacío
+        // y el agrupador puede cambiar entre versiones de un mismo RMD.
+        //
+        // El Exportado "con recetas" (mismas 18 columnas del Exportar de SAP + Linaje + una fila por receta: lo genera el
+        // script del portal, o llega directo con su botón "Enviar a Status RMD") permite decidir por la receta exacta.
+        // Para cada material del Programa de Producción y cada etapa se busca LA cadena de RMD que le corresponde:
+        //   1. "propia": el propio código es receta de esa etapa (ej. el PT en Acondicionado) — exacto.
+        //   2. "árbol": el árbol de materiales (BOM de SAP) da el material y su versión de fabricación en esa etapa — exacto.
+        //   3. "familia": en su familia (mismo Código Agrupador) hay UN solo material en esa etapa (ej. un granel común).
+        //   4. "ambiguo": varias presentaciones y todavía sin árbol: criterio conservador de siempre (pendiente si alguna
+        //      lo está), marcado como tal; en segundo plano se calcula el árbol localmente y se vuelve a evaluar.
+        // Cadena = todos los RMD de ese material en esa etapa (todas sus versiones); su estado lo decide
+        // estadoDeCadenaPrecisa (las Canceladas no cuentan; las Suspendidas se apartan si hay un RMD vigente). Solo se
+        // revisan la etapa del propio material y las ANTERIORES (lo que hay "detrás"), no las posteriores.
+        const PORTAL_SAP_ORIGIN = 'https://medifarma-portal-prd-twuxor0u.cpp.cfapps.us10.hana.ondemand.com';
+        const ESTADOS_IGNORADOS_RMD = new Set(['CANCELADO']);
+        const CABECERA_CLASICA_RMD = ['Código', 'Código de Solicitud', 'Versión', 'Estado', 'Código por Defecto', 'Código Agrupador', 'Descripción', 'Etapa', 'Fecha Registro', 'Usuario Registro', 'Fecha Autorización', 'Usuario Autorización', 'A/F', 'Fecha Solicitud', 'Planta', 'Sección', 'Motivo', 'Observación'];
+        const CABECERA_RECETAS_RMD = ['Linaje', 'Código Receta', 'Versión Receta', 'Descripción Receta', 'Etapa Receta', 'Puesto Trabajo', 'Hoja Ruta', 'Contador'];
+        // Orden FÍSICO del proceso para decidir qué etapas quedan "antes" de otra. No es el orden de columnas de
+        // ETAPAS_FIJAS: en los 4.528 árboles de SAP revisados, Inspección va SIEMPRE después de Envase (inyectables:
+        // Fabricación > Envase > Inspección > Acondicionado), nunca antes.
+        const ORDEN_FISICO_ETAPA = { FABRICACION: 0, RECUBRIMIENTO: 1, ENVASE: 2, INSPECCION: 3, ACONDICIONADO: 4 };
+        let rmdPrecisoDatos = null; // lo que se guarda: { generado, origen, filas:[[rmd, linaje, version, estado, etapa, agr, defecto, desc, [[material, verid]...]]] } (una por RMD)
+        let rmdPreciso = null;      // índices construidos desde rmdPrecisoDatos (no se guardan)
+
+        // Mayúsculas y sin tildes (misma normalización que normalizeEstadoRmd), para comparar encabezados.
+        const normCabeceraRmd = (h) => normalizeEstadoRmd(h === null || h === undefined ? '' : String(h));
+        function esFormatoConRecetas(headerRow) {
+            const k = (headerRow || []).map(normCabeceraRmd);
+            return k.includes('CODIGO RECETA') && k.includes('LINAJE') && k.includes('CODIGO AGRUPADOR') && k.includes('ETAPA');
+        }
+        // Excel "con recetas" (una fila por receta) -> datos compactos (una entrada por RMD).
+        function datosPrecisosDesdeFilas(rows, origen, generado) {
+            const k = rows[0].map(normCabeceraRmd); const col = (n) => k.indexOf(n);
+            const c = { rmd: col('CODIGO'), sol: col('CODIGO DE SOLICITUD'), ver: col('VERSION'), est: col('ESTADO'), def: col('CODIGO POR DEFECTO'), agr: col('CODIGO AGRUPADOR'),
+                        desc: col('DESCRIPCION'), eta: col('ETAPA'), lin: col('LINAJE'), mat: col('CODIGO RECETA'), vrd: col('VERSION RECETA') };
+            const porRmd = new Map();
+            rows.slice(1).forEach(r => {
+                if (!r || !r.length) return;
+                const v = (i) => (i >= 0 && r[i] !== null && r[i] !== undefined ? String(r[i]).trim() : '');
+                const rmd = v(c.rmd), sol = v(c.sol), version = Number(v(c.ver)) || 0, etapa = v(c.eta);
+                if (!etapa) return;
+                const clave = [rmd, sol, version, etapa].join('|');
+                let e = porRmd.get(clave);
+                if (!e) {
+                    e = [rmd, v(c.lin) || rmd || (sol ? 'SOL-' + sol : ''), version, v(c.est), etapa, normalizeAgrupador(v(c.agr)) || '', normalizeMaterialCode(v(c.def)) || '', v(c.desc), []];
+                    porRmd.set(clave, e);
+                }
+                const mat = normalizeMaterialCode(v(c.mat)), verid = v(c.vrd);
+                if (mat && !e[8].some(([m, vr]) => m === mat && vr === verid)) e[8].push([mat, verid]);
+            });
+            return { generado: generado || null, origen: origen || 'archivo', filas: Array.from(porRmd.values()) };
+        }
+        // Para las partes que siguen usando el formato clásico (Forecast, modal de verificación, Seguimiento RMD): una sola
+        // fila por RMD, con exactamente las 18 columnas del Exportar de SAP.
+        function filasClasicasDeduplicadas(rows) {
+            const k = rows[0].map(normCabeceraRmd); const idx = (n) => k.indexOf(n);
+            const iRmd = idx('CODIGO'), iSol = idx('CODIGO DE SOLICITUD'), iVer = idx('VERSION'), iEta = idx('ETAPA');
+            const cols = CABECERA_CLASICA_RMD.map(h => idx(normCabeceraRmd(h)));
+            const vistos = new Set(); const out = [CABECERA_CLASICA_RMD.slice()];
+            rows.slice(1).forEach(r => {
+                if (!r || !r.length) return;
+                const clave = [iRmd, iSol, iVer, iEta].map(i => String(i >= 0 && r[i] !== null && r[i] !== undefined ? r[i] : '').trim()).join('|');
+                if (vistos.has(clave)) return;
+                vistos.add(clave);
+                out.push(cols.map(i => (i >= 0 && r[i] !== undefined ? r[i] : '')));
+            });
+            return out;
+        }
+        function libroClasicoComoBuffer(rows) {
+            const iFechas = ['Fecha Registro', 'Fecha Solicitud'].map(h => rows[0].indexOf(h));
+            const datos = rows.map((r, n) => n === 0 ? r : r.map((v, j) => (iFechas.includes(j) && typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v)) ? new Date(v + 'T00:00:00') : v));
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(datos, { cellDates: true }), 'Exportación SAPUI5');
+            return XLSX.write(wb, { type: 'array', bookType: 'xlsx' });
+        }
+
+        // Índices del modo preciso. Una "cadena" = TODOS los RMD de un mismo material (receta) en una misma etapa: es la
+        // misma idea que el modo clásico (Agrupador + Etapa + Código por Defecto, versión más alta), pero con las recetas
+        // reales en vez del único Código por Defecto y sin depender del Código Agrupador (que en SAP puede cambiar entre
+        // versiones). No se usa el "Linaje" (codigoversionprincipal) para agrupar: en los datos reales viene vacío en la
+        // mayoría de las versiones (ej. ANDREWS Fabricación v1…v8 no están enlazadas), así que partiría cadenas.
+        function construirIndicePreciso(datos) {
+            if (!datos || !Array.isArray(datos.filas) || datos.filas.length === 0) return null;
+            const agregarLista = (map, k, v) => { let s = map.get(k); if (!s) { s = []; map.set(k, s); } s.push(v); };
+            const agregarSet = (map, k, v) => { let s = map.get(k); if (!s) { s = new Set(); map.set(k, s); } s.add(v); };
+            const idx = {
+                generado: datos.generado || null, origen: datos.origen || 'archivo', totalRmd: datos.filas.length, totalEntradas: 0,
+                porMatEtapa: new Map(), matsPorAgrEtapa: new Map(), etapasPropias: new Map(),
+                agrsDeMaterial: new Map(), etapasDeAgr: new Map(), descDeMaterial: new Map()
+            };
+            const descElegida = new Map(); // material -> { acond, version }
+            datos.filas.forEach(([rmd, linaje, version, estado, etapaTxt, agr, defecto, desc, recetas]) => {
+                const etapa = mapEtapaAFija(normalizeEtapa(etapaTxt));
+                if (!etapa) return;
+                const estadoNorm = normalizeEstadoRmd(estado);
+                if (ESTADOS_IGNORADOS_RMD.has(estadoNorm)) return; // Cancelados: no cuentan
+                const e = { rmd, version: Number(version) || 0, estado, estadoNorm, etapa, desc };
+                const materiales = new Set();
+                if (defecto) materiales.add(defecto);
+                (recetas || []).forEach(([m]) => { if (m) materiales.add(m); });
+                materiales.forEach(m => {
+                    agregarLista(idx.porMatEtapa, `${m}::${etapa}`, e);
+                    agregarSet(idx.etapasPropias, m, etapa);
+                    if (agr) { agregarSet(idx.agrsDeMaterial, m, agr); agregarSet(idx.matsPorAgrEtapa, `${agr}::${etapa}`, m); }
+                    // Descripción del material: la de su RMD de Acondicionado si lo tiene, si no la de su versión más alta.
+                    const acond = etapa === 'ACONDICIONADO', prev = descElegida.get(m);
+                    if (desc && (!prev || (acond && !prev.acond) || (acond === prev.acond && e.version > prev.version))) { descElegida.set(m, { acond, version: e.version }); idx.descDeMaterial.set(m, desc); }
+                });
+                if (agr) agregarSet(idx.etapasDeAgr, agr, etapa);
+                idx.totalEntradas++;
+            });
+            return idx;
+        }
+        // Estado de una cadena (todos los RMD de un material en una etapa). Al autorizarse una versión nueva SAP
+        // suspende la anterior, así que las versiones Suspendidas se apartan cuando en la cadena hay un RMD VIGENTE
+        // (Autorizado o Ingresado) — ej. un material que es receta de dos másters con numeración de versión distinta.
+        // Una solicitud (Solicitud Rechazada/Aprobada) NO basta para apartarlas: no es un RMD (ej. 5000000435
+        // Fabricación: v1 y v2 Suspendidas + una solicitud duplicada de la v2 Rechazada → sigue pendiente). Sin RMD
+        // vigente se usa la regla clásica sobre todas: manda la versión más alta. En empate gana la no resuelta (mismo
+        // criterio que el modo clásico) y, después, el RMD real sobre la solicitud (ej. MACRODANTINA Envase: v4
+        // Autorizada y una solicitud v4 Rechazada → se muestra la v4 Autorizada).
+        const ESTADOS_RMD_VIGENTES = new Set(['AUTORIZADO', 'INGRESADO']);
+        function estadoDeCadenaPrecisa(entradas) {
+            if (!entradas || entradas.length === 0) return null;
+            const hayVigente = entradas.some(x => ESTADOS_RMD_VIGENTES.has(x.estadoNorm));
+            const base = hayVigente ? entradas.filter(x => x.estadoNorm !== 'SUSPENDIDO') : entradas;
+            const peso = (x) => (!ESTADOS_RESUELTOS_RMD.has(x.estadoNorm) ? 2 : (x.rmd ? 1 : 0));
+            const ultima = base.reduce((a, b) => {
+                if (b.version !== a.version) return b.version > a.version ? b : a;
+                return peso(b) > peso(a) ? b : a;
+            });
+            return { ultima, pendiente: !ESTADOS_RESUELTOS_RMD.has(ultima.estadoNorm), versiones: entradas.length, suspendidasApartadas: entradas.length - base.length };
+        }
+
+        function arbolEnCacheSincrono(material) {
+            try {
+                const c = cargarArbolMaterialesCache();
+                const a = c && c[material];
+                if (a && Array.isArray(a.nodos) && a.nodos.length > 0) return a;
+            } catch (err) { /* sin caché: se prueba con el árbol hacia atrás */ }
+            return arbolesAguasArribaSesion.get(material) || null;
+        }
+        // Semielaborados del programa (ampollas llenas, graneles…): el árbol completo se arma desde su producto
+        // terminado y SAP puede no tener ninguno o tener varios ("sin_producto_terminado" / "multiples_productos"). Para
+        // saber qué RMD necesita el propio semielaborado basta su cadena HACIA ATRÁS (él y sus etapas previas), que el
+        // motor construye igual partiendo de él (misma alternativa por defecto que el árbol normal: la de menor número).
+        // Solo en memoria y solo para el modo preciso: no se mezcla con el caché del filtro por árbol.
+        const arbolesAguasArribaSesion = new Map();
+        const MOTIVOS_ARBOL_AGUAS_ARRIBA = new Set(['sin_producto_terminado', 'multiples_productos']);
+        function arbolAguasArribaLocal(motor, codigo) {
+            const mat = motor.normMat(codigo);
+            const alts = (mat && motor.buildBomIndex().altsByMaterial[mat]) || [];
+            const num = (a) => { const n = parseInt(a, 10); return isNaN(n) ? Infinity : n; };
+            const alt = alts.map(a => a.alt).sort((a, b) => num(a) - num(b))[0];
+            if (alt === undefined) return null;
+            const arbol = ((motor.construirTodosLosArboles(mat, alt, {}) || {}).arboles || [])[0];
+            if (!arbol || arbol.length === 0) return null;
+            return { estado: 'ok', materialFinal: mat, altFinal: alt, aguasArriba: true, nodos: arbol.map(n => ({ etapa: n.etapa, material: n.material, alt: n.alt, version: n.version })) };
+        }
+        function nodoArbolDeEtapa(arbol, etapa) {
+            if (!arbol || !Array.isArray(arbol.nodos)) return null;
+            return arbol.nodos.find(n => String(n.material || '').trim() && mapEtapaAFija(normalizeEtapa(n.etapa)) === etapa) || null;
+        }
+        function agrupadoresDeMaterialPreciso(material) {
+            const s = new Set(rmdPreciso.agrsDeMaterial.get(material) || []);
+            const info = databaseMaterials.get(material);
+            if (info && info.agrupador) s.add(info.agrupador);
+            return s;
+        }
+        // Etapas a revisar: con árbol, exactamente las de su cadena (BOM real); sin árbol, su(s) etapa(s) propia(s) y las
+        // ANTERIORES que existan en su familia; si no se sabe su etapa propia, todas las de la familia (criterio de siempre).
+        function etapasParaMaterialPreciso(material, arbol) {
+            if (arbol) {
+                const s = new Set(arbol.nodos.map(n => mapEtapaAFija(normalizeEtapa(n.etapa))).filter(Boolean));
+                if (s.size > 0) return { etapas: ETAPAS_FIJAS.filter(e => s.has(e)), fuente: arbol.aguasArriba ? 'su cadena hacia atrás en el árbol de materiales (BOM de SAP)' : 'árbol de materiales (BOM de SAP)' };
+            }
+            const P = rmdPreciso;
+            const familia = new Set();
+            agrupadoresDeMaterialPreciso(material).forEach(a => (P.etapasDeAgr.get(a) || []).forEach(e => familia.add(e)));
+            const info = databaseMaterials.get(material);
+            const propias = new Set(P.etapasPropias.get(material) || []);
+            if (propias.size === 0 && info && info.etapaPropia) { const f = mapEtapaAFija(info.etapaPropia); if (f) propias.add(f); }
+            if (familia.size === 0 && info && info.agrupador) (agrupadorEtapasMap.get(info.agrupador) || []).forEach(e => { const f = mapEtapaAFija(e); if (f) familia.add(f); });
+            if (propias.size > 0) {
+                const tope = Math.max(...Array.from(propias).map(e => ORDEN_FISICO_ETAPA[e]));
+                return { etapas: ETAPAS_FIJAS.filter(e => propias.has(e) || (familia.has(e) && ORDEN_FISICO_ETAPA[e] <= tope)), fuente: 'etapa propia y las anteriores de su familia' };
+            }
+            return { etapas: ETAPAS_FIJAS.filter(e => familia.has(e)), fuente: 'familia (Código Agrupador)' };
+        }
+        function evaluarEtapaPrecisa(material, etapa, arbol) {
+            const P = rmdPreciso;
+            let nivel = null, codigo = null, verid = null;
+            if ((P.etapasPropias.get(material) || new Set()).has(etapa)) { nivel = 'propia'; codigo = material; }
+            else {
+                const nodo = nodoArbolDeEtapa(arbol, etapa);
+                if (nodo) { nivel = 'arbol'; codigo = String(nodo.material).trim(); verid = nodo.version ? String(nodo.version).trim() : null; }
+            }
+            let candidatos;
+            if (codigo) {
+                // Se decide con TODAS las versiones de fabricación del material (misma idea que el modo clásico, pero por
+                // material exacto). La versión de fabricación que elige el árbol NO se usa para decidir: cuando hay varias,
+                // el motor toma la primera, y en los datos reales suele ser una ya retirada (ej. QUITOSO envase 5000000969:
+                // el árbol da la 1101, que solo existe en la v1 Suspendida, mientras la v4 Autorizada usa 1102/2204). Solo
+                // se muestra como información.
+                candidatos = [{ material: codigo, cadena: estadoDeCadenaPrecisa(P.porMatEtapa.get(`${codigo}::${etapa}`) || []) }];
+            } else {
+                const mats = new Set();
+                agrupadoresDeMaterialPreciso(material).forEach(a => (P.matsPorAgrEtapa.get(`${a}::${etapa}`) || []).forEach(m => mats.add(m)));
+                if (mats.size === 1) { nivel = 'familia'; codigo = Array.from(mats)[0]; }
+                else if (mats.size > 1) nivel = 'ambiguo';
+                candidatos = Array.from(mats).map(m => ({ material: m, cadena: estadoDeCadenaPrecisa(P.porMatEtapa.get(`${m}::${etapa}`)) }));
+            }
+            candidatos = candidatos.filter(c => c.cadena)
+                .sort((a, b) => (Number(b.cadena.pendiente) - Number(a.cadena.pendiente)) || (b.cadena.ultima.version - a.cadena.ultima.version))
+                .map(c => ({ material: c.material, rmd: c.cadena.ultima.rmd, version: c.cadena.ultima.version, estado: c.cadena.ultima.estado, pendiente: c.cadena.pendiente, versiones: c.cadena.versiones, apartadas: c.cadena.suspendidasApartadas }));
+            if (candidatos.length === 0) return { etapa, nivel: 'sin-rmd', codigo, verid, pendiente: true, estado: 'Sin RMD', candidatos };
+            const rep = candidatos[0];
+            return { etapa, nivel, codigo, verid, pendiente: candidatos.some(c => c.pendiente), estado: rep.estado, rmd: rep.rmd, version: rep.version, candidatos };
+        }
+        // Si el material es un semielaborado, su árbol (armado desde el producto terminado) incluye también las etapas
+        // POSTERIORES a él, que no son requisito para fabricarlo: se recorta desde su propio nodo hacia atrás (los nodos
+        // van de Acondicionado, índice 0, a Fabricación).
+        function arbolDesdeMaterial(arbol, material) {
+            if (!arbol || !Array.isArray(arbol.nodos)) return arbol;
+            const k = arbol.nodos.findIndex(n => String(n.material || '').trim() === material);
+            return k > 0 ? Object.assign({}, arbol, { nodos: arbol.nodos.slice(k), aguasArriba: true }) : arbol;
+        }
+        function evaluarMaterialPreciso(material) {
+            const arbol = arbolDesdeMaterial(arbolEnCacheSincrono(material), material);
+            const { etapas, fuente } = etapasParaMaterialPreciso(material, arbol);
+            const detalle = {};
+            etapas.forEach(e => { detalle[e] = evaluarEtapaPrecisa(material, e, arbol); });
+            return { etapas, fuente, detalle, conArbol: !!arbol, descripcion: rmdPreciso.descDeMaterial.get(material) || '' };
+        }
+        const NIVEL_PRECISO_TXT = { propia: 'código propio', arbol: 'por árbol de materiales', familia: 'única en su familia', ambiguo: 'varias presentaciones en su familia, sin árbol todavía', 'sin-rmd': 'sin RMD' };
+        function motivoEtapaPrecisa(d) {
+            const lbl = ETAPAS_FIJAS_LABEL[d.etapa] || d.etapa;
+            if (d.nivel === 'sin-rmd') return `${lbl}: sin RMD en SAP${d.codigo ? ` para ${d.codigo}${d.verid ? ' (versión de fabricación ' + d.verid + ')' : ''}` : ''}`;
+            return `${lbl}: ${d.estado} v${d.version} (RMD ${d.rmd || 'en solicitud'}, ${NIVEL_PRECISO_TXT[d.nivel] || d.nivel})`;
+        }
+        // Una etapa "exacta" (su propia receta, o la de su árbol de materiales) ya no depende del filtro de árbol antiguo
+        // (descartadosPorArbol), que existía justamente para compensar la falta de recetas: se ignora ese descarte ahí.
+        // "Única en su familia" NO cuenta como exacta: una presentación puede no pasar por esa etapa (ej. sin
+        // recubrimiento) y ese descarte antiguo puede ser justamente lo que lo indica.
+        function etapaPrecisaEsExacta(d) { return !!(d && (d.nivel === 'propia' || d.nivel === 'arbol')); }
+
+        // Refinamiento en segundo plano de las etapas que no se identificaron por la propia receta del material (única
+        // en su familia, ambiguas o sin RMD): se calcula el árbol SOLO con el motor LOCAL (sin consultar la API remota,
+        // para no generar ráfagas de peticiones) y, si llegó alguno nuevo, se vuelve a validar. Una sola vez por material
+        // y sesión.
+        const arbolesRefinoIntentados = new Set();
+        const refinoArbolEnCola = new Set(); // pedidos que llegan mientras otro refinamiento está corriendo
+        let refinoArbolEnCurso = false;
+        async function refinarAmbiguosConArbol(materiales) {
+            const faltan = materiales.filter(m => !arbolesRefinoIntentados.has(m) && !arbolEnCacheSincrono(m)
+                && (!arbolSinArbolSesion.has(m) || MOTIVOS_ARBOL_AGUAS_ARRIBA.has(arbolSinArbolSesion.get(m))));
+            if (faltan.length === 0) return;
+            if (refinoArbolEnCurso) { faltan.forEach(m => refinoArbolEnCola.add(m)); return; }
+            refinoArbolEnCurso = true;
+            faltan.forEach(m => arbolesRefinoIntentados.add(m));
+            let nuevos = 0, i = 0;
+            try {
+                const trabajador = async () => {
+                    while (i < faltan.length) {
+                        const m = faltan[i++];
+                        let motivo = arbolSinArbolSesion.get(m);
+                        if (!motivo) {
+                            const r = await intentarArbolLocal(m);
+                            if (!r) return; // motor local no disponible: no se insiste
+                            if (r.arbol) { const c = cargarArbolMaterialesCache(); c[m] = r.arbol; guardarArbolMaterialesCache(c); nuevos++; continue; }
+                            motivo = r.sinArbol; arbolSinArbolSesion.set(m, motivo);
+                        }
+                        if (MOTIVOS_ARBOL_AGUAS_ARRIBA.has(motivo)) {
+                            const motor = await obtenerMotorArbolLocal(false);
+                            if (!motor) return;
+                            const a = arbolAguasArribaLocal(motor, m);
+                            if (a) { arbolesAguasArribaSesion.set(m, a); nuevos++; }
+                        }
+                    }
+                };
+                await Promise.all([trabajador(), trabajador(), trabajador()]);
+            } finally { refinoArbolEnCurso = false; }
+            if (refinoArbolEnCola.size > 0) { const cola = Array.from(refinoArbolEnCola); refinoArbolEnCola.clear(); await refinarAmbiguosConArbol(cola); }
+            if (nuevos > 0 && currentTab === 'produccion') runValidacionMateriales();
+        }
+
+        // ---- Enlace directo con el portal SAP (script "RMD · mejoras de interfaz", botón "Enviar a Status RMD") ----
+        // El script corre dentro de la sesión ya iniciada del portal, lee el maestro completo con sus recetas y lo envía a
+        // esta pestaña con postMessage. Aquí solo se acepta desde el origen EXACTO del portal; se pide el DNI como en
+        // cualquier carga y se procesa con el mismo código que el Excel subido. No hay credenciales de por medio.
+        let recibiendoMaestroSap = false;
+        function filasDesdePuenteSap(msg) {
+            const cols = msg.columnas; const i = (n) => cols.indexOf(n);
+            const orden = ['codigo', 'codigoSolicitud', 'version', 'estado', 'codDefecto', 'codAgrupador', 'descripcion', 'etapa', 'fechaRegistro', 'usuarioRegistro',
+                'fechaAut', 'usuarioAutorizacion', 'af', 'fechaSolicitud', 'planta', 'seccion', 'motivo', 'observacion'].map(i);
+            const iRec = i('recetas'), iLin = i('linaje');
+            if (orden.some(x => x < 0) || iRec < 0 || iLin < 0) throw new Error('formato de datos inesperado');
+            const rows = [[...CABECERA_CLASICA_RMD, ...CABECERA_RECETAS_RMD]];
+            msg.filas.forEach(f => {
+                if (!Array.isArray(f)) return;
+                const base = orden.map(x => (f[x] === null || f[x] === undefined ? '' : f[x]));
+                const recetas = Array.isArray(f[iRec]) ? f[iRec] : [];
+                // receta = [Matnr, Verid, Etapa receta, Descripción, Puesto, Hoja ruta, Contador]
+                if (recetas.length === 0) rows.push([...base, f[iLin] || '', '', '', '', '', '', '', '']);
+                else recetas.forEach(r => rows.push([...base, f[iLin] || '', ...[0, 1, 3, 2, 4, 5, 6].map(j => (r && r[j] !== null && r[j] !== undefined ? r[j] : ''))]));
+            });
+            return rows;
+        }
+        async function recibirMaestroDesdeSap(msg, fuente, origen) {
+            const responder = (r) => { try { fuente.postMessage(Object.assign({ type: 'STATUS_RMD_RECIBIDO' }, r), origen); } catch (err) { /* la pestaña del portal se cerró */ } };
+            if (recibiendoMaestroSap) { responder({ ok: false, motivo: 'ya se está procesando un envío anterior' }); return; }
+            recibiendoMaestroSap = true;
+            try {
+                if (!msg || !Array.isArray(msg.filas) || !Array.isArray(msg.columnas) || msg.filas.length === 0) { responder({ ok: false, motivo: 'no llegaron datos' }); return; }
+                const ok = await autorizarYRegistrar('Sincronización con SAP', `Maestro RMD con recetas desde el portal SAP: ${msg.filas.length} RMD (leído ${String(msg.generado || '').replace('T', ' ').slice(0, 16)})`);
+                if (!ok) { responder({ ok: false, motivo: 'se canceló la confirmación con DNI' }); return; }
+                Swal.fire({ title: 'Procesando datos de SAP...', allowOutsideClick: false, didOpen: () => Swal.showLoading(), background: '#0f172a' });
+                const rows = filasDesdePuenteSap(msg);
+                const r = await procesarFilasRmd(rows, { fileName: `SAP_${String(msg.generado || '').slice(0, 10) || 'portal'}.xlsx`, fromSeguimientoIframe: false, bufferOriginal: null, origen: 'sap', generado: msg.generado });
+                responder(r && r.ok ? { ok: true, resumen: r.resumen } : { ok: false, motivo: (r && r.motivo) || 'no se pudo procesar' });
+                if (r && r.ok && currentTab !== 'produccion' && typeof switchTab === 'function') switchTab('produccion');
+            } catch (err) {
+                console.error(err);
+                responder({ ok: false, motivo: err.message });
+                Swal.fire({ icon: 'error', title: 'Error', text: 'No se pudieron procesar los datos recibidos de SAP.', background: '#0f172a' });
+            } finally { recibiendoMaestroSap = false; }
+        }
+
         function processFileRmdAutorizados(file, fromSeguimientoIframe) {
             // Cuando el archivo llega automáticamente desde Seguimiento RMD
             // (fromSeguimientoIframe=true), el usuario ya vio su propia
@@ -7192,29 +7568,53 @@ async function downloadPlanProduccionFromCloud() {
             const reader = new FileReader();
             reader.onload = async (e) => {
                 try {
-                    // Este archivo (RMD_Configuración) es el MISMO que usa
-                    // Seguimiento RMD. Si NO vino ya desde ese iframe, se le
-                    // reenvía una copia para que también se actualice ahí
-                    // automáticamente, sin pedirle el archivo al usuario de
-                    // nuevo. Se clona el buffer porque más abajo se sigue
-                    // usando para el parseo local.
-                    if (!fromSeguimientoIframe) {
-                        try {
-                            const iframeEl = document.getElementById('iframeSeguimientoRMD');
-                            if (iframeEl && iframeEl.contentWindow) {
-                                const bufferCopy = e.target.result.slice(0);
-                                iframeEl.contentWindow.postMessage({ type: 'RMD_ARCHIVO_COMPARTIDO_DEL_PADRE', fileName: file.name, buffer: bufferCopy }, '*', [bufferCopy]);
-                            }
-                        } catch (shareErr) { console.error('No se pudo compartir el archivo con Seguimiento RMD:', shareErr); }
-                    }
                     const data = new Uint8Array(e.target.result);
                     const workbook = XLSX.read(data, { type: 'array', cellDates: true });
                     const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
                     const rows = XLSX.utils.sheet_to_json(firstSheet, { header: 1, defval: "" });
+                    // "generado": la fecha del archivo (cuando se descargó de SAP), para mostrar de cuándo son los datos.
+                    const generado = new Date(file.lastModified || Date.now()).toISOString();
+                    await procesarFilasRmd(rows, { fileName: file.name, fromSeguimientoIframe, bufferOriginal: e.target.result, origen: 'archivo', generado });
+                } catch (error) {
+                    console.error(error);
+                    Swal.fire({ icon: 'error', title: 'Error', text: 'No se pudo leer el archivo Exportado RMD.', background: '#0f172a' });
+                }
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        // Núcleo común del Exportado RMD (archivo subido, archivo que comparte Seguimiento RMD, o datos directos del
+        // portal SAP). Devuelve { ok, resumen, motivo } para quien necesite saber el resultado (el enlace con SAP).
+        async function procesarFilasRmd(rowsEntrada, opciones) {
+            const { fileName, fromSeguimientoIframe, bufferOriginal, origen, generado } = opciones || {};
+                    let rows = rowsEntrada;
+                    let datosPrecisos = null;
+                    let bufferParaSeguimiento = bufferOriginal || null;
+                    if (rows.length >= 2 && esFormatoConRecetas(rows[0])) {
+                        // Formato "con recetas": índice preciso + filas clásicas (una por RMD) para todo lo demás.
+                        datosPrecisos = datosPrecisosDesdeFilas(rows, origen, generado);
+                        rows = filasClasicasDeduplicadas(rows);
+                        bufferParaSeguimiento = libroClasicoComoBuffer(rows);
+                    }
+                    // Este archivo (RMD_Configuración) es el MISMO que usa
+                    // Seguimiento RMD. Si NO vino ya desde ese iframe, se le
+                    // reenvía una copia para que también se actualice ahí
+                    // automáticamente, sin pedirle el archivo al usuario de
+                    // nuevo (con el formato "con recetas" se le reenvía la
+                    // versión clásica, una fila por RMD, que es la que entiende).
+                    if (!fromSeguimientoIframe && bufferParaSeguimiento) {
+                        try {
+                            const iframeEl = document.getElementById('iframeSeguimientoRMD');
+                            if (iframeEl && iframeEl.contentWindow) {
+                                const bufferCopy = bufferParaSeguimiento.slice(0);
+                                iframeEl.contentWindow.postMessage({ type: 'RMD_ARCHIVO_COMPARTIDO_DEL_PADRE', fileName: fileName || 'RMD_Configuracion.xlsx', buffer: bufferCopy }, '*', [bufferCopy]);
+                            }
+                        } catch (shareErr) { console.error('No se pudo compartir el archivo con Seguimiento RMD:', shareErr); }
+                    }
                     if (rows.length < 2) {
                         Swal.close();
                         Swal.fire({ icon: 'warning', title: 'Vacío', text: 'No se encontraron datos en el archivo Exportado RMD.', background: '#0f172a' });
-                        return;
+                        return { ok: false, motivo: 'no se encontraron datos' };
                     }
                     const headerRow = rows[0];
                     // A diferencia de los archivos de Programa de Producción (donde
@@ -7247,12 +7647,12 @@ async function downloadPlanProduccionFromCloud() {
                     if (codigoAgrupadorCol === -1 || etapaCol === -1) {
                         Swal.close();
                         Swal.fire({ icon: 'warning', title: 'Formato inesperado', text: 'No se encontraron las columnas "Código Agrupador" y/o "Etapa" en el archivo Exportado RMD.', background: '#0f172a' });
-                        return;
+                        return { ok: false, motivo: 'faltan las columnas Código Agrupador y/o Etapa' };
                     }
                     if (estadoCol === -1 || versionCol === -1) {
                         Swal.close();
                         Swal.fire({ icon: 'warning', title: 'Formato inesperado', text: 'No se encontraron las columnas "Estado" y/o "Versión", necesarias para detectar la última versión de cada etapa.', background: '#0f172a' });
-                        return;
+                        return { ok: false, motivo: 'faltan las columnas Estado y/o Versión' };
                     }
 
                     // Paso 1: agrupar filas por (Agrupador, EtapaNormalizada),
@@ -7263,7 +7663,7 @@ async function downloadPlanProduccionFromCloud() {
                     // el de la fila de mayor versión.
                     const grupos = new Map(); // key "agr::etapaNorm" -> { version, estado, agr, etapaNorm, etapaRaw, desc, codigosPorDefecto:Set }
                     const detalle = []; // una entrada por CADA fila del Excel, sin colapsar — para el modal de verificación
-                    let filasConDatos = 0;
+                    let filasConDatos = 0, countCancelados = 0;
                     rows.slice(1).forEach(row => {
                         if (!row || row.length === 0) return;
                         const agr = normalizeAgrupador(row[codigoAgrupadorCol]);
@@ -7279,6 +7679,10 @@ async function downloadPlanProduccionFromCloud() {
                         const observacion = observacionCol !== -1 ? String(row[observacionCol] || '').trim() : '';
 
                         detalle.push({ codigoAgrupador: agr, codigoPorDefecto, estado: estadoRaw, descripcion: desc, etapa: etapaRaw, etapaNorm, version, observacion });
+                        // Un RMD Cancelado nunca entró en vigor: no cuenta para decidir la última versión. Antes caía en
+                        // "estado no reconocido" y bloqueaba la etapa aunque la versión anterior siguiera Autorizada (ej.
+                        // SOLUDEX Fabricación: v4 Autorizada + v5 Cancelada). Mismo criterio que la validación por receta.
+                        if (ESTADOS_IGNORADOS_RMD.has(normalizeEstadoRmd(estadoRaw))) { countCancelados++; return; }
 
                         // La clave de agrupación incluye el CÓDIGO POR DEFECTO
                         // (es decir, el producto concreto), no solo Agrupador +
@@ -7379,18 +7783,27 @@ async function downloadPlanProduccionFromCloud() {
                     if (grupos.size === 0) {
                         Swal.close();
                         Swal.fire({ icon: 'warning', title: 'Sin registros válidos', text: 'No se pudo asociar ninguna Etapa con un Código Agrupador.', background: '#0f172a' });
-                        return;
+                        return { ok: false, motivo: 'no se pudo asociar ninguna Etapa con un Código Agrupador' };
                     }
 
                     rmdAutorizadosEtapasPorAgrupador = etapasByAgrupador;
                     rmdAutorizadosRaw = raw;
                     rmdAutorizadosDetalle = detalle;
                     rmdAutorizadosLoaded = true;
+                    // Datos por receta: se reemplazan SIEMPRE con esta carga. Si llegó un Excel clásico (sin recetas), los
+                    // datos precisos anteriores ya no son los más recientes y se descartan (la validación vuelve a decidir
+                    // por Código Agrupador con los datos nuevos, sin mezclar fuentes de distinta fecha).
+                    rmdPrecisoDatos = datosPrecisos;
+                    rmdPreciso = construirIndicePreciso(datosPrecisos);
                     // Se espera a que el guardado termine ANTES de avisar "Listo".
                     const guardadoOk = await saveValidacionData();
                     document.getElementById('rmdAutorizadosStatusBadge').style.display = 'inline';
                     const raf = document.getElementById('rmdAutorizadosStatusBadgeForecast'); if (raf) raf.style.display = 'inline';
-                    const resumenTxt = `${filasConDatos} filas leídas → ${grupos.size} combinaciones Agrupador+Etapa (última versión) → ${countResueltos} resueltas, ${countPendientes} pendientes${countEstadoNoReconocido > 0 ? `, ${countEstadoNoReconocido} con estado no reconocido` : ''}.`;
+                    let resumenTxt = `${filasConDatos} filas leídas → ${grupos.size} combinaciones Agrupador+Etapa (última versión) → ${countResueltos} resueltas, ${countPendientes} pendientes${countEstadoNoReconocido > 0 ? `, ${countEstadoNoReconocido} con estado no reconocido` : ''}${countCancelados > 0 ? ` (${countCancelados} filas Canceladas no cuentan)` : ''}.`;
+                    if (rmdPreciso) {
+                        const nRecetas = datosPrecisos.filas.reduce((a, f) => a + f[8].length, 0);
+                        resumenTxt = `<b>Validación por receta activada</b> (${origen === 'sap' ? 'datos directos del portal SAP' : 'Exportado con recetas'}): ${datosPrecisos.filas.length} RMD con ${nRecetas} recetas asociadas.<br><span style="opacity:.75">${resumenTxt}</span>`;
+                    }
                     if (guardadoOk) {
                         // El modal de éxito se omite cuando el archivo llegó
                         // automáticamente desde Seguimiento RMD: el usuario ya
@@ -7398,23 +7811,19 @@ async function downloadPlanProduccionFromCloud() {
                         // interrumpirlo con un modal en el padre que además
                         // podría no notar mientras trabaja en el iframe.
                         if (!fromSeguimientoIframe) {
-                            Swal.fire({ icon: 'success', title: '¡Listo!', html: resumenTxt, timer: 4500, showConfirmButton: true, confirmButtonText: 'Entendido', background: '#0f172a' });
+                            Swal.fire({ icon: 'success', title: '¡Listo!', html: resumenTxt, timer: 6000, showConfirmButton: true, confirmButtonText: 'Entendido', background: '#0f172a' });
                         }
                     } else {
                         Swal.fire({ icon: 'warning', title: 'Cargado, pero no se pudo guardar', text: 'Los datos se cargaron en pantalla, pero no se guardaron para la próxima vez que abras la página. Intenta cargar el archivo de nuevo.', background: '#0f172a' });
                     }
                     runValidacionMateriales();
                     runValidacionForecast();
-                } catch (error) {
-                    console.error(error);
-                    Swal.fire({ icon: 'error', title: 'Error', text: 'No se pudo leer el archivo Exportado RMD.', background: '#0f172a' });
-                }
-            };
-            reader.readAsArrayBuffer(file);
+                    updateFuentesStatusUI(); // "✓ Por receta · fecha" o "✓ Cargado" según lo que se acaba de cargar
+                    return { ok: true, resumen: rmdPreciso ? `${datosPrecisos.filas.length} RMD procesados, validación por receta activada.` : `${filasConDatos} filas procesadas.` };
         }
 
         async function saveValidacionData() {
-            // Las 6 escrituras son independientes entre sí, así que se lanzan en
+            // Las 7 escrituras son independientes entre sí, así que se lanzan en
             // paralelo en vez de una tras otra: reduce notablemente el tiempo
             // de guardado cuando Base de Datos o RMD Autorizados son grandes.
             const results = await Promise.all([
@@ -7423,6 +7832,7 @@ async function downloadPlanProduccionFromCloud() {
                 storeSet('val_rmd_autorizados_raw', rmdAutorizadosRaw),
                 storeSet('val_rmd_autorizados_detalle', rmdAutorizadosDetalle),
                 storeSet('val_rmd_autorizados_etapas_por_agrupador', Array.from(rmdAutorizadosEtapasPorAgrupador.entries()).map(([k, v]) => [k, Array.from(v)])),
+                storeSet('val_rmd_preciso', rmdPrecisoDatos || { filas: [] }),
                 storeSet('val_flags', { databaseMaterialsLoaded, rmdAutorizadosLoaded })
             ]);
             return results.every(Boolean);
@@ -7502,7 +7912,7 @@ async function downloadPlanProduccionFromCloud() {
             // en paralelo: con Supabase de por medio (llamadas de red reales),
             // hacerlas una tras otra sumaría varios round-trips innecesarios al
             // tiempo de carga inicial de la página.
-            const [ma, re, flags, dm, ae, rr, rd, ea, es, dpa] = await Promise.all([
+            const [ma, re, flags, dm, ae, rr, rd, ea, es, dpa, rp] = await Promise.all([
                 storeGet('val_manual_autorizados'),
                 storeGet('val_responsables_etapa'),
                 storeGet('val_flags'),
@@ -7512,7 +7922,8 @@ async function downloadPlanProduccionFromCloud() {
                 storeGet('val_rmd_autorizados_detalle'),
                 storeGet('val_rmd_autorizados_etapas_por_agrupador'),
                 storeGet('val_estatus_etapa'),
-                storeGet('val_descartados_por_arbol')
+                storeGet('val_descartados_por_arbol'),
+                storeGet('val_rmd_preciso')
             ]);
             if (ma) manualAutorizados = new Set(ma);
             if (re) responsablesEtapa = new Map(re);
@@ -7556,6 +7967,8 @@ async function downloadPlanProduccionFromCloud() {
             if (rr) rmdAutorizadosRaw = rr;
             if (rd) rmdAutorizadosDetalle = rd;
             if (ea) rmdAutorizadosEtapasPorAgrupador = new Map(ea.map(([k, v]) => [k, new Set(v)]));
+            rmdPrecisoDatos = (rp && Array.isArray(rp.filas) && rp.filas.length > 0) ? rp : null;
+            rmdPreciso = construirIndicePreciso(rmdPrecisoDatos);
 
             databaseMaterialsLoaded = !!flags.databaseMaterialsLoaded;
             rmdAutorizadosLoaded = !!flags.rmdAutorizadosLoaded;
@@ -7594,9 +8007,12 @@ async function downloadPlanProduccionFromCloud() {
         function runValidacionMateriales() {
             updateFuentesStatusUI();
 
+            // Con los datos por receta (modo preciso) la Base de Datos pasa a ser opcional: el Código Agrupador y la
+            // etapa de cada material salen directamente de SAP. Sigue usándose como respaldo si está cargada.
+            const usarPreciso = !!(rmdPreciso && rmdPreciso.totalEntradas > 0);
             const readyProd = productionData.length > 0;
-            const readyBase = databaseMaterialsLoaded && databaseMaterials.size > 0;
-            const readyRmd = rmdAutorizadosLoaded && rmdAutorizadosEtapasPorAgrupador.size > 0;
+            const readyBase = usarPreciso || (databaseMaterialsLoaded && databaseMaterials.size > 0);
+            const readyRmd = usarPreciso || (rmdAutorizadosLoaded && rmdAutorizadosEtapasPorAgrupador.size > 0);
 
             const emptyState = document.getElementById('validacionEmptyState');
             const tableWrapper = document.getElementById('tablaPendientesWrapper');
@@ -7606,7 +8022,11 @@ async function downloadPlanProduccionFromCloud() {
                 emptyState.style.display = 'block';
                 tableWrapper.style.display = 'none';
                 if (toolbar) toolbar.style.display = 'none';
-                emptyState.textContent = `Carga los tres archivos (Programa de Producción - ${plantaLabel()}, Base de Datos y Exportado RMD) para generar la validación de materiales.`;
+                const faltan = [];
+                if (!readyProd) faltan.push(`Programa de Producción - ${plantaLabel()}`);
+                if (!readyBase) faltan.push('Base de Datos');
+                if (!readyRmd) faltan.push('Exportado RMD (o usar "Enviar a Status RMD" desde el portal SAP)');
+                emptyState.textContent = `Falta cargar: ${faltan.join(', ')} para generar la validación de materiales.`;
                 animateCounter('kpi-val-revisados', 0);
                 animateCounter('kpi-val-autorizados', 0);
                 animateCounter('kpi-val-pendientes', 0);
@@ -7648,11 +8068,32 @@ productionData.forEach(p => {
 
             let revisados = 0, autorizados = 0;
             const pendientes = [];
+            const materialesParaRefinar = []; // materiales sin árbol aún con etapas decididas por familia: se refinan en segundo plano
 
             materialAreas.forEach((areas, cod) => {
     revisados++;
     const fechaProxima = materialFechaMin.get(cod) || null; // 🔽 LÍNEA NUEVA
     const info = databaseMaterials.get(cod);
+
+    // Modo preciso (datos por receta de SAP): cada etapa se decide con el linaje de RMD que le corresponde a ESTE
+    // material, no con todo lo que comparta su Código Agrupador. Ver evaluarMaterialPreciso.
+    if (usarPreciso) {
+        const r = evaluarMaterialPreciso(cod);
+        const desc = r.descripcion || (info && info.descripcion) || '';
+        const areasTxt = Array.from(areas).join(', ');
+        if (r.etapas.length === 0) {
+            if (!r.conArbol) materialesParaRefinar.push(cod);
+            pendientes.push({ material: cod, descripcion: desc || '(sin RMD en SAP)', areas: areasTxt, etapasPendientes: [], motivo: 'Sin RMD en SAP para este material ni para su familia (Código Agrupador)', fechaProxima });
+            return;
+        }
+        const etapasPend = r.etapas.filter(e => r.detalle[e].pendiente);
+        // Sin árbol, las etapas que no son de su propia receta se deciden por familia: se pide el árbol aunque hoy
+        // salgan resueltas (la presentación real podría usar un material sin RMD que la familia no muestra).
+        if (!r.conArbol && r.etapas.some(e => r.detalle[e].nivel !== 'propia')) materialesParaRefinar.push(cod);
+        if (etapasPend.length === 0) { autorizados++; return; }
+        pendientes.push({ material: cod, descripcion: desc || '-', areas: areasTxt, etapasPendientes: etapasPend, detallePreciso: r.detalle, fuenteEtapas: r.fuente, motivo: etapasPend.map(e => motivoEtapaPrecisa(r.detalle[e])).join(' | '), fechaProxima });
+        return;
+    }
 
     if (!info) {
         pendientes.push({ material: cod, descripcion: '(no encontrado en Base de Datos)', areas: Array.from(areas).join(', '), etapasPendientes: [], motivo: 'No encontrado en Base de Datos', fechaProxima }); // 🔽 se agregó "fechaProxima" al final
@@ -7719,9 +8160,13 @@ pendientes.forEach(p => {
                     if (!fija) return true;
                     // Se descarta una etapa si fue autorizada manualmente O si
                     // el árbol de materiales (BOM real de SAP) ya confirmó que
-                    // esa presentación no corresponde a este producto.
+                    // esa presentación no corresponde a este producto. En modo
+                    // preciso, una etapa identificada con exactitud (su propia
+                    // receta o su árbol) ya no depende de ese descarte
+                    // antiguo: se muestra tal como está en SAP.
+                    const exacta = etapaPrecisaEsExacta(p.detallePreciso && p.detallePreciso[fija]);
                     return !manualAutorizados.has(responsableKey(p.material, fija))
-                        && !descartadosPorArbol.has(responsableKey(p.material, fija));
+                        && (exacta || !descartadosPorArbol.has(responsableKey(p.material, fija)));
                 });
                 const etapasYaAutorizadasManual = p.etapasPendientes.filter(et => {
                     const fija = mapEtapaAFija(et);
@@ -7773,6 +8218,7 @@ pendientes.forEach(p => {
                 renderTablaPendientes(todasLasFilas);
             }
             renderSummaryProd();
+            if (usarPreciso && materialesParaRefinar.length > 0) refinarAmbiguosConArbol(materialesParaRefinar);
         }
 
         function refiltrarValidacionFiltros() {
@@ -7818,6 +8264,23 @@ pendientes.forEach(p => {
             el.textContent = total;
             el.dataset.count = String(total);
             el.style.display = total > 0 ? '' : 'none';
+        }
+
+        // Chip con el estado REAL en SAP de una etapa pendiente (solo en modo preciso). El tooltip explica cómo se
+        // identificó el RMD de esa etapa y lista las cadenas (material + etapa) consideradas.
+        function chipSapEtapa(p, fija) {
+            const d = p && p.detallePreciso && p.detallePreciso[fija];
+            if (!d) return '';
+            const clase = d.nivel === 'sin-rmd' ? 'sin' : ({ SUSPENDIDO: 'susp', INGRESADO: 'ing', SOLICITADO: 'sol' }[normalizeEstadoRmd(d.estado)] || 'otro');
+            const materialesAmb = d.nivel === 'ambiguo' ? (d.candidatos || []).length : 0;
+            const texto = d.nivel === 'sin-rmd' ? 'Sin RMD' : `${d.estado}${d.version ? ' v' + d.version : ''}${materialesAmb ? ' ⚠' : ''}`;
+            const lineas = [];
+            if (d.nivel === 'sin-rmd') lineas.push(`No hay ningún RMD en SAP para esta etapa (sin contar los cancelados)${d.codigo ? ` (material ${d.codigo}${d.verid ? ', versión de fabricación ' + d.verid : ''})` : ''}.`);
+            else if (materialesAmb) lineas.push(`⚠ Su familia tiene ${materialesAmb} presentaciones distintas en esta etapa y aún no se calculó su árbol de materiales: se muestra pendiente si alguna lo está.`);
+            else lineas.push(`Identificado por ${NIVEL_PRECISO_TXT[d.nivel] || d.nivel}${d.codigo ? ` — material ${d.codigo}${d.verid ? ', versión de fabricación ' + d.verid : ''}` : ''}.`);
+            (d.candidatos || []).slice(0, 8).forEach(c => lineas.push(`• ${c.material}: ${c.estado} v${c.version} — RMD ${c.rmd || '(en solicitud)'} — ${c.versiones} versión(es) en SAP${c.apartadas ? `, ${c.apartadas} suspendida(s) no cuentan porque hay un RMD vigente` : ''}`));
+            if ((d.candidatos || []).length > 8) lineas.push(`… y ${d.candidatos.length - 8} más`);
+            return `<span class="chip-sap chip-sap--${clase}" title="${escapeHtmlRmdConfig(lineas.join('\n'))}">${escapeHtmlRmdConfig(texto)}</span>`;
         }
 
         function renderTablaPendientes(filas) {
@@ -7904,7 +8367,7 @@ pendientes.forEach(p => {
                         })()
                         : `<span class="etapa-responsable-auto" title="Responsable asignado automáticamente según el Estatus">${valorActual || '—'}</span>`;
                     return `<div class="etapa-fila-grid">
-                        <span class="${etapasCls} cursor-pointer hover:underline" onclick="mostrarVerificacionRmdConfig('${mat}','${fija}')" title="Ver verificación contra RMD Configuración">${labelTxt}</span>
+                        <span class="etapa-label-celda"><span class="${etapasCls} cursor-pointer hover:underline" onclick="mostrarVerificacionRmdConfig('${mat}','${fija}')" title="Ver verificación contra RMD Configuración">${labelTxt}</span>${chipSapEtapa(p, fija)}</span>
                         <select id="${estatusSelectId}" onchange="setEstatusEtapa('${mat}','${fija}', this.value)" class="etapa-estatus-select ${claseColorEstatus(estatusActual)}" title="Estatus de ${labelTxt}">${estatusOpciones}</select>
                         ${respHtml}
                         ${btnAutorizarEtapa(mat, fija)}
@@ -8084,6 +8547,24 @@ return `<tr class="${rowCls}" title="${p.motivo || ''}">
             setStatus('fuenteStatusProd', productionData.length > 0);
             setStatus('fuenteStatusBase', databaseMaterialsLoaded && databaseMaterials.size > 0);
             setStatus('fuenteStatusRmd', rmdAutorizadosLoaded && rmdAutorizadosEtapasPorAgrupador.size > 0);
+            // Modo preciso: se indica que la validación es por receta y de cuándo son los datos de SAP; la Base de
+            // Datos pasa a ser opcional (respaldo), así que no se marca como pendiente.
+            const elRmd = document.getElementById('fuenteStatusRmd');
+            const elBase = document.getElementById('fuenteStatusBase');
+            if (rmdPreciso && elRmd) {
+                const f = rmdPreciso.generado ? dayjs(rmdPreciso.generado).format('DD/MM HH:mm') : '';
+                elRmd.textContent = `✓ Por receta${f ? ' · ' + f : ''}`;
+                elRmd.className = 'text-emerald-400 font-semibold';
+                elRmd.title = `Validación por receta exacta: ${rmdPreciso.totalRmd} RMD ${rmdPreciso.origen === 'sap' ? 'leídos directo del portal SAP' : 'del Exportado con recetas'}${f ? ' el ' + f : ''}.`;
+            } else if (elRmd) elRmd.title = rmdAutorizadosLoaded ? 'Validación por Código Agrupador (Exportado RMD clásico, sin recetas).' : '';
+            // La etiqueta junto al botón "Exportado RMD" de Producción dice lo mismo (la de Forecast no: allí se sigue
+            // validando por Código Agrupador).
+            const badgeRmd = document.getElementById('rmdAutorizadosStatusBadge');
+            if (badgeRmd) { badgeRmd.textContent = rmdPreciso ? '✓ Por receta' : '✓ Cargado'; badgeRmd.title = elRmd ? elRmd.title : ''; }
+            if (rmdPreciso && elBase && !(databaseMaterialsLoaded && databaseMaterials.size > 0)) {
+                elBase.textContent = 'Opcional';
+                elBase.className = 'text-slate-400 font-semibold';
+            }
         }
 
         // ==================== FORMATO ESTILO MACRO (portado de GenerarTablaDinamica.bas) ====================
@@ -9795,7 +10276,7 @@ function updateForecastActiveFiltersBadge() {
             'prod_historial_planta1', 'prod_historial_planta2',
             'forecast_data', 'forecast_months_meta',
             'val_database_materials', 'val_agrupador_etapas', 'val_flags',
-            'val_rmd_autorizados_raw', 'val_rmd_autorizados_detalle', 'val_rmd_autorizados_etapas_por_agrupador',
+            'val_rmd_autorizados_raw', 'val_rmd_autorizados_detalle', 'val_rmd_autorizados_etapas_por_agrupador', 'val_rmd_preciso',
             'val_manual_autorizados', 'val_manual_autorizados_forecast',
             'val_responsables_etapa', 'val_estatus_etapa', 'val_descartados_por_arbol', 'val_descartados_por_arbol_version',
             'historial_trazabilidad', 'tour_completed'
@@ -10238,6 +10719,8 @@ async function maybeAutoStartTour() {
                 loaderOverlay.classList.add('is-hidden');
                 setTimeout(() => loaderOverlay.remove(), 450);
             }
+            // Recién ahora (datos guardados ya cargados) se aceptan datos directos del portal SAP.
+            window.__statusRmdAppLista = true;
 
             // Se muestra la barra de carga que corresponde a la pestaña
             // REALMENTE activa al arrancar (currentTab), no un valor fijo.
