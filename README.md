@@ -29,7 +29,7 @@ Producción tiene 3 **fuentes de datos independientes**, cada una con su propio 
 |---|---|---|---|
 | **Programa de Producción** | `productionData` (array) | Uno por planta (Planta ATE / Planta LIMA), varias hojas (una por área) | Qué se va a producir y CUÁNDO (fechas) |
 | **Base de Datos** | `databaseMaterials` (Map), `agrupadorEtapasMap` (Map) | Un Excel con columnas Material / Descripción / Agrupador / Etapa | A qué "Agrupador RMD" y "Etapa" pertenece cada código de material |
-| **Exportado RMD** | `rmdAutorizadosEtapasPorAgrupador` (Map), `rmdAutorizadosDetalle` (array), `rmdAutorizadosRaw` (array) | Export de RMD_Configuración de SAP | Qué combinaciones Agrupador+Etapa YA tienen RMD autorizado |
+| **Exportado RMD** | `rmdAutorizadosEtapasPorAgrupador` (Map), `rmdAutorizadosDetalle` (array), `rmdAutorizadosRaw` (array) y, si trae recetas, `rmdPrecisoDatos` / `rmdPreciso` | Export de RMD_Configuración de SAP — el clásico (un Código por Defecto por RMD) o el **con recetas** (botón "Recetas asociadas" del script del portal), o sin archivo con el botón **"Enviar a Status RMD"** del portal (sección 4.6) | Qué combinaciones Agrupador+Etapa YA tienen RMD autorizado; con recetas, el estado exacto de cada material en cada etapa (sección 4.5) |
 
 La función que cruza las tres es **`runValidacionMateriales()`** (línea ~7594) — es, con diferencia, la función más importante de toda la pestaña. Todo lo demás (KPIs, tabla, calendario, gráficos) se recalcula a partir de su resultado.
 
@@ -121,7 +121,7 @@ Cada carga guarda también el Excel original en base64 (`prod_archivo_original_<
 
 ## 4. Validación cruzada: `runValidacionMateriales()` (línea 7594)
 
-Esta función solo corre si las 3 fuentes están listas (`productionData.length > 0`, `databaseMaterialsLoaded`, `rmdAutorizadosLoaded`); si no, deja la tabla vacía con un mensaje.
+Esta función solo corre si las 3 fuentes están listas (`productionData.length > 0`, `databaseMaterialsLoaded`, `rmdAutorizadosLoaded`); si no, deja la tabla vacía con un mensaje que dice cuál falta. **Si el Exportado RMD trae recetas, la decisión de cada etapa la toma el modo preciso (sección 4.5)** y la Base de Datos pasa a ser opcional (solo respaldo); lo que sigue en 4.1–4.4 describe el modo clásico, que se sigue usando con un Exportado sin recetas y en Forecast.
 
 ### 4.1 Paso 1 — Agrupar por código de material (todas las áreas)
 
@@ -137,6 +137,8 @@ Para cada código único:
 2. Si está pero **sin agrupador válido** → pendiente, "Sin agrupador válido en Base de Datos".
 3. Si tiene agrupador: se buscan las etapas que existen para ese agrupador (`agrupadorEtapasMap`) y las que ya tienen RMD resuelto (`rmdAutorizadosEtapasPorAgrupador`). La diferencia (`etapasMaterial - etapasAutorizadas`) son las **etapas pendientes** de ese producto.
 4. Si `etapasPendientes.length === 0` → autorizado. Si no, pendiente, con la lista de etapas que faltan.
+
+Una combinación Agrupador+Etapa se da por resuelta solo si TODOS sus productos (Código por Defecto) tienen su versión más alta en un estado resuelto (Autorizado, Solicitud Aprobada, Solicitud Rechazada). Los RMD **Cancelados** no cuentan para elegir esa versión (un RMD cancelado nunca entró en vigor): antes caían en "estado no reconocido" y bloqueaban la etapa aunque la versión anterior siguiera Autorizada (ej. SOLUDEX Fabricación: v4 Autorizada + v5 Cancelada). Con el Exportado completo de hoy eran 465 combinaciones.
 
 ### 4.3 Paso 3 — Restar lo ya resuelto manualmente o por árbol
 
@@ -161,6 +163,39 @@ ultimoResultadoValidacion = {
 `rmdPendientes` es el número que se muestra en el KPI destacado "RMD Pendientes" — cuenta **etapas**, no productos: un producto con 3 etapas pendientes suma 3.
 
 La lista final se ordena por `fechaProxima` ascendente (lo más urgente primero); los productos sin fecha van al final, ordenados alfabéticamente.
+
+### 4.5 Validación por receta exacta ("modo preciso")
+
+**Qué resuelve.** El Exportado nativo trae un solo *Código por Defecto* por RMD, pero un mismo máster (Código Agrupador) reúne muchas recetas/presentaciones. Con eso la validación clásica solo puede razonar por familia: si CUALQUIER presentación del agrupador tenía una etapa pendiente, marcaba pendiente esa etapa para TODOS los productos de la familia. El modo preciso decide con el material exacto de cada etapa.
+
+**Cuándo se activa.** Solo, al cargar un Exportado que traiga las columnas de recetas (`Linaje`, `Código Receta`, `Versión Receta`…): el `.xlsx` del botón *Recetas asociadas* del script del portal, o los datos que llegan por *Enviar a Status RMD* (4.6). Con un Exportado clásico todo funciona como antes (y se descartan los datos por receta anteriores, para no mezclar fuentes de distinta fecha). Funciones: `procesarFilasRmd` (núcleo común de archivo subido / Seguimiento / SAP), `datosPrecisosDesdeFilas`, `construirIndicePreciso`, `evaluarMaterialPreciso`.
+
+**Datos.** `rmdPrecisoDatos` se guarda en `val_rmd_preciso` (≈1,8 MB para ≈12 700 RMD; una fila compacta por RMD: `[rmd, linaje, versión, estado, etapa, agrupador, código por defecto, descripción, [[material, versión de fabricación]…]]`) y `rmdPreciso` es su índice en memoria (`porMatEtapa`, `matsPorAgrEtapa`, `etapasPropias`…). Las partes que siguen usando el formato clásico (Forecast, modal de verificación, Seguimiento RMD) reciben las mismas filas deduplicadas con exactamente las 18 columnas del Exportar nativo (`filasClasicasDeduplicadas`, `libroClasicoComoBuffer`).
+
+**Regla de cada etapa** (`estadoDeCadenaPrecisa`). Una *cadena* son todos los RMD de un material exacto (como receta o como Código por Defecto) en una etapa, de cualquier máster:
+1. Los **Cancelados** no cuentan.
+2. Si en la cadena hay un RMD **vigente** (Autorizado o Ingresado), las versiones **Suspendidas** se apartan: SAP suspende la anterior al autorizar la nueva, y un material puede ser receta de dos másters con numeración de versión distinta. Una solicitud (Aprobada/Rechazada) no basta para apartarlas.
+3. Manda la **versión más alta**; en empate gana la no resuelta (criterio clásico) y después el RMD real sobre la solicitud.
+4. Resuelto = Autorizado, Solicitud Aprobada o Solicitud Rechazada (mismo criterio de siempre); pendiente = Ingresado, Suspendido, Solicitado, o **Sin RMD**.
+
+**Qué etapas se revisan de cada producto** (`etapasParaMaterialPreciso`):
+- **Con árbol de materiales** (motor local `arbol-motor.js`): exactamente las etapas de su BOM y, en cada una, el material de ese nodo. Para un **semielaborado** del programa (ampollas, graneles…) solo cuenta su propio nodo y los anteriores: el árbol se recorta desde él (`arbolDesdeMaterial`) o, si SAP no le encuentra un producto terminado único, se arma directamente desde él hacia atrás (`arbolAguasArribaLocal`, solo en memoria).
+- **Sin árbol todavía**: su etapa propia más las anteriores de su familia, en el **orden físico** (`ORDEN_FISICO_ETAPA`: Fabricación › Recubrimiento › Envase › Inspección › Acondicionado — en los 4.528 árboles de SAP revisados, Inspección va siempre DESPUÉS de Envase; `ETAPAS_FIJAS` es solo el orden de columnas). Esas etapas se deciden por familia ("única en su familia" o "varias presentaciones": pendiente si alguna lo está) y el árbol se calcula en segundo plano (`refinarAmbiguosConArbol`: solo motor local, 3 a la vez, una vez por material y sesión, con cola si llega otra validación) para volver a validar con el material exacto.
+- Las etapas exactas (propia receta o árbol) ya no dependen de `descartadosPorArbol`; las **autorizaciones manuales** se respetan igual que siempre.
+
+**En la tabla.** Bajo cada etapa pendiente, un chip con el estado real en SAP (`Ingresado v4`, `Suspendido v2`, `Solicitado v9`, `Sin RMD`) cuyo tooltip dice qué material y qué RMD se usó, cuántas versiones hay y cuántas suspendidas no cuentan (`chipSapEtapa`). Junto a "Exportado RMD" se lee **✓ Por receta** y, en las fuentes, la fecha de los datos de SAP.
+
+**Resultado medido** (23/09/2026, Consolidado, 187 productos del programa, mismo Exportado completo de SAP): lógica clásica 112 autorizados / 75 pendientes / 135 etapas → modo preciso **141 / 46 / 71**. Las 3 etapas que el modo preciso agrega son RMD de Acondicionado Ingresados que el Exportado clásico escondía por ser receta y no Código por Defecto; las 67 que quita son etapas cuyo material exacto está Autorizado (56) o que no forman parte de su cadena real según el BOM (11). Una verificación independiente (misma regla recalculada aparte, en Python, desde el Excel crudo) dio 0 diferencias en las 582 etapas evaluadas.
+
+### 4.6 Enlace directo con el portal SAP (sin archivo)
+
+El script de Tampermonkey del portal (`rmd-ui-mejoras.user.js` ≥ v1.17, repo AUTOMATIZACION-DE-RMD) añade junto a "Exportar" el botón **Enviar a Status RMD**: abre esta página en otra pestaña, lee el maestro completo con sus recetas usando la sesión ya iniciada del portal (el mismo servicio OData que usa su propio botón Exportar) y lo pasa con `postMessage`. Protocolo: el portal envía `STATUS_RMD_PING` hasta que esta página responde `STATUS_RMD_LISTO` (solo cuando terminó de cargar), luego `RMD_SAP_MAESTRO` (`{ v:1, generado, columnas, filas }`) y esta página contesta `STATUS_RMD_RECIBIDO` (`{ ok, resumen | motivo }`). Aquí se pide el DNI como en cualquier carga ("Sincronización con SAP") y se procesa con el mismo `procesarFilasRmd` que un Excel subido (`recibirMaestroDesdeSap`). Tiempo medido: ≈8 s para 12 732 RMD.
+
+**Por qué no un GET directo desde esta página a SAP:** la API del portal exige la sesión SSO de la persona (cookies del dominio de SAP), el navegador bloquea las llamadas entre dominios (CORS) y la alternativa —guardar un usuario técnico o credenciales en este repositorio público— sería un riesgo de seguridad. El enlace por pestañas reutiliza la sesión que la persona ya tiene abierta y no toca credenciales.
+
+**Seguridad de mensajes** (listener de `message`): `STATUS_RMD_PING` y `RMD_SAP_MAESTRO` solo se aceptan desde el origen exacto del portal (`PORTAL_SAP_ORIGIN`) y cuando la app ya está lista; los mensajes `RMD_SEGUIMIENTO_*` solo desde el iframe de Seguimiento RMD (`event.source`). Antes cualquier página que abriera esta en una ventana podía enviarle mensajes.
+
+**Tiempo real:** si otro dispositivo guarda datos de validación nuevos (`val_*`, incluido `val_rmd_preciso`), esta página los recarga (con 1,5 s de espera para agrupar las 7 escrituras) y vuelve a validar.
 
 ---
 
