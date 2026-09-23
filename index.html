@@ -41,7 +41,7 @@
         //     defecto en las cajas de KPI y fondos que no respetaban el tema).
         //  3) Los tonos genéricos de Tailwind (azul, violeta, esmeralda…) se
         //     reemplazan por una paleta armonizada de 6 familias: tinta
-        //     (neutros), latón (acento de marca), cobre, bermellón, salvia,
+        //     (neutros), oro rosa (acento de marca), cobre, bermellón, salvia,
         //     petróleo y ciruela.
         (function () {
             const SHADES = [50, 100, 200, 300, 400, 500, 600, 700, 800, 900];
@@ -132,7 +132,7 @@
         }
 
         /* ============ SISTEMA DE COLOR (oscuro / claro) ============
-           Paleta propia en 7 familias — tinta (neutros), latón (acento de
+           Paleta propia en 7 familias — tinta (neutros), oro rosa (acento de
            marca: lo que requiere autorización), cobre, bermellón (pendiente /
            alerta), salvia (autorizado / ok), petróleo (información, Planta
            ATE) y ciruela (Planta LIMA / consolidado). --c-<familia>-<tono>
@@ -143,7 +143,7 @@
            contraste legible en los dos temas. */
         :root {
             --c-slate-50: 244 245 247; --c-slate-100: 233 235 239; --c-slate-200: 213 217 224; --c-slate-300: 179 185 196; --c-slate-400: 139 147 161; --c-slate-500: 102 110 124; --c-slate-600: 71 78 91; --c-slate-700: 50 56 68; --c-slate-800: 30 35 45; --c-slate-900: 13 16 23;
-            --c-brass-50: 251 246 234; --c-brass-100: 244 231 198; --c-brass-200: 234 209 152; --c-brass-300: 224 186 106; --c-brass-400: 212 165 72; --c-brass-500: 187 138 47; --c-brass-600: 154 111 34; --c-brass-700: 121 86 28; --c-brass-800: 90 64 24; --c-brass-900: 61 44 18;
+            --c-brass-50: 252 245 243; --c-brass-100: 248 230 225; --c-brass-200: 241 211 203; --c-brass-300: 232 185 174; --c-brass-400: 224 168 156; --c-brass-500: 201 139 127; --c-brass-600: 168 111 101; --c-brass-700: 132 86 79; --c-brass-800: 95 62 57; --c-brass-900: 64 42 39;
             --c-copper-50: 252 241 234; --c-copper-100: 246 220 201; --c-copper-200: 238 189 156; --c-copper-300: 229 156 112; --c-copper-400: 217 130 79; --c-copper-500: 192 106 56; --c-copper-600: 158 85 44; --c-copper-700: 124 67 36; --c-copper-800: 91 50 29; --c-copper-900: 62 35 22;
             --c-verm-50: 252 239 236; --c-verm-100: 247 214 207; --c-verm-200: 239 177 164; --c-verm-300: 230 138 120; --c-verm-400: 219 106 85; --c-verm-500: 197 81 61; --c-verm-600: 163 65 49; --c-verm-700: 129 52 40; --c-verm-800: 95 40 32; --c-verm-900: 64 28 23;
             --c-sage-50: 238 247 241; --c-sage-100: 211 235 220; --c-sage-200: 169 216 187; --c-sage-300: 127 195 155; --c-sage-400: 91 171 128; --c-sage-500: 67 145 106; --c-sage-600: 53 116 85; --c-sage-700: 42 91 68; --c-sage-800: 32 68 53; --c-sage-900: 22 47 37;
@@ -152,11 +152,11 @@
             --slate-50: #f4f5f7; --slate-100: #e9ebef; --slate-200: #d5d9e0; --slate-300: #b3b9c4; --slate-400: #8b93a1; --slate-500: #666e7c; --slate-600: #474e5b; --slate-700: #323844; --slate-800: #1e232d; --slate-900: #0d1017;
 
             /* Tokens semánticos */
-            --accent: #d4a548; --accent-strong: #e6bd66; --accent-ink: #1a1206;
-            --accent-rgb: 212 165 72;
+            --accent: #e0a89c; --accent-strong: #f0c8bd; --accent-ink: #2b1614;
+            --accent-rgb: 224 168 156;
             --info-rgb: 90 152 179; --ok-rgb: 91 171 128; --danger-rgb: 219 106 85;
             --copper-rgb: 217 130 79; --plum-rgb: 160 123 187;
-            --focus-ring: rgba(224, 186, 106, 0.75);
+            --focus-ring: rgba(240, 200, 189, 0.75);
 
             --app-bg: #0b0e15;
             --app-bg-glow: #141a26;
@@ -178,19 +178,19 @@
             --field-border: rgba(255, 255, 255, 0.09);
             --field-text: #e9ebef;
             --nav-track-bg: rgba(22, 26, 35, 0.7);
-            --nav-track-border: rgba(212, 165, 72, 0.28);
-            --nav-pill-bg: rgba(212, 165, 72, 0.14);
-            --nav-pill-border: rgba(212, 165, 72, 0.5);
-            --nav-pill-text: #f4e7c6;
+            --nav-track-border: rgba(224, 168, 156, 0.28);
+            --nav-pill-bg: rgba(224, 168, 156, 0.14);
+            --nav-pill-border: rgba(224, 168, 156, 0.5);
+            --nav-pill-text: #f7e3dc;
             --table-head-bg: #151a24;
             --table-row-alt: rgba(255, 255, 255, 0.018);
-            --table-row-hover: rgba(212, 165, 72, 0.06);
+            --table-row-hover: rgba(224, 168, 156, 0.06);
             --scroll-thumb: #323844;
             --scroll-thumb-hover: #474e5b;
         }
         html[data-theme="light"] {
             --c-slate-50: 18 22 30; --c-slate-100: 28 33 43; --c-slate-200: 45 51 63; --c-slate-300: 67 74 87; --c-slate-400: 90 97 112; --c-slate-500: 115 121 133; --c-slate-600: 201 197 188; --c-slate-700: 223 219 210; --c-slate-800: 236 232 224; --c-slate-900: 249 247 243;
-            --c-brass-50: 92 62 10; --c-brass-100: 110 74 12; --c-brass-200: 110 74 12; --c-brass-300: 138 93 15; --c-brass-400: 138 93 15; --c-brass-500: 176 125 34; --c-brass-600: 154 106 23; --c-brass-700: 125 85 18; --c-brass-800: 241 227 195; --c-brass-900: 248 239 219;
+            --c-brass-50: 90 42 44; --c-brass-100: 108 51 52; --c-brass-200: 108 51 52; --c-brass-300: 143 79 80; --c-brass-400: 143 79 80; --c-brass-500: 184 115 112; --c-brass-600: 163 96 95; --c-brass-700: 131 73 74; --c-brass-800: 244 222 219; --c-brass-900: 251 239 237;
             --c-copper-50: 107 52 19; --c-copper-100: 131 64 26; --c-copper-200: 131 64 26; --c-copper-300: 164 80 31; --c-copper-400: 164 80 31; --c-copper-500: 194 101 46; --c-copper-600: 168 85 31; --c-copper-700: 138 69 25; --c-copper-800: 244 220 203; --c-copper-900: 250 236 226;
             --c-verm-50: 116 39 26; --c-verm-100: 142 47 32; --c-verm-200: 142 47 32; --c-verm-300: 176 59 40; --c-verm-400: 176 59 40; --c-verm-500: 201 74 53; --c-verm-600: 176 59 40; --c-verm-700: 142 47 32; --c-verm-800: 245 215 208; --c-verm-900: 251 235 231;
             --c-sage-50: 26 74 52; --c-sage-100: 34 92 65; --c-sage-200: 34 92 65; --c-sage-300: 44 115 82; --c-sage-400: 44 115 82; --c-sage-500: 61 138 100; --c-sage-600: 47 117 83; --c-sage-700: 36 93 66; --c-sage-800: 212 234 220; --c-sage-900: 234 245 238;
@@ -198,11 +198,11 @@
             --c-plum-50: 67 41 90; --c-plum-100: 84 54 107; --c-plum-200: 84 54 107; --c-plum-300: 106 69 133; --c-plum-400: 106 69 133; --c-plum-500: 128 92 158; --c-plum-600: 108 76 137; --c-plum-700: 87 61 111; --c-plum-800: 231 220 239; --c-plum-900: 244 238 248;
             --slate-50: #12161e; --slate-100: #1c212b; --slate-200: #2d333f; --slate-300: #434a57; --slate-400: #5a6170; --slate-500: #737985; --slate-600: #c9c5bc; --slate-700: #dfdbd2; --slate-800: #ece8e0; --slate-900: #f9f7f3;
 
-            --accent: #9a6a17; --accent-strong: #7d5512; --accent-ink: #fffaf0;
-            --accent-rgb: 154 106 23;
+            --accent: #a3605f; --accent-strong: #83494a; --accent-ink: #fff7f6;
+            --accent-rgb: 163 96 95;
             --info-rgb: 45 105 131; --ok-rgb: 47 117 83; --danger-rgb: 176 59 40;
             --copper-rgb: 168 85 31; --plum-rgb: 108 76 137;
-            --focus-ring: rgba(154, 106, 23, 0.6);
+            --focus-ring: rgba(163, 96, 95, 0.6);
 
             --app-bg: #f3f0e9;
             --app-bg-glow: #fbfaf6;
@@ -224,13 +224,13 @@
             --field-border: rgba(18, 22, 30, 0.14);
             --field-text: #1c212b;
             --nav-track-bg: rgba(255, 255, 255, 0.7);
-            --nav-track-border: rgba(154, 106, 23, 0.3);
+            --nav-track-border: rgba(163, 96, 95, 0.3);
             --nav-pill-bg: #1c212b;
-            --nav-pill-border: rgba(154, 106, 23, 0.55);
-            --nav-pill-text: #f8efdb;
+            --nav-pill-border: rgba(163, 96, 95, 0.55);
+            --nav-pill-text: #faeee9;
             --table-head-bg: #f1ede5;
             --table-row-alt: rgba(18, 22, 30, 0.018);
-            --table-row-hover: rgba(154, 106, 23, 0.07);
+            --table-row-hover: rgba(163, 96, 95, 0.07);
             --scroll-thumb: #cfcac0;
             --scroll-thumb-hover: #b3ada1;
         }
@@ -455,7 +455,7 @@
            tarjeta y el ícono. Esos resplandores mantenían un estímulo
            luminoso permanente alrededor del contenido más consultado de la
            pantalla, que es justo lo que cansa la vista en jornadas largas. */
-        /* Es el panel protagonista de la pantalla: marco de latón, una
+        /* Es el panel protagonista de la pantalla: marco en oro rosa, una
            franja superior del mismo tono (lectura inmediata de "esto es lo
            que se autoriza") y un fondo apenas más cálido que el resto de
            tarjetas. Sin brillos ni animaciones, para no cansar la vista. */
@@ -536,7 +536,7 @@
             color: var(--app-text);
             transform: translateY(-1px);
         }
-        /* Filtro activo: sólido en latón con texto de tinta — el mismo
+        /* Filtro activo: sólido en oro rosa con texto de tinta — el mismo
            acento de marca que el panel de RMD Pendientes, en vez del verde
            genérico con halo que competía con el verde de "autorizado". */
         .filter-pill.active {
@@ -1048,7 +1048,7 @@
             border-color: var(--card-border) !important;
         }
         /* Botones del calendario: superficie neutra con borde fino y el
-           estado activo en latón — antes eran bloques azul saturado que
+           estado activo en oro rosa — antes eran bloques azul saturado que
            competían con el panel de RMD Pendientes por la atención. */
         .fc .fc-button-primary {
             background: var(--surface-1) !important;
@@ -1316,7 +1316,7 @@
 
         /* ===== Tabla de RMD Pendientes de Autorización =====
            La tabla es el contenido que se viene a consultar: encabezado
-           sólido con filete de latón, filas alternas muy sutiles, un riel
+           sólido con filete en oro rosa, filas alternas muy sutiles, un riel
            de color a la izquierda de cada fila (bermellón = pendiente,
            salvia = autorizado manual) y el código de material en cifras
            tabulares para que se lea en columna. */
@@ -1355,7 +1355,7 @@
         }
         .urg-chip::before { content: ''; width: 0.38rem; height: 0.38rem; border-radius: 50%; background: currentColor; }
         .urg-vencido { color: rgb(var(--c-verm-300)); background: rgb(var(--danger-rgb) / 0.14); border-color: rgb(var(--danger-rgb) / 0.35); }
-        .urg-hoy     { color: rgb(var(--c-copper-300)); background: rgb(var(--copper-rgb) / 0.15); border-color: rgb(var(--copper-rgb) / 0.4); }
+        .urg-hoy     { color: rgb(var(--c-verm-200)); background: rgb(var(--danger-rgb) / 0.08); border-color: rgb(var(--danger-rgb) / 0.3); }
         .urg-pronto  { color: rgb(var(--c-brass-300)); background: rgb(var(--accent-rgb) / 0.12); border-color: rgb(var(--accent-rgb) / 0.32); }
         .urg-normal  { color: var(--slate-400); background: var(--surface-1-faint); border-color: var(--card-border-highlight); }
 
@@ -4128,8 +4128,8 @@ function findProductionHeaderRowIndex(rows, maxScanRows = 12) {
         // arcoíris saturado por defecto de Tailwind. Se leen bien sobre
         // fondo oscuro y claro, y el texto blanco de los badges mantiene
         // contraste.
-        const colorMap = { 'SOL': '#4f8fab', 'PEF': '#8f6fb0', 'ACO': '#c0953c', 'SOL HORM': '#c65f4b', 'SOL COLOR': '#c97a45', 'CAP BLAN': '#a89a45', 'INY': '#4f9c75', 'SEM HORM': '#3f9490', 'COS': '#6f78b4', 'SEM': '#6d9a55', 'MEN': '#9c8866', 'REA': '#727b8a' };
-const areaColorPalette = ['#4f8fab', '#8f6fb0', '#c0953c', '#c65f4b', '#c97a45', '#a89a45', '#4f9c75', '#3f9490', '#6f78b4', '#6d9a55', '#9c8866', '#b0657e', '#5a7fa0', '#a07a52', '#7f9a8a', '#9a6f9a', '#b5874f', '#588f6a', '#7a6aa8', '#8a8f55'];
+        const colorMap = { 'SOL': '#4f8fab', 'PEF': '#8f6fb0', 'ACO': '#c9958c', 'SOL HORM': '#c65f4b', 'SOL COLOR': '#c97a45', 'CAP BLAN': '#a88f86', 'INY': '#4f9c75', 'SEM HORM': '#3f9490', 'COS': '#6f78b4', 'SEM': '#6d9a55', 'MEN': '#9c8866', 'REA': '#727b8a' };
+const areaColorPalette = ['#4f8fab', '#8f6fb0', '#c9958c', '#c65f4b', '#c97a45', '#a88f86', '#4f9c75', '#3f9490', '#6f78b4', '#6d9a55', '#9c8866', '#b0657e', '#5a7fa0', '#a07a52', '#7f9a8a', '#9a6f9a', '#b8877a', '#588f6a', '#7a6aa8', '#8a9a7a'];
 const dynamicAreaColors = {};
 function hashStringToIndex(str, mod) {
     let hash = 0;
@@ -5233,9 +5233,9 @@ function buildDateColumnMapPlanta1(headerRow, weekLabelRow, hiddenCols) {
 
             if (chartTrendProd) chartTrendProd.destroy();
             const gradient = ctx.getContext('2d').createLinearGradient(0, 0, 0, 260);
-            // Color de la serie tomado del acento de la app (latón), que
+            // Color de la serie tomado del acento de la app (oro rosa), que
             // cambia de tono entre modo oscuro y claro.
-            const acentoRgb = (getComputedStyle(document.documentElement).getPropertyValue('--accent-rgb') || '212 165 72').trim().split(/\s+/).join(', ');
+            const acentoRgb = (getComputedStyle(document.documentElement).getPropertyValue('--accent-rgb') || '224 168 156').trim().split(/\s+/).join(', ');
             gradient.addColorStop(0, `rgba(${acentoRgb}, 0.38)`);
             gradient.addColorStop(1, `rgba(${acentoRgb}, 0.0)`);
 
