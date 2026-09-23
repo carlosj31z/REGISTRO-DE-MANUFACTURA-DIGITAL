@@ -3490,6 +3490,21 @@ create policy "Acceso con clave anon"
 
         async function openHistorialTrazabilidadModal() {
             const entradas = await actualizarBadgeHistorial();
+            const esc = escapeHtmlRmdConfig;
+            // Columnas de ancho fijo (table-layout: fixed): antes el Usuario no se partía y, con el nombre y el correo de SAP,
+            // se quedaba con todo el ancho y el Detalle salía una letra por línea.
+            const td = 'padding:7px 8px;vertical-align:top;overflow-wrap:anywhere;';
+            // "NOMBRE (usuario SAP: correo)" / "Nombre (DNI)": el nombre arriba y lo de los paréntesis debajo, más pequeño.
+            const usuarioHtml = (u) => {
+                const m = /^(.*?)\s*\((.*)\)\s*$/.exec(u || '');
+                return m ? `${esc(m[1])}<div style="font-size:10px;color:var(--slate-500);margin-top:1px;">${esc(m[2])}</div>` : esc(u || '-');
+            };
+            // Los detalles muy largos (p. ej. la lista de autorizaciones manuales que caducaron) se pliegan.
+            const detalleHtml = (d) => {
+                const t = String(d || '-');
+                if (t.length <= 220) return esc(t);
+                return `${esc(t.slice(0, 200))}… <details style="display:inline;"><summary style="display:inline;cursor:pointer;color:rgb(var(--info-rgb));">ver todo</summary><div style="margin-top:4px;white-space:pre-line;">${esc(t.replace(/ \| /g, '\n'))}</div></details>`;
+            };
             const filasHtml = entradas.length === 0
                 ? `<tr><td colspan="4" style="text-align:center;color:var(--slate-400);padding:24px;font-size:12px;">Aún no hay registros de carga o eliminación de archivos.</td></tr>`
                 : entradas.map(e => {
@@ -3498,26 +3513,33 @@ create policy "Acceso con clave anon"
                     const esElim = e.accion && e.accion.toLowerCase().includes('elimin');
                     const accionColor = esElim ? '#fca5a5' : '#6ee7b7';
                     return `<tr style="border-bottom:1px solid var(--card-border-highlight);">
-                        <td style="padding:6px 8px;white-space:nowrap;color:var(--slate-300);">${fechaTxt}</td>
-                        <td style="padding:6px 8px;white-space:nowrap;color:${accionColor};">${e.accion || '-'}</td>
-                        <td style="padding:6px 8px;color:var(--slate-300);">${e.detalle || '-'}</td>
-                        <td style="padding:6px 8px;white-space:nowrap;color:var(--slate-400);">${e.usuario || '-'}</td>
+                        <td style="${td}color:var(--slate-300);font-variant-numeric:tabular-nums;">${fechaTxt}</td>
+                        <td style="${td}color:${accionColor};">${esc(e.accion || '-')}</td>
+                        <td style="${td}color:var(--slate-300);">${detalleHtml(e.detalle)}</td>
+                        <td style="${td}color:var(--slate-400);">${usuarioHtml(e.usuario)}</td>
                     </tr>`;
                 }).join('');
+            const th = 'padding:6px 8px;text-align:left;color:var(--slate-400);font-size:10px;text-transform:uppercase;';
             Swal.fire({
                 title: 'Historial de cargas y eliminaciones',
-                html: `<div style="max-height:60vh;overflow-y:auto;text-align:left;">
-                    <table style="width:100%;border-collapse:collapse;font-size:11.5px;">
+                // En el teléfono las 4 columnas no caben: cada registro pasa a ser una tarjeta (fecha y acción arriba).
+                html: `<style>@media (max-width: 600px) { .hist-tabla { table-layout: auto !important; } .hist-tabla thead { display: none; }
+                        .hist-tabla, .hist-tabla tbody, .hist-tabla tr { display: block; width: 100%; } .hist-tabla tr { padding: 6px 0; }
+                        .hist-tabla td { display: block; width: auto !important; padding: 2px 8px !important; }
+                        .hist-tabla td:nth-child(1), .hist-tabla td:nth-child(2) { display: inline-block; } }</style>
+                    <div style="max-height:60vh;overflow-y:auto;text-align:left;">
+                    <table class="hist-tabla" style="width:100%;border-collapse:collapse;font-size:11.5px;table-layout:fixed;">
+                        <colgroup><col style="width:92px;"><col style="width:22%;"><col><col style="width:28%;"></colgroup>
                         <thead><tr style="border-bottom:1px solid rgba(255,255,255,0.12);">
-                            <th style="padding:6px 8px;text-align:left;color:var(--slate-400);font-size:10px;text-transform:uppercase;">Fecha</th>
-                            <th style="padding:6px 8px;text-align:left;color:var(--slate-400);font-size:10px;text-transform:uppercase;">Acción</th>
-                            <th style="padding:6px 8px;text-align:left;color:var(--slate-400);font-size:10px;text-transform:uppercase;">Detalle</th>
-                            <th style="padding:6px 8px;text-align:left;color:var(--slate-400);font-size:10px;text-transform:uppercase;">Usuario</th>
+                            <th style="${th}">Fecha</th>
+                            <th style="${th}">Acción</th>
+                            <th style="${th}">Detalle</th>
+                            <th style="${th}">Usuario</th>
                         </tr></thead>
                         <tbody>${filasHtml}</tbody>
                     </table>
                 </div>`,
-                width: 'min(760px, 94vw)',
+                width: 'min(900px, 96vw)',
                 confirmButtonText: 'Cerrar',
                 background: '#0f172a', color: '#f8fafc',
                 customClass: { confirmButton: 'bg-slate-700 hover:bg-slate-600 text-white px-4 py-2.5 rounded-lg text-xs min-w-[44px]' },
