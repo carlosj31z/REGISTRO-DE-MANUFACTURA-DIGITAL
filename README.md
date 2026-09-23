@@ -1,6 +1,6 @@
 # RMD Pendientes de Autorización — Lógica de funcionamiento
 
-Este documento explica **cómo funciona por dentro** `index.html` (una SPA de un solo archivo, sin build ni backend propio), con foco especial en la pestaña **Producción**, que es el corazón de la app: cruza el Programa de Producción con la Base de Datos de materiales y el Exportado RMD para decirte, producto por producto y etapa por etapa, qué le falta autorización.
+Este documento explica **cómo funciona por dentro** `index.html` (una SPA de un solo archivo, sin build ni backend propio), con foco especial en la pestaña **Producción**, que es el corazón de la app: cruza el Programa de Producción con el árbol de producción de cada producto (listas de materiales de SAP) y los RMD de SAP para decirte, producto por producto y etapa por etapa, qué le falta autorización.
 
 Está escrito para que puedas decidir **qué tocar** al mejorar Producción sin romper el resto. Cada sección indica el rango de líneas aproximado en `index.html` para ubicarte rápido.
 
@@ -23,22 +23,24 @@ El tema oscuro/claro se resuelve con variables CSS (`--accent`, `--slate-*`, etc
 
 ## 2. La pestaña Producción: mapa de piezas
 
-Producción tiene 3 **fuentes de datos independientes**, cada una con su propio botón de carga en la barra superior (`#inlineUploadProd`), y una **validación cruzada** que las combina:
+Producción cruza **2 fuentes** (cada una con su botón de carga en la barra superior, `#inlineUploadProd`) con el **árbol de producción** de cada producto (listas de materiales de SAP):
 
-| Fuente | Variable(s) | Excel esperado | Qué aporta |
+| Fuente | Variable(s) | De dónde sale | Qué aporta |
 |---|---|---|---|
-| **Programa de Producción** | `productionData` (array) | Uno por planta (Planta ATE / Planta LIMA), varias hojas (una por área) | Qué se va a producir y CUÁNDO (fechas) |
-| **Base de Datos** | `databaseMaterials` (Map), `agrupadorEtapasMap` (Map) | Un Excel con columnas Material / Descripción / Agrupador / Etapa | A qué "Agrupador RMD" y "Etapa" pertenece cada código de material |
-| **Exportado RMD** | `rmdAutorizadosEtapasPorAgrupador` (Map), `rmdAutorizadosDetalle` (array), `rmdAutorizadosRaw` (array) y, si trae recetas, `rmdPrecisoDatos` / `rmdPreciso` | Export de RMD_Configuración de SAP (el clásico, un Código por Defecto por RMD) o, recomendado, **sin archivo** con el botón **"Enviar a Status RMD"** del portal, que trae además todas las recetas (sección 4.6) | Qué combinaciones Agrupador+Etapa YA tienen RMD autorizado; con recetas, el estado exacto de cada material en cada etapa (sección 4.5) |
+| **Programa de Producción** | `productionData` (array) | Un Excel por planta (Planta ATE / Planta LIMA), varias hojas (una por área) | Qué se va a producir y CUÁNDO (fechas) |
+| **RMD de SAP** | `rmdPrecisoDatos` / `rmdPreciso` (+ `rmdAutorizadosDetalle` para la observación) | Recomendado: **sin archivo**, con el botón **"Enviar a Status RMD"** del portal (trae todas las versiones y todas las recetas). También acepta el Exportado RMD (sección 4.8) | El estado de cada RMD y con qué materiales (recetas) se usa |
+| **Árbol de producción** | `motorArboles`, `arbolDeProduccion()` | Motor local de "Listas de materiales" (`arbol-motor.js` + 4 tablas, caché 12 h) | Qué etapas tiene cada producto y con qué material exacto se hace cada una |
 
-La función que cruza las tres es **`runValidacionMateriales()`** (línea ~7594) — es, con diferencia, la función más importante de toda la pestaña. Todo lo demás (KPIs, tabla, calendario, gráficos) se recalcula a partir de su resultado.
+La **Base de Datos** (material → Código Agrupador) y el Código Agrupador **ya no se usan** para validar; su botón sigue ahí, pero su estado dice "No se usa".
+
+La función que lo cruza todo es **`runValidacionMateriales()`** — es, con diferencia, la función más importante de toda la pestaña. Todo lo demás (KPIs, tabla, calendario, gráficos) se recalcula a partir de su resultado.
 
 ```
-Excel Programa de Producción  ──┐
-                                  ├─► runValidacionMateriales() ──► ultimoResultadoValidacion
-Excel Base de Datos            ──┤         (línea 7594)              { pendientes[], autorizadosManual[],
-                                  │                                    revisados, autorizados, rmdPendientes }
-Excel Exportado RMD            ──┘                                          │
+Excel Programa de Producción ──┐
+                                 ├─► runValidacionMateriales() ──► ultimoResultadoValidacion
+RMD de SAP (con recetas)       ──┤     por cada producto:          { pendientes[], autorizadosManual[],
+                                 │     evaluarMaterialPreciso()      revisados, autorizados, rmdPendientes }
+Árbol de producción (BOM SAP)  ──┘                                          │
                                                                               ▼
                                                           renderTablaPendientes() + KPIs + calendario + gráficos
 ```
@@ -53,15 +55,16 @@ let productionData = [];             // [{ codigo, producto, area, fechas:[...],
 let availableAreas = new Set();      // nombres de hoja/área presentes en el Excel cargado
 let currentAreaFilter = 'TODAS';     // filtro de pestañas de área (chips debajo del header)
 
-let databaseMaterials = new Map();          // codigo -> { material, descripcion, agrupador, etapaPropia }
-let agrupadorEtapasMap = new Map();         // agrupador -> Set(etapas que existen para ese agrupador)
-let rmdAutorizadosEtapasPorAgrupador = new Map(); // agrupador -> Set(etapas YA resueltas/autorizadas)
-let rmdAutorizadosDetalle = [];             // una fila por cada fila del Excel RMD (sin colapsar)
+let rmdPrecisoDatos = null;          // maestro de RMD que se guarda (val_rmd_preciso): una fila compacta por RMD
+let rmdPreciso = null;               // su índice en memoria: porMatEtapa ("material::ETAPA" -> RMD), etapasPropias, descDeMaterial
+const motorArboles = { estado };     // 'pendiente' | 'cargando' | 'listo' | 'no-disponible' (motor de árboles)
+let rmdAutorizadosDetalle = [];      // una fila por RMD del Exportado (de aquí sale la Observación de cada RMD)
+// Ya no intervienen en la validación: databaseMaterials, agrupadorEtapasMap, rmdAutorizadosEtapasPorAgrupador
 
 let manualAutorizados = new Set();   // claves "material::ETAPA_FIJA" marcadas ✓ a mano
 let estatusEtapa = new Map();        // "material::ETAPA_FIJA" -> 'PENDIENTE-PRO' | 'POR INGRESAR' | ...
 let responsablesEtapa = new Map();   // "material::ETAPA_FIJA" -> 'PRO' | 'DOC' | 'ASC' | 'IDE'
-let descartadosPorArbol = new Set(); // etapas descartadas por el filtro de árbol de materiales
+let descartadosPorArbol = new Set(); // filtro de árbol ANTIGUO (por agrupador); ya no se usa en la validación
 
 let ultimoResultadoValidacion = { revisados, autorizados, pendientes:[...], autorizadosManual:[...], rmdPendientes };
 ```
@@ -120,84 +123,75 @@ Cada carga guarda también el Excel original en base64 (`prod_archivo_original_<
 
 ---
 
-## 4. Validación cruzada: `runValidacionMateriales()` (línea 7594)
+## 4. Validación por árbol de producción: `runValidacionMateriales()`
 
-Esta función solo corre si las 3 fuentes están listas (`productionData.length > 0`, `databaseMaterialsLoaded`, `rmdAutorizadosLoaded`); si no, deja la tabla vacía con un mensaje que dice cuál falta. **Si el Exportado RMD trae recetas, la decisión de cada etapa la toma el modo preciso (sección 4.5)** y la Base de Datos pasa a ser opcional (solo respaldo); lo que sigue en 4.1–4.4 describe el modo clásico, que se sigue usando con un Exportado sin recetas y en Forecast.
+Solo necesita el **Programa de Producción** y los **RMD de SAP**; si falta alguno deja la tabla vacía con un mensaje que dice cuál. La primera vez del día espera a que cargue el motor de árboles ("Cargando el árbol de materiales de SAP…", `esperarMotorArboles`); después cada validación tarda ~50 ms. Forecast (`runValidacionForecast`) usa exactamente la misma lógica.
 
 ### 4.1 Paso 1 — Agrupar por código de material (todas las áreas)
 
-Recorre `productionData` (respetando `currentAreaFilter` si no es `'TODAS'`) y arma:
-- `materialAreas`: código → Set de áreas donde aparece.
-- `materialPlantas`: código → Set de plantas de origen (solo relevante en consolidado).
-- `materialFechaMin`: código → fecha de inicio de producción más próxima (usada para ordenar la tabla y para el chip de urgencia).
+Recorre `productionData` (respetando `currentAreaFilter` si no es `'TODAS'`) y arma, por código: sus áreas (`materialAreas`), sus plantas (`materialPlantas`, relevante en consolidado), su fecha de inicio más próxima (`materialFechaMin`, para ordenar la tabla y el chip de urgencia) y su descripción del programa (respaldo).
 
-### 4.2 Paso 2 — Decidir el estado de cada material
+### 4.2 Paso 2 — El árbol de producción de cada producto (`calcularArbolProduccion`)
 
-Para cada código único:
-1. Si **no está en `databaseMaterials`** → pendiente, motivo "No encontrado en Base de Datos" (esto es lo que habilita el botón "🌳 Buscar en árbol" en la tabla, ver sección 7).
-2. Si está pero **sin agrupador válido** → pendiente, "Sin agrupador válido en Base de Datos".
-3. Si tiene agrupador: se buscan las etapas que existen para ese agrupador (`agrupadorEtapasMap`) y las que ya tienen RMD resuelto (`rmdAutorizadosEtapasPorAgrupador`). La diferencia (`etapasMaterial - etapasAutorizadas`) son las **etapas pendientes** de ese producto.
-4. Si `etapasPendientes.length === 0` → autorizado. Si no, pendiente, con la lista de etapas que faltan.
+El árbol se calcula **hacia atrás desde el propio código**: un producto terminado arranca en Acondicionado; un semielaborado del programa (ampolla llena, granel…) arranca en su propia etapa, así que solo cuentan su etapa y las anteriores. Cada árbol se calcula al momento (163 productos en ~5 ms) y nunca se reutiliza uno de otra sesión: siempre corresponde a la lista de materiales vigente.
 
-Una combinación Agrupador+Etapa se da por resuelta solo si TODOS sus productos (Código por Defecto) tienen su versión más alta en un estado resuelto (Autorizado, Solicitud Aprobada, Solicitud Rechazada). Los RMD **Cancelados** no cuentan para elegir esa versión (un RMD cancelado nunca entró en vigor): antes caían en "estado no reconocido" y bloqueaban la etapa aunque la versión anterior siguiera Autorizada (ej. SOLUDEX Fabricación: v4 Autorizada + v5 Cancelada). Con el Exportado completo de hoy eran 465 combinaciones.
+Un código puede tener varias **alternativas** de lista de materiales y cada una varias **versiones de fabricación**. Cuentan solo las **rutas vigentes**:
+- alternativa normal (no 66–90 de conciliación ni 95–99 de reacondicionado),
+- lista de materiales **activa**,
+- con versión de fabricación **real** (registrada en SAP),
+- sin versiones de fabricación **bloqueadas** ni materiales con **estado Z** (bloqueo) en el camino.
 
-### 4.3 Paso 3 — Restar lo ya resuelto manualmente o por árbol
+Antes se tomaba siempre la alternativa de menor número aunque estuviera inactiva (casos reales: AKA-PRED 6000000814, cuya alternativa 1 inactiva no tenía Fabricación; NISTATINA 6000000997, cuya alternativa 1 inactiva solo tenía Acondicionado y por eso no se revisaban su Envase ni su Fabricación). Si hay **varias rutas vigentes** (dos líneas, dos versiones de fabricación), cada etapa lleva los materiales de todas (ej. DOLORAL FTE 6000003645: Fabricación 5000003208 por la versión 1101 y 5000003663 por la 1201). Si ninguna ruta es vigente se usan las que haya y se avisa en la ventana de la etapa.
 
-Las etapas pendientes de cada producto se filtran contra dos mecanismos adicionales, independientes del Exportado RMD:
-- `manualAutorizados` (autorización manual con el botón ✓ de una fila/etapa específica).
-- `descartadosPorArbol` (el filtro de árbol de materiales confirmó que esa fila en realidad pertenece a OTRA presentación — ver sección 7).
+### 4.3 Paso 3 — El estado de cada etapa (`evaluarEtapaArbol` + `estadoDeCadenaPrecisa`)
 
-Si tras esta resta ya no quedan etapas pendientes, el producto pasa completo a `autorizadosManual`. Si quedan **algunas** pero no todas, el producto sigue pendiente mostrando solo las que faltan, más las ya autorizadas manualmente (para poder revertir cada una).
+Para cada material que el árbol asigna a la etapa, su *cadena* son todos los RMD de ese material (como receta o como Código por Defecto) en esa etapa, de cualquier máster:
+1. Los **Cancelados** no cuentan.
+2. Si en la cadena hay un RMD **vigente** (Autorizado o Ingresado), las versiones **Suspendidas** se apartan: SAP suspende la anterior al autorizar la nueva, y un material puede ser receta de dos másters con numeración de versión distinta. Una solicitud (Aprobada/Rechazada) no basta para apartarlas.
+3. Manda la **versión más alta**; en empate gana la no resuelta y después el RMD real sobre la solicitud.
+4. Si el elegido está resuelto pero hay un RMD **Ingresado** o una solicitud **Solicitada** registrados DESPUÉS de él (otra línea de versiones), la etapa queda pendiente: hay una versión nueva en curso.
+5. Resuelto = Autorizado, Solicitud Aprobada o Solicitud Rechazada (criterio de siempre); pendiente = Ingresado, Suspendido, Solicitado o **Sin RMD**.
 
-### 4.4 Resultado final
+La etapa está pendiente si el material de **alguna** de sus rutas vigentes lo está.
+
+### 4.4 Productos sin árbol
+
+Si un código no tiene lista de materiales en SAP (o no se pudo cargar el motor), solo se revisa el RMD de su propio código. Si su etapa es **Fabricación** no hay nada antes y la revisión está completa; si no, el producto sale para revisar con el motivo "Sin árbol de producción: …" y la nota "etapas anteriores sin verificar" (nunca se da por autorizado a ciegas). Si el motor no carga, un aviso fijo sobre la tabla lo dice y ofrece **Reintentar** (`avisoMotorArboles`).
+
+### 4.5 Paso 4 — Restar lo autorizado manualmente
+
+Las etapas pendientes se filtran solo contra `manualAutorizados` (botón ✓ de una etapa). Si no queda ninguna, el producto pasa a `autorizadosManual`; si quedan algunas, sigue pendiente mostrando las que faltan más las autorizadas a mano (para poder revertir cada una). El antiguo descarte por árbol (`descartadosPorArbol`) ya no interviene y se quitó su opción del menú **Revertir**.
+
+### 4.6 Resultado final
 
 ```js
 ultimoResultadoValidacion = {
   revisados,               // total de materiales únicos evaluados
   autorizados: autorizados + autorizadosManualLista.length,
-  pendientes: pendientesReales,       // [{ material, descripcion, areas, etapasPendientes:[...], fechaProxima, plantas, motivo }]
+  pendientes: pendientesReales,       // [{ material, descripcion, areas, etapasPendientes:[...], detallePreciso, sinArbol?, fechaProxima, plantas, motivo }]
   autorizadosManual: autorizadosManualLista,
   rmdPendientes: rmdPendientesTotal   // SUMA de etapas pendientes individuales, no de productos
 };
 ```
 
-`rmdPendientes` es el número que se muestra en el KPI destacado "RMD Pendientes" — cuenta **etapas**, no productos: un producto con 3 etapas pendientes suma 3.
+`rmdPendientes` es el número del KPI destacado "RMD Pendientes" — cuenta **etapas**, no productos. La lista se ordena por `fechaProxima` ascendente (lo más urgente primero).
 
-La lista final se ordena por `fechaProxima` ascendente (lo más urgente primero); los productos sin fecha van al final, ordenados alfabéticamente.
+### 4.7 En la pantalla y en el Excel
 
-### 4.5 Validación por receta exacta ("modo preciso")
+- **Chip** bajo cada etapa pendiente (`chipSapEtapa`): estado real en SAP (`Ingresado v4`, `Suspendido v2`, `Solicitado v9`, `Sin RMD`); con varias rutas, `+N`. El tooltip lista cada código con su RMD.
+- **Clic en la etapa** (`mostrarDetalleEtapa` → `mostrarEtapaPrecisa`): solo el código (o los códigos, uno por ruta vigente) de esa etapa y el RMD que decide su estado — número de RMD o de solicitud, versión, estado, fecha de registro y **Observación** (`filaDetalleDeEntrada`) —, la explicación de por qué está pendiente, las rutas del árbol con la etapa resaltada y, plegado, el historial de versiones de ese mismo código.
+- **Exportar Excel** (Producción y Forecast): las columnas de etapa van en orden de producción y la hoja **Detalle SAP** tiene una fila por código pendiente con su ruta, RMD, versión, estado, registro y observación (`hojaDetalleSap`).
+- Junto a "Exportado RMD" se lee **✓ Por árbol** y, en las fuentes, la fecha de los datos de SAP (`textoFuenteRmd`).
 
-**Qué resuelve.** El Exportado nativo trae un solo *Código por Defecto* por RMD, pero un mismo máster (Código Agrupador) reúne muchas recetas/presentaciones. Con eso la validación clásica solo puede razonar por familia: si CUALQUIER presentación del agrupador tenía una etapa pendiente, marcaba pendiente esa etapa para TODOS los productos de la familia. El modo preciso decide con el material exacto de cada etapa.
+### 4.8 El maestro de RMD: SAP o Exportado
 
-**Cuándo se activa.** Solo, al recibir los datos del botón **Enviar a Status RMD** del portal (4.6) o al cargar un Exportado que traiga las columnas de recetas (`Linaje`, `Código Receta`, `Versión Receta`…). Con un Exportado clásico todo funciona como antes, pero si ya había datos por receta se pide **confirmar** ("Este Exportado no trae las recetas"): cargarlo haría que Producción y Forecast vuelvan a validar por Código Agrupador para todo el equipo; al cancelar no cambia nada. Funciones: `procesarFilasRmd` (núcleo común de archivo subido / Seguimiento / SAP), `datosPrecisosDesdeFilas`, `construirIndicePreciso`, `evaluarMaterialPreciso`.
+- **Con recetas** (botón "Enviar a Status RMD", o un Excel con las columnas `Linaje`, `Código Receta`…): reemplaza el maestro completo (`datosPrecisosDesdeFilas`). Se guarda en `val_rmd_preciso` (≈2 MB): una fila por RMD `[rmd, linaje, versión, estado, etapa, agrupador, código por defecto, descripción, [[material, versión de fabricación]…], fechaRegistroMs, códigoSolicitud]`.
+- **Exportado clásico** (sin recetas): ya no hace volver a ninguna lógica por agrupador. Sus estados se **suman** al maestro existente (`fusionarDatosPrecisos`): se conservan las recetas de la última sincronización, un estado solo **avanza** (Solicitado → Solicitud Aprobada/Rechazada → Ingresado → Autorizado → Suspendido/Cancelado; un Exportado más viejo no retrocede nada) y los RMD nuevos cuentan por su Código por Defecto hasta la próxima sincronización. Si no había maestro, se usa ese Exportado solo y la fuente dice "sin recetas".
+- Al abrir la página, si solo hay datos de un Exportado clásico guardado (de antes de esta versión), la validación por árbol funciona igual con ellos (`datosPrecisosDesdeDetalle`).
 
-**Datos.** `rmdPrecisoDatos` se guarda en `val_rmd_preciso` (≈1,8 MB para ≈12 700 RMD; una fila compacta por RMD: `[rmd, linaje, versión, estado, etapa, agrupador, código por defecto, descripción, [[material, versión de fabricación]…]]`) y `rmdPreciso` es su índice en memoria (`porMatEtapa`, `matsPorAgrEtapa`, `etapasPropias`…). Las partes que siguen usando el formato clásico (Forecast, modal de verificación, Seguimiento RMD) reciben las mismas filas deduplicadas con exactamente las 18 columnas del Exportar nativo (`filasClasicasDeduplicadas`, `libroClasicoComoBuffer`).
+**Resultado medido** con los programas ATE del 17/09/2026 y LIMA de las semanas 38–40 y el maestro de SAP del 23/09/2026 (autorizados / pendientes / etapas pendientes): ATE, 65 productos, 22 / 43 / 69 con la antigua lógica por agrupador → **51 / 14 / 21**; LIMA, 98 productos, 68 / 30 / 51 → **65 / 33 / 51**. Los 163 productos tienen árbol; en LIMA 4 etapas tienen dos rutas vigentes. Verificación independiente (misma regla recalculada en Python desde el Excel crudo): 0 diferencias en 513 etapas y 517 códigos.
 
-**Regla de cada etapa** (`estadoDeCadenaPrecisa`). Una *cadena* son todos los RMD de un material exacto (como receta o como Código por Defecto) en una etapa, de cualquier máster:
-1. Los **Cancelados** no cuentan.
-2. Si en la cadena hay un RMD **vigente** (Autorizado o Ingresado), las versiones **Suspendidas** se apartan: SAP suspende la anterior al autorizar la nueva, y un material puede ser receta de dos másters con numeración de versión distinta. Una solicitud (Aprobada/Rechazada) no basta para apartarlas.
-3. Manda la **versión más alta**; en empate gana la no resuelta (criterio clásico) y después el RMD real sobre la solicitud.
-4. Si el elegido está resuelto pero en la cadena hay un RMD **Ingresado** o una solicitud **Solicitada** registrados DESPUÉS de él (otra línea de versiones, cuya numeración no es comparable), la etapa queda pendiente: hay una versión nueva en curso, igual que con una sola línea (v6 Autorizada + v7 Ingresada). Por eso se guarda la **Fecha Registro** de cada RMD (con hora cuando llega desde el portal).
-5. Resuelto = Autorizado, Solicitud Aprobada o Solicitud Rechazada (mismo criterio de siempre); pendiente = Ingresado, Suspendido, Solicitado, o **Sin RMD**.
-
-**Qué etapas se revisan de cada producto** (`etapasParaMaterialPreciso`):
-- **Con árbol de materiales** (motor local `arbol-motor.js`): exactamente las etapas de su BOM y, en cada una, el material de ese nodo. Para un **semielaborado** del programa (ampollas, graneles…) solo cuenta su propio nodo y los anteriores: el árbol se recorta desde él (`arbolDesdeMaterial`) o, si SAP no le encuentra un producto terminado único, se arma directamente desde él hacia atrás (`arbolAguasArribaLocal`, solo en memoria).
-- **Sin árbol todavía**: su etapa propia más las anteriores de su familia, en el **orden físico** (`ORDEN_FISICO_ETAPA`: Fabricación › Recubrimiento › Envase › Inspección › Acondicionado — en los 4.528 árboles de SAP revisados, Inspección va siempre DESPUÉS de Envase; `ETAPAS_FIJAS` es solo el orden de columnas). Esas etapas se deciden por familia ("única en su familia" o "varias presentaciones": pendiente si alguna lo está) y el árbol se calcula en segundo plano (`refinarAmbiguosConArbol`: solo motor local, 3 a la vez, una vez por material y sesión, con cola si llega otra validación) para volver a validar con el material exacto.
-- Las etapas exactas (propia receta o árbol) ya no dependen de `descartadosPorArbol`; las **autorizaciones manuales** se respetan igual que siempre.
-
-**En la tabla (Producción y Forecast).** Bajo cada etapa pendiente, un chip con el estado real en SAP (`Ingresado v4`, `Suspendido v2`, `Solicitado v9`, `Sin RMD`) cuyo tooltip dice qué material y qué RMD se usó, cuántas versiones hay y cuántas suspendidas no cuentan (`chipSapEtapa`). Junto a "Exportado RMD" se lee **✓ Por receta** y, en las fuentes, la fecha de los datos de SAP.
-
-**Clic en la etapa** (`mostrarDetalleEtapa` → `mostrarEtapaPrecisa`). Muestra **solo el código de esa etapa** (el propio código del producto o el material de su árbol) y el RMD que decide su estado: número de RMD o de solicitud, versión, estado, fecha de registro y **Observación** (se toma del detalle del Exportado por número de RMD, `filaDetalleDeEntrada`), con una frase que explica por qué está pendiente, la cadena del árbol del producto y, plegado, el historial de versiones de ese mismo código. Ya no lista todas las presentaciones del Código Agrupador. Si la etapa todavía no se había identificado con el árbol, se calcula en ese momento (`obtenerArbolPreciso`). Sin datos por receta se abre la verificación clásica por agrupador, como antes.
-
-**Forecast.** `runValidacionForecast` usa la misma validación por receta (y el mismo refinamiento con el árbol): un producto ya no puede salir pendiente en Forecast y autorizado en Producción por la misma etapa.
-
-**Exportar Excel.** Con datos por receta, los Excel de Producción y de Forecast llevan además la hoja **Detalle SAP**: una fila por etapa pendiente con el código de la etapa, el RMD, la versión, el estado, la fecha de registro y la observación (la hoja con el formato de la macro no cambia).
-
-**Resultado medido** con los programas ATE del 17/09/2026 y LIMA de las semanas 38–40 y el maestro de SAP del 23/09/2026 (autorizados / pendientes / etapas pendientes): ATE, 65 productos, 22 / 43 / 69 → **51 / 14 / 21**; LIMA, 98 productos, 68 / 30 / 51 → **65 / 33 / 51**; Consolidado, 163 productos, 90 / 73 / 120 → **116 / 47 / 72**. En ATE la diferencia viene casi toda de familias con presentaciones antiguas suspendidas o RMD sin Código por Defecto que bloqueaban a TODAS las presentaciones del agrupador; cada etapa está explicada en el Excel de cruce. Verificación independiente (misma regla recalculada en Python desde el Excel crudo): 0 diferencias en las 510 etapas de esos programas.
-
-Medición anterior (23/09/2026, Consolidado, 187 productos del programa de entonces): lógica clásica 112 autorizados / 75 pendientes / 135 etapas → modo preciso **141 / 46 / 71**. Las 3 etapas que el modo preciso agrega son RMD de Acondicionado Ingresados que el Exportado clásico escondía por ser receta y no Código por Defecto; las 67 que quita son etapas cuyo material exacto está Autorizado (56) o que no forman parte de su cadena real según el BOM (11). Una verificación independiente (misma regla recalculada aparte, en Python, desde el Excel crudo) dio 0 diferencias en las 582 etapas evaluadas.
-
-### 4.6 Enlace directo con el portal SAP (sin archivo)
+### 4.9 Enlace directo con el portal SAP (sin archivo)
 
 El script de Tampermonkey del portal (`rmd-ui-mejoras.user.js` ≥ v1.17; v1.18 envía además la hora de registro; repo AUTOMATIZACION-DE-RMD) añade junto a "Exportar" el botón **Enviar a Status RMD**: abre esta página en otra pestaña, lee el maestro completo con sus recetas usando la sesión ya iniciada del portal (el mismo servicio OData que usa su propio botón Exportar) y lo pasa con `postMessage`. Protocolo: el portal envía `STATUS_RMD_PING` hasta que esta página responde `STATUS_RMD_LISTO` (solo cuando terminó de cargar), luego `RMD_SAP_MAESTRO` (`{ v:1, generado, columnas, filas }`) y esta página contesta `STATUS_RMD_RECIBIDO` (`{ ok, resumen | motivo }`). Aquí se pide el DNI como en cualquier carga ("Sincronización con SAP") y se procesa con el mismo `procesarFilasRmd` que un Excel subido (`recibirMaestroDesdeSap`). Tiempo medido: ≈8 s para 12 732 RMD.
 
@@ -211,10 +205,10 @@ El script de Tampermonkey del portal (`rmd-ui-mejoras.user.js` ≥ v1.17; v1.18 
 
 ## 5. Las "5 etapas fijas" y el mapeo de estatus
 
-Todo el sistema de etapas gira en torno a una lista fija (línea ~6867):
+Todo el sistema de etapas gira en torno a una lista fija, en el **orden de producción** (en los 4.528 árboles de SAP revisados, Inspección va siempre DESPUÉS de Envase: inyectables Fabricación › Envase › Inspección › Acondicionado). Es también el orden de las etapas en la tabla y de las columnas del Excel:
 
 ```js
-const ETAPAS_FIJAS = ['FABRICACION', 'RECUBRIMIENTO', 'INSPECCION', 'ENVASE', 'ACONDICIONADO'];
+const ETAPAS_FIJAS = ['FABRICACION', 'RECUBRIMIENTO', 'ENVASE', 'INSPECCION', 'ACONDICIONADO'];
 ```
 
 Los Excel de origen escriben la etapa con texto libre y variable (ej. "Acondicionado Final", "ENV."), así que `mapEtapaAFija()` (línea ~6880) usa un diccionario de alias (`ETAPA_ALIASES`) más coincidencia parcial para normalizar cualquier variante al valor fijo correspondiente. Si el texto menciona **más de una** etapa fija a la vez (dato corrupto de origen), se trata como no reconocible en vez de adivinar.
@@ -247,9 +241,9 @@ Se guardan hasta 30 snapshots por planta (`prod_historial_planta1` / `prod_histo
 
 ---
 
-## 7. Filtrado por árbol de materiales (BOM de SAP)
+## 7. Árbol de materiales (BOM de SAP)
 
-Este es el mecanismo que resuelve el caso "el material no encontrado en Base de Datos, o con una fila pendiente que en realidad pertenece a otra presentación del mismo agrupador (ej. otro tamaño de envase)".
+El árbol es ahora la **base de la validación** (sección 4.2). Esta sección describe de dónde sale; el "filtrado por árbol" de la 7.2 es la herramienta ANTIGUA para la lógica por agrupador y ya no interviene en la validación.
 
 ### 7.1 Qué es "el árbol"
 
@@ -260,7 +254,7 @@ Un producto real de SAP puede descomponerse en hasta 3 nodos de un BOM (Bill of 
 
 `consultarArbolMaterial(codigo)` (línea ~5853) es el punto de entrada único; cachea resultados exitosos en memoria (con persistencia diferida a `localStorage`) y también memoriza, solo en memoria de sesión, los códigos para los que el motor local respondió "sin árbol" de forma concluyente — para no volver a golpear la API remota con la misma pregunta.
 
-### 7.2 Cómo se usa para descartar filas ajenas
+### 7.2 (Antiguo, ya no se usa) Cómo se descartaban filas ajenas del agrupador
 
 `aplicarFiltroArbolPersistente(material, etapaFijaUnica)` (línea ~6222) es la función central:
 
