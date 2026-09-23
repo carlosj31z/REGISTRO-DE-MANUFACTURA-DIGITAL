@@ -147,6 +147,7 @@ Antes se tomaba siempre la alternativa de menor número aunque estuviera inactiv
 ### 4.3 Paso 3 — El estado de cada etapa (`evaluarEtapaArbol` + `estadoDeCadenaPrecisa`)
 
 Para cada material que el árbol asigna a la etapa, su *cadena* son todos los RMD de ese material (como receta o como Código por Defecto) en esa etapa, de cualquier máster:
+0. **Másters de reacondicionado (REA)**: si el código tiene su propio máster, los másters generales de reacondicionado donde solo es una receta más se apartan (`esMasterReacondicionado`): su descripción empieza por `REA` o `REAC` como palabra, o por `REACONDICIONADO` (141 en SAP, casi todos de Acondicionado, con hasta 242 recetas; "REALIM 10 MG INY…" es un producto, no un máster REA). Se ven en la ventana de la etapa ("no cuenta: máster de reacondicionado (REA)" y, si alguno falta autorizar, "Falta autorizar el reacondicionado (no cuenta como pendiente)"), pero no deciden. Si el código **solo** tiene másters REA en esa etapa, deciden ellos (56 etapas, todas del Forecast). Caso real: MENTHOLATUM NF UNG POT85g 6000003527, Acondicionado v2 **Autorizado** en su máster; el máster REAC - GENERICO - CONSU AACORA01 v2 Ingresado ya no lo deja pendiente. La descripción de cada código también sale de su propio máster, no de un REA.
 1. Los **Cancelados** no cuentan.
 2. Si en la cadena hay un RMD **vigente** (Autorizado o Ingresado), las versiones **Suspendidas** se apartan: SAP suspende la anterior al autorizar la nueva, y un material puede ser receta de dos másters con numeración de versión distinta. Una solicitud (Aprobada/Rechazada) no basta para apartarlas.
 3. Manda la **versión más alta**; en empate gana la no resuelta y después el RMD real sobre la solicitud.
@@ -168,7 +169,7 @@ Una autorización manual **caduca sola, sin DNI**, cuando SAP **resuelve** la et
 - un código pendiente con otra versión u otro RMD que el de la huella → caduca ("SAP registró una versión nueva…"); una solicitud que pasa a RMD con la misma versión no cuenta como versión nueva;
 - mismo RMD y versión, aunque cambie de estado → se mantiene.
 
-Las autorizaciones anteriores a esta versión (sin huella) reciben la suya la primera vez que se revisan; las de etapas que ya no están en el árbol de su producto reciben una huella vacía (si esa etapa llega a aparecer pendiente, caducan). Las claves sin etapa de una versión muy antigua (solo el código, 21 hoy) no tienen efecto y no se tocan. Lo que caduca queda en el historial como "Status RMD (automático)", en **Cambios de SAP** (sección 4.10) y, si pasó fuera de una sincronización, con un aviso discreto abajo a la izquierda (`avisoDiscreto`). Con los datos del equipo del 23/09/2026: de 260 autorizaciones de Producción, 163 caducan la primera vez (SAP ya autorizó esas etapas: hoy no tapan nada, los KPI no cambian: 140 / 47 / 72).
+Las autorizaciones anteriores a esta versión (sin huella) reciben la suya la primera vez que se revisan; las de etapas que ya no están en el árbol de su producto reciben una huella vacía (si esa etapa llega a aparecer pendiente, caducan). Las claves sin etapa de una versión muy antigua (solo el código, 21 hoy) no tienen efecto y no se tocan. Lo que caduca queda en el historial como "Status RMD (automático)", en **Cambios de SAP** (sección 4.10) y, si pasó fuera de una sincronización, con un aviso discreto abajo a la izquierda (`avisoDiscreto`). Con los datos del equipo del 23/09/2026: de 260 autorizaciones de Producción, 163 caducan la primera vez (SAP ya autorizó esas etapas: hoy no tapan nada y los KPI no cambian).
 
 ### 4.6 Resultado final
 
@@ -199,7 +200,7 @@ ultimoResultadoValidacion = {
 - **Exportado clásico** (sin recetas): ya no hace volver a ninguna lógica por agrupador. Sus estados se **suman** al maestro existente (`fusionarDatosPrecisos`): se conservan las recetas de la última sincronización, un estado solo **avanza** (Solicitado → Solicitud Aprobada/Rechazada → Ingresado → Autorizado → Suspendido/Cancelado; un Exportado más viejo no retrocede nada) y los RMD nuevos cuentan por su Código por Defecto hasta la próxima sincronización. Si no había maestro, se usa ese Exportado solo y la fuente dice "sin recetas".
 - Al abrir la página, si solo hay datos de un Exportado clásico guardado (de antes de esta versión), la validación por árbol funciona igual con ellos (`datosPrecisosDesdeDetalle`).
 
-**Resultado medido** con los programas ATE del 17/09/2026 y LIMA de las semanas 38–40 y el maestro de SAP del 23/09/2026 (autorizados / pendientes / etapas pendientes): ATE, 65 productos, 22 / 43 / 69 con la antigua lógica por agrupador → **51 / 14 / 21**; LIMA, 98 productos, 68 / 30 / 51 → **65 / 33 / 51**. Los 163 productos tienen árbol; en LIMA 4 etapas tienen dos rutas vigentes. Verificación independiente (misma regla recalculada en Python desde el Excel crudo): 0 diferencias en 513 etapas y 517 códigos.
+**Resultado medido** con los programas ATE del 17/09/2026 y LIMA de las semanas 38–40 y el maestro de SAP del 23/09/2026 (autorizados / pendientes / etapas pendientes): ATE, 65 productos, 22 / 43 / 69 con la antigua lógica por agrupador → **51 / 14 / 21**; LIMA, 98 productos, 68 / 30 / 51 → **68 / 30 / 48** (65 / 33 / 51 antes de apartar los másters de reacondicionado: las 3 etapas de Acondicionado de MENTHOLATUM 6000003524/26/27); Forecast 400 / 372 / 608 → **398 / 374 / 609** (7 etapas se resuelven y 8 quedan pendientes porque su propio máster está Suspendido y antes solo las resolvía un máster REA). Los 163 productos tienen árbol; en LIMA 4 etapas tienen dos rutas vigentes. Verificación independiente (misma regla, incluida la de los másters REA, recalculada en Python desde el Excel crudo): 0 diferencias en 513 etapas y 517 códigos.
 
 ### 4.9 Enlace directo con el portal SAP (sin archivo)
 
@@ -333,6 +334,7 @@ Si vas a tocar Producción, estos son los patrones defensivos que ya están inst
 | Cómo se ve cada fila de la tabla principal | `renderTablaPendientes()` (7354) y `htmlEtapasDeFila()` (7307) |
 | Colores/urgencia de la tabla | `urgenciaInicioHtml()` (7193), `edadPendienteHtml()`, `getAreaColor()` (4147), clases CSS `.urg-*` / `.edad-pend*` / `.val-kpi*` en el `<style>` |
 | Calendario / "Próximas a producir" / gráficos | `renderCalendarProd()`, `renderUpcomingProd()`, `render*ChartProd()` — línea ~4930–5280 |
+| Másters de reacondicionado (REA) | `esMasterReacondicionado()` / `PATRON_MASTER_REA` y `estadoDeCadenaPrecisa()` |
 | Cuándo caduca una autorización manual | `motivoCaducidadManual()` y `aplicarCaducidadManuales()` — línea ~6203 |
 | Qué cambió con una sincronización | `registrarCambiosSap()` (6372), `compararEvaluaciones()`, `mostrarCambiosSap()` (6410) |
 | Semáforo de los datos de SAP | `frescuraDatosSap()` (6468) y las constantes `SEMAFORO_SAP_*` |

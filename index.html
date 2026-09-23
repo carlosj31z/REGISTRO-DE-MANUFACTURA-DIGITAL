@@ -5916,6 +5916,16 @@ async function downloadPlanProduccionFromCloud() {
             return XLSX.write(wb, { type: 'array', bookType: 'xlsx' });
         }
 
+        // Másters de REACONDICIONADO: másters generales ("REACONDICIONADO GENERICO - GV1", "REAC - GENERICO - CONSU AACORA01",
+        // "REA - PRESERVATIVOS…", 141 en SAP, casi todos de Acondicionado) donde se asocian como recetas muchos productos para
+        // reacondicionarlos. No son el Acondicionado del producto: si el código tiene su propio máster (el de su nombre), ese
+        // decide la etapa y los REA se apartan (se muestran en la ventana de la etapa, pero no cuentan). Caso real: MENTHOLATUM
+        // NF UNG POT85g 6000003527 tiene su Acondicionado v2 Autorizado y además es receta del máster REAC - GENERICO - CONSU
+        // AACORA01 v2 Ingresado, que la dejaba pendiente. "REALIM 10 MG INY…" es un producto, no un máster REA: por eso REA
+        // y REAC tienen que ser palabra completa.
+        const PATRON_MASTER_REA = /^(REAC?(?=[\s\-(.,]|$)|REACONDICIONAD)/;
+        const esMasterReacondicionado = (desc) => PATRON_MASTER_REA.test(normalizeEstadoRmd(desc));
+
         // Índices. Una "cadena" = TODOS los RMD de un mismo material (receta o Código por Defecto) en una misma etapa,
         // de cualquier máster (no depende del Código Agrupador, que en SAP puede cambiar entre versiones). No se usa el "Linaje" (codigoversionprincipal) para agrupar: en los datos reales viene vacío en la
         // mayoría de las versiones (ej. ANDREWS Fabricación v1…v8 no están enlazadas), así que partiría cadenas.
@@ -5933,16 +5943,18 @@ async function downloadPlanProduccionFromCloud() {
                 if (!etapa) return;
                 const estadoNorm = normalizeEstadoRmd(estado);
                 if (ESTADOS_IGNORADOS_RMD.has(estadoNorm)) return; // Cancelados: no cuentan
-                const e = { rmd, sol: solicitud || '', version: Number(version) || 0, estado, estadoNorm, etapa, desc, defecto, fecha: Number.isFinite(fechaRegistro) ? fechaRegistro : null };
+                const e = { rmd, sol: solicitud || '', version: Number(version) || 0, estado, estadoNorm, etapa, desc, defecto, fecha: Number.isFinite(fechaRegistro) ? fechaRegistro : null, rea: esMasterReacondicionado(desc) };
                 const materiales = new Set();
                 if (defecto) materiales.add(defecto);
                 (recetas || []).forEach(([m]) => { if (m) materiales.add(m); });
                 materiales.forEach(m => {
                     agregarLista(idx.porMatEtapa, `${m}::${etapa}`, e);
                     agregarSet(idx.etapasPropias, m, etapa);
-                    // Descripción del material: la de su RMD de Acondicionado si lo tiene, si no la de su versión más alta.
-                    const acond = etapa === 'ACONDICIONADO', prev = descElegida.get(m);
-                    if (desc && (!prev || (acond && !prev.acond) || (acond === prev.acond && e.version > prev.version))) { descElegida.set(m, { acond, version: e.version }); idx.descDeMaterial.set(m, desc); }
+                    // Descripción del material: la de su propio máster (no la de un máster general de reacondicionado) y, entre
+                    // ellas, la de su RMD de Acondicionado si lo tiene; si no, la de su versión más alta.
+                    const acond = etapa === 'ACONDICIONADO', propio = !e.rea, prev = descElegida.get(m);
+                    const mejor = !prev || (propio && !prev.propio) || (propio === prev.propio && ((acond && !prev.acond) || (acond === prev.acond && e.version > prev.version)));
+                    if (desc && mejor) { descElegida.set(m, { acond, version: e.version, propio }); idx.descDeMaterial.set(m, desc); }
                 });
                 idx.totalEntradas++;
             });
@@ -5956,9 +5968,14 @@ async function downloadPlanProduccionFromCloud() {
         // vigente se usa la regla clásica sobre todas: manda la versión más alta. En empate gana la no resuelta (mismo
         // criterio que el modo clásico) y, después, el RMD real sobre la solicitud (ej. MACRODANTINA Envase: v4
         // Autorizada y una solicitud v4 Rechazada → se muestra la v4 Autorizada).
+        // Antes de todo, si el código tiene su propio máster, los másters generales de reacondicionado (REA) donde solo es
+        // receta se apartan (ver esMasterReacondicionado); si solo tiene másters REA (p. ej. un producto de reacondicionado),
+        // son los que deciden.
         const ESTADOS_RMD_VIGENTES = new Set(['AUTORIZADO', 'INGRESADO']);
-        function estadoDeCadenaPrecisa(entradas) {
-            if (!entradas || entradas.length === 0) return null;
+        function estadoDeCadenaPrecisa(todas) {
+            if (!todas || todas.length === 0) return null;
+            const propias = todas.filter(x => !x.rea);
+            const entradas = propias.length ? propias : todas;
             const hayVigente = entradas.some(x => ESTADOS_RMD_VIGENTES.has(x.estadoNorm));
             const base = hayVigente ? entradas.filter(x => x.estadoNorm !== 'SUSPENDIDO') : entradas;
             const peso = (x) => (!ESTADOS_RESUELTOS_RMD.has(x.estadoNorm) ? 2 : (x.rmd ? 1 : 0));
@@ -5975,7 +5992,8 @@ async function downloadPlanProduccionFromCloud() {
                 const nuevos = entradas.filter(x => (x.estadoNorm === 'INGRESADO' || x.estadoNorm === 'SOLICITADO') && x.fecha && x.fecha > ultima.fecha);
                 if (nuevos.length > 0) { ultima = nuevos.reduce((a, b) => (b.fecha > a.fecha ? b : a)); masNuevo = true; }
             }
-            return { ultima, masNuevo, pendiente: !ESTADOS_RESUELTOS_RMD.has(ultima.estadoNorm), versiones: entradas.length, suspendidasApartadas: entradas.length - base.length };
+            return { ultima, masNuevo, pendiente: !ESTADOS_RESUELTOS_RMD.has(ultima.estadoNorm), versiones: todas.length, suspendidasApartadas: entradas.length - base.length,
+                     reaApartadas: todas.length - entradas.length, soloRea: !propias.length };
         }
 
         // ==== Árbol de producción: la ÚNICA fuente de qué etapas tiene cada producto y con qué material se hace cada una ====
@@ -6103,6 +6121,7 @@ async function downloadPlanProduccionFromCloud() {
                     material: x.material, rutas: x.rutas || [], rmd: u ? u.rmd : null, sol: u ? u.sol : '', version: u ? u.version : null,
                     estado: u ? u.estado : 'Sin RMD', estadoNorm: u ? u.estadoNorm : 'SIN RMD', sinRmd: !cadena, pendiente: cadena ? cadena.pendiente : true,
                     versiones: cadena ? cadena.versiones : 0, apartadas: cadena ? cadena.suspendidasApartadas : 0, masNuevo: cadena ? cadena.masNuevo : false,
+                    reaApartadas: cadena ? cadena.reaApartadas : 0, soloRea: !!(cadena && cadena.soloRea),
                     fecha: u && Number.isFinite(u.fecha) ? u.fecha : null // Fecha Registro del RMD que decide (antigüedad del pendiente)
                 };
             }).sort((a, b) => (Number(b.pendiente) - Number(a.pendiente)) || ((b.version || 0) - (a.version || 0)));
@@ -6497,6 +6516,20 @@ async function downloadPlanProduccionFromCloud() {
             if (ESTADOS_RESUELTOS_RMD.has(n)) return `La última es ${u.estado} v${u.version} (${ref}); se considera resuelta.`;
             return `Estado "${u.estado}" no reconocido en v${u.version} (${ref}): se considera pendiente.`;
         }
+        // Nota bajo el código en la ventana de la etapa cuando hay RMD de másters de reacondicionado (REA): cuáles son y, si
+        // alguno está por autorizar, que es el reacondicionado el que falta (no la etapa del producto).
+        function notaReacondicionado(entradas, cadena, codigo) {
+            if (!cadena || (!cadena.reaApartadas && !cadena.soloRea)) return '';
+            const esc = escapeHtmlRmdConfig;
+            const rea = entradas.filter(x => x.rea);
+            const pendientes = rea.filter(x => x.estadoNorm === 'INGRESADO' || x.estadoNorm === 'SOLICITADO');
+            const ref = (x) => `${x.desc} v${x.version} ${x.estado} (${x.rmd ? 'RMD ' + x.rmd : (x.sol ? 'solicitud ' + x.sol : 'sin número')})`;
+            const texto = cadena.soloRea
+                ? `${codigo} solo aparece en másters de reacondicionado (REA): su estado es el de esos másters.`
+                : `No cuentan ${plural(cadena.reaApartadas, 'RMD', 'RMD')} de másters de reacondicionado (REA) donde ${codigo} es receta: la etapa la decide su propio máster.`
+                  + (pendientes.length ? ` Falta autorizar el reacondicionado (no cuenta como pendiente): ${pendientes.map(ref).join('; ')}.` : '');
+            return `<div style="margin:4px 2px 0;font-size:12px;color:#93c5fd;">${esc(texto)}</div>`;
+        }
         // Hoja "Detalle SAP" para los Excel exportados (Producción y Forecast): una fila por código pendiente de cada etapa
         // pendiente (lo mismo que la ventana de la etapa). No toca la hoja con formato de la macro.
         function hojaDetalleSap(pendientes) {
@@ -6559,13 +6592,15 @@ async function downloadPlanProduccionFromCloud() {
                     <td style="${td}white-space:nowrap;">${u && u.fecha ? dayjs(u.fecha).format('DD/MM/YYYY') + (c.pendiente && !c.sinRmd ? `<div style="color:#94a3b8;font-size:11px;">hace ${plural(diasDesde(u.fecha), 'día', 'días')}</div>` : '') : '-'}</td>
                     <td style="${td}">${esc((fila && fila.observacion) || '-')}</td>
                 </tr>`;
-                const explicacion = `<div style="margin:6px 2px 0;font-size:12px;color:${cadena && !cadena.pendiente ? '#6ee7b7' : '#fbbf24'};">${variasRutas ? esc(c.material) + ': ' : ''}${esc(explicarCadenaPrecisa(cadena, c.material, lbl))}</div>`;
+                const explicacion = `<div style="margin:6px 2px 0;font-size:12px;color:${cadena && !cadena.pendiente ? '#6ee7b7' : '#fbbf24'};">${variasRutas ? esc(c.material) + ': ' : ''}${esc(explicarCadenaPrecisa(cadena, c.material, lbl))}</div>`
+                    + notaReacondicionado(entradas, cadena, c.material);
                 // Historial del MISMO código en esta etapa (plegado): todas sus versiones, la que decide y las que no cuentan.
                 const historial = entradas.length > 1 ? `<details style="margin:6px 2px 0;font-size:12px;color:#94a3b8;"><summary style="cursor:pointer;">Ver las ${entradas.length} versiones de ${esc(c.material)} en ${esc(lbl)}</summary>
-                    <table style="width:100%;border-collapse:collapse;margin-top:6px;font-size:12px;"><thead><tr style="background:rgba(255,255,255,0.04);"><th style="${th}">RMD</th><th style="${th}">Versión</th><th style="${th}">Estado</th><th style="${th}">Registro</th><th style="${th}"></th></tr></thead><tbody>
+                    <table style="width:100%;border-collapse:collapse;margin-top:6px;font-size:12px;"><thead><tr style="background:rgba(255,255,255,0.04);"><th style="${th}">RMD</th><th style="${th}">Máster (descripción)</th><th style="${th}">Versión</th><th style="${th}">Estado</th><th style="${th}">Registro</th><th style="${th}"></th></tr></thead><tbody>
                     ${[...entradas].sort((a, b) => ((b.fecha || 0) - (a.fecha || 0)) || (b.version - a.version)).map(x => {
-                        const nota = x === u ? 'decide el estado' : (cadena.suspendidasApartadas > 0 && x.estadoNorm === 'SUSPENDIDO' ? 'no cuenta: hay un RMD vigente' : '');
-                        return `<tr${x === u ? ' style="color:#f8fafc;font-weight:600;"' : ''}><td style="${td}">${esc(x.rmd || (x.sol ? 'Solicitud ' + x.sol : '-'))}</td><td style="${td}">v${x.version}</td><td style="${td}">${esc(x.estado)}</td><td style="${td}">${x.fecha ? dayjs(x.fecha).format('DD/MM/YYYY') : '-'}</td><td style="${td}">${esc(nota)}</td></tr>`;
+                        const nota = x === u ? 'decide el estado' : (x.rea && cadena.reaApartadas > 0 ? 'no cuenta: máster de reacondicionado (REA)'
+                            : (cadena.suspendidasApartadas > 0 && x.estadoNorm === 'SUSPENDIDO' ? 'no cuenta: hay un RMD vigente' : ''));
+                        return `<tr${x === u ? ' style="color:#f8fafc;font-weight:600;"' : ''}><td style="${td}">${esc(x.rmd || (x.sol ? 'Solicitud ' + x.sol : '-'))}</td><td style="${td}">${esc(x.desc || '-')}</td><td style="${td}">v${x.version}</td><td style="${td}">${esc(x.estado)}</td><td style="${td}">${x.fecha ? dayjs(x.fecha).format('DD/MM/YYYY') : '-'}</td><td style="${td}">${esc(nota)}</td></tr>`;
                     }).join('')}</tbody></table><div style="margin-top:4px;">Los RMD cancelados no se muestran: no cuentan.</div></details>` : '';
                 return { principal, explicacion, historial };
             });
@@ -7218,7 +7253,7 @@ pendientes.forEach(p => {
             const lineas = [d.candidatos.length > 1 ? `Etapa con ${d.candidatos.length} rutas vigentes en el árbol de producción:`
                 : (d.nivel === 'propia' ? 'Su propio código:' : 'Material de esta etapa según el árbol de producción:')];
             d.candidatos.slice(0, 8).forEach(c => lineas.push(`• ${c.material}${d.candidatos.length > 1 && c.rutas.length ? ' [' + c.rutas.join(', ') + ']' : ''}: `
-                + (c.sinRmd ? 'sin RMD en SAP (sin contar los cancelados)' : `${c.estado} v${c.version} — RMD ${c.rmd || '(en solicitud)'}${c.fecha ? ' — registrado el ' + dayjs(c.fecha).format('DD/MM/YYYY') : ''} — ${c.versiones} versión(es) en SAP${c.apartadas ? `, ${c.apartadas} suspendida(s) no cuentan porque hay un RMD vigente` : ''}${c.masNuevo ? ' — registrado después del último RMD resuelto (otra línea de versiones)' : ''}`)));
+                + (c.sinRmd ? 'sin RMD en SAP (sin contar los cancelados)' : `${c.estado} v${c.version} — RMD ${c.rmd || '(en solicitud)'}${c.fecha ? ' — registrado el ' + dayjs(c.fecha).format('DD/MM/YYYY') : ''} — ${c.versiones} versión(es) en SAP${c.apartadas ? `, ${c.apartadas} suspendida(s) no cuentan porque hay un RMD vigente` : ''}${c.reaApartadas ? `, ${c.reaApartadas} de másters de reacondicionado (REA) no cuentan` : ''}${c.soloRea ? ' — solo tiene másters de reacondicionado (REA)' : ''}${c.masNuevo ? ' — registrado después del último RMD resuelto (otra línea de versiones)' : ''}`)));
             if (d.candidatos.length > 8) lineas.push(`… y ${d.candidatos.length - 8} más`);
             lineas.push('Clic en la etapa para ver el detalle.');
             return `<span class="chip-sap chip-sap--${clase}" title="${escapeHtmlRmdConfig(lineas.join('\n'))}">${escapeHtmlRmdConfig(texto)}</span>`;
