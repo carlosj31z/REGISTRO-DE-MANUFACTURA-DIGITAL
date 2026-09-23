@@ -821,6 +821,7 @@
         .chip-sap--sol  { color: rgb(var(--plum-rgb));   background: rgb(var(--plum-rgb) / 0.12);   border-color: rgb(var(--plum-rgb) / 0.35); }
         .chip-sap--sin  { color: rgb(var(--danger-rgb)); background: transparent; border-color: rgb(var(--danger-rgb) / 0.5); border-style: dashed; }
         .chip-sap--otro { color: rgb(var(--copper-rgb)); background: rgb(var(--copper-rgb) / 0.12); border-color: rgb(var(--copper-rgb) / 0.35); }
+        .chip-sap--aut  { color: rgb(var(--ok-rgb));     background: rgb(var(--ok-rgb) / 0.12);     border-color: rgb(var(--ok-rgb) / 0.35); }
 
         /* Barra lateral de color en el selector de Estatus, según la
            actividad elegida — permite identificar el tipo de pendiente de
@@ -4455,7 +4456,21 @@ function buildDateColumnMapPlanta1(headerRow, weekLabelRow, hiddenCols) {
                 if (currentWeekKey && globalWeekMondayMap[currentWeekKey] !== undefined &&
                     typeof headerVal === 'number' && headerVal >= 1 && headerVal <= 31) {
                     const offsetFromBlockStart = idx - blockStartIdx;
-                    const reconstructed = dayjs(globalWeekMondayMap[currentWeekKey]).add(offsetFromBlockStart, 'day');
+                    let reconstructed = dayjs(globalWeekMondayMap[currentWeekKey]).add(offsetFromBlockStart, 'day');
+                    // Hojas con el historial de TODO el año (caso real: MENT, SEM y COS de Planta LIMA traen desde
+                    // "SEMANA N° 45" de 2025 hasta la 40 de 2026, con "SEMANA N° 53/54/55" en el cambio de año): el número
+                    // de semana no dice el año, y un bloque viejo caía en el año actual o el siguiente (ej. el "N° 53"
+                    // de fin de 2025 terminaba en 01/01/2027 y el producto aparecía programado a futuro sin estarlo). El
+                    // número de día del encabezado lo desambigua: si no coincide con la fecha reconstruida y sí con la
+                    // misma semana un año antes (bloque que quedaba en el futuro) o un año después (bloque que quedaba
+                    // muy en el pasado), se usa esa. Si no coincide ninguna, se deja como siempre.
+                    if (reconstructed.isValid() && reconstructed.date() !== headerVal) {
+                        const hoy = dayjs();
+                        const saltos = reconstructed.isAfter(hoy.add(30, 'day')) ? [-52, -53]
+                            : (reconstructed.isBefore(hoy.subtract(180, 'day')) ? [52, 53] : []);
+                        const corregida = saltos.map(w => reconstructed.add(w, 'week')).find(x => x.date() === headerVal);
+                        if (corregida) reconstructed = corregida;
+                    }
                     if (reconstructed.isValid()) dateColMap[idx] = reconstructed.format('YYYY-MM-DD');
                 }
             }
@@ -7248,7 +7263,7 @@ async function downloadPlanProduccionFromCloud() {
         // ETAPAS_FIJAS: en los 4.528 árboles de SAP revisados, Inspección va SIEMPRE después de Envase (inyectables:
         // Fabricación > Envase > Inspección > Acondicionado), nunca antes.
         const ORDEN_FISICO_ETAPA = { FABRICACION: 0, RECUBRIMIENTO: 1, ENVASE: 2, INSPECCION: 3, ACONDICIONADO: 4 };
-        let rmdPrecisoDatos = null; // lo que se guarda: { generado, origen, filas:[[rmd, linaje, version, estado, etapa, agr, defecto, desc, [[material, verid]...]]] } (una por RMD)
+        let rmdPrecisoDatos = null; // lo que se guarda: { generado, origen, filas:[[rmd, linaje, version, estado, etapa, agr, defecto, desc, [[material, verid]...], fechaRegistroMs, códigoSolicitud]] } (una por RMD)
         let rmdPreciso = null;      // índices construidos desde rmdPrecisoDatos (no se guardan)
 
         // Mayúsculas y sin tildes (misma normalización que normalizeEstadoRmd), para comparar encabezados.
@@ -7261,7 +7276,9 @@ async function downloadPlanProduccionFromCloud() {
         function datosPrecisosDesdeFilas(rows, origen, generado) {
             const k = rows[0].map(normCabeceraRmd); const col = (n) => k.indexOf(n);
             const c = { rmd: col('CODIGO'), sol: col('CODIGO DE SOLICITUD'), ver: col('VERSION'), est: col('ESTADO'), def: col('CODIGO POR DEFECTO'), agr: col('CODIGO AGRUPADOR'),
-                        desc: col('DESCRIPCION'), eta: col('ETAPA'), lin: col('LINAJE'), mat: col('CODIGO RECETA'), vrd: col('VERSION RECETA') };
+                        desc: col('DESCRIPCION'), eta: col('ETAPA'), lin: col('LINAJE'), mat: col('CODIGO RECETA'), vrd: col('VERSION RECETA'), freg: col('FECHA REGISTRO') };
+            // Fecha Registro en milisegundos (Date del Excel, o texto ISO de los datos directos de SAP); null si no hay.
+            const msRegistro = (x) => { const t = x instanceof Date ? x.getTime() : (x ? Date.parse(String(x)) : NaN); return Number.isFinite(t) ? t : null; };
             const porRmd = new Map();
             rows.slice(1).forEach(r => {
                 if (!r || !r.length) return;
@@ -7271,7 +7288,8 @@ async function downloadPlanProduccionFromCloud() {
                 const clave = [rmd, sol, version, etapa].join('|');
                 let e = porRmd.get(clave);
                 if (!e) {
-                    e = [rmd, v(c.lin) || rmd || (sol ? 'SOL-' + sol : ''), version, v(c.est), etapa, normalizeAgrupador(v(c.agr)) || '', normalizeMaterialCode(v(c.def)) || '', v(c.desc), []];
+                    e = [rmd, v(c.lin) || rmd || (sol ? 'SOL-' + sol : ''), version, v(c.est), etapa, normalizeAgrupador(v(c.agr)) || '', normalizeMaterialCode(v(c.def)) || '', v(c.desc), [],
+                         c.freg >= 0 ? msRegistro(r[c.freg]) : null, sol];
                     porRmd.set(clave, e);
                 }
                 const mat = normalizeMaterialCode(v(c.mat)), verid = v(c.vrd);
@@ -7297,7 +7315,10 @@ async function downloadPlanProduccionFromCloud() {
         }
         function libroClasicoComoBuffer(rows) {
             const iFechas = ['Fecha Registro', 'Fecha Solicitud'].map(h => rows[0].indexOf(h));
-            const datos = rows.map((r, n) => n === 0 ? r : r.map((v, j) => (iFechas.includes(j) && typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v)) ? new Date(v + 'T00:00:00') : v));
+            // Las fechas de los datos directos de SAP llegan como texto ISO: "AAAA-MM-DD" (script v1.17.0) o con hora en UTC
+            // (v1.17.1+, "…T20:45:14.000Z"), que se convierte a la hora local.
+            const aFecha = (v) => (/^\d{4}-\d{2}-\d{2}$/.test(v) ? new Date(v + 'T00:00:00') : new Date(v));
+            const datos = rows.map((r, n) => n === 0 ? r : r.map((v, j) => (iFechas.includes(j) && typeof v === 'string' && /^\d{4}-\d{2}-\d{2}(T[\d:.]+Z)?$/.test(v)) ? aFecha(v) : v));
             const wb = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(datos, { cellDates: true }), 'Exportación SAPUI5');
             return XLSX.write(wb, { type: 'array', bookType: 'xlsx' });
@@ -7318,12 +7339,12 @@ async function downloadPlanProduccionFromCloud() {
                 agrsDeMaterial: new Map(), etapasDeAgr: new Map(), descDeMaterial: new Map()
             };
             const descElegida = new Map(); // material -> { acond, version }
-            datos.filas.forEach(([rmd, linaje, version, estado, etapaTxt, agr, defecto, desc, recetas]) => {
+            datos.filas.forEach(([rmd, linaje, version, estado, etapaTxt, agr, defecto, desc, recetas, fechaRegistro, solicitud]) => {
                 const etapa = mapEtapaAFija(normalizeEtapa(etapaTxt));
                 if (!etapa) return;
                 const estadoNorm = normalizeEstadoRmd(estado);
                 if (ESTADOS_IGNORADOS_RMD.has(estadoNorm)) return; // Cancelados: no cuentan
-                const e = { rmd, version: Number(version) || 0, estado, estadoNorm, etapa, desc };
+                const e = { rmd, sol: solicitud || '', version: Number(version) || 0, estado, estadoNorm, etapa, desc, defecto, fecha: Number.isFinite(fechaRegistro) ? fechaRegistro : null };
                 const materiales = new Set();
                 if (defecto) materiales.add(defecto);
                 (recetas || []).forEach(([m]) => { if (m) materiales.add(m); });
@@ -7354,11 +7375,20 @@ async function downloadPlanProduccionFromCloud() {
             const hayVigente = entradas.some(x => ESTADOS_RMD_VIGENTES.has(x.estadoNorm));
             const base = hayVigente ? entradas.filter(x => x.estadoNorm !== 'SUSPENDIDO') : entradas;
             const peso = (x) => (!ESTADOS_RESUELTOS_RMD.has(x.estadoNorm) ? 2 : (x.rmd ? 1 : 0));
-            const ultima = base.reduce((a, b) => {
+            let ultima = base.reduce((a, b) => {
                 if (b.version !== a.version) return b.version > a.version ? b : a;
                 return peso(b) > peso(a) ? b : a;
             });
-            return { ultima, pendiente: !ESTADOS_RESUELTOS_RMD.has(ultima.estadoNorm), versiones: entradas.length, suspendidasApartadas: entradas.length - base.length };
+            // Varias líneas de versiones (másters) no tienen numeración comparable (ej. 5000001567 Envase: v7 de una
+            // línea y v5 de otra). Si la elegida está resuelta pero en la cadena hay un RMD Ingresado o una solicitud
+            // pendiente registrados DESPUÉS de ella, hay una versión nueva en curso: la etapa queda pendiente, igual que
+            // con una sola línea (v6 Autorizada + v7 Ingresada).
+            let masNuevo = false;
+            if (ESTADOS_RESUELTOS_RMD.has(ultima.estadoNorm) && ultima.fecha) {
+                const nuevos = entradas.filter(x => (x.estadoNorm === 'INGRESADO' || x.estadoNorm === 'SOLICITADO') && x.fecha && x.fecha > ultima.fecha);
+                if (nuevos.length > 0) { ultima = nuevos.reduce((a, b) => (b.fecha > a.fecha ? b : a)); masNuevo = true; }
+            }
+            return { ultima, masNuevo, pendiente: !ESTADOS_RESUELTOS_RMD.has(ultima.estadoNorm), versiones: entradas.length, suspendidasApartadas: entradas.length - base.length };
         }
 
         function arbolEnCacheSincrono(material) {
@@ -7441,7 +7471,7 @@ async function downloadPlanProduccionFromCloud() {
             }
             candidatos = candidatos.filter(c => c.cadena)
                 .sort((a, b) => (Number(b.cadena.pendiente) - Number(a.cadena.pendiente)) || (b.cadena.ultima.version - a.cadena.ultima.version))
-                .map(c => ({ material: c.material, rmd: c.cadena.ultima.rmd, version: c.cadena.ultima.version, estado: c.cadena.ultima.estado, pendiente: c.cadena.pendiente, versiones: c.cadena.versiones, apartadas: c.cadena.suspendidasApartadas }));
+                .map(c => ({ material: c.material, rmd: c.cadena.ultima.rmd, version: c.cadena.ultima.version, estado: c.cadena.ultima.estado, pendiente: c.cadena.pendiente, versiones: c.cadena.versiones, apartadas: c.cadena.suspendidasApartadas, masNuevo: c.cadena.masNuevo }));
             if (candidatos.length === 0) return { etapa, nivel: 'sin-rmd', codigo, verid, pendiente: true, estado: 'Sin RMD', candidatos };
             const rep = candidatos[0];
             return { etapa, nivel, codigo, verid, pendiente: candidatos.some(c => c.pendiente), estado: rep.estado, rmd: rep.rmd, version: rep.version, candidatos };
@@ -7473,10 +7503,180 @@ async function downloadPlanProduccionFromCloud() {
         // recubrimiento) y ese descarte antiguo puede ser justamente lo que lo indica.
         function etapaPrecisaEsExacta(d) { return !!(d && (d.nivel === 'propia' || d.nivel === 'arbol')); }
 
+        // ---- Ventana de la etapa (clic en el nombre de la etapa, en Producción y Forecast) ----
+        // Con los datos por receta muestra SOLO el código que corresponde a esa etapa del producto (su propio código o el
+        // material de su árbol de materiales) y el RMD que decide su estado, no la lista de todas las presentaciones del
+        // Código Agrupador. Sin datos por receta se abre la verificación clásica por agrupador, como siempre.
+        function mostrarDetalleEtapa(material, etapaFija, origen) {
+            if (!rmdPreciso) { mostrarVerificacionRmdConfig(material, etapaFija); return; }
+            mostrarEtapaPrecisa(material, etapaFija, origen).catch(err => {
+                console.error(err);
+                Swal.fire({ icon: 'error', title: 'Error', text: 'No se pudo mostrar el detalle de la etapa.', background: '#0f172a' });
+            });
+        }
+        // Fila del Exportado (detalle clásico) de un RMD del índice preciso, por su número de RMD o de solicitud: de ahí
+        // sale la Observación, que no se guarda dos veces.
+        let detallePorRmdRef = null, detallePorRmd = null;
+        function filaDetalleDeEntrada(e) {
+            if (detallePorRmdRef !== rmdAutorizadosDetalle || !detallePorRmd) {
+                detallePorRmd = new Map();
+                (rmdAutorizadosDetalle || []).forEach(r => {
+                    if (r.codigo) detallePorRmd.set('R' + r.codigo, r);
+                    else if (r.solicitud) detallePorRmd.set('S' + r.solicitud, r);
+                });
+                detallePorRmdRef = rmdAutorizadosDetalle;
+            }
+            return (e.rmd && detallePorRmd.get('R' + e.rmd)) || (!e.rmd && e.sol && detallePorRmd.get('S' + e.sol)) || null;
+        }
+        function explicarCadenaPrecisa(cadena, codigo, lbl) {
+            if (!cadena) return `SAP no tiene ningún RMD para el código ${codigo} en ${lbl} (sin contar los cancelados).`;
+            const u = cadena.ultima, n = u.estadoNorm, ref = u.rmd ? `RMD ${u.rmd}` : (u.sol ? `solicitud ${u.sol}` : 'sin número');
+            const fecha = u.fecha ? ` (registrado el ${dayjs(u.fecha).format('DD/MM/YYYY')})` : '';
+            if (cadena.masNuevo) return `Hay una versión nueva en curso: ${u.estado} v${u.version}, ${ref}${fecha}, registrada después del último RMD resuelto (otra línea de versiones).`;
+            if (n === 'INGRESADO') return `La versión más reciente, v${u.version} (${ref})${fecha}, está Ingresada: falta autorizarla.`;
+            if (n === 'SOLICITADO') return `Hay una solicitud de nueva versión, v${u.version} (${ref})${fecha}, pendiente de aprobación.`;
+            if (n === 'SUSPENDIDO') return `La versión más reciente, v${u.version} (${ref}), está Suspendida y no hay otra versión vigente de este código.`;
+            if (n === 'AUTORIZADO') return `Autorizado: v${u.version} (${ref}).`;
+            if (ESTADOS_RESUELTOS_RMD.has(n)) return `La última es ${u.estado} v${u.version} (${ref}); se considera resuelta.`;
+            return `Estado "${u.estado}" no reconocido en v${u.version} (${ref}): se considera pendiente.`;
+        }
+        // Hoja "Detalle SAP" para los Excel exportados (Producción y Forecast): una fila por etapa pendiente con SOLO el
+        // código de esa etapa y el RMD que la deja pendiente (lo mismo que la ventana de la etapa). No toca la hoja con
+        // formato de la macro. null si no hay datos por receta.
+        function hojaDetalleSap(pendientes) {
+            if (!rmdPreciso) return null;
+            const filas = [];
+            (pendientes || []).forEach(p => (p.etapasPendientes || []).forEach(et => {
+                const fija = mapEtapaAFija(et); const d = fija && p.detallePreciso && p.detallePreciso[fija];
+                if (!d) return;
+                const codigos = d.codigo ? [d.codigo] : d.candidatos.filter(c => c.pendiente).map(c => c.material);
+                codigos.forEach(codigo => {
+                    const cadena = estadoDeCadenaPrecisa(rmdPreciso.porMatEtapa.get(`${codigo}::${fija}`) || []);
+                    const u = cadena && cadena.ultima; const fila = u ? filaDetalleDeEntrada(u) : null;
+                    filas.push({
+                        'Material': p.material, 'Descripción': p.descripcion || '', 'Etapa': ETAPAS_FIJAS_LABEL[fija] || fija,
+                        'Código de la etapa': codigo, 'Cómo se identificó': NIVEL_PRECISO_TXT[d.nivel] || d.nivel,
+                        'RMD': u ? (u.rmd || (u.sol ? 'Solicitud ' + u.sol : '')) : '', 'Versión': u ? u.version : '',
+                        'Estado en SAP': u ? u.estado : 'Sin RMD', 'Registro': u && u.fecha ? dayjs(u.fecha).format('YYYY-MM-DD') : '',
+                        'Observación': (fila && fila.observacion) || ''
+                    });
+                });
+            }));
+            if (filas.length === 0) return null;
+            const ws = XLSX.utils.json_to_sheet(filas);
+            ws['!cols'] = [{ wch: 13 }, { wch: 42 }, { wch: 15 }, { wch: 15 }, { wch: 24 }, { wch: 13 }, { wch: 8 }, { wch: 16 }, { wch: 12 }, { wch: 80 }];
+            ws['!autofilter'] = { ref: `A1:J${filas.length + 1}` };
+            return ws;
+        }
+        async function mostrarEtapaPrecisa(material, etapaFija, origen) {
+            const P = rmdPreciso;
+            const lbl = ETAPAS_FIJAS_LABEL[etapaFija] || etapaFija;
+            let r = evaluarMaterialPreciso(material);
+            let d = r.detalle[etapaFija];
+            if (!d) { mostrarVerificacionRmdConfig(material, etapaFija); return; }
+            // Si la etapa todavía se decidió por familia (sin árbol), se calcula ahora el árbol de este material.
+            if (!etapaPrecisaEsExacta(d) && !(d.nivel === 'sin-rmd' && d.codigo) && !r.conArbol) {
+                Swal.fire({ title: 'Identificando el código de la etapa...', text: 'Calculando el árbol de materiales de SAP de este producto.', allowOutsideClick: false, didOpen: () => Swal.showLoading(), background: '#0f172a' });
+                const nuevo = await obtenerArbolPreciso(material);
+                if (nuevo) {
+                    r = evaluarMaterialPreciso(material);
+                    d = r.detalle[etapaFija] || d;
+                    if (origen === 'forecast') runValidacionForecast(); else runValidacionMateriales();
+                }
+            }
+            const esc = escapeHtmlRmdConfig;
+            const exacta = etapaPrecisaEsExacta(d) || (d.nivel === 'sin-rmd' && !!d.codigo);
+            const manual = (origen === 'forecast' ? manualAutorizadosForecast : manualAutorizados).has(responsableKey(material, etapaFija));
+            const arbol = arbolDesdeMaterial(arbolEnCacheSincrono(material), material);
+            const descProducto = r.descripcion || ((databaseMaterials.get(material) || {}).descripcion) || '';
+            const claseEstado = (n) => (n === 'SIN RMD' ? 'sin' : ({ SUSPENDIDO: 'susp', INGRESADO: 'ing', SOLICITADO: 'sol', AUTORIZADO: 'aut' }[n] || 'otro'));
+            const chip = (txt, n) => `<span class="chip-sap chip-sap--${claseEstado(n)}" style="font-size:11.5px;max-width:none;padding:1px 7px;cursor:default;">${esc(txt)}</span>`;
+            const td = 'padding:8px 10px;border-bottom:1px solid rgba(255,255,255,0.08);vertical-align:top;';
+            const th = 'padding:8px 10px;text-align:left;white-space:nowrap;';
+
+            // Código(s) a mostrar: con identificación exacta, SOLO el de esta etapa; si aún no se pudo identificar
+            // (sin árbol en SAP), solo los que están pendientes, avisándolo.
+            const codigos = exacta ? [d.codigo || (d.candidatos[0] && d.candidatos[0].material)].filter(Boolean)
+                                   : d.candidatos.filter(c => c.pendiente).map(c => c.material);
+            const bloques = codigos.map(codigo => {
+                const entradas = P.porMatEtapa.get(`${codigo}::${etapaFija}`) || [];
+                const cadena = estadoDeCadenaPrecisa(entradas);
+                const u = cadena && cadena.ultima;
+                const fila = u ? filaDetalleDeEntrada(u) : null;
+                const estadoTxt = u ? `${u.estado}` : 'Sin RMD';
+                const principal = `<tr>
+                    <td style="${td}font-weight:700;color:#f8fafc;white-space:nowrap;">${esc(codigo)}</td>
+                    <td style="${td}">${esc((u && u.desc) || P.descDeMaterial.get(codigo) || '(sin RMD en SAP)')}</td>
+                    <td style="${td}white-space:nowrap;">${esc(u ? (u.rmd || (u.sol ? 'Solicitud ' + u.sol : '-')) : '-')}</td>
+                    <td style="${td}white-space:nowrap;">${u ? 'v' + u.version : '-'}</td>
+                    <td style="${td}white-space:nowrap;">${chip(estadoTxt, u ? u.estadoNorm : 'SIN RMD')}</td>
+                    <td style="${td}white-space:nowrap;">${u && u.fecha ? dayjs(u.fecha).format('DD/MM/YYYY') : '-'}</td>
+                    <td style="${td}">${esc((fila && fila.observacion) || '-')}</td>
+                </tr>`;
+                const explicacion = `<div style="margin:6px 2px 0;font-size:12px;color:${cadena && !cadena.pendiente ? '#6ee7b7' : '#fbbf24'};">${codigos.length > 1 ? esc(codigo) + ': ' : ''}${esc(explicarCadenaPrecisa(cadena, codigo, lbl))}</div>`;
+                // Historial del MISMO código en esta etapa (plegado): todas sus versiones, la que decide y las que no cuentan.
+                const historial = entradas.length > 1 ? `<details style="margin:6px 2px 0;font-size:12px;color:#94a3b8;"><summary style="cursor:pointer;">Ver las ${entradas.length} versiones de ${esc(codigo)} en ${esc(lbl)}</summary>
+                    <table style="width:100%;border-collapse:collapse;margin-top:6px;font-size:12px;"><thead><tr style="background:rgba(255,255,255,0.04);"><th style="${th}">RMD</th><th style="${th}">Versión</th><th style="${th}">Estado</th><th style="${th}">Registro</th><th style="${th}"></th></tr></thead><tbody>
+                    ${[...entradas].sort((a, b) => ((b.fecha || 0) - (a.fecha || 0)) || (b.version - a.version)).map(x => {
+                        const nota = x === u ? 'decide el estado' : (cadena.suspendidasApartadas > 0 && x.estadoNorm === 'SUSPENDIDO' ? 'no cuenta: hay un RMD vigente' : '');
+                        return `<tr${x === u ? ' style="color:#f8fafc;font-weight:600;"' : ''}><td style="${td}">${esc(x.rmd || (x.sol ? 'Solicitud ' + x.sol : '-'))}</td><td style="${td}">v${x.version}</td><td style="${td}">${esc(x.estado)}</td><td style="${td}">${x.fecha ? dayjs(x.fecha).format('DD/MM/YYYY') : '-'}</td><td style="${td}">${esc(nota)}</td></tr>`;
+                    }).join('')}</tbody></table><div style="margin-top:4px;">Los RMD cancelados no se muestran: no cuentan.</div></details>` : '';
+                return { principal, explicacion, historial };
+            });
+
+            const cadenaArbol = arbol && Array.isArray(arbol.nodos) && arbol.nodos.length > 0
+                ? [...arbol.nodos].reverse().map(n => {
+                    const f = mapEtapaAFija(normalizeEtapa(n.etapa)); const actual = f === etapaFija;
+                    return `<span style="white-space:nowrap;${actual ? 'color:#f8fafc;font-weight:700;text-decoration:underline;' : ''}">${esc(String(n.material || '').trim())} ${esc(ETAPAS_FIJAS_LABEL[f] || n.etapa || '')}</span>`;
+                }).join(' <span style="color:#64748b;">›</span> ')
+                : '';
+            const comoSeIdentifico = !exacta ? 'Todavía no se pudo identificar con el árbol de materiales: se muestran solo las presentaciones de su familia que están pendientes.'
+                : (d.nivel === 'propia' ? 'Es el propio código del producto.' : `Material de esta etapa según el árbol de materiales de SAP${d.verid ? ' (versión de fabricación ' + d.verid + ')' : ''}.`);
+
+            Swal.fire({
+                title: `${esc(lbl)} — ${esc(material)}`,
+                html: `<div style="text-align:left;font-size:12.5px;color:#cbd5e1;">
+                    <div style="margin-bottom:6px;color:#94a3b8;">Producto: <strong style="color:#f8fafc;">${esc(material)}</strong>${descProducto ? ' — ' + esc(descProducto) : ''}</div>
+                    ${cadenaArbol ? `<div style="margin-bottom:6px;color:#94a3b8;">${arbol.aguasArriba ? 'Cadena hacia atrás' : 'Cadena del producto'} (árbol de materiales de SAP): ${cadenaArbol}</div>` : ''}
+                    <div style="margin-bottom:10px;color:#94a3b8;">${esc(comoSeIdentifico)}</div>
+                    ${manual ? `<div style="margin-bottom:10px;padding:6px 8px;border:1px solid rgba(110,231,183,0.35);border-radius:6px;color:#6ee7b7;">Esta etapa está autorizada manualmente en Status RMD. Abajo se ve su estado real en SAP.</div>` : ''}
+                    <div style="border:1px solid rgba(255,255,255,0.1);border-radius:8px;overflow-x:auto;">
+                        <table style="width:100%;border-collapse:collapse;font-size:13px;">
+                            <thead><tr style="background:rgba(255,255,255,0.05);"><th style="${th}">Código</th><th style="${th}">Descripción</th><th style="${th}">RMD</th><th style="${th}">Versión</th><th style="${th}">Estado</th><th style="${th}">Registro</th><th style="${th}">Observación</th></tr></thead>
+                            <tbody>${bloques.length ? bloques.map(x => x.principal).join('') : `<tr><td colspan="7" style="${td}text-align:center;color:#94a3b8;">No hay ningún código pendiente en esta etapa.</td></tr>`}</tbody>
+                        </table>
+                    </div>
+                    ${bloques.map(x => x.explicacion + x.historial).join('')}
+                </div>`,
+                width: 'min(1100px, 96vw)',
+                background: '#0f172a',
+                confirmButtonText: 'Cerrar'
+            });
+        }
+
         // Refinamiento en segundo plano de las etapas que no se identificaron por la propia receta del material (única
         // en su familia, ambiguas o sin RMD): se calcula el árbol SOLO con el motor LOCAL (sin consultar la API remota,
         // para no generar ráfagas de peticiones) y, si llegó alguno nuevo, se vuelve a validar. Una sola vez por material
         // y sesión.
+        // Calcula (solo con el motor LOCAL) el árbol de un material para el modo preciso: el normal desde su producto
+        // terminado o, si SAP no le encuentra uno único, su cadena hacia atrás. Devuelve true si consiguió un árbol nuevo,
+        // false si no hay árbol posible y null si el motor local no está disponible.
+        async function obtenerArbolPreciso(m) {
+            if (arbolEnCacheSincrono(m)) return false;
+            let motivo = arbolSinArbolSesion.get(m);
+            if (!motivo) {
+                const r = await intentarArbolLocal(m);
+                if (!r) return null;
+                if (r.arbol) { const c = cargarArbolMaterialesCache(); c[m] = r.arbol; guardarArbolMaterialesCache(c); return true; }
+                motivo = r.sinArbol; arbolSinArbolSesion.set(m, motivo);
+            }
+            if (!MOTIVOS_ARBOL_AGUAS_ARRIBA.has(motivo)) return false;
+            const motor = await obtenerMotorArbolLocal(false);
+            if (!motor) return null;
+            const a = arbolAguasArribaLocal(motor, m);
+            if (a) { arbolesAguasArribaSesion.set(m, a); return true; }
+            return false;
+        }
         const arbolesRefinoIntentados = new Set();
         const refinoArbolEnCola = new Set(); // pedidos que llegan mientras otro refinamiento está corriendo
         let refinoArbolEnCurso = false;
@@ -7491,26 +7691,16 @@ async function downloadPlanProduccionFromCloud() {
             try {
                 const trabajador = async () => {
                     while (i < faltan.length) {
-                        const m = faltan[i++];
-                        let motivo = arbolSinArbolSesion.get(m);
-                        if (!motivo) {
-                            const r = await intentarArbolLocal(m);
-                            if (!r) return; // motor local no disponible: no se insiste
-                            if (r.arbol) { const c = cargarArbolMaterialesCache(); c[m] = r.arbol; guardarArbolMaterialesCache(c); nuevos++; continue; }
-                            motivo = r.sinArbol; arbolSinArbolSesion.set(m, motivo);
-                        }
-                        if (MOTIVOS_ARBOL_AGUAS_ARRIBA.has(motivo)) {
-                            const motor = await obtenerMotorArbolLocal(false);
-                            if (!motor) return;
-                            const a = arbolAguasArribaLocal(motor, m);
-                            if (a) { arbolesAguasArribaSesion.set(m, a); nuevos++; }
-                        }
+                        const r = await obtenerArbolPreciso(faltan[i++]);
+                        if (r === null) return; // motor local no disponible: no se insiste
+                        if (r) nuevos++;
                     }
                 };
                 await Promise.all([trabajador(), trabajador(), trabajador()]);
             } finally { refinoArbolEnCurso = false; }
             if (refinoArbolEnCola.size > 0) { const cola = Array.from(refinoArbolEnCola); refinoArbolEnCola.clear(); await refinarAmbiguosConArbol(cola); }
             if (nuevos > 0 && currentTab === 'produccion') runValidacionMateriales();
+            else if (nuevos > 0 && currentTab === 'forecast') runValidacionForecast();
         }
 
         // ---- Enlace directo con el portal SAP (script "RMD · mejoras de interfaz", botón "Enviar a Status RMD") ----
@@ -7523,11 +7713,16 @@ async function downloadPlanProduccionFromCloud() {
             const orden = ['codigo', 'codigoSolicitud', 'version', 'estado', 'codDefecto', 'codAgrupador', 'descripcion', 'etapa', 'fechaRegistro', 'usuarioRegistro',
                 'fechaAut', 'usuarioAutorizacion', 'af', 'fechaSolicitud', 'planta', 'seccion', 'motivo', 'observacion'].map(i);
             const iRec = i('recetas'), iLin = i('linaje');
+            // Script v1.18+: Fecha Registro / Solicitud también CON hora (columnas aparte, al final); se usan en lugar
+            // de las de solo día para ordenar bien RMD del mismo día y mostrar la fecha local.
+            const iRegH = i('fechaRegistroHora'), iSolH = i('fechaSolicitudHora');
             if (orden.some(x => x < 0) || iRec < 0 || iLin < 0) throw new Error('formato de datos inesperado');
             const rows = [[...CABECERA_CLASICA_RMD, ...CABECERA_RECETAS_RMD]];
             msg.filas.forEach(f => {
                 if (!Array.isArray(f)) return;
                 const base = orden.map(x => (f[x] === null || f[x] === undefined ? '' : f[x]));
+                if (iRegH >= 0 && f[iRegH]) base[8] = f[iRegH];
+                if (iSolH >= 0 && f[iSolH]) base[13] = f[iSolH];
                 const recetas = Array.isArray(f[iRec]) ? f[iRec] : [];
                 // receta = [Matnr, Verid, Etapa receta, Descripción, Puesto, Hoja ruta, Contador]
                 if (recetas.length === 0) rows.push([...base, f[iLin] || '', '', '', '', '', '', '', '']);
@@ -7595,6 +7790,17 @@ async function downloadPlanProduccionFromCloud() {
                         datosPrecisos = datosPrecisosDesdeFilas(rows, origen, generado);
                         rows = filasClasicasDeduplicadas(rows);
                         bufferParaSeguimiento = libroClasicoComoBuffer(rows);
+                    } else if (rows.length >= 2 && rmdPrecisoDatos && Array.isArray(rmdPrecisoDatos.filas) && rmdPrecisoDatos.filas.length > 0) {
+                        // Un Exportado clásico (sin recetas) reemplazaría la validación por receta de TODO el equipo: los
+                        // números subirían de golpe con etapas de otras presentaciones de la familia. Se pide confirmar.
+                        const f = rmdPrecisoDatos.generado ? dayjs(rmdPrecisoDatos.generado).format('DD/MM/YYYY HH:mm') : '';
+                        const resp = await Swal.fire({
+                            icon: 'warning', title: 'Este Exportado no trae las recetas',
+                            html: `Ahora la validación es <b>por receta</b> (datos de SAP${f ? ' del ' + f : ''}). Si cargas este Exportado, Producción y Forecast volverán a validar por <b>Código Agrupador</b> y marcarán como pendientes etapas de otras presentaciones de la familia.<br><br>Para actualizar sin perder precisión, usa el botón <b>"Enviar a Status RMD"</b> del portal SAP.`,
+                            showCancelButton: true, confirmButtonText: 'Cargar igual', cancelButtonText: 'Cancelar', reverseButtons: true, background: '#0f172a'
+                        });
+                        if (!resp.isConfirmed) return { ok: false, motivo: 'se canceló la carga de un Exportado sin recetas' };
+                        Swal.fire({ title: 'Procesando Exportado RMD...', allowOutsideClick: false, didOpen: () => Swal.showLoading(), background: '#0f172a' });
                     }
                     // Este archivo (RMD_Configuración) es el MISMO que usa
                     // Seguimiento RMD. Si NO vino ya desde ese iframe, se le
@@ -7643,6 +7849,10 @@ async function downloadPlanProduccionFromCloud() {
                     const etapaCol = findCol('etapa');
                     const versionCol = findCol('versión', 'version');
                     const observacionCol = findCol('observaci');
+                    // Número del RMD ("Código", exacto: findCol también encontraría "Código Agrupador") y de la solicitud:
+                    // enlazan cada fila del detalle con la validación por receta (observación en la ventana de la etapa).
+                    const codigoRmdCol = colIndexByName['código'] ?? colIndexByName['codigo'] ?? -1;
+                    const solicitudCol = findCol('código de solicitud', 'codigo de solicitud');
 
                     if (codigoAgrupadorCol === -1 || etapaCol === -1) {
                         Swal.close();
@@ -7668,8 +7878,7 @@ async function downloadPlanProduccionFromCloud() {
                         if (!row || row.length === 0) return;
                         const agr = normalizeAgrupador(row[codigoAgrupadorCol]);
                         const etapaRaw = String(row[etapaCol] || '').trim();
-                        if (!agr || !etapaRaw) return;
-                        filasConDatos++;
+                        if (!etapaRaw) return;
                         const etapaNorm = normalizeEtapa(etapaRaw);
                         const versionRaw = row[versionCol];
                         const version = Number(versionRaw) || 0;
@@ -7677,8 +7886,14 @@ async function downloadPlanProduccionFromCloud() {
                         const desc = descCol !== -1 ? String(row[descCol] || '').trim() : '';
                         const codigoPorDefecto = codigoPorDefectoCol !== -1 ? String(row[codigoPorDefectoCol] || '').trim() : '';
                         const observacion = observacionCol !== -1 ? String(row[observacionCol] || '').trim() : '';
+                        const codigoRmd = codigoRmdCol !== -1 ? String(row[codigoRmdCol] || '').trim() : '';
+                        const solicitud = solicitudCol !== -1 ? String(row[solicitudCol] || '').trim() : '';
 
-                        detalle.push({ codigoAgrupador: agr, codigoPorDefecto, estado: estadoRaw, descripcion: desc, etapa: etapaRaw, etapaNorm, version, observacion });
+                        detalle.push({ codigoAgrupador: agr || '', codigoPorDefecto, estado: estadoRaw, descripcion: desc, etapa: etapaRaw, etapaNorm, version, observacion, codigo: codigoRmd, solicitud });
+                        // Sin Código Agrupador: queda solo en el detalle (la ventana de la etapa muestra su observación), pero
+                        // no entra al cálculo por agrupador, como siempre.
+                        if (!agr) return;
+                        filasConDatos++;
                         // Un RMD Cancelado nunca entró en vigor: no cuenta para decidir la última versión. Antes caía en
                         // "estado no reconocido" y bloqueaba la etapa aunque la versión anterior siguiera Autorizada (ej.
                         // SOLUDEX Fabricación: v4 Autorizada + v5 Cancelada). Mismo criterio que la validación por receta.
@@ -8278,7 +8493,7 @@ pendientes.forEach(p => {
             if (d.nivel === 'sin-rmd') lineas.push(`No hay ningún RMD en SAP para esta etapa (sin contar los cancelados)${d.codigo ? ` (material ${d.codigo}${d.verid ? ', versión de fabricación ' + d.verid : ''})` : ''}.`);
             else if (materialesAmb) lineas.push(`⚠ Su familia tiene ${materialesAmb} presentaciones distintas en esta etapa y aún no se calculó su árbol de materiales: se muestra pendiente si alguna lo está.`);
             else lineas.push(`Identificado por ${NIVEL_PRECISO_TXT[d.nivel] || d.nivel}${d.codigo ? ` — material ${d.codigo}${d.verid ? ', versión de fabricación ' + d.verid : ''}` : ''}.`);
-            (d.candidatos || []).slice(0, 8).forEach(c => lineas.push(`• ${c.material}: ${c.estado} v${c.version} — RMD ${c.rmd || '(en solicitud)'} — ${c.versiones} versión(es) en SAP${c.apartadas ? `, ${c.apartadas} suspendida(s) no cuentan porque hay un RMD vigente` : ''}`));
+            (d.candidatos || []).slice(0, 8).forEach(c => lineas.push(`• ${c.material}: ${c.estado} v${c.version} — RMD ${c.rmd || '(en solicitud)'} — ${c.versiones} versión(es) en SAP${c.apartadas ? `, ${c.apartadas} suspendida(s) no cuentan porque hay un RMD vigente` : ''}${c.masNuevo ? ' — registrado después del RMD resuelto de mayor versión (otra línea de versiones)' : ''}`));
             if ((d.candidatos || []).length > 8) lineas.push(`… y ${d.candidatos.length - 8} más`);
             return `<span class="chip-sap chip-sap--${clase}" title="${escapeHtmlRmdConfig(lineas.join('\n'))}">${escapeHtmlRmdConfig(texto)}</span>`;
         }
@@ -8367,7 +8582,7 @@ pendientes.forEach(p => {
                         })()
                         : `<span class="etapa-responsable-auto" title="Responsable asignado automáticamente según el Estatus">${valorActual || '—'}</span>`;
                     return `<div class="etapa-fila-grid">
-                        <span class="etapa-label-celda"><span class="${etapasCls} cursor-pointer hover:underline" onclick="mostrarVerificacionRmdConfig('${mat}','${fija}')" title="Ver verificación contra RMD Configuración">${labelTxt}</span>${chipSapEtapa(p, fija)}</span>
+                        <span class="etapa-label-celda"><span class="${etapasCls} cursor-pointer hover:underline" onclick="mostrarDetalleEtapa('${mat}','${fija}','produccion')" title="${rmdPreciso ? 'Ver el código y el RMD de esta etapa' : 'Ver verificación contra RMD Configuración'}">${labelTxt}</span>${chipSapEtapa(p, fija)}</span>
                         <select id="${estatusSelectId}" onchange="setEstatusEtapa('${mat}','${fija}', this.value)" class="etapa-estatus-select ${claseColorEstatus(estatusActual)}" title="Estatus de ${labelTxt}">${estatusOpciones}</select>
                         ${respHtml}
                         ${btnAutorizarEtapa(mat, fija)}
@@ -8557,10 +8772,11 @@ return `<tr class="${rowCls}" title="${p.motivo || ''}">
                 elRmd.className = 'text-emerald-400 font-semibold';
                 elRmd.title = `Validación por receta exacta: ${rmdPreciso.totalRmd} RMD ${rmdPreciso.origen === 'sap' ? 'leídos directo del portal SAP' : 'del Exportado con recetas'}${f ? ' el ' + f : ''}.`;
             } else if (elRmd) elRmd.title = rmdAutorizadosLoaded ? 'Validación por Código Agrupador (Exportado RMD clásico, sin recetas).' : '';
-            // La etiqueta junto al botón "Exportado RMD" de Producción dice lo mismo (la de Forecast no: allí se sigue
-            // validando por Código Agrupador).
-            const badgeRmd = document.getElementById('rmdAutorizadosStatusBadge');
-            if (badgeRmd) { badgeRmd.textContent = rmdPreciso ? '✓ Por receta' : '✓ Cargado'; badgeRmd.title = elRmd ? elRmd.title : ''; }
+            // Las etiquetas junto al botón "Exportado RMD" (Producción y Forecast validan igual) dicen lo mismo.
+            ['rmdAutorizadosStatusBadge', 'rmdAutorizadosStatusBadgeForecast'].forEach(id => {
+                const badgeRmd = document.getElementById(id);
+                if (badgeRmd) { badgeRmd.textContent = rmdPreciso ? '✓ Por receta' : '✓ Cargado'; badgeRmd.title = elRmd ? elRmd.title : ''; }
+            });
             if (rmdPreciso && elBase && !(databaseMaterialsLoaded && databaseMaterials.size > 0)) {
                 elBase.textContent = 'Opcional';
                 elBase.className = 'text-slate-400 font-semibold';
@@ -9055,8 +9271,10 @@ return `<tr class="${rowCls}" title="${p.motivo || ''}">
                 // generaba la macro, calculado aquí directamente.
                 const { ws: wsResumen } = await construirHojaResumenMacro(wsData, headers);
                 XLSX.utils.book_append_sheet(wb, wsResumen, 'Resumen');
+                const wsSap = hojaDetalleSap(pendientes);
+                if (wsSap) XLSX.utils.book_append_sheet(wb, wsSap, 'Detalle SAP');
 
-                const plantaSufijo = currentPlanta === 'consolidado' ? 'Consolidado' : (currentPlanta === 'planta1' ? 'Planta1' : 'Planta2');
+                const plantaSufijo =currentPlanta === 'consolidado' ? 'Consolidado' : (currentPlanta === 'planta1' ? 'Planta1' : 'Planta2');
                 const nombreBase = `Materiales_Pendientes_RMD_${plantaSufijo}_${dayjs().format('YYYYMMDD_HHmm')}`;
                 XLSX.writeFile(wb, `${nombreBase}.xlsx`);
 
@@ -9610,14 +9828,29 @@ function updateForecastActiveFiltersBadge() {
             setStatus('fuenteStatusForecastPlan', forecastData.length > 0);
             setStatus('fuenteStatusForecastBase', databaseMaterialsLoaded && databaseMaterials.size > 0);
             setStatus('fuenteStatusForecastRmd', rmdAutorizadosLoaded && rmdAutorizadosEtapasPorAgrupador.size > 0);
+            // Validación por receta (mismos datos y mismo criterio que Producción).
+            const elRmd = document.getElementById('fuenteStatusForecastRmd');
+            const elBase = document.getElementById('fuenteStatusForecastBase');
+            if (rmdPreciso && elRmd) {
+                const f = rmdPreciso.generado ? dayjs(rmdPreciso.generado).format('DD/MM HH:mm') : '';
+                elRmd.textContent = `✓ Por receta${f ? ' · ' + f : ''}`;
+                elRmd.className = 'text-emerald-400 font-semibold';
+            }
+            if (rmdPreciso && elBase && !(databaseMaterialsLoaded && databaseMaterials.size > 0)) {
+                elBase.textContent = 'Opcional';
+                elBase.className = 'text-slate-400 font-semibold';
+            }
         }
 
         function runValidacionForecast() {
             updateFuentesStatusForecastUI();
 
+            // Con datos por receta cada etapa se decide con el material exacto (evaluarMaterialPreciso), igual que en
+            // Producción: así un mismo producto no sale pendiente en una pestaña y autorizado en la otra.
+            const usarPreciso = !!(rmdPreciso && rmdPreciso.totalEntradas > 0);
             const readyForecast = forecastData.length > 0;
-            const readyBase = databaseMaterialsLoaded && databaseMaterials.size > 0;
-            const readyRmd = rmdAutorizadosLoaded && rmdAutorizadosEtapasPorAgrupador.size > 0;
+            const readyBase = usarPreciso || (databaseMaterialsLoaded && databaseMaterials.size > 0);
+            const readyRmd = usarPreciso || (rmdAutorizadosLoaded && rmdAutorizadosEtapasPorAgrupador.size > 0);
 
             const emptyState = document.getElementById('validacionForecastEmptyState');
             const tableWrapper = document.getElementById('tablaPendientesForecastWrapper');
@@ -9628,7 +9861,9 @@ function updateForecastActiveFiltersBadge() {
                 emptyState.style.display = 'block';
                 tableWrapper.style.display = 'none';
                 if (toolbar) toolbar.style.display = 'none';
-                emptyState.textContent = 'Carga los tres archivos (Plan de Producción Forecast, Base de Datos y Exportado RMD) para generar la validación de materiales proyectada.';
+                emptyState.textContent = usarPreciso
+                    ? 'Carga el Plan de Producción Forecast para generar la validación de materiales proyectada.'
+                    : 'Carga los tres archivos (Plan de Producción Forecast, Base de Datos y Exportado RMD) para generar la validación de materiales proyectada.';
                 animateCounter('kpi-val-revisados-forecast', 0);
                 animateCounter('kpi-val-autorizados-forecast', 0);
                 animateCounter('kpi-val-pendientes-forecast', 0);
@@ -9638,6 +9873,7 @@ function updateForecastActiveFiltersBadge() {
 
             let revisados = 0, autorizados = 0;
             const pendientes = [];
+            const materialesParaRefinar = [];
 
             getFilteredForecastData().forEach(mat => {
                 const cod = normalizeMaterialCode(mat.material);
@@ -9646,6 +9882,20 @@ function updateForecastActiveFiltersBadge() {
                 const mesesLabel = mat.meses.map(mk => dayjs(mk + '-01').format('MMM YYYY'));
                 const plantaLabel = (mat.centros || []).map(c => `${getCentroLabel(c)} (${c})`).join(', ') || '-';
                 const info = databaseMaterials.get(cod);
+
+                if (usarPreciso) {
+                    const r = evaluarMaterialPreciso(cod);
+                    const desc = r.descripcion || (info && info.descripcion) || mat.descripcion || '';
+                    if (!r.conArbol && (r.etapas.length === 0 || r.etapas.some(e => r.detalle[e].nivel !== 'propia'))) materialesParaRefinar.push(cod);
+                    if (r.etapas.length === 0) {
+                        pendientes.push({ material: cod, descripcion: desc || '(sin RMD en SAP)', centros: plantaLabel, meses: mesesLabel, etapasPendientes: [], motivo: 'Sin RMD en SAP para este material ni para su familia (Código Agrupador)' });
+                        return;
+                    }
+                    const etapasPend = r.etapas.filter(e => r.detalle[e].pendiente);
+                    if (etapasPend.length === 0) { autorizados++; return; }
+                    pendientes.push({ material: cod, descripcion: desc || '-', centros: plantaLabel, meses: mesesLabel, etapasPendientes: etapasPend, detallePreciso: r.detalle, fuenteEtapas: r.fuente, motivo: etapasPend.map(e => motivoEtapaPrecisa(r.detalle[e])).join(' | ') });
+                    return;
+                }
 
                 if (!info) {
                     pendientes.push({ material: cod, descripcion: mat.descripcion || '(no encontrado en Base de Datos)', centros: plantaLabel, meses: mesesLabel, etapasPendientes: [], motivo: 'No encontrado en Base de Datos' });
@@ -9687,8 +9937,10 @@ function updateForecastActiveFiltersBadge() {
                 const etapasAunPendientes = p.etapasPendientes.filter(et => {
                     const fija = mapEtapaAFija(et);
                     if (!fija) return true;
+                    // Como en Producción: una etapa identificada con exactitud (propia receta o árbol) no depende del
+                    // descarte antiguo por árbol.
                     return !manualAutorizadosForecast.has(responsableKey(p.material, fija))
-                        && !descartadosPorArbol.has(responsableKey(p.material, fija));
+                        && (etapaPrecisaEsExacta(p.detallePreciso && p.detallePreciso[fija]) || !descartadosPorArbol.has(responsableKey(p.material, fija)));
                 });
                 const etapasYaAutorizadasManualFc = p.etapasPendientes.filter(et => {
                     const fija = mapEtapaAFija(et);
@@ -9731,6 +9983,7 @@ function updateForecastActiveFiltersBadge() {
                 if (toolbar) toolbar.style.display = 'flex';
                 renderTablaPendientesForecast(todasLasFilas);
             }
+            if (usarPreciso && materialesParaRefinar.length > 0) refinarAmbiguosConArbol(materialesParaRefinar);
         }
 
         function refiltrarValidacionForecastFiltros() {
@@ -9802,7 +10055,7 @@ function updateForecastActiveFiltersBadge() {
                         })()
                         : `<span class="etapa-responsable-auto" title="Responsable asignado automáticamente según el Estatus">${valorActual || '—'}</span>`;
                     return `<div class="etapa-fila-grid">
-                        <span class="${etapasCls} cursor-pointer hover:underline" onclick="mostrarVerificacionRmdConfig('${mat}','${fija}')" title="Ver verificación contra RMD Configuración">${labelTxt}</span>
+                        <span class="etapa-label-celda"><span class="${etapasCls} cursor-pointer hover:underline" onclick="mostrarDetalleEtapa('${mat}','${fija}','forecast')" title="${rmdPreciso ? 'Ver el código y el RMD de esta etapa' : 'Ver verificación contra RMD Configuración'}">${labelTxt}</span>${chipSapEtapa(p, fija)}</span>
                         <select id="${estatusSelectId}" onchange="setEstatusEtapa('${mat}','${fija}', this.value)" class="etapa-estatus-select ${claseColorEstatus(estatusActual)}" title="Estatus de ${labelTxt}">${estatusOpciones}</select>
                         ${respHtml}
                         ${btnAutorizarEtapaFc(mat, fija)}
@@ -9913,6 +10166,8 @@ function updateForecastActiveFiltersBadge() {
         const { ws: wsResumen } = await construirHojaResumenMacro(wsData, headersForecast);
         XLSX.utils.book_append_sheet(wb, wsResumen, 'Resumen');
         XLSX.utils.book_append_sheet(wb, wsDetalle, 'Detalle Pendientes');
+        const wsSapFc = hojaDetalleSap(pendientes);
+        if (wsSapFc) XLSX.utils.book_append_sheet(wb, wsSapFc, 'Detalle SAP');
 
         const nombreBase = `Forecast_Materiales_Pendientes_RMD_${dayjs().format('YYYYMMDD_HHmm')}`;
         XLSX.writeFile(wb, `${nombreBase}.xlsx`);
