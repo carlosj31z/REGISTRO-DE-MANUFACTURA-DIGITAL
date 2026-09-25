@@ -840,6 +840,25 @@
         .aviso-discreto-x { background: none; border: none; color: var(--slate-400); font-size: 17px; line-height: 1; cursor: pointer; padding: 0 2px; }
         .aviso-discreto-link { background: none; border: none; padding: 0; color: rgb(var(--info-rgb)); font-weight: 700; text-decoration: underline; cursor: pointer; font-size: inherit; }
 
+        /* Colores un poco más vivos (septiembre de 2026): misma paleta y mismos tonos, con ~25 % más de saturación, y el
+           texto secundario (slate 300-500) apenas más claro. Solo en modo oscuro, que era el que se veía opaco. */
+        :root:not([data-theme="light"]) {
+            --c-brass-50: 253 244 242; --c-brass-100: 251 228 222; --c-brass-200: 246 208 198; --c-brass-300: 239 180 167; --c-brass-400: 232 162 148; --c-brass-500: 210 133 118; --c-brass-600: 176 105 93; --c-brass-700: 139 81 72; --c-brass-800: 100 58 52; --c-brass-900: 67 40 36; --c-copper-50: 254 240 232; --c-copper-100: 252 219 195; --c-copper-200: 248 187 146; --c-copper-300: 244 152 97; --c-copper-400: 234 125 62; --c-copper-500: 209 102 39; --c-copper-600: 172 81 30; --c-copper-700: 135 64 25; --c-copper-800: 99 48 21; --c-copper-900: 67 33 17; --c-verm-50: 254 238 234; --c-verm-100: 252 211 202; --c-verm-200: 248 171 155; --c-verm-300: 244 129 106; --c-verm-400: 236 94 68; --c-verm-500: 214 69 44; --c-verm-600: 177 55 35; --c-verm-700: 140 44 29; --c-verm-800: 103 34 24; --c-verm-900: 69 24 18; --c-sage-50: 237 248 241; --c-sage-100: 208 238 219; --c-sage-200: 163 222 186; --c-sage-300: 119 203 154; --c-sage-400: 81 181 127; --c-sage-500: 57 155 106; --c-sage-600: 45 124 85; --c-sage-700: 36 97 68; --c-sage-800: 28 72 54; --c-sage-900: 19 50 38; --c-petrol-50: 236 246 249; --c-petrol-100: 206 232 242; --c-petrol-200: 162 208 226; --c-petrol-300: 116 182 209; --c-petrol-400: 79 156 190; --c-petrol-500: 54 131 166; --c-petrol-600: 42 105 135; --c-petrol-700: 34 81 105; --c-petrol-800: 26 60 77; --c-petrol-900: 17 41 55; --c-plum-50: 245 239 249; --c-plum-100: 231 214 241; --c-plum-200: 209 179 229; --c-plum-300: 185 143 213; --c-plum-400: 161 115 195; --c-plum-500: 135 90 171; --c-plum-600: 109 71 140; --c-plum-700: 84 56 108; --c-plum-800: 61 41 79; --c-plum-900: 42 28 55;
+            --accent-rgb: 232 162 148; --info-rgb: 79 156 190; --ok-rgb: 81 181 127; --danger-rgb: 236 94 68; --copper-rgb: 234 125 62; --plum-rgb: 161 115 195;
+            --accent: #e8a294; --accent-strong: #f6c4b7;
+            --c-slate-300: 190 196 205; --slate-300: #bec4cd; --c-slate-400: 150 157 170; --slate-400: #969daa; --c-slate-500: 111 120 135; --slate-500: #6f7887;
+            --card-border: rgba(255, 255, 255, 0.075);
+        }
+        /* El Estatus elegido (recuadro de la etapa) se lee de un vistazo: además de la barra izquierda, un tinte suave de
+           su color y el texto en ese tono. */
+        .etapa-estatus-select.est-pendiente-pro { background: rgb(var(--accent-rgb) / 0.13); color: rgb(var(--accent-rgb)); }
+        .etapa-estatus-select.est-por-ingresar  { background: rgb(var(--info-rgb) / 0.14); color: rgb(var(--info-rgb)); }
+        .etapa-estatus-select.est-flujo-sap     { background: rgb(var(--plum-rgb) / 0.15); color: rgb(var(--plum-rgb)); }
+        .etapa-estatus-select.est-pend-rmd      { background: rgb(var(--danger-rgb) / 0.13); color: rgb(var(--danger-rgb)); }
+        .etapa-estatus-select.est-pend-cc       { background: rgb(var(--copper-rgb) / 0.14); color: rgb(var(--copper-rgb)); }
+        .etapa-estatus-select[class*="est-"] { font-weight: 600; }
+        .etapa-estatus-select option { color: var(--field-text); background: var(--surface-2); font-weight: 400; }
+
         /* Barra lateral de color en el selector de Estatus, según la
            actividad elegida — permite identificar el tipo de pendiente de
            un vistazo, sin leer el texto del desplegable. Es un borde
@@ -2028,6 +2047,9 @@
                     <select id="filtroEdadProd" onchange="setFiltroEtapa('produccion','edad',this.value)" class="field-input filtro-etapa-select" title="Antigüedad del pendiente: días desde la Fecha Registro en SAP del RMD que decide la etapa" aria-label="Filtrar por antigüedad del pendiente">
                         <option value="">Antigüedad: todas</option><option value="le7">Hasta 7 días</option><option value="gt7">Más de 7 días</option><option value="gt30">Más de 30 días</option><option value="gt90">Más de 90 días</option>
                     </select>
+                    <select id="filtroEstatusProd" onchange="setFiltroEtapa('produccion','estatus',this.value)" class="field-input filtro-etapa-select" title="Estatus elegido en la etapa pendiente (PEND CC, POR INGRESAR…); &quot;Sin estatus&quot;: etapas pendientes a las que aún no se les asignó" aria-label="Filtrar por estatus de la etapa">
+                        <option value="">Estatus: todos</option><option value="PENDIENTE-PRO">PENDIENTE-PRO</option><option value="POR INGRESAR">POR INGRESAR</option><option value="FLUJO SAP">FLUJO SAP</option><option value="PEND RMD OFICIAL">PEND RMD OFICIAL</option><option value="PEND CC">PEND CC</option><option value="SIN ESTATUS">Sin estatus</option>
+                    </select>
                     <button type="button" id="filtrosEtapaLimpiarProd" onclick="limpiarFiltrosEtapa('produccion')" class="filtro-etapa-limpiar" style="display:none;">Quitar filtros</button>
                 </div>
                 <span id="validacionContadorFilas" class="text-[11px] text-slate-500 whitespace-nowrap sm:ml-auto"></span>
@@ -2306,6 +2328,9 @@
                     </select>
                     <select id="filtroEdadForecast" onchange="setFiltroEtapa('forecast','edad',this.value)" class="field-input filtro-etapa-select" title="Antigüedad del pendiente: días desde la Fecha Registro en SAP del RMD que decide la etapa" aria-label="Filtrar por antigüedad del pendiente">
                         <option value="">Antigüedad: todas</option><option value="le7">Hasta 7 días</option><option value="gt7">Más de 7 días</option><option value="gt30">Más de 30 días</option><option value="gt90">Más de 90 días</option>
+                    </select>
+                    <select id="filtroEstatusForecast" onchange="setFiltroEtapa('forecast','estatus',this.value)" class="field-input filtro-etapa-select" title="Estatus elegido en la etapa pendiente (PEND CC, POR INGRESAR…); &quot;Sin estatus&quot;: etapas pendientes a las que aún no se les asignó" aria-label="Filtrar por estatus de la etapa">
+                        <option value="">Estatus: todos</option><option value="PENDIENTE-PRO">PENDIENTE-PRO</option><option value="POR INGRESAR">POR INGRESAR</option><option value="FLUJO SAP">FLUJO SAP</option><option value="PEND RMD OFICIAL">PEND RMD OFICIAL</option><option value="PEND CC">PEND CC</option><option value="SIN ESTATUS">Sin estatus</option>
                     </select>
                     <button type="button" id="filtrosEtapaLimpiarForecast" onclick="limpiarFiltrosEtapa('forecast')" class="filtro-etapa-limpiar" style="display:none;">Quitar filtros</button>
                 </div>
@@ -7284,12 +7309,12 @@ pendientes.forEach(p => {
         // ---- Filtros por etapa de las tablas de RMD pendientes: Etapa, Estado en SAP y Antigüedad del pendiente ----
         // Se aplican a CADA etapa de la fila (pendiente o autorizada a mano) con su estado real en SAP: una fila se ve si
         // alguna de sus etapas cumple y, dentro de la fila, solo se muestran las etapas que cumplen. Los KPI no cambian.
-        const filtrosEtapaProd = { etapa: '', sap: '', edad: '' };
-        const filtrosEtapaForecast = { etapa: '', sap: '', edad: '' };
+        const filtrosEtapaProd = { etapa: '', sap: '', edad: '', estatus: '' };
+        const filtrosEtapaForecast = { etapa: '', sap: '', edad: '', estatus: '' };
         const ESTADOS_SAP_FILTRO = ['INGRESADO', 'SUSPENDIDO', 'SOLICITADO'];
         const RANGOS_EDAD_FILTRO = { le7: [0, 7], gt7: [8, Infinity], gt30: [31, Infinity], gt90: [91, Infinity] };
         const filtrosEtapaDe = (origen) => (origen === 'forecast' ? filtrosEtapaForecast : filtrosEtapaProd);
-        const filtrosEtapaActivos = (fx) => !!(fx.etapa || fx.sap || fx.edad);
+        const filtrosEtapaActivos = (fx) => !!(fx.etapa || fx.sap || fx.edad || fx.estatus);
         function candidatoPasaFiltros(c, fx) {
             if (!c.pendiente) return false;
             if (fx.sap === 'SIN RMD' && !c.sinRmd) return false;
@@ -7304,6 +7329,11 @@ pendientes.forEach(p => {
         function etapaPasaFiltros(p, et, fx) {
             const fija = mapEtapaAFija(et);
             if (fx.etapa && fija !== fx.etapa) return false;
+            // Estatus del recuadro de la etapa (PEND CC, POR INGRESAR…); "SIN ESTATUS": pendientes sin estatus asignado
+            if (fx.estatus) {
+                const e = fija ? (estatusEtapa.get(responsableKey(p.material, fija)) || '') : '';
+                if (fx.estatus === 'SIN ESTATUS' ? !!e : e !== fx.estatus) return false;
+            }
             if (!fx.sap && !fx.edad) return true;
             const d = fija && p.detallePreciso && p.detallePreciso[fija];
             return !!(d && d.candidatos.some(c => candidatoPasaFiltros(c, fx)));
@@ -7312,7 +7342,8 @@ pendientes.forEach(p => {
             if (!filtrosEtapaActivos(fx)) return filas;
             return filas.map(f => {
                 const pend = f.estado === 'autorizado' ? [] : (f.etapasPendientes || []).filter(et => etapaPasaFiltros(f, et, fx));
-                const man = (f.etapasAutorizadasManual || []).filter(et => etapaPasaFiltros(f, et, fx));
+                // el Estatus solo se asigna a etapas pendientes: al filtrar por él no se muestran las autorizadas a mano
+                const man = fx.estatus ? [] : (f.etapasAutorizadasManual || []).filter(et => etapaPasaFiltros(f, et, fx));
                 if (!pend.length && !man.length) return null;
                 return { ...f, etapasPendientes: f.estado === 'autorizado' ? f.etapasPendientes : pend, etapasAutorizadasManual: man };
             }).filter(Boolean);
@@ -7330,12 +7361,12 @@ pendientes.forEach(p => {
             if (origen === 'forecast') refiltrarTablaPendientesForecast(); else refiltrarTablaPendientes();
         };
         window.limpiarFiltrosEtapa = function (origen) {
-            Object.assign(filtrosEtapaDe(origen), { etapa: '', sap: '', edad: '' });
+            Object.assign(filtrosEtapaDe(origen), { etapa: '', sap: '', edad: '', estatus: '' });
             if (origen === 'forecast') refiltrarTablaPendientesForecast(); else refiltrarTablaPendientes();
         };
         function actualizarControlesFiltrosEtapa(origen) {
             const fx = filtrosEtapaDe(origen), suf = origen === 'forecast' ? 'Forecast' : 'Prod';
-            [['etapa', 'filtroEtapa'], ['sap', 'filtroSap'], ['edad', 'filtroEdad']].forEach(([campo, id]) => {
+            [['etapa', 'filtroEtapa'], ['sap', 'filtroSap'], ['edad', 'filtroEdad'], ['estatus', 'filtroEstatus']].forEach(([campo, id]) => {
                 const el = document.getElementById(id + suf);
                 if (!el) return;
                 if (el.value !== fx[campo]) el.value = fx[campo];
