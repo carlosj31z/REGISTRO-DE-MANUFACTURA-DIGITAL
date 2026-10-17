@@ -9823,5 +9823,331 @@ async function maybeAutoStartTour() {
         </div>
     </div>
 
+
+    <!-- ================= Festividades (Perú) =================
+         En los días previos a cada fiesta: el color de marca (oro rosa) pasa al de la celebración, junto a la marca aparece
+         una insignia pequeña y, al abrir la página, un guiño animado de pocos segundos (una vez al día; se repite al
+         pulsar la insignia). Fuera de las fiestas todo queda como siempre. Sin animaciones con «reducir movimiento».
+         Fechas con la hora de Lima. Vista previa: ?fiesta=halloween|navidad|anionuevo|patrias|sanvalentin|madre|padre|mujer
+         (?fiesta=no la apaga). -->
+    <style>
+        /* «Pendiente Pro» conserva su color propio aunque cambie el de marca */
+        :root { --pend-pro-rgb: 232 162 148; }
+        html[data-theme="light"] { --pend-pro-rgb: 163 96 95; }
+        .etapa-estatus-select.est-pendiente-pro { background: rgb(var(--pend-pro-rgb) / 0.13); color: rgb(var(--pend-pro-rgb)); border-left: 3px solid rgb(var(--pend-pro-rgb)); }
+
+        .fz-insignia { position: absolute; left: 1.75rem; top: -0.7rem; width: 1.75rem; height: 1.75rem; z-index: 3; cursor: pointer; border: 0; padding: 0; background: none;
+            filter: drop-shadow(0 3px 5px rgba(0,0,0,0.35)); transform-origin: 50% 0; -webkit-tap-highlight-color: transparent; }
+        .fz-insignia svg { width: 100%; height: 100%; overflow: visible; display: block; }
+        .fz-insignia:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; border-radius: 6px; }
+        .fz-insignia:hover { animation: fzMeneo 0.9s ease-in-out 1; }
+        @keyframes fzMeneo { 0%, 100% { transform: rotate(0); } 25% { transform: rotate(-9deg); } 60% { transform: rotate(7deg); } 85% { transform: rotate(-3deg); } }
+        .fz-capa { position: fixed; inset: 0; pointer-events: none; z-index: 60; overflow: hidden; }
+        .fz-capa canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+        .fz-volador { position: absolute; left: 0; top: 0; will-change: transform, opacity; }
+        .fz-volador svg { display: block; overflow: visible; }
+        .fz-ala { transform-box: fill-box; animation: fzAleteo 0.22s ease-in-out infinite alternate; }
+        .fz-ala-i { transform-origin: 100% 40%; } .fz-ala-d { transform-origin: 0% 40%; }
+        @keyframes fzAleteo { from { transform: scaleY(1) rotate(0); } to { transform: scaleY(0.35) rotate(var(--giro, 8deg)); } }
+        .fz-ala-d { --giro: -8deg; }
+        .fz-cara { animation: fzVela 2.6s ease-in-out infinite alternate; }
+        @keyframes fzVela { from { opacity: 0.82; } to { opacity: 1; } }
+        @media (prefers-reduced-motion: reduce) { .fz-insignia:hover, .fz-ala, .fz-cara { animation: none; } }
+    </style>
+    <script>
+    (function () {
+        'use strict';
+        // ---------- Calendario (hora de Lima) ----------
+        const hoyLima = () => {
+            const p = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Lima', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date());
+            const v = (t) => +p.find((x) => x.type === t).value;
+            return new Date(Date.UTC(v('year'), v('month') - 1, v('day')));
+        };
+        const dia = (y, m, d) => new Date(Date.UTC(y, m - 1, d));
+        const domingoN = (y, m, n) => { const d1 = dia(y, m, 1), primero = 1 + ((7 - d1.getUTCDay()) % 7); return dia(y, m, primero + 7 * (n - 1)); };
+        const sumar = (f, n) => new Date(f.getTime() + n * 864e5);
+        // desde, hasta (incluidos) y día de la fiesta
+        const FIESTAS = {
+            anionuevo:   { nombre: 'Año Nuevo', rango: (y) => [dia(y - 1, 12, 27), dia(y, 1, 2), dia(y, 1, 1)], base: { oscuro: '#e6c47a', claro: '#8a6a1f' }, guino: 'fuegos', insignia: 'destello' },
+            sanvalentin: { nombre: 'Día del Amor y la Amistad', rango: (y) => [dia(y, 2, 7), dia(y, 2, 14), dia(y, 2, 14)], base: { oscuro: '#ef6f8f', claro: '#b02a52' }, guino: 'corazones', insignia: 'corazon' },
+            mujer:       { nombre: 'Día Internacional de la Mujer', rango: (y) => [dia(y, 3, 6), dia(y, 3, 8), dia(y, 3, 8)], base: { oscuro: '#b693ea', claro: '#6f3fb0' }, guino: 'petalos', insignia: 'flor', flor: 'violeta' },
+            madre:       { nombre: 'Día de la Madre', rango: (y) => { const d = domingoN(y, 5, 2); return [sumar(d, -7), d, d]; }, base: { oscuro: '#ea8fbd', claro: '#a3407a' }, guino: 'petalos', insignia: 'flor', flor: 'rosa' },
+            padre:       { nombre: 'Día del Padre', rango: (y) => { const d = domingoN(y, 6, 3); return [sumar(d, -7), d, d]; }, base: { oscuro: '#74abdc', claro: '#2c5f8f' }, guino: 'destellos', insignia: 'corbata' },
+            patrias:     { nombre: 'Fiestas Patrias', rango: (y) => [dia(y, 7, 15), dia(y, 7, 29), dia(y, 7, 28)], base: { oscuro: '#ec4655', claro: '#c0111f' }, guino: 'confeti', insignia: 'escarapela' },
+            halloween:   { nombre: 'Halloween y Día de la Canción Criolla', rango: (y) => [dia(y, 10, 17), dia(y, 10, 31), dia(y, 10, 31)], base: { oscuro: '#f28c3e', claro: '#b4541a' }, guino: 'murcielagos', insignia: 'calabaza' },
+            navidad:     { nombre: 'Navidad', rango: (y) => [dia(y, 12, 8), dia(y, 12, 26), dia(y, 12, 25)], base: { oscuro: '#e0606f', claro: '#a8323f' }, guino: 'nieve', insignia: 'esfera' },
+        };
+        function fiestaDeHoy() {
+            const q = new URLSearchParams(location.search).get('fiesta');
+            if (q === 'no') return null;
+            const hoy = hoyLima(), y = hoy.getUTCFullYear();
+            if (q && FIESTAS[q]) { let [, b, d] = FIESTAS[q].rango(y); if (b < hoy) [, , d] = FIESTAS[q].rango(y + 1); return { id: q, ...FIESTAS[q], dia: d, hoy }; }
+            for (const [id, f] of Object.entries(FIESTAS)) for (const yy of [y, y + 1]) {
+                const [a, b, d] = f.rango(yy); if (hoy >= a && hoy <= b) return { id, ...f, dia: d, hoy };
+            }
+            return null;
+        }
+        // ---------- Paleta ----------
+        const rgb = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
+        const mezcla = (c, otro, t) => c.map((x, i) => Math.round(x + (otro[i] - x) * t));
+        const B = [255, 255, 255], N = [0, 0, 0], txt = (c) => c.join(' '), hex = (c) => '#' + c.map((x) => x.toString(16).padStart(2, '0')).join('');
+        const rgba = (c, a) => `rgba(${c.join(', ')}, ${a})`;
+        function variables(f, claro) {
+            const c = rgb(f.base[claro ? 'claro' : 'oscuro']), v = {};
+            const escala = claro ? [mezcla(c, N, 0.45), mezcla(c, N, 0.33), mezcla(c, N, 0.33), mezcla(c, N, 0.12), mezcla(c, N, 0.12), mezcla(c, B, 0.14), c, mezcla(c, N, 0.2), mezcla(c, B, 0.85), mezcla(c, B, 0.93)]
+                : [mezcla(c, B, 0.93), mezcla(c, B, 0.8), mezcla(c, B, 0.62), mezcla(c, B, 0.3), c, mezcla(c, N, 0.1), mezcla(c, N, 0.25), mezcla(c, N, 0.41), mezcla(c, N, 0.57), mezcla(c, N, 0.71)];
+            [50, 100, 200, 300, 400, 500, 600, 700, 800, 900].forEach((n, i) => { v[`--c-brass-${n}`] = txt(escala[i]); });
+            v['--accent'] = hex(c); v['--accent-strong'] = hex(claro ? mezcla(c, N, 0.2) : mezcla(c, B, 0.45)); v['--accent-rgb'] = txt(c);
+            v['--focus-ring'] = rgba(claro ? c : mezcla(c, B, 0.45), claro ? 0.6 : 0.75);
+            v['--nav-track-border'] = rgba(c, claro ? 0.3 : 0.28); v['--nav-pill-border'] = rgba(c, claro ? 0.55 : 0.5);
+            v['--nav-pill-text'] = hex(mezcla(c, B, claro ? 0.9 : 0.85)); if (!claro) v['--nav-pill-bg'] = rgba(c, 0.14);
+            v['--table-row-hover'] = rgba(c, 0.06);
+            return v;
+        }
+        let puestas = [];
+        function aplicarPaleta(f) {
+            const raiz = document.documentElement; puestas.forEach((k) => raiz.style.removeProperty(k)); puestas = [];
+            if (!f) { delete raiz.dataset.fiesta; return; }
+            raiz.dataset.fiesta = f.id;
+            Object.entries(variables(f, raiz.getAttribute('data-theme') === 'light')).forEach(([k, val]) => { raiz.style.setProperty(k, val); puestas.push(k); });
+        }
+        // ---------- Insignias (SVG con volumen: degradados, brillos y sombras) ----------
+        let nId = 0; const uid = (p) => `fz${p}${++nId}`;
+        function svgInsignia(f) {
+            const g = uid('g');
+            switch (f.insignia) {
+                case 'calabaza': return `<svg viewBox="0 0 64 64" aria-hidden="true"><defs>
+                    <radialGradient id="${g}a" cx="38%" cy="32%" r="75%"><stop offset="0" stop-color="#ffd08a"/><stop offset=".45" stop-color="#f4892a"/><stop offset="1" stop-color="#8f3a07"/></radialGradient>
+                    <radialGradient id="${g}b" cx="50%" cy="30%" r="80%"><stop offset="0" stop-color="#ffc173"/><stop offset=".5" stop-color="#ee7c1c"/><stop offset="1" stop-color="#7d3205"/></radialGradient>
+                    <linearGradient id="${g}t" x1="0" x2="1"><stop offset="0" stop-color="#8fb24a"/><stop offset="1" stop-color="#3d5a17"/></linearGradient>
+                    <radialGradient id="${g}l"><stop offset="0" stop-color="#fff6b0"/><stop offset=".55" stop-color="#ffbf2e"/><stop offset="1" stop-color="#e46b00"/></radialGradient>
+                    <filter id="${g}f" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="1.6"/></filter></defs>
+                    <ellipse cx="32" cy="57" rx="20" ry="3.2" fill="#000" opacity=".25"/>
+                    <ellipse cx="19" cy="38" rx="14" ry="17" fill="url(#${g}a)"/><ellipse cx="45" cy="38" rx="14" ry="17" fill="url(#${g}a)"/>
+                    <ellipse cx="32" cy="38" rx="13.5" ry="19" fill="url(#${g}b)"/>
+                    <path d="M25 21 Q22 38 25 56 M39 21 Q42 38 39 56" stroke="#7a2e04" stroke-opacity=".35" stroke-width="1.4" fill="none"/>
+                    <path d="M30 20 C30 14 31 10 35 7 L37 9 C34 12 34 15 34.5 20 Z" fill="url(#${g}t)"/>
+                    <path d="M34 11 C40 8 45 11 46 15 C42 13 38 13 34 14 Z" fill="#5f8a25" opacity=".9"/>
+                    <g class="fz-cara"><g filter="url(#${g}f)" opacity=".8"><path d="M20 33 L26 28 L28 35 Z M44 33 L38 28 L36 35 Z M19 42 Q32 52 45 42 Q41 47 37 46 L35 49 L32 46 L29 49 L27 46 Q23 47 19 42 Z" fill="#ffcf40"/></g>
+                    <path d="M20 33 L26 28 L28 35 Z M44 33 L38 28 L36 35 Z M19 42 Q32 52 45 42 Q41 47 37 46 L35 49 L32 46 L29 49 L27 46 Q23 47 19 42 Z" fill="url(#${g}l)"/></g>
+                    <ellipse cx="24" cy="27" rx="4" ry="6" fill="#fff" opacity=".22" transform="rotate(-25 24 27)"/></svg>`;
+                case 'esfera': return `<svg viewBox="0 0 40 60" aria-hidden="true"><defs>
+                    <radialGradient id="${g}e" cx="35%" cy="32%" r="72%"><stop offset="0" stop-color="#ffb3bd"/><stop offset=".35" stop-color="#e2384f"/><stop offset=".8" stop-color="#8e0f24"/><stop offset="1" stop-color="#5a0714"/></radialGradient>
+                    <linearGradient id="${g}m" x1="0" x2="1"><stop offset="0" stop-color="#8a6a1f"/><stop offset=".45" stop-color="#ffe9a8"/><stop offset=".6" stop-color="#e2b84f"/><stop offset="1" stop-color="#7a5a12"/></linearGradient>
+                    <filter id="${g}f"><feGaussianBlur stdDeviation="1.2"/></filter></defs>
+                    <path d="M20 0 V16" stroke="#d9c27a" stroke-width="1.2"/><path d="M16 15 Q20 9 24 15" stroke="url(#${g}m)" stroke-width="2" fill="none"/>
+                    <rect x="14.5" y="15" width="11" height="6" rx="1.5" fill="url(#${g}m)"/>
+                    <circle cx="20" cy="39" r="17" fill="url(#${g}e)"/>
+                    <path d="M4 37 Q20 44 36 37" stroke="url(#${g}m)" stroke-width="2.2" fill="none" opacity=".9"/>
+                    <circle cx="11" cy="40" r="1.2" fill="#ffe9a8"/><circle cx="20" cy="42.5" r="1.4" fill="#ffe9a8"/><circle cx="29" cy="40" r="1.2" fill="#ffe9a8"/>
+                    <ellipse cx="13.5" cy="30" rx="4.5" ry="6.5" fill="#fff" opacity=".55" filter="url(#${g}f)" transform="rotate(30 13.5 30)"/></svg>`;
+                case 'destello': return `<svg viewBox="0 0 64 64" aria-hidden="true"><defs>
+                    <radialGradient id="${g}s" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#fffbe6"/><stop offset=".35" stop-color="#ffe08a"/><stop offset=".75" stop-color="#d9a52a"/><stop offset="1" stop-color="#8a6312"/></radialGradient>
+                    <radialGradient id="${g}h"><stop offset="0" stop-color="#ffe9a8" stop-opacity=".8"/><stop offset="1" stop-color="#ffe9a8" stop-opacity="0"/></radialGradient></defs>
+                    <circle cx="32" cy="32" r="26" fill="url(#${g}h)"/>
+                    <path d="M32 4 C35 24 40 29 60 32 C40 35 35 40 32 60 C29 40 24 35 4 32 C24 29 29 24 32 4 Z" fill="url(#${g}s)"/>
+                    <path d="M32 18 C33 28 36 31 46 32 C36 33 33 36 32 46 C31 36 28 33 18 32 C28 31 31 28 32 18 Z" fill="#fff" opacity=".55"/>
+                    <circle cx="52" cy="12" r="2.2" fill="#ffe9a8"/><circle cx="12" cy="52" r="1.6" fill="#ffe9a8"/><circle cx="54" cy="50" r="1.3" fill="#fff"/></svg>`;
+                case 'corazon': return `<svg viewBox="0 0 64 64" aria-hidden="true"><defs>
+                    <radialGradient id="${g}c" cx="35%" cy="30%" r="80%"><stop offset="0" stop-color="#ffc2cf"/><stop offset=".4" stop-color="#ee4b72"/><stop offset="1" stop-color="#7d0f2c"/></radialGradient>
+                    <filter id="${g}f"><feGaussianBlur stdDeviation="1.4"/></filter></defs>
+                    <ellipse cx="32" cy="60" rx="16" ry="2.6" fill="#000" opacity=".22"/>
+                    <path d="M32 56 C9 41 4 25 13 15.5 C21 7.5 29.5 11 32 18.5 C34.5 11 43 7.5 51 15.5 C60 25 55 41 32 56 Z" fill="url(#${g}c)"/>
+                    <ellipse cx="20" cy="21" rx="5" ry="7.5" fill="#fff" opacity=".5" filter="url(#${g}f)" transform="rotate(-35 20 21)"/></svg>`;
+                case 'flor': { const vi = f.flor === 'violeta', p1 = vi ? '#f1e3ff' : '#ffe0ee', p2 = vi ? '#a777e6' : '#ec7fb2', p3 = vi ? '#55248f' : '#9c2c62';
+                    return `<svg viewBox="0 0 64 64" aria-hidden="true"><defs>
+                    <radialGradient id="${g}p" cx="50%" cy="85%" r="95%"><stop offset="0" stop-color="${p3}"/><stop offset=".45" stop-color="${p2}"/><stop offset="1" stop-color="${p1}"/></radialGradient>
+                    <radialGradient id="${g}c" cx="40%" cy="35%"><stop offset="0" stop-color="#fff6c2"/><stop offset=".6" stop-color="#f5c542"/><stop offset="1" stop-color="#b07a12"/></radialGradient>
+                    <linearGradient id="${g}h" x1="0" x2="1"><stop offset="0" stop-color="#7fb35a"/><stop offset="1" stop-color="#2f6b2a"/></linearGradient></defs>
+                    <path d="M33 40 C30 50 26 56 22 62" stroke="url(#${g}h)" stroke-width="2.6" fill="none" stroke-linecap="round"/>
+                    <path d="M27 52 C18 50 14 44 15 40 C22 41 26 45 27 52 Z" fill="url(#${g}h)"/>
+                    ${[0, 72, 144, 216, 288].map((a) => `<ellipse cx="32" cy="17" rx="9" ry="13" fill="url(#${g}p)" transform="rotate(${a} 32 28)"/>`).join('')}
+                    ${[36, 108, 180, 252, 324].map((a) => `<ellipse cx="32" cy="20" rx="6" ry="9" fill="url(#${g}p)" opacity=".85" transform="rotate(${a} 32 28)"/>`).join('')}
+                    <circle cx="32" cy="28" r="5.5" fill="url(#${g}c)"/><circle cx="30.5" cy="26.5" r="1.6" fill="#fff" opacity=".7"/></svg>`; }
+                case 'corbata': return `<svg viewBox="0 0 64 64" aria-hidden="true"><defs>
+                    <linearGradient id="${g}c" x1="0" x2="1"><stop offset="0" stop-color="#173a63"/><stop offset=".5" stop-color="#3f7fc0"/><stop offset="1" stop-color="#132f52"/></linearGradient>
+                    <pattern id="${g}r" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(40)"><rect width="8" height="8" fill="url(#${g}c)"/><rect width="2.2" height="8" fill="#9cc6ef" opacity=".55"/></pattern></defs>
+                    <path d="M22 4 H42 L44 9 L36 16 H28 L20 9 Z" fill="#f2f4f7"/><path d="M22 4 L32 14 L42 4" fill="none" stroke="#c8ced8" stroke-width="1.2"/>
+                    <path d="M27 13 H37 L35 20 H29 Z" fill="url(#${g}c)"/>
+                    <path d="M29 20 H35 L41 48 L32 60 L23 48 Z" fill="url(#${g}r)"/>
+                    <path d="M29 20 H32 L28 48 L32 60 L23 48 Z" fill="#000" opacity=".18"/><path d="M33 22 L37 46" stroke="#fff" stroke-opacity=".35" stroke-width="1.4"/></svg>`;
+                case 'escarapela': {
+                    const pl = (n, r, rx, ry, c1, c2) => Array.from({ length: n }, (_, i) => `<ellipse cx="32" cy="${32 - r}" rx="${rx}" ry="${ry}" fill="${i % 2 ? c1 : c2}" transform="rotate(${(360 / n) * i} 32 32)"/>`).join('');
+                    return `<svg viewBox="0 0 64 64" aria-hidden="true"><defs>
+                    <radialGradient id="${g}r" cx="40%" cy="35%"><stop offset="0" stop-color="#ff6b78"/><stop offset=".6" stop-color="#d91023"/><stop offset="1" stop-color="#7e0611"/></radialGradient>
+                    <radialGradient id="${g}b" cx="40%" cy="35%"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#d9dde3"/></radialGradient>
+                    <linearGradient id="${g}c" x1="0" x2="1"><stop offset="0" stop-color="#a50c1a"/><stop offset=".5" stop-color="#e8303f"/><stop offset="1" stop-color="#a50c1a"/></linearGradient></defs>
+                    <path d="M24 40 L18 62 L24 58 L28 63 L31 42 Z" fill="url(#${g}c)"/><path d="M40 40 L46 62 L40 58 L36 63 L33 42 Z" fill="#f4f5f7"/><path d="M40 40 L46 62 L44 61 L37 42Z" fill="#000" opacity=".12"/>
+                    <circle cx="32" cy="32" r="22" fill="#9c0a17"/>
+                    ${pl(22, 15, 4.2, 8.5, `url(#${g}r)`, '#b30d1d')}
+                    ${pl(16, 8.5, 3.4, 6.2, `url(#${g}b)`, '#e9ecf0')}
+                    <circle cx="32" cy="32" r="6" fill="url(#${g}r)"/><circle cx="30" cy="30" r="1.8" fill="#fff" opacity=".6"/></svg>`; }
+            }
+            return '';
+        }
+        // ---------- Guiños (duran unos segundos y se retiran) ----------
+        const reducir = () => window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+        let enCurso = null;
+        function capa() { const c = document.createElement('div'); c.className = 'fz-capa'; c.setAttribute('aria-hidden', 'true'); document.body.appendChild(c); return c; }
+        function lienzo(c) {
+            const cv = document.createElement('canvas'), dpr = Math.min(2, window.devicePixelRatio || 1);
+            cv.width = innerWidth * dpr; cv.height = innerHeight * dpr; c.appendChild(cv); const x = cv.getContext('2d'); x.scale(dpr, dpr); return x;
+        }
+        // bucle de dibujo con fundido al final; termina solo (en una pestaña oculta no hay cuadros: al volver, si ya pasó su tiempo, termina)
+        function animar(dur, paso, alTerminar) {
+            const t0 = performance.now(); let raf = 0, prev = t0;
+            const tick = (t) => { const e = (t - t0) / 1000, dt = Math.min(0.12, Math.max(0, (t - prev) / 1000)); prev = t; if (e >= dur) { alTerminar(); return; } paso(e, Math.min(1, (dur - e) / 0.9), dt); raf = requestAnimationFrame(tick); };
+            raf = requestAnimationFrame(tick); return () => cancelAnimationFrame(raf);
+        }
+        const azar = (a, b) => a + Math.random() * (b - a);
+        const GUINOS = {
+            nieve(c) {
+                const x = lienzo(c), W = innerWidth, H = innerHeight, cristal = (s) => { x.beginPath(); for (let k = 0; k < 6; k++) { const a = (Math.PI / 3) * k; x.moveTo(0, 0); x.lineTo(Math.cos(a) * s, Math.sin(a) * s);
+                    x.moveTo(Math.cos(a) * s * 0.55, Math.sin(a) * s * 0.55); x.lineTo(Math.cos(a + 0.5) * s * 0.85, Math.sin(a + 0.5) * s * 0.85); x.moveTo(Math.cos(a) * s * 0.55, Math.sin(a) * s * 0.55); x.lineTo(Math.cos(a - 0.5) * s * 0.85, Math.sin(a - 0.5) * s * 0.85); } x.stroke(); };
+                const copos = Array.from({ length: Math.round(Math.min(150, W / 9)) }, () => { const z = Math.random(); return { x: azar(0, W), y: azar(-H * 0.6, H * 0.15), z, r: 1.2 + z * 3.8, v: 28 + z * 70, f: azar(0, 6.3), cr: z > 0.72 }; });
+                return animar(5.2, (e, a, dt) => { x.clearRect(0, 0, W, H);
+                    copos.forEach((p) => { p.y += p.v * dt; const px = p.x + Math.sin(e * 1.3 + p.f) * (8 + p.z * 14); x.save(); x.translate(px, p.y); x.globalAlpha = a * (0.35 + p.z * 0.6);
+                        if (p.cr) { x.rotate(e * 0.6 + p.f); x.strokeStyle = '#eaf4ff'; x.lineWidth = 0.9; x.shadowColor = 'rgba(200,225,255,0.9)'; x.shadowBlur = 4; cristal(p.r * 1.9); }
+                        else { const gr = x.createRadialGradient(0, 0, 0, 0, 0, p.r); gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(0.55, 'rgba(235,244,255,0.75)'); gr.addColorStop(1, 'rgba(220,235,255,0)'); x.fillStyle = gr; x.beginPath(); x.arc(0, 0, p.r, 0, 7); x.fill(); }
+                        x.restore(); }); }, () => c.remove());
+            },
+            fuegos(c) {
+                const x = lienzo(c), W = innerWidth, H = innerHeight, chispas = [], cohetes = [], colores = [['#ffd36b', '#fff4cf'], ['#ff6b81', '#ffd1d9'], ['#7fd1ff', '#e3f6ff'], ['#c9a2ff', '#f0e6ff']];
+                const T_SUBIDA = 0.75, sube = (u) => 1 - Math.pow(1 - u, 3);
+                const plan = [0.15, 0.7, 1.25].map((t, i) => ({ t, x: W * (0.2 + 0.3 * i + azar(-0.05, 0.05)), y0: H * 0.66, y1: H * azar(0.12, 0.24), col: colores[i % colores.length] }));
+                const estallar = (k) => { const n = 110; for (let i = 0; i < n; i++) { const ang = (Math.PI * 2 * i) / n + azar(-0.05, 0.05), v = azar(130, 330) * (i % 5 ? 1 : 0.55);
+                    chispas.push({ x: k.x, y: k.y1, vx: Math.cos(ang) * v, vy: Math.sin(ang) * v, vida: azar(1, 1.6), t: 0, col: i % 4 ? k.col[0] : k.col[1], r: azar(1, 2.2) }); } };
+                return animar(4.6, (e, a, dt) => {
+                    x.globalCompositeOperation = 'destination-out'; x.fillStyle = `rgba(0,0,0,${Math.min(1, 9 * dt)})`; x.fillRect(0, 0, W, H); x.globalCompositeOperation = 'lighter';
+                    plan.forEach((k) => { const u = (e - k.t) / T_SUBIDA; if (u < 0 || k.listo) return;
+                        if (u >= 1) { k.listo = true; estallar(k); return; }
+                        const y = k.y0 + (k.y1 - k.y0) * sube(u), yc = k.y0 + (k.y1 - k.y0) * sube(Math.max(0, u - 0.12)), gr = x.createLinearGradient(k.x, yc, k.x, y);
+                        gr.addColorStop(0, 'rgba(255,220,150,0)'); gr.addColorStop(1, k.col[1]); x.globalAlpha = a; x.strokeStyle = gr; x.lineWidth = 2.4; x.lineCap = 'round';
+                        x.shadowColor = k.col[0]; x.shadowBlur = 12; x.beginPath(); x.moveTo(k.x, yc); x.lineTo(k.x + Math.sin(e * 40) * 0.6, y); x.stroke(); x.shadowBlur = 0; });
+                    const roce = Math.pow(0.35, dt);
+                    for (let i = chispas.length - 1; i >= 0; i--) { const p = chispas[i]; p.t += dt; if (p.t >= p.vida) { chispas.splice(i, 1); continue; }
+                        const x0 = p.x, y0 = p.y; p.vx *= roce; p.vy = p.vy * roce + 120 * dt; p.x += p.vx * dt; p.y += p.vy * dt; const vida = 1 - p.t / p.vida;
+                        x.globalAlpha = vida * a; x.strokeStyle = p.col; x.lineWidth = p.r * (0.5 + vida * 0.7); x.shadowColor = p.col; x.shadowBlur = 8;
+                        x.beginPath(); x.moveTo(x0, y0); x.lineTo(p.x, p.y); x.stroke(); }
+                    x.shadowBlur = 0; x.globalAlpha = 1; x.globalCompositeOperation = 'source-over';
+                }, () => c.remove());
+            },
+            confeti(c) {
+                const x = lienzo(c), W = innerWidth, H = innerHeight;
+                const piezas = Array.from({ length: Math.round(Math.min(160, W / 8)) }, (_, i) => ({ x: azar(0, W), y: azar(-H * 0.5, -10), w: azar(6, 11), h: azar(9, 15), v: azar(90, 170), giro: azar(0, 6.3), vg: azar(3, 8), rot: azar(0, 6.3), vr: azar(-2, 2), rojo: i % 2 === 0, f: azar(0, 6.3) }));
+                return animar(4.8, (e, a, dt) => { x.clearRect(0, 0, W, H);
+                    piezas.forEach((p) => { p.y += p.v * dt; p.giro += p.vg * dt; p.rot += p.vr * dt; const cs = Math.cos(p.giro), luz = 0.62 + 0.38 * Math.abs(cs);
+                        x.save(); x.translate(p.x + Math.sin(e * 2 + p.f) * 12, p.y); x.rotate(p.rot); x.scale(1, Math.max(0.08, Math.abs(cs))); x.globalAlpha = a;
+                        const base = p.rojo ? [217, 16, 35] : [246, 247, 250], col = base.map((v) => Math.round(v * luz));
+                        const gr = x.createLinearGradient(-p.w / 2, 0, p.w / 2, 0); gr.addColorStop(0, `rgb(${col.join(',')})`); gr.addColorStop(1, `rgb(${col.map((v) => Math.round(v * 0.82)).join(',')})`);
+                        x.fillStyle = gr; x.beginPath(); x.roundRect ? x.roundRect(-p.w / 2, -p.h / 2, p.w, p.h, 2) : x.rect(-p.w / 2, -p.h / 2, p.w, p.h); x.fill(); x.restore(); }); }, () => c.remove());
+            },
+            petalos(c, f) {
+                const x = lienzo(c), W = innerWidth, H = innerHeight, vi = f.flor === 'violeta', tonos = vi ? [['#f3e8ff', '#a777e6'], ['#e6d4ff', '#7c4bc4']] : [['#ffe3ef', '#ec7fb2'], ['#ffd2e4', '#cf4f8c']];
+                const ps = Array.from({ length: Math.round(Math.min(70, W / 18)) }, () => ({ x: azar(-W * 0.1, W), y: azar(-H * 0.25, -10), s: azar(7, 13), v: azar(75, 135), vx: azar(12, 40), rot: azar(0, 6.3), vr: azar(-1.5, 1.5), giro: azar(0, 6.3), vg: azar(1.5, 3.5), t: tonos[Math.random() < 0.5 ? 0 : 1], f: azar(0, 6.3) }));
+                return animar(5, (e, a, dt) => { x.clearRect(0, 0, W, H);
+                    ps.forEach((p) => { p.y += p.v * dt; p.x += (p.vx + Math.sin(e * 1.6 + p.f) * 22) * dt; p.rot += p.vr * dt; p.giro += p.vg * dt;
+                        x.save(); x.translate(p.x, p.y); x.rotate(p.rot); x.scale(Math.max(0.15, Math.abs(Math.cos(p.giro))), 1); x.globalAlpha = a * 0.92;
+                        const gr = x.createRadialGradient(0, -p.s * 0.3, 0, 0, 0, p.s); gr.addColorStop(0, p.t[0]); gr.addColorStop(1, p.t[1]); x.fillStyle = gr;
+                        x.beginPath(); x.moveTo(0, -p.s); x.bezierCurveTo(p.s * 0.9, -p.s * 0.6, p.s * 0.7, p.s * 0.7, 0, p.s); x.bezierCurveTo(-p.s * 0.7, p.s * 0.7, -p.s * 0.9, -p.s * 0.6, 0, -p.s); x.fill(); x.restore(); }); }, () => c.remove());
+            },
+            corazones(c) {
+                const W = innerWidth, H = innerHeight, n = 9, anim = [];
+                for (let i = 0; i < n; i++) {
+                    const el = document.createElement('div'), t = azar(26, 46); el.className = 'fz-volador'; el.innerHTML = svgInsignia({ insignia: 'corazon' }); el.firstChild.setAttribute('width', t); el.firstChild.setAttribute('height', t);
+                    c.appendChild(el); const x0 = azar(W * 0.05, W * 0.95), dx = azar(-60, 60);
+                    anim.push(el.animate([{ transform: `translate(${x0}px, ${H + 20}px) scale(.6) rotate(${azar(-15, 15)}deg)`, opacity: 0 }, { opacity: 0.95, offset: 0.15 },
+                        { transform: `translate(${x0 + dx * 0.5}px, ${H * 0.55}px) scale(1) rotate(${azar(-10, 10)}deg)`, offset: 0.55 }, { transform: `translate(${x0 + dx}px, ${H * azar(0.18, 0.32)}px) scale(.9) rotate(${azar(-20, 20)}deg)`, opacity: 0 }],
+                        { duration: azar(3200, 4300), delay: i * 140, easing: 'cubic-bezier(.3,.7,.4,1)', fill: 'both' }));
+                }
+                Promise.all(anim.map((a) => a.finished)).then(() => c.remove(), () => c.remove());
+                return () => anim.forEach((a) => a.cancel());
+            },
+            murcielagos(c) {
+                const W = innerWidth, cab = document.querySelector('header'), top = cab ? cab.getBoundingClientRect().bottom : 80, anim = [];
+                const murcielago = (t) => { const g = uid('m'); return `<svg width="${t}" height="${t / 2}" viewBox="0 0 80 40" aria-hidden="true"><defs>
+                    <linearGradient id="${g}a" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#6a4390"/><stop offset="1" stop-color="#1c0f28"/></linearGradient>
+                    <radialGradient id="${g}c" cx="45%" cy="35%"><stop offset="0" stop-color="#5b3b74"/><stop offset="1" stop-color="#140a1c"/></radialGradient></defs>
+                    <g class="fz-ala fz-ala-i"><path d="M38 18 C30 6 16 4 2 12 C8 13 10 17 9 21 C14 18 18 20 19 25 C23 21 28 22 30 27 C32 22 36 21 38 22 Z" fill="url(#${g}a)"/><path d="M38 19 L9 21 M38 20 L19 25 M38 21 L30 27" stroke="#7a5a96" stroke-width=".6" opacity=".6"/></g>
+                    <g class="fz-ala fz-ala-d"><path d="M42 18 C50 6 64 4 78 12 C72 13 70 17 71 21 C66 18 62 20 61 25 C57 21 52 22 50 27 C48 22 44 21 42 22 Z" fill="url(#${g}a)"/><path d="M42 19 L71 21 M42 20 L61 25 M42 21 L50 27" stroke="#7a5a96" stroke-width=".6" opacity=".6"/></g>
+                    <ellipse cx="40" cy="22" rx="5" ry="8" fill="url(#${g}c)"/><path d="M36.5 15 L37.5 9 L39.5 14 Z M43.5 15 L42.5 9 L40.5 14 Z" fill="#1d1028"/>
+                    <circle cx="38.3" cy="18.5" r="1" fill="#ffb347"/><circle cx="41.7" cy="18.5" r="1" fill="#ffb347"/></svg>`; };
+                const lu = document.createElement('div'), gl = uid('l'), tl = Math.min(150, Math.max(96, W * 0.08)); lu.className = 'fz-volador';
+                lu.innerHTML = `<svg width="${tl}" height="${tl}" viewBox="0 0 100 100" aria-hidden="true"><defs>
+                    <radialGradient id="${gl}h"><stop offset=".55" stop-color="#ffe7b0" stop-opacity=".45"/><stop offset="1" stop-color="#ffe7b0" stop-opacity="0"/></radialGradient>
+                    <radialGradient id="${gl}d" cx="40%" cy="35%" r="70%"><stop offset="0" stop-color="#fff8e1"/><stop offset=".6" stop-color="#f3dfa8"/><stop offset="1" stop-color="#c9a865"/></radialGradient>
+                    <radialGradient id="${gl}c" cx="40%" cy="35%"><stop offset="0" stop-color="#d8bf85"/><stop offset="1" stop-color="#bfa165"/></radialGradient></defs>
+                    <circle cx="50" cy="50" r="50" fill="url(#${gl}h)"/><circle cx="50" cy="50" r="30" fill="url(#${gl}d)"/>
+                    <circle cx="41" cy="42" r="6" fill="url(#${gl}c)" opacity=".7"/><circle cx="60" cy="58" r="4.5" fill="url(#${gl}c)" opacity=".6"/><circle cx="56" cy="38" r="3" fill="url(#${gl}c)" opacity=".55"/><circle cx="44" cy="62" r="2.5" fill="url(#${gl}c)" opacity=".5"/></svg>`;
+                c.appendChild(lu); const lx = W * 0.62, ly = Math.max(6, top * 0.08);
+                anim.push(lu.animate([{ transform: `translate(${lx}px, ${ly + 18}px) scale(.92)`, opacity: 0 }, { opacity: 0.9, offset: 0.2 }, { opacity: 0.9, offset: 0.75 }, { transform: `translate(${lx}px, ${ly}px) scale(1)`, opacity: 0 }], { duration: 4600, easing: 'ease-in-out', fill: 'both' }));
+                [[110, 0, 0.12], [78, 420, 0.3], [58, 820, 0.2]].forEach(([t, delay, alto]) => {
+                    const el = document.createElement('div'); el.className = 'fz-volador'; el.style.filter = 'drop-shadow(0 0 6px rgba(255, 170, 90, 0.35)) drop-shadow(0 6px 8px rgba(0,0,0,0.45))'; el.innerHTML = murcielago(t); c.appendChild(el);
+                    const y = Math.max(20, top * 0.4) + alto * 140, desde = -t * 1.5, hasta = W + t;
+                    anim.push(el.animate([{ transform: `translate(${desde}px, ${y + 40}px) scale(.8)`, opacity: 0 }, { opacity: 1, offset: 0.08 },
+                        { transform: `translate(${W * 0.35}px, ${y - 30}px) scale(1)`, offset: 0.4 }, { transform: `translate(${W * 0.7}px, ${y + 25}px) scale(.95)`, offset: 0.72 },
+                        { transform: `translate(${hasta}px, ${y - 50}px) scale(.85)`, opacity: 0.9 }], { duration: 3600 + delay, delay, easing: 'cubic-bezier(.45,.05,.55,.95)', fill: 'both' }));
+                });
+                Promise.all(anim.map((a) => a.finished)).then(() => c.remove(), () => c.remove());
+                return () => anim.forEach((a) => a.cancel());
+            },
+            destellos(c) {
+                const ins = document.querySelector('.fz-insignia'), r = ins ? ins.getBoundingClientRect() : { left: 60, top: 30, width: 28, height: 28 }, anim = [];
+                for (let i = 0; i < 7; i++) {
+                    const el = document.createElement('div'), t = azar(12, 22); el.className = 'fz-volador'; el.innerHTML = svgInsignia({ insignia: 'destello' }); el.firstChild.setAttribute('width', t); el.firstChild.setAttribute('height', t);
+                    c.appendChild(el); const ang = (Math.PI * 2 * i) / 7, d = azar(28, 60), cx = r.left + r.width / 2 - t / 2, cy = r.top + r.height / 2 - t / 2;
+                    anim.push(el.animate([{ transform: `translate(${cx}px, ${cy}px) scale(.2) rotate(0)`, opacity: 0 }, { opacity: 1, offset: 0.3 },
+                        { transform: `translate(${cx + Math.cos(ang) * d}px, ${cy + Math.sin(ang) * d}px) scale(1) rotate(90deg)`, opacity: 0 }], { duration: 1500, delay: i * 90, easing: 'cubic-bezier(.2,.8,.3,1)', fill: 'both' }));
+                }
+                Promise.all(anim.map((a) => a.finished)).then(() => c.remove(), () => c.remove());
+                return () => anim.forEach((a) => a.cancel());
+            },
+        };
+        function guino(f) {
+            if (reducir() || !GUINOS[f.guino]) return;
+            if (enCurso) { enCurso.parar(); enCurso.capa.remove(); }
+            const c = capa(), parar = GUINOS[f.guino](c, f); enCurso = { capa: c, parar };
+        }
+        function entradaInsignia(b, f) {
+            if (reducir()) return;
+            const balanceo = f.insignia === 'esfera' || f.insignia === 'corbata' || f.insignia === 'escarapela';
+            b.animate(balanceo ? [{ transform: 'translateY(-18px) rotate(-25deg)', opacity: 0 }, { transform: 'translateY(0) rotate(14deg)', opacity: 1, offset: 0.35 }, { transform: 'rotate(-8deg)', offset: 0.6 }, { transform: 'rotate(4deg)', offset: 0.8 }, { transform: 'rotate(0)' }]
+                : [{ transform: 'scale(0) rotate(-30deg)', opacity: 0 }, { transform: 'scale(1.18) rotate(8deg)', opacity: 1, offset: 0.6 }, { transform: 'scale(1) rotate(0)' }], { duration: balanceo ? 1600 : 700, easing: 'cubic-bezier(.34,1.4,.64,1)' });
+        }
+        function texto(f) {
+            const n = Math.round((f.dia - f.hoy) / 864e5);
+            const pl = f.id === 'patrias', saludo = pl ? '¡Felices Fiestas Patrias!' : `¡Feliz ${f.nombre}!`;
+            const con = pl ? 'las Fiestas Patrias' : /^Día /.test(f.nombre) ? 'el ' + f.nombre : f.nombre;
+            return n > 1 ? `Faltan ${n} días para ${con}` : n === 1 ? `Mañana: ${pl ? 'Fiestas Patrias' : f.nombre}` : saludo;
+        }
+        function ponerInsignia(f) {
+            document.querySelectorAll('.fz-insignia').forEach((x) => x.remove());
+            const marca = document.querySelector('header .brand-mark'); if (!marca || !f) return null;
+            const cont = marca.parentElement; if (getComputedStyle(cont).position === 'static') cont.style.position = 'relative';
+            const b = document.createElement('button'); b.type = 'button'; b.className = 'fz-insignia'; const t = texto(f); b.title = t; b.setAttribute('aria-label', t);
+            b.innerHTML = svgInsignia(f); b.addEventListener('click', () => guino(f)); cont.appendChild(b); return b;
+        }
+        // ---------- Arranque: tras la carga inicial ----------
+        function iniciar() {
+            const f = fiestaDeHoy(); aplicarPaleta(f);
+            new MutationObserver(() => aplicarPaleta(fiestaDeHoy())).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+            if (!f) return;
+            const listo = () => { const lo = document.getElementById('pageLoaderOverlay'); return !lo || lo.classList.contains('is-hidden') || getComputedStyle(lo).display === 'none' || +getComputedStyle(lo).opacity === 0; };
+            const t0 = Date.now();
+            const esperar = () => {
+                if (!listo() && Date.now() - t0 < 30000) { setTimeout(esperar, 250); return; }
+                setTimeout(() => {
+                    const b = ponerInsignia(f); if (b) entradaInsignia(b, f);
+                    const clave = `fzGuino:${f.id}:${f.hoy.toISOString().slice(0, 10)}`; let visto = false;
+                    try { visto = localStorage.getItem(clave) === '1' && !new URLSearchParams(location.search).get('fiesta'); localStorage.setItem(clave, '1'); } catch (e) { /* sin almacenamiento: se muestra */ }
+                    if (!visto) setTimeout(() => guino(f), 1200);
+                }, 700);
+            };
+            esperar();
+        }
+        window.__fiesta = { hoy: fiestaDeHoy, FIESTAS, guino: (id) => { const f = id ? { id, ...FIESTAS[id] } : fiestaDeHoy(); if (f) guino(f); }, variables };
+        if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', iniciar); else iniciar();
+    })();
+    </script>
 </body>
 </html>
