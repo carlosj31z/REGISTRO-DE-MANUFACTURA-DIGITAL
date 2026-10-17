@@ -9825,7 +9825,7 @@ async function maybeAutoStartTour() {
 
 
     <!-- ================= Festividades (Perú) =================
-         En los días previos a cada fiesta: el color de marca (oro rosa) pasa al de la celebración, junto a la marca aparece
+         En los días previos a cada fiesta (como máximo 2 semanas antes): el color de marca (oro rosa) pasa al de la celebración, junto a la marca aparece
          una insignia y, al abrir la página, un guiño animado de unos segundos (una vez al día; se repite al pulsar la
          insignia) con un brillo en el título. Fuera de las fiestas todo queda como siempre. Sin animaciones con
          «reducir movimiento». Fechas con la hora de Lima. El núcleo (calendario, paleta, insignias y guiños) es el mismo
@@ -9874,8 +9874,9 @@ async function maybeAutoStartTour() {
           padre:      { nombre: 'Día del Padre', rango: (y) => previos(domingoN(y, 6, 3), 7), base: ['#74abdc', '#2c5f8f'], efectos: ['destellos', 'fugaces'], insignia: 'corbata' },
           patrias:    { nombre: 'Fiestas Patrias', rango: (y) => [dia(y, 7, 15), dia(y, 7, 29), dia(y, 7, 28)], base: ['#ec4655', '#c0111f'], efectos: ['bandera', 'confeti'], insignia: 'escarapela', plural: true },
           halloween:  { nombre: 'Halloween y Día de la Canción Criolla', rango: (y) => [dia(y, 10, 17), dia(y, 10, 31), dia(y, 10, 31)], base: ['#f28c3e', '#b4541a'], efectos: ['murcielagos'], insignia: 'calabaza' },
-          navidad:    { nombre: 'Navidad', rango: (y) => [dia(y, 12, 8), dia(y, 12, 26), dia(y, 12, 25)], base: ['#e0606f', '#a8323f'], efectos: ['guirnalda', 'nieve'], insignia: 'esfera' },
+          navidad:    { nombre: 'Navidad', rango: (y) => [dia(y, 12, 11), dia(y, 12, 26), dia(y, 12, 25)], base: ['#e0606f', '#a8323f'], efectos: ['guirnalda', 'nieve'], insignia: 'esfera' },
         };
+        const ANTICIPACION = 14;                                             // días: ninguna fiesta se anuncia antes
         let forzada = null;                                                   // pruebas y vista previa: id o 'no'
         // Fiesta activa: si se cruzan dos rangos, la de fecha más cercana (a igual distancia, la que viene)
         function deHoy(op = {}) {
@@ -9884,7 +9885,7 @@ async function maybeAutoStartTour() {
           if (q && FIESTAS[q]) { const F = FIESTAS[q]; let [, b, d] = F.rango(y); if (b < hoy) [, , d] = F.rango(y + 1); return { id: q, ...F, dia: d, hoy }; }
           let mejor = null;
           for (const [id, F] of Object.entries(FIESTAS)) for (const yy of [y, y + 1]) {
-            const [a, b, d] = F.rango(yy); if (hoy < a || hoy > b) continue;
+            const [a, b, d] = F.rango(yy); if (hoy < a || hoy < sumar(d, -ANTICIPACION) || hoy > b) continue;
             const dist = Math.abs(d - hoy) / 864e5 + (d < hoy ? 0.5 : 0);
             if (!mejor || dist < mejor.dist) mejor = { id, ...F, dia: d, hoy, dist };
           }
