@@ -94,6 +94,7 @@ El Programa de Producción no trae "una fecha por celda" de forma simple. Hay do
 - Una fila con etiquetas de semana tipo `S37`, `S38`... (formato corto).
 - Debajo, una fila de encabezados de columna (día de la semana implícito por posición: offset 0 = lunes, offset 6 = domingo).
 - La fecha real de cada columna se **reconstruye matemáticamente**: `isoWeekMonday(37) + offset días`, no se lee un valor de fecha literal de la celda.
+- **Formato S43/2026 en adelante**: la mayoría de hojas ya no tienen columna `CODIGO`; el código viene en `PRODUCTO` y la descripción en `NOMBRE`. `findProductionHeaderRowIndex` solo usa la fila `PRODUCTO` + `NOMBRE` si ninguna fila tiene `CODIGO` (así el formato anterior se lee igual). En BEB, SEL, PV1-x, CARB, CEFA y ORA-SOL-CAP las fechas vienen en la misma fila de encabezados y la etiqueta `S43` dos filas arriba: la fila `S..` se busca hasta 4 filas arriba y la fila de días se elige por conteo de celdas de día (la siguiente, salvo que la de encabezados tenga más).
 
 **Planta LIMA (`planta1Format = false`)** — `buildDateColumnMap()` (línea ~4400), con dos variantes que se auto-detectan:
 - **Formato nuevo**: las fechas vienen como objetos `Date` reales, directamente en la fila de "Código" o en la siguiente.
@@ -105,7 +106,8 @@ El Programa de Producción no trae "una fecha por celda" de forma simple. Hay do
 ### 3.3 Filtrado de filas que no son "producción real"
 
 - `containsExcludedTermPlanta1` / `containsExcludedTermPlanta2` (línea ~4152): celdas cuyo contenido es un término como `LIMP`, `VAL`, `SETUP`, `MTTO` (ATE) o `MMTO`, `MTO`, `MAN` (LIMA) se ignoran — no cuentan como fecha programada aunque estén dentro del rango de columnas de fecha.
-- Ciertas hojas completas se excluyen según la planta: `REA` se excluye solo en Planta LIMA; `SOP BEB`, `SOP P1`, `SOP P2` se excluyen solo en Planta ATE.
+- Ciertas hojas completas se excluyen según la planta: `REA` se excluye solo en Planta LIMA; `SOP BEB`, `SOP P1`, `SOP P2` (desde la S43/2026 `SOPLADO FCO P1` / `SOPLADO FCO P2`) se excluyen solo en Planta ATE.
+- Filas y columnas ocultas se ignoran (`getHiddenRowSet` / `getHiddenColSet`); para eso el Programa de Producción se lee con `cellStyles: true`, sin lo cual SheetJS no informa qué está oculto.
 - El código de material debe matchear `^[56]\d{9}$` (10 dígitos, empieza con 5 o 6) — cualquier otra cosa en la columna "Código" se descarta.
 - `filtrarFechasFuturas()` → `isDentroDeVentanaProduccion()` — solo se conservan fechas desde el **lunes de la semana actual**; lo programado solo en semanas anteriores se descarta como si ya no aplicara.
 - **Semanas sin año** (`buildDateColumnMap`): algunas hojas de Planta LIMA (MENT, SEM, COS) traen el historial de todo el año, desde "SEMANA N° 45" del año anterior hasta la semana actual, con "SEMANA N° 53/54/55" en el cambio de año y números de día sueltos. El número de semana no dice el año y un bloque viejo caía en el año actual o el siguiente (caso real: el bloque "N° 53" de fin de 2025 terminaba en 01/01/2027 y MENTHOLATUM 6000003525 aparecía programado a futuro). Ahora el número de día del encabezado desambigua: si no coincide con la fecha reconstruida y sí con la misma semana un año antes (o después), se usa esa. Comprobado contra una lectura independiente en Python de ambos programas: mismos productos por hoja.

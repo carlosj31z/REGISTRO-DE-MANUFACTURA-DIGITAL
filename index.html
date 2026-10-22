@@ -4159,11 +4159,27 @@ let gooeyActiveIndex = 1; // arranca en "produccion" (pestaña activa por defect
         // ==================== PRODUCCIÓN MODULE (con soporte para planta 1 y planta 2) ====================
         // Busca en las primeras filas de la hoja cuál contiene "CODIGO"/"CÓDIGO".
 // Devuelve el índice (0-based) de esa fila, o -1 si no se encuentra.
+//
+// Respaldo (formato de Planta ATE desde la S43/2026): esas hojas ya no
+// tienen columna "CODIGO" — el código de material viene en la columna
+// "PRODUCTO" y la descripción en "NOMBRE" (o "DESCRIPCION"). Solo si
+// ninguna fila tiene "CODIGO" se acepta como encabezado una fila con una
+// celda exactamente "PRODUCTO" y otra exactamente "NOMBRE"/"DESCRIPCION",
+// así los archivos con el formato anterior se leen igual que siempre.
+const RE_HEADER_PRODUCTO = /^\s*producto\s*$/i;
+const RE_HEADER_NOMBRE = /^\s*(nombre|descripci[oó]n)\s*$/i;
 function findProductionHeaderRowIndex(rows, maxScanRows = 12) {
     const limit = Math.min(rows.length, maxScanRows);
     for (let i = 0; i < limit; i++) {
         const row = rows[i] || [];
         if (row.some(cell => cell && /c[oó]digo/i.test(String(cell)))) {
+            return i;
+        }
+    }
+    for (let i = 0; i < limit; i++) {
+        const row = rows[i] || [];
+        if (row.some(cell => RE_HEADER_PRODUCTO.test(String(cell || ''))) &&
+            row.some(cell => RE_HEADER_NOMBRE.test(String(cell || '')))) {
             return i;
         }
     }
@@ -4560,7 +4576,12 @@ function buildDateColumnMapPlanta1(headerRow, weekLabelRow, hiddenCols) {
             reader.onload = async (ev) => {
                 try {
                     const data = new Uint8Array(ev.target.result);
-                    const wb = XLSX.read(data, { type: 'array', cellDates: true });
+                    // cellStyles: sin esta opción SheetJS no llena '!rows' /
+                    // '!cols', y getHiddenRowSet/getHiddenColSet nunca veían
+                    // las filas y columnas ocultas (caso real, ATE S43/2026:
+                    // filas ocultas con "anular" en PEQUEÑO VOLUMEN 2 y
+                    // LIQ-L5-STRUNK se contaban como producción).
+                    const wb = XLSX.read(data, { type: 'array', cellDates: true, cellStyles: true });
                     const pmap = new Map();
                     const areasDeEstaCarga = new Set();
 
@@ -4575,8 +4596,10 @@ function buildDateColumnMapPlanta1(headerRow, weekLabelRow, hiddenCols) {
 
     // Excluir las áreas SOP BEB, SOP P1 y SOP P2 solo para Planta ATE (no
     // corresponden a producción real, se excluyen del cálculo completo:
-    // calendario, KPIs, gráficos, validación RMD y resumen).
-    const PLANTA1_AREAS_EXCLUIDAS = ['SOP BEB', 'SOP P1', 'SOP P2'];
+    // calendario, KPIs, gráficos, validación RMD y resumen). Desde la
+    // S43/2026 las pestañas SOP P1 / SOP P2 se llaman "SOPLADO FCO P1" /
+    // "SOPLADO FCO P2".
+    const PLANTA1_AREAS_EXCLUIDAS = ['SOP BEB', 'SOP P1', 'SOP P2', 'SOPLADO FCO P1', 'SOPLADO FCO P2'];
     if (plantaObjetivo === 'planta1' && PLANTA1_AREAS_EXCLUIDAS.includes(sn.trim().toUpperCase())) return;
 
     const hiddenRows = getHiddenRowSet(sh);
@@ -4593,10 +4616,38 @@ function buildDateColumnMapPlanta1(headerRow, weekLabelRow, hiddenCols) {
     let weekLabelRow, headerRow, headerRowIdx;
  
     if (planta1Format) {
-        // Formato Planta ATE: fila "SEM" arriba, fila CODIGO, y una fila aparte
-        // debajo con los números de día. Se mantiene el comportamiento original.
-        weekLabelRow = rows[labelRowIdx - 1] || [];
-        headerRowIdx = labelRowIdx + 1;
+        // Formato Planta ATE anterior: fila "S43" justo arriba, fila CODIGO,
+        // y una fila aparte debajo con los números de día.
+        //
+        // Formato S43/2026 en adelante, según la hoja:
+        // - LIQ, GRAN VOLUMEN, SOPLADO: igual que el anterior (fila "S43",
+        //   fila de encabezados, fila de números de día debajo).
+        // - BEB, SEL, PV1-x, CARB, CEFA, ORA-SOL-CAP: fila "S43", una fila
+        //   intermedia con L/M/M/J/V/S/D, y las fechas (objetos Date) en la
+        //   MISMA fila que los encabezados; la fila siguiente ya es dato.
+        // Por eso la fila "S.." se busca hacia arriba (hasta 4 filas) y la
+        // fila de días se elige contando celdas con pinta de día (número
+        // 1-31 o fecha real): la siguiente, como siempre, salvo que la
+        // propia fila de encabezados tenga más.
+        const esEtiquetaSemanaCorta = (c) => /^S\d{1,2}$/i.test(String(c || '').trim());
+        let weekLabelRowIdx = labelRowIdx - 1;
+        for (let i = labelRowIdx - 1; i >= Math.max(0, labelRowIdx - 4); i--) {
+            if ((rows[i] || []).some(esEtiquetaSemanaCorta)) { weekLabelRowIdx = i; break; }
+        }
+        weekLabelRow = rows[weekLabelRowIdx] || [];
+
+        const scoreCeldasDeDia = (row) => {
+            if (!row) return 0;
+            let c = 0;
+            row.forEach((v, i) => {
+                if (hiddenColsForRow.has(i)) return;
+                if (v instanceof Date || (typeof v === 'number' && Number.isInteger(v) && v >= 1 && v <= 31)) c++;
+            });
+            return c;
+        };
+        const sameRowScore = scoreCeldasDeDia(rows[labelRowIdx]);
+        const nextRowScore = scoreCeldasDeDia(rows[labelRowIdx + 1]);
+        headerRowIdx = (sameRowScore > nextRowScore) ? labelRowIdx : (labelRowIdx + 1);
         headerRow = rows[headerRowIdx] || [];
     } else {
         // Formato Planta LIMA: las fechas pueden venir en la MISMA fila que
@@ -4661,12 +4712,16 @@ function buildDateColumnMapPlanta1(headerRow, weekLabelRow, hiddenCols) {
         if (idx === -1) idx = headerRow.findIndex((h, i) => !hiddenColsForRow.has(i) && regex.test(String(h || '')));
         return idx;
     };
-    const codigoColIdx = findLabelCol(/c[oó]digo/i);
+    // Sin columna "CODIGO" (formato ATE S43/2026), el código viene en
+    // "PRODUCTO" y la descripción en "NOMBRE"/"DESCRIPCION".
+    let codigoColIdx = findLabelCol(/c[oó]digo/i);
+    const codigoEnColumnaProducto = codigoColIdx === -1;
+    if (codigoEnColumnaProducto) codigoColIdx = findLabelCol(RE_HEADER_PRODUCTO);
     if (codigoColIdx === -1) return;
- 
+
     areasDeEstaCarga.add(sn);
- 
-    let productoColIdx = findLabelCol(/produc/i);
+
+    let productoColIdx = codigoEnColumnaProducto ? findLabelCol(RE_HEADER_NOMBRE) : findLabelCol(/produc/i);
     if (productoColIdx === -1) productoColIdx = findLabelCol(/descripci/i);
  
     const dateColMap = planta1Format
