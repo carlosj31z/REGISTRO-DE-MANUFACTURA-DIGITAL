@@ -238,9 +238,9 @@ Los Excel de origen escriben la etapa con texto libre y variable (ej. "Acondicio
 En la tabla, cada etapa pendiente de un producto tiene un `<select>` de **Estatus** (línea ~5357):
 
 ```js
-const ESTATUS_ETAPA_OPCIONES = ['PENDIENTE-PRO', 'POR INGRESAR', 'FLUJO SAP', 'PEND RMD OFICIAL', 'PEND CC'];
+const ESTATUS_ETAPA_OPCIONES = ['PENDIENTE-PRO', 'POR INGRESAR', 'FLUJO SAP', 'PEND RMD OFICIAL', 'PEND CC', 'POR AUTORIZAR'];
 const ESTATUS_ETAPA_RESPONSABLE_DEFECTO = {
-  'PENDIENTE-PRO': 'PRO', 'POR INGRESAR': 'DOC', 'FLUJO SAP': 'PRO', 'PEND RMD OFICIAL': 'DOC'
+  'PENDIENTE-PRO': 'PRO', 'POR INGRESAR': 'DOC', 'FLUJO SAP': 'PRO', 'PEND RMD OFICIAL': 'DOC', 'POR AUTORIZAR': 'DOC'
   // 'PEND CC' NO tiene default: es responsabilidad compartida ASC/PRO, el usuario debe elegir a mano
 };
 ```
