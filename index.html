@@ -856,6 +856,7 @@
         .etapa-estatus-select.est-flujo-sap     { background: rgb(var(--plum-rgb) / 0.15); color: rgb(var(--plum-rgb)); }
         .etapa-estatus-select.est-pend-rmd      { background: rgb(var(--danger-rgb) / 0.13); color: rgb(var(--danger-rgb)); }
         .etapa-estatus-select.est-pend-cc       { background: rgb(var(--copper-rgb) / 0.14); color: rgb(var(--copper-rgb)); }
+        .etapa-estatus-select.est-por-autorizar { background: rgb(var(--ok-rgb) / 0.14); color: rgb(var(--ok-rgb)); }
         .etapa-estatus-select[class*="est-"] { font-weight: 600; }
         .etapa-estatus-select option { color: var(--field-text); background: var(--surface-2); font-weight: 400; }
 
@@ -869,6 +870,7 @@
         .etapa-estatus-select.est-flujo-sap     { border-left: 3px solid rgb(var(--plum-rgb)); }
         .etapa-estatus-select.est-pend-rmd      { border-left: 3px solid rgb(var(--danger-rgb)); }
         .etapa-estatus-select.est-pend-cc       { border-left: 3px solid rgb(var(--copper-rgb)); }
+        .etapa-estatus-select.est-por-autorizar { border-left: 3px solid rgb(var(--ok-rgb)); }
 
         .etapa-estatus-select {
             background: var(--field-bg);
@@ -2048,7 +2050,7 @@
                         <option value="">Antigüedad: todas</option><option value="le7">Hasta 7 días</option><option value="gt7">Más de 7 días</option><option value="gt30">Más de 30 días</option><option value="gt90">Más de 90 días</option>
                     </select>
                     <select id="filtroEstatusProd" onchange="setFiltroEtapa('produccion','estatus',this.value)" class="field-input filtro-etapa-select" title="Estatus elegido en la etapa pendiente (PEND CC, POR INGRESAR…); &quot;Sin estatus&quot;: etapas pendientes a las que aún no se les asignó" aria-label="Filtrar por estatus de la etapa">
-                        <option value="">Estatus: todos</option><option value="PENDIENTE-PRO">PENDIENTE-PRO</option><option value="POR INGRESAR">POR INGRESAR</option><option value="FLUJO SAP">FLUJO SAP</option><option value="PEND RMD OFICIAL">PEND RMD OFICIAL</option><option value="PEND CC">PEND CC</option><option value="SIN ESTATUS">Sin estatus</option>
+                        <option value="">Estatus: todos</option><option value="PENDIENTE-PRO">PENDIENTE-PRO</option><option value="POR INGRESAR">POR INGRESAR</option><option value="FLUJO SAP">FLUJO SAP</option><option value="PEND RMD OFICIAL">PEND RMD OFICIAL</option><option value="PEND CC">PEND CC</option><option value="POR AUTORIZAR">POR AUTORIZAR</option><option value="SIN ESTATUS">Sin estatus</option>
                     </select>
                     <button type="button" id="filtrosEtapaLimpiarProd" onclick="limpiarFiltrosEtapa('produccion')" class="filtro-etapa-limpiar" style="display:none;">Quitar filtros</button>
                 </div>
@@ -2330,7 +2332,7 @@
                         <option value="">Antigüedad: todas</option><option value="le7">Hasta 7 días</option><option value="gt7">Más de 7 días</option><option value="gt30">Más de 30 días</option><option value="gt90">Más de 90 días</option>
                     </select>
                     <select id="filtroEstatusForecast" onchange="setFiltroEtapa('forecast','estatus',this.value)" class="field-input filtro-etapa-select" title="Estatus elegido en la etapa pendiente (PEND CC, POR INGRESAR…); &quot;Sin estatus&quot;: etapas pendientes a las que aún no se les asignó" aria-label="Filtrar por estatus de la etapa">
-                        <option value="">Estatus: todos</option><option value="PENDIENTE-PRO">PENDIENTE-PRO</option><option value="POR INGRESAR">POR INGRESAR</option><option value="FLUJO SAP">FLUJO SAP</option><option value="PEND RMD OFICIAL">PEND RMD OFICIAL</option><option value="PEND CC">PEND CC</option><option value="SIN ESTATUS">Sin estatus</option>
+                        <option value="">Estatus: todos</option><option value="PENDIENTE-PRO">PENDIENTE-PRO</option><option value="POR INGRESAR">POR INGRESAR</option><option value="FLUJO SAP">FLUJO SAP</option><option value="PEND RMD OFICIAL">PEND RMD OFICIAL</option><option value="PEND CC">PEND CC</option><option value="POR AUTORIZAR">POR AUTORIZAR</option><option value="SIN ESTATUS">Sin estatus</option>
                     </select>
                     <button type="button" id="filtrosEtapaLimpiarForecast" onclick="limpiarFiltrosEtapa('forecast')" class="filtro-etapa-limpiar" style="display:none;">Quitar filtros</button>
                 </div>
@@ -5456,7 +5458,7 @@ function buildDateColumnMapPlanta1(headerRow, weekLabelRow, hiddenCols) {
         // RMD — es un selector propio de Producción/Forecast, con la misma
         // lista de opciones y responsable por defecto que se usa allá, pero
         // totalmente independiente y editable en cada etapa.
-        const ESTATUS_ETAPA_OPCIONES = ['PENDIENTE-PRO', 'POR INGRESAR', 'FLUJO SAP', 'PEND RMD OFICIAL', 'PEND CC'];
+        const ESTATUS_ETAPA_OPCIONES = ['PENDIENTE-PRO', 'POR INGRESAR', 'FLUJO SAP', 'PEND RMD OFICIAL', 'PEND CC', 'POR AUTORIZAR'];
 
         // Devuelve la clase CSS que pinta la barra lateral de color del
         // selector de Estatus, según la actividad elegida — así se puede
@@ -5469,6 +5471,7 @@ function buildDateColumnMapPlanta1(headerRow, weekLabelRow, hiddenCols) {
                 case 'FLUJO SAP': return 'est-flujo-sap';
                 case 'PEND RMD OFICIAL': return 'est-pend-rmd';
                 case 'PEND CC': return 'est-pend-cc';
+                case 'POR AUTORIZAR': return 'est-por-autorizar';
                 default: return '';
             }
         }
@@ -5483,7 +5486,8 @@ function buildDateColumnMapPlanta1(headerRow, weekLabelRow, hiddenCols) {
             'PENDIENTE-PRO': 'PRO',
             'POR INGRESAR': 'DOC',
             'FLUJO SAP': 'PRO',
-            'PEND RMD OFICIAL': 'DOC'
+            'PEND RMD OFICIAL': 'DOC',
+            'POR AUTORIZAR': 'DOC'
         };
         // Map<"material::etapaFija", estatus>, misma clave que responsablesEtapa.
         let estatusEtapa = new Map();
@@ -7720,6 +7724,7 @@ pendientes.forEach(p => {
             actFlujoSapTexto: '5B21B6', actFlujoSapFondo: 'EDE9FE',
             actPendRmdOficialTexto: '9D174D', actPendRmdOficialFondo: 'FCE7F3',
             actPendCcTexto: 'B45309', actPendCcFondo: 'FFEDD5',
+            actPorAutorizarTexto: '0F766E', actPorAutorizarFondo: 'CCFBF1',
             actNoAplicaTexto: '6B7280', actNoAplicaFondo: 'F3F4F6',
             totalFondo: 'E5E7EB'
         };
@@ -7786,6 +7791,7 @@ pendientes.forEach(p => {
                         else if (valorCelda === 'FLUJO SAP') { s.font.color = { rgb: MACRO_COLOR.actFlujoSapTexto }; s.fill = { patternType: 'solid', fgColor: { rgb: MACRO_COLOR.actFlujoSapFondo } }; }
                         else if (valorCelda === 'PEND RMD OFICIAL') { s.font.color = { rgb: MACRO_COLOR.actPendRmdOficialTexto }; s.fill = { patternType: 'solid', fgColor: { rgb: MACRO_COLOR.actPendRmdOficialFondo } }; }
                         else if (valorCelda === 'PEND CC') { s.font.color = { rgb: MACRO_COLOR.actPendCcTexto }; s.fill = { patternType: 'solid', fgColor: { rgb: MACRO_COLOR.actPendCcFondo } }; }
+                        else if (valorCelda === 'POR AUTORIZAR') { s.font.color = { rgb: MACRO_COLOR.actPorAutorizarTexto }; s.fill = { patternType: 'solid', fgColor: { rgb: MACRO_COLOR.actPorAutorizarFondo } }; }
                         else if (valorCelda === 'NO APLICA') { s.font.color = { rgb: MACRO_COLOR.actNoAplicaTexto }; s.fill = { patternType: 'solid', fgColor: { rgb: MACRO_COLOR.actNoAplicaFondo } }; }
                     } else if (c === colPlantaIdx) {
                         s.alignment.horizontal = 'center';
@@ -7822,7 +7828,7 @@ pendientes.forEach(p => {
         // Excel completa solo para verlo en pantalla.
         function calcularMatrizActividadResponsable(filasObjeto) {
             const ETAPAS = ['FABRICACIÓN', 'RECUBRIMIENTO', 'INSPECCIÓN', 'ENVASE', 'ACONDICIONADO'];
-            const ACTIVIDADES = ['PENDIENTE-PRO', 'POR INGRESAR', 'FLUJO SAP', 'PEND RMD OFICIAL', 'PEND CC'];
+            const ACTIVIDADES = ['PENDIENTE-PRO', 'POR INGRESAR', 'FLUJO SAP', 'PEND RMD OFICIAL', 'PEND CC', 'POR AUTORIZAR'];
             const RESPONSABLES = ['DOC', 'PRO', 'ASC', 'IDE'];
             const matrizActResp = {};
             ACTIVIDADES.forEach(a => { matrizActResp[a] = {}; RESPONSABLES.forEach(r => matrizActResp[a][r] = 0); });
