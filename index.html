@@ -6609,7 +6609,7 @@ async function downloadPlanProduccionFromCloud() {
         }
 
         // ---- OP sin RMD: órdenes de producción de SAP sin RMD autorizado ----
-        // El botón "Enviar a Status RMD" del portal (script ≥ v1.93) trae, junto con el maestro, las órdenes de producción de
+        // El botón "Enviar a Status RMD" del portal (script ≥ v1.95) trae, junto con el maestro, las órdenes de producción de
         // Planta ATE (centro 1020) y Planta LIMA (1021) que inician en los próximos 15 días (sin las cerradas técnicamente),
         // con su versión de fabricación y si ya tienen un RMD abierto. Una orden queda "sin RMD" con la misma regla del
         // engranaje "OP sin RMD" del portal: ningún RMD Autorizado tiene como receta su material CON esa versión de
@@ -6934,7 +6934,7 @@ async function downloadPlanProduccionFromCloud() {
                 Swal.fire({ title: 'Procesando datos de SAP...', html: identidadSap ? `Enviado por <b>${escapeHtmlRmdConfig(identidadSap.usuarioSap.nombre || identidadSap.usuarioSap.email)}</b> desde el portal SAP.` : undefined,
                     allowOutsideClick: false, didOpen: () => Swal.showLoading(), background: '#0f172a' });
                 const rows = filasDesdePuenteSap(msg);
-                // Script v1.93+: las órdenes de producción de ATE y LIMA (OP sin RMD en Producción). Con un script anterior no
+                // Script v1.95+: las órdenes de producción de ATE y LIMA (OP sin RMD en Producción). Con un script anterior no
                 // llegan y se conservan las de la última sincronización.
                 const ops = msg.opSap ? normalizarOpsSap(msg.opSap) : null;
                 if (ops) { opsSap = ops; await storeSet('val_op_sap', ops); }
@@ -7865,7 +7865,7 @@ pendientes.forEach(p => {
             const semaforo = fr ? `\nDatos de SAP del ${dayjs(fr.ultima).format('DD/MM/YYYY HH:mm')} (${fr.haceTxt}). Semáforo: verde hasta ${SEMAFORO_SAP_AMBAR_DESDE_DIAS - 1} días, ámbar de ${SEMAFORO_SAP_AMBAR_DESDE_DIAS} a ${SEMAFORO_SAP_ROJO_DESDE_DIAS - 1} y rojo desde ${SEMAFORO_SAP_ROJO_DESDE_DIAS} días sin sincronizar. Para actualizarlos: "Enviar a Status RMD" desde el portal SAP.` : '';
             const corto = (fr ? `SAP ${dayjs(fr.ultima).format('DD/MM')} · ${fr.haceTxt}` : 'SAP sin fecha') + (rmdPreciso.sinRecetas ? ' · sin recetas' : '');
             const ops = opsSap ? `\nÓrdenes de producción de SAP (OP sin RMD): ${opsSap.ops.length} de ATE y LIMA que inician del ${opsSap.desde ? dayjs(opsSap.desde).format('DD/MM') : '-'} al ${opsSap.hasta ? dayjs(opsSap.hasta).format('DD/MM') : '-'}, leídas el ${opsSap.generado ? dayjs(opsSap.generado).format('DD/MM/YYYY HH:mm') : '-'}.`
-                : '\nSin órdenes de producción de SAP: llegan con "Enviar a Status RMD" (script del portal v1.93 o posterior).';
+                : '\nSin órdenes de producción de SAP: llegan con "Enviar a Status RMD" (script del portal v1.95 o posterior).';
             return { texto: 'Por árbol · ' + corto, corto, title: base + semaforo + ops, color: fr ? fr.color : 'ambar' };
         }
         // Etiquetas junto al botón "Exportado RMD" (Producción y Forecast validan igual): el semáforo.
