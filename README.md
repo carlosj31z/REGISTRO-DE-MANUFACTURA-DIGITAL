@@ -225,7 +225,7 @@ Si antes no había datos, o no se pudo cargar el árbol, lo dice en vez de compa
 
 ### 4.11 OP sin RMD en Producción
 
-El botón **Enviar a Status RMD** del portal (script ≥ v1.93) trae, junto con el maestro (`msg.opSap`), las **órdenes de producción** de Planta ATE (centro 1020) y Planta LIMA (1021) que inician hoy y en los 14 días siguientes, sin las cerradas técnicamente (CTEC): orden, material, versión de fabricación, clase (FABR, ENVS, ACON, REAC…), inicio, fin, lote y, si ya lo tiene, el RMD de la orden. Se guardan en `val_op_sap` (con un script anterior no llegan y se conservan las de la última sincronización).
+El botón **Enviar a Status RMD** del portal (script ≥ v1.95) trae, junto con el maestro (`msg.opSap`), las **órdenes de producción** de Planta ATE (centro 1020) y Planta LIMA (1021) que inician hoy y en los 14 días siguientes, sin las cerradas técnicamente (CTEC): orden, material, versión de fabricación, clase (FABR, ENVS, ACON, REAC…), inicio, fin, lote y, si ya lo tiene, el RMD de la orden. Se guardan en `val_op_sap` (con un script anterior no llegan y se conservan las de la última sincronización).
 
 Una orden queda **sin RMD** con la misma regla del engranaje "OP sin RMD" del portal: ningún RMD **Autorizado** del maestro tiene como receta su material **con esa versión de fabricación**, y la orden todavía no tiene RMD (`opsSinRmdDe`, con el índice `indiceVersionesFab`). Se evalúa con el maestro guardado, así que un Exportado RMD posterior la actualiza; con un maestro sin recetas no se evalúa. Entran las de **reacondicionado** (clase REAC), que no van en el programa y deben estar en un máster genérico de reacondicionado.
 
