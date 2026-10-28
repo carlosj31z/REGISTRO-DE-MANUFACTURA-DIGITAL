@@ -356,3 +356,14 @@ Si vas a tocar Producción, estos son los patrones defensivos que ya están inst
 | Historial de cambios entre cargas | `registrarSnapshotProduccion()` / `renderHistorialTrazabilidadModal()` — línea ~3344–3460 |
 | Exportar a Excel / copiar tabla | `exportPendientesToExcel()` (7992), `copyPendientesToClipboard()` (8256) |
 | Persistencia / sync multi-dispositivo | `storeSet`/`storeGet` (3038), `iniciarSupabaseRealtime()`/`onRemoteKeyChanged()` (3145–3240) |
+
+## 13. Pestaña Acuerdos
+
+Reemplaza los Word «TODAS LAS ETAPAS» y «CAMBIOS DE CALIDAD DE OPERACIONES». Cada acuerdo dice qué paso debe ir en qué sección y etapa del RMD (con Tipo dato, R. Por, V°B° y Estado CC), para qué planta (Planta 1 ATE, Planta 2 LIMA o ambas), con una condición opcional (p. ej. «Solo fase 2») y quién lo pidió.
+
+- **Dónde se guarda:** en Supabase, tabla `rmd_dashboard_kv`, una fila por acuerdo con la key `acuerdo:<id>` (así dos personas editando acuerdos distintos no se pisan). No hace falta crear tablas nuevas. Realtime avisa a las otras PCs y recargan la lista (`Acuerdos.recargarPronto`, llamado desde `onRemoteKeyChanged`). La lista también queda en la caché local (`acuerdos_cache`) por si no hay red.
+- **Quién edita:** la primera vez se pide el nombre y se guarda en `localStorage` (`acuerdos_usuario`). Cada cambio queda en el historial del acuerdo.
+- **Anular en vez de borrar:** un acuerdo anulado deja de aplicarse pero sigue visible en el filtro «Anulados» y se puede reactivar.
+- **Exportar / Importar:** Excel con hojas `Acuerdos`, `Pasos` e `Historial`. Al importar se compara por ID: los nuevos se agregan y los existentes solo se reemplazan si el archivo trae una edición más reciente.
+- **Portal SAP:** el script de mejoras del portal lee las mismas filas `acuerdo:*` para mostrarlas y avisar si un RMD no cumple.
+- Todo el código está en el bloque `const Acuerdos = (() => { … })()` al final de `index.html`.
