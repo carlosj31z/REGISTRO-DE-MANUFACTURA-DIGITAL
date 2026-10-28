@@ -1771,6 +1771,12 @@
                             <span class="gooey-nav-label">Seguimiento RMD</span>
                         </a>
                     </li>
+                    <li class="tab-mini" data-tab="acuerdos" title="Acuerdos">
+                        <a href="#" onclick="return false;">
+                            <svg class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8.5 4.5h-2a1.5 1.5 0 0 0-1.5 1.5v13a1.5 1.5 0 0 0 1.5 1.5h11a1.5 1.5 0 0 0 1.5-1.5V6a1.5 1.5 0 0 0-1.5-1.5h-2"/><rect x="8.5" y="3" width="7" height="3" rx="1"/><path d="M9 12.5l2 2 4-4"/><path d="M9 17h6"/></svg>
+                            <span class="gooey-nav-label">Acuerdos</span>
+                        </a>
+                    </li>
                 </ul>
             </nav>
             <span class="gooey-nav-pill" id="gooeyNavPill"></span>
@@ -2439,6 +2445,49 @@
         <div class="card p-0 opacity-0 overflow-hidden" id="cardSeguimientoRMD" style="height: calc(100vh - 230px); min-height: 560px;">
             <iframe id="iframeSeguimientoRMD" title="Seguimiento RMD" style="width:100%; height:100%; border:0; background:#f3f4f6; border-radius: 1rem; display:block;"></iframe>
         </div>
+    </div>
+
+    <!-- ==================== TAB 5: ACUERDOS ==================== -->
+    <!-- Acuerdos de configuración de RMD (reemplazan los Word «TODAS LAS ETAPAS» y
+         «CAMBIOS DE CALIDAD DE OPERACIONES»). Cada acuerdo se guarda en Supabase
+         (rmd_dashboard_kv, una key «acuerdo:<id>» por acuerdo) para que todos vean
+         lo mismo; el script del portal SAP los lee de ahí. -->
+    <div class="tab-content" id="tab-acuerdos">
+        <div class="card acu-card p-4 md:p-5 opacity-0">
+            <div class="acu-cabecera">
+                <div>
+                    <h2 class="acu-titulo">Acuerdos de configuración de RMD</h2>
+                    <p class="acu-sub">Qué pasos deben ir en cada sección y etapa del RMD. Lo que anotes aquí lo ven todos, y el script del portal avisa si un RMD no lo cumple.</p>
+                </div>
+                <div class="acu-acciones">
+                    <button type="button" class="acu-btn acu-btn-primario" onclick="Acuerdos.nuevo()">+ Nuevo acuerdo</button>
+                    <button type="button" class="acu-btn" onclick="Acuerdos.exportar()" title="Descarga un Excel con todos los acuerdos, para guardarlo o cargarlo en otra PC">Exportar</button>
+                    <button type="button" class="acu-btn" onclick="document.getElementById('acuInputImportar').click()" title="Carga un Excel exportado desde esta pestaña">Importar</button>
+                    <input type="file" id="acuInputImportar" class="hidden" accept=".xlsx,.xls" onchange="Acuerdos.importar(event)">
+                </div>
+            </div>
+            <div class="acu-filtros">
+                <div class="acu-seg" id="acuFiltroPlanta" role="group" aria-label="Planta">
+                    <button type="button" data-v="" class="activo">Todas las plantas</button>
+                    <button type="button" data-v="planta1">Planta 1 ATE</button>
+                    <button type="button" data-v="planta2">Planta 2 LIMA</button>
+                </div>
+                <select id="acuFiltroEtapa" class="acu-campo" aria-label="Etapa">
+                    <option value="">Todas las etapas</option>
+                    <option value="FABRICACION">Fabricación</option>
+                    <option value="ENVASE">Envase</option>
+                    <option value="ACONDICIONADO">Acondicionado</option>
+                </select>
+                <select id="acuFiltroEstado" class="acu-campo" aria-label="Estado">
+                    <option value="vigente">Vigentes</option>
+                    <option value="anulado">Anulados</option>
+                    <option value="">Vigentes y anulados</option>
+                </select>
+                <input type="search" id="acuBuscar" class="acu-campo acu-buscar" placeholder="Buscar por código de paso, sección o texto…" aria-label="Buscar">
+                <span class="acu-cuenta" id="acuCuenta"></span>
+            </div>
+        </div>
+        <div id="acuLista"></div>
     </div>
 
     <!-- Template reutilizable para el módulo Resumen -->
@@ -3206,7 +3255,9 @@ create policy "Acceso con clave anon"
         let recargaManualesTimer = null;
         let recargaDatosValidacionTimer = null;
         async function onRemoteKeyChanged(key) {
-            if (key === 'dashboard_products_rmd') {
+            if (key.startsWith('acuerdo:')) {
+                Acuerdos.recargarPronto();
+            } else if (key === 'dashboard_products_rmd') {
                 const saved = await storeGet('dashboard_products_rmd');
                 productsRMD = saved || [];
                 if (currentTab === 'rmd') updateDashboardRMD();
@@ -3695,9 +3746,9 @@ create policy "Acceso con clave anon"
         // ==================== TAB SWITCHING ====================
         let tabSwitchTimeline = null;
         const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-        const TAB_ORDER = ['produccion', 'forecast', 'rmd', 'seguimiento'];
+        const TAB_ORDER = ['produccion', 'forecast', 'rmd', 'seguimiento', 'acuerdos'];
 // índice de cada pestaña dentro de la lista visual del gooey nav (li[0]=forecast, li[1]=produccion, li[2]=rmd, li[3]=seguimiento)
-const TAB_TO_GOOEY_INDEX = { produccion: 0, forecast: 1, rmd: 2, seguimiento: 3 };
+const TAB_TO_GOOEY_INDEX = { produccion: 0, forecast: 1, rmd: 2, seguimiento: 3, acuerdos: 4 };
 let gooeyActiveIndex = 0; // arranca en "produccion" (pestaña activa por defecto), el primer <li> del nav
 
         function switchTab(tab) {
@@ -3718,7 +3769,8 @@ let gooeyActiveIndex = 0; // arranca en "produccion" (pestaña activa por defect
                 rmd: 'radial-gradient(circle, rgba(59, 130, 246, 0.15) 0%, rgba(139, 92, 246, 0.1) 40%, rgba(0, 0, 0, 0) 70%)',
                 produccion: 'radial-gradient(circle, rgba(16, 185, 129, 0.15) 0%, rgba(59, 130, 246, 0.1) 40%, rgba(0, 0, 0, 0) 70%)',
                 forecast: 'radial-gradient(circle, rgba(244, 63, 94, 0.15) 0%, rgba(249, 115, 22, 0.1) 40%, rgba(0, 0, 0, 0) 70%)',
-                seguimiento: 'radial-gradient(circle, rgba(16, 124, 65, 0.16) 0%, rgba(16, 185, 129, 0.1) 40%, rgba(0, 0, 0, 0) 70%)'
+                seguimiento: 'radial-gradient(circle, rgba(16, 124, 65, 0.16) 0%, rgba(16, 185, 129, 0.1) 40%, rgba(0, 0, 0, 0) 70%)',
+                acuerdos: 'radial-gradient(circle, rgba(160, 123, 187, 0.15) 0%, rgba(224, 168, 156, 0.1) 40%, rgba(0, 0, 0, 0) 70%)'
             };
             const targetGlow = glowByTab[tab] || glowByTab.produccion;
 
@@ -3736,6 +3788,8 @@ let gooeyActiveIndex = 0; // arranca en "produccion" (pestaña activa por defect
                     if (chartForecastMonthly) chartForecastMonthly.resize();
                 } else if (tab === 'seguimiento') {
                     ensureSeguimientoRMDLoaded();
+                } else if (tab === 'acuerdos') {
+                    Acuerdos.alEntrar();
                 }
             };
 
@@ -9718,6 +9772,9 @@ const TOUR_STEPS = [
     // ---- Pestaña Seguimiento RMD ----
     { tab: 'seguimiento', selector: '#cardSeguimientoRMD', title: 'Seguimiento RMD', text: 'Aquí llevas el control de cada RMD: Suspendidos, Ingresados y Autorizados. Carga tu Excel de configuración, edita celdas directamente en la tabla y filtra por planta, sección o estatus.' },
 
+    // ---- Pestaña Acuerdos ----
+    { tab: 'acuerdos', selector: '#tab-acuerdos .acu-card', title: 'Acuerdos', text: 'Los acuerdos de configuración de RMD (qué paso va en qué sección y etapa), por planta o para ambas. Lo que anota uno lo ven todos, y se pueden exportar a Excel e importar en otra PC.' },
+
     // ---- Global ----
     { tab: null, selector: '#supabaseStatusCorner', title: 'Guardado en la nube', text: 'Todos los datos de Forecast, Producción, OP sin RMD y Seguimiento RMD se guardan en Supabase, así que se sincronizan automáticamente entre dispositivos. Este punto muestra si la conexión está activa.' },
     { tab: null, selector: '#historialCorner', title: 'Historial de trazabilidad', text: 'Cada carga o eliminación de un archivo pide tu DNI y queda registrada aquí: fecha, acción y quién la hizo. Escribir ADMIN permite continuar sin quedar registrado.' },
@@ -9798,7 +9855,8 @@ if (activeLi && container && pillEl) {
         rmd: 'radial-gradient(circle, rgba(59, 130, 246, 0.15) 0%, rgba(139, 92, 246, 0.1) 40%, rgba(0, 0, 0, 0) 70%)',
         produccion: 'radial-gradient(circle, rgba(16, 185, 129, 0.15) 0%, rgba(59, 130, 246, 0.1) 40%, rgba(0, 0, 0, 0) 70%)',
         forecast: 'radial-gradient(circle, rgba(244, 63, 94, 0.15) 0%, rgba(249, 115, 22, 0.1) 40%, rgba(0, 0, 0, 0) 70%)',
-        seguimiento: 'radial-gradient(circle, rgba(16, 124, 65, 0.16) 0%, rgba(16, 185, 129, 0.1) 40%, rgba(0, 0, 0, 0) 70%)'
+        seguimiento: 'radial-gradient(circle, rgba(16, 124, 65, 0.16) 0%, rgba(16, 185, 129, 0.1) 40%, rgba(0, 0, 0, 0) 70%)',
+        acuerdos: 'radial-gradient(circle, rgba(160, 123, 187, 0.15) 0%, rgba(224, 168, 156, 0.1) 40%, rgba(0, 0, 0, 0) 70%)'
     };
     if (glowOrb) glowOrb.style.background = glowByTab[tab] || glowByTab.produccion;
 
@@ -9812,6 +9870,8 @@ if (activeLi && container && pillEl) {
         if (chartForecastMonthly) chartForecastMonthly.resize();
     } else if (tab === 'seguimiento') {
         ensureSeguimientoRMDLoaded();
+    } else if (tab === 'acuerdos') {
+        Acuerdos.alEntrar();
     }
     animateCurrentTabCards();
 }
@@ -10560,6 +10620,547 @@ async function maybeAutoStartTour() {
         }
         window.__fiesta = { F, hoy: () => F.deHoy(), guino: (id) => { const f = F.deHoy({ forzada: id || undefined }); if (f) guino(f); } };
         if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', iniciar); else iniciar();
+    })();
+    </script>
+    <style>
+        /* ==================== ACUERDOS ==================== */
+        #tab-acuerdos .acu-cabecera { display:flex; flex-wrap:wrap; gap:12px 20px; align-items:flex-start; justify-content:space-between; }
+        #tab-acuerdos .acu-titulo { font-size:15px; font-weight:650; color:var(--app-text); }
+        #tab-acuerdos .acu-sub { font-size:12px; color:var(--slate-400); margin-top:3px; max-width:62ch; line-height:1.5; }
+        #tab-acuerdos .acu-acciones { display:flex; flex-wrap:wrap; gap:8px; }
+        .acu-btn { font:inherit; font-size:12px; font-weight:600; padding:7px 13px; border-radius:9px; border:1px solid var(--field-border); background:var(--surface-1); color:var(--app-text); cursor:pointer; white-space:nowrap; transition:background .15s, border-color .15s; }
+        .acu-btn:hover { border-color:var(--accent); }
+        .acu-btn:focus-visible { outline:2px solid var(--focus-ring); outline-offset:2px; }
+        .acu-btn-primario { background:var(--accent); border-color:var(--accent); color:var(--accent-ink); }
+        .acu-btn-primario:hover { background:var(--accent-strong); }
+        .acu-btn-mini { font-size:11px; padding:4px 9px; border-radius:7px; }
+        .acu-btn-peligro:hover { border-color:rgb(var(--danger-rgb)); color:rgb(var(--danger-rgb)); }
+        #tab-acuerdos .acu-filtros { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-top:14px; }
+        .acu-campo { font:inherit; font-size:12px; padding:7px 10px; border-radius:9px; border:1px solid var(--field-border); background:var(--field-bg); color:var(--field-text); }
+        .acu-campo:focus { outline:none; border-color:var(--accent); box-shadow:0 0 0 3px var(--focus-ring); }
+        #tab-acuerdos .acu-buscar { flex:1 1 220px; min-width:0; }
+        #tab-acuerdos .acu-cuenta { font-size:11.5px; color:var(--slate-400); margin-left:auto; }
+        .acu-seg { display:inline-flex; border:1px solid var(--field-border); border-radius:9px; overflow:hidden; }
+        .acu-seg button { font:inherit; font-size:12px; padding:7px 11px; background:var(--field-bg); color:var(--slate-300); border:0; cursor:pointer; }
+        .acu-seg button + button { border-left:1px solid var(--field-border); }
+        .acu-seg button.activo { background:var(--nav-pill-bg); color:var(--nav-pill-text); font-weight:600; }
+        #tab-acuerdos .acu-grupo-titulo { font-size:11px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--slate-400); margin:4px 2px 10px; }
+        #tab-acuerdos .acu-item { padding:16px 18px; margin-bottom:12px; }
+        #tab-acuerdos .acu-item.anulado { opacity:.6; }
+        #tab-acuerdos .acu-item-cab { display:flex; flex-wrap:wrap; gap:8px 14px; justify-content:space-between; align-items:flex-start; }
+        #tab-acuerdos .acu-item-titulo { font-size:14px; font-weight:650; color:var(--app-text); }
+        #tab-acuerdos .acu-chips { display:flex; flex-wrap:wrap; gap:6px; margin-top:7px; }
+        .acu-chip { font-size:10.5px; font-weight:650; padding:3px 9px; border-radius:20px; background:var(--surface-1-faint); color:var(--slate-300); border:1px solid var(--card-border); white-space:nowrap; }
+        .acu-chip-planta { background:rgb(var(--info-rgb) / .14); color:rgb(var(--info-rgb)); border-color:transparent; }
+        .acu-chip-tipo { background:rgb(var(--accent-rgb) / .14); color:var(--accent); border-color:transparent; }
+        .acu-chip-cond { background:rgb(var(--copper-rgb) / .14); color:rgb(var(--copper-rgb)); border-color:transparent; }
+        .acu-chip-anulado { background:rgb(var(--danger-rgb) / .14); color:rgb(var(--danger-rgb)); border-color:transparent; }
+        #tab-acuerdos .acu-detalle { font-size:12.5px; color:var(--slate-300); margin-top:10px; line-height:1.55; white-space:pre-wrap; }
+        #tab-acuerdos .acu-item-acc { display:flex; gap:6px; flex-wrap:wrap; }
+        #tab-acuerdos .acu-pie { font-size:10.5px; color:var(--slate-500); margin-top:10px; }
+        .acu-tabla-wrap { overflow-x:auto; margin-top:12px; border:1px solid var(--card-border); border-radius:10px; }
+        .acu-tabla { width:100%; border-collapse:collapse; font-size:12px; }
+        .acu-tabla th { background:var(--table-head-bg); color:var(--slate-400); font-weight:650; font-size:10.5px; text-transform:uppercase; letter-spacing:.04em; text-align:left; padding:8px 10px; white-space:nowrap; }
+        .acu-tabla td { padding:8px 10px; border-top:1px solid var(--card-border); vertical-align:top; color:var(--app-text); }
+        .acu-tabla td.acu-cod { font-family:var(--font-mono, ui-monospace, monospace); font-weight:650; white-space:nowrap; }
+        .acu-tabla td.acu-desc { min-width:260px; line-height:1.45; }
+        .acu-tabla td.acu-chk, .acu-tabla th.acu-chk { text-align:center; width:62px; }
+        .acu-si { color:rgb(var(--ok-rgb)); font-weight:700; }
+        .acu-no { color:var(--slate-500); }
+        .acu-nota-paso { display:block; font-size:11px; color:rgb(var(--copper-rgb)); margin-top:3px; }
+        #tab-acuerdos .acu-vacio { text-align:center; padding:36px 16px; color:var(--slate-400); font-size:13px; }
+        /* Editor (dentro de SweetAlert) */
+        .acu-form { text-align:left; font-size:12.5px; color:var(--slate-300); }
+        .acu-form label { display:block; font-size:11px; font-weight:650; color:var(--slate-400); margin-bottom:4px; }
+        .acu-form .acu-campo { width:100%; box-sizing:border-box; }
+        .acu-form textarea.acu-campo { min-height:64px; resize:vertical; }
+        .acu-form-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(190px, 1fr)); gap:12px; margin-bottom:12px; }
+        .acu-form-checks { display:flex; flex-wrap:wrap; gap:6px 14px; padding-top:6px; }
+        .acu-form-checks label { display:inline-flex; gap:5px; align-items:center; font-size:12px; font-weight:500; color:var(--slate-300); margin:0; }
+        .acu-form .acu-tabla td { padding:5px 6px; }
+        .acu-form .acu-tabla input[type="text"], .acu-form .acu-tabla textarea, .acu-form .acu-tabla select { width:100%; box-sizing:border-box; font-size:11.5px; padding:5px 7px; }
+        .acu-form .acu-tabla textarea { min-height:52px; resize:vertical; }
+        .acu-ayuda { font-size:11px; color:var(--slate-500); margin-top:4px; }
+        @media (max-width: 640px) {
+            #tab-acuerdos .acu-cuenta { margin-left:0; width:100%; }
+            #tab-acuerdos .acu-item { padding:13px; }
+        }
+    </style>
+    <script>
+    // ==================== ACUERDOS ====================
+    // Cada acuerdo vive en Supabase (rmd_dashboard_kv) con la key «acuerdo:<id>»:
+    // una fila por acuerdo para que dos personas editando acuerdos distintos no
+    // se pisen. storeSet/storeRemove (más arriba) ya dejan copia local y
+    // reintentan si no hay red; aquí solo se agrega la lectura de todas las
+    // filas «acuerdo:*» y la caché de esa lista.
+    const Acuerdos = (() => {
+        const PREFIJO = 'acuerdo:';
+        const CACHE_KEY = 'acuerdos_cache';
+        const PLANTAS = { ambas: 'Ambas plantas', planta1: 'Planta 1 ATE', planta2: 'Planta 2 LIMA' };
+        const ETAPAS = { FABRICACION: 'Fabricación', ENVASE: 'Envase', ACONDICIONADO: 'Acondicionado' };
+        const TIPOS = { agregar: 'Agregar paso', reemplazar: 'Reemplazar paso', configurar: 'Configurar paso', quitar: 'Quitar paso', nota: 'Indicación' };
+        const SECCIONES = ['PRECAUCIONES', 'NOTAS IMPORTANTES', 'PROCEDIMIENTO', 'CONTROL DE PROCESO', 'ENTREGA'];
+        const TIPOS_DATO = ['', 'Múltiple', 'Realizado por', 'Visto bueno', 'Texto', 'Numérico', 'Fecha'];
+        let lista = [];
+        let cargado = false;
+        let recargaTimer = null;
+
+        const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+        const ahora = () => new Date().toISOString();
+        const nuevoId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+        const fechaTxt = (iso) => iso ? dayjs(iso).format('DD/MM/YYYY') : '';
+        const fechaHoraTxt = (iso) => iso ? dayjs(iso).format('DD/MM/YYYY HH:mm') : '';
+        const swalBase = () => {
+            const claro = document.documentElement.getAttribute('data-theme') === 'light';
+            return { background: claro ? '#fbfaf6' : '#0f172a', color: claro ? '#12161e' : '#f8fafc' };
+        };
+
+        function usuario() {
+            try { return localStorage.getItem('acuerdos_usuario') || ''; } catch (e) { return ''; }
+        }
+        async function pedirUsuario() {
+            let u = usuario();
+            if (u) return u;
+            const r = await Swal.fire(Object.assign(swalBase(), {
+                title: '¿Cómo te llamas?',
+                text: 'Se guarda junto al acuerdo para saber quién lo registró. Solo se pregunta una vez en esta PC.',
+                input: 'text', inputPlaceholder: 'Nombre y apellido',
+                showCancelButton: true, confirmButtonText: 'Continuar', cancelButtonText: 'Cancelar',
+                inputValidator: (v) => (!v || !v.trim()) ? 'Escribe tu nombre' : undefined
+            }));
+            if (!r.isConfirmed) return '';
+            u = r.value.trim();
+            try { localStorage.setItem('acuerdos_usuario', u); } catch (e) { /* best effort */ }
+            return u;
+        }
+
+        function normalizar(a) {
+            a = Object.assign({}, a || {});
+            a.id = String(a.id || nuevoId());
+            a.titulo = String(a.titulo || '').trim();
+            a.planta = PLANTAS[a.planta] ? a.planta : 'ambas';
+            a.etapas = (Array.isArray(a.etapas) ? a.etapas : String(a.etapas || '').split(/[,;]/)).map((e) => String(e).trim().toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g, '')).filter((e) => ETAPAS[e]);
+            a.seccion = String(a.seccion || '').trim().toUpperCase();
+            a.condicion = String(a.condicion || '').trim();
+            a.faseDesde = Math.max(0, Math.min(9, parseInt(a.faseDesde, 10) || 0));   // 0 = cualquier fase; 2 = fase 2, 2R y siguientes
+            a.tipo = TIPOS[a.tipo] ? a.tipo : 'agregar';
+            a.detalle = String(a.detalle || '').trim();
+            a.area = String(a.area || '').trim();
+            a.vigenteDesde = a.vigenteDesde ? String(a.vigenteDesde).slice(0, 10) : '';
+            a.estado = a.estado === 'anulado' ? 'anulado' : 'vigente';
+            a.pasos = (Array.isArray(a.pasos) ? a.pasos : []).map((p) => ({
+                codigo: String(p.codigo == null ? '' : p.codigo).trim(),
+                descripcion: String(p.descripcion || '').trim(),
+                etapa: ETAPAS[String(p.etapa || '').toUpperCase()] ? String(p.etapa).toUpperCase() : '',
+                tipoDato: String(p.tipoDato || '').trim(),
+                rPor: !!p.rPor, vb: !!p.vb, estadoCC: !!p.estadoCC,
+                nota: String(p.nota || '').trim()
+            })).filter((p) => p.codigo || p.descripcion);
+            a.historial = Array.isArray(a.historial) ? a.historial : [];
+            a.creadoEn = a.creadoEn || ahora();
+            a.actualizadoEn = a.actualizadoEn || a.creadoEn;
+            return a;
+        }
+
+        // ---------- Datos ----------
+        async function leerTodos() {
+            try {
+                const res = await fetch(`${SUPABASE_URL}/rest/v1/${SUPABASE_KV_TABLE}?key=like.${encodeURIComponent(PREFIJO + '*')}&select=key,value`, {
+                    headers: supabaseHeaders({ 'Accept': 'application/json' })
+                });
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                const rows = await res.json();
+                supabaseKvReachable = true;
+                actualizarIndicadorSupabase();
+                const out = rows.map((r) => r.value).filter(Boolean).map(normalizar);
+                // Lo que quedó guardado solo en esta PC (sin red al guardar) todavía no está en Supabase.
+                let pend = [];
+                try { pend = (await dbStore.getItem('__pending_kv_keys__')) || []; } catch (e) { /* sin caché */ }
+                for (const k of pend.filter((k) => k.startsWith(PREFIJO))) {
+                    const v = await dbStore.getItem(k).catch(() => null);
+                    if (v && !out.some((a) => a.id === v.id)) out.push(normalizar(v));
+                }
+                try { await dbStore.setItem(CACHE_KEY, out); } catch (e) { /* caché no crítica */ }
+                return out;
+            } catch (err) {
+                console.error('Acuerdos: Supabase no responde, usando copia local', err);
+                supabaseKvReachable = false;
+                actualizarIndicadorSupabase();
+                try { return ((await dbStore.getItem(CACHE_KEY)) || []).map(normalizar); } catch (e) { return []; }
+            }
+        }
+
+        async function guardar(a, accion) {
+            const u = await pedirUsuario();
+            if (!u) return false;
+            a = normalizar(a);
+            if (!a.creadoPor) a.creadoPor = u;
+            a.actualizadoPor = u;
+            a.actualizadoEn = ahora();
+            a.historial = a.historial.concat([{ fecha: a.actualizadoEn, por: u, accion }]).slice(-50);
+            await storeSet(PREFIJO + a.id, a);
+            const i = lista.findIndex((x) => x.id === a.id);
+            if (i >= 0) lista[i] = a; else lista.push(a);
+            try { await dbStore.setItem(CACHE_KEY, lista); } catch (e) { /* caché no crítica */ }
+            render();
+            return true;
+        }
+
+        async function cargar() {
+            lista = await leerTodos();
+            cargado = true;
+            render();
+        }
+
+        // Llamado desde onRemoteKeyChanged cuando otra PC cambia un acuerdo.
+        function recargarPronto() {
+            clearTimeout(recargaTimer);
+            recargaTimer = setTimeout(() => { if (cargado) cargar(); }, 800);
+        }
+
+        // ---------- Vista ----------
+        let filtroPlanta = '';
+        function filtrados() {
+            const etapa = document.getElementById('acuFiltroEtapa').value;
+            const estado = document.getElementById('acuFiltroEstado').value;
+            const q = document.getElementById('acuBuscar').value.trim().toLowerCase();
+            return lista.filter((a) => {
+                if (filtroPlanta && a.planta !== 'ambas' && a.planta !== filtroPlanta) return false;
+                if (etapa && a.etapas.length && !a.etapas.includes(etapa)) return false;
+                if (estado && a.estado !== estado) return false;
+                if (q) {
+                    const txt = [a.titulo, a.seccion, a.condicion, a.detalle, a.area, ...a.pasos.map((p) => p.codigo + ' ' + p.descripcion + ' ' + p.nota)].join(' ').toLowerCase();
+                    if (!txt.includes(q)) return false;
+                }
+                return true;
+            });
+        }
+
+        function marca(v) { return v ? '<span class="acu-si" aria-label="Sí">✓</span>' : '<span class="acu-no" aria-label="No">—</span>'; }
+
+        function htmlItem(a) {
+            const etapasTxt = a.etapas.length ? a.etapas.map((e) => ETAPAS[e]).join(', ') : 'Todas las etapas';
+            const conEtapa = a.pasos.some((p) => p.etapa);
+            const pasos = a.pasos.length ? `<div class="acu-tabla-wrap"><table class="acu-tabla"><thead><tr>
+                    <th>Código</th><th>Descripción del paso</th>${conEtapa ? '<th>Etapa</th>' : ''}<th>Tipo dato</th>
+                    <th class="acu-chk">R. Por</th><th class="acu-chk">V°B°</th><th class="acu-chk">Estado CC</th></tr></thead><tbody>
+                ${a.pasos.map((p) => `<tr><td class="acu-cod">${esc(p.codigo)}</td>
+                    <td class="acu-desc">${esc(p.descripcion)}${p.nota ? `<span class="acu-nota-paso">${esc(p.nota)}</span>` : ''}</td>
+                    ${conEtapa ? `<td>${esc(ETAPAS[p.etapa] || '')}</td>` : ''}
+                    <td>${esc(p.tipoDato)}</td><td class="acu-chk">${marca(p.rPor)}</td><td class="acu-chk">${marca(p.vb)}</td><td class="acu-chk">${marca(p.estadoCC)}</td></tr>`).join('')}
+                </tbody></table></div>` : '';
+            const pie = [a.area ? 'Pedido por ' + a.area : '', a.vigenteDesde ? 'Vigente desde ' + fechaTxt(a.vigenteDesde) : '',
+                a.actualizadoPor ? `Última edición: ${a.actualizadoPor}, ${fechaHoraTxt(a.actualizadoEn)}` : ''].filter(Boolean).join(' · ');
+            return `<div class="card acu-item${a.estado === 'anulado' ? ' anulado' : ''}" data-id="${esc(a.id)}">
+                <div class="acu-item-cab">
+                    <div style="min-width:0;flex:1 1 320px;">
+                        <div class="acu-item-titulo">${esc(a.titulo || (a.seccion ? a.seccion : 'Acuerdo sin título'))}</div>
+                        <div class="acu-chips">
+                            <span class="acu-chip acu-chip-planta">${esc(PLANTAS[a.planta])}</span>
+                            <span class="acu-chip">${esc(etapasTxt)}</span>
+                            ${a.seccion ? `<span class="acu-chip">Sección: ${esc(a.seccion)}</span>` : ''}
+                            <span class="acu-chip acu-chip-tipo">${esc(TIPOS[a.tipo])}</span>
+                            ${a.faseDesde ? `<span class="acu-chip acu-chip-cond" title="Aplica cuando la fase del RMD (1.ª línea de Observaciones) es ${a.faseDesde} o mayor, con o sin R">Desde fase ${a.faseDesde} (incluye ${a.faseDesde}R)</span>` : ''}
+                            ${a.condicion ? `<span class="acu-chip acu-chip-cond">${esc(a.condicion)}</span>` : ''}
+                            ${a.estado === 'anulado' ? '<span class="acu-chip acu-chip-anulado">Anulado</span>' : ''}
+                        </div>
+                    </div>
+                    <div class="acu-item-acc">
+                        <button type="button" class="acu-btn acu-btn-mini" onclick="Acuerdos.editar('${esc(a.id)}')">Editar</button>
+                        <button type="button" class="acu-btn acu-btn-mini" onclick="Acuerdos.historial('${esc(a.id)}')">Historial</button>
+                        <button type="button" class="acu-btn acu-btn-mini acu-btn-peligro" onclick="Acuerdos.cambiarEstado('${esc(a.id)}')">${a.estado === 'anulado' ? 'Reactivar' : 'Anular'}</button>
+                    </div>
+                </div>
+                ${a.detalle ? `<div class="acu-detalle">${esc(a.detalle)}</div>` : ''}
+                ${pasos}
+                ${pie ? `<div class="acu-pie">${esc(pie)}</div>` : ''}
+            </div>`;
+        }
+
+        function render() {
+            const cont = document.getElementById('acuLista');
+            if (!cont) return;
+            const fl = filtrados();
+            const vigentes = lista.filter((a) => a.estado === 'vigente').length;
+            document.getElementById('acuCuenta').textContent = cargado ? `${fl.length} de ${lista.length} acuerdos · ${vigentes} vigentes` : 'Cargando…';
+            if (!cargado) { cont.innerHTML = '<div class="card acu-vacio">Cargando acuerdos…</div>'; return; }
+            if (!lista.length) {
+                cont.innerHTML = `<div class="card acu-vacio">Todavía no hay acuerdos registrados.<br><br>
+                    <button type="button" class="acu-btn acu-btn-primario" onclick="Acuerdos.cargarIniciales()">Cargar los acuerdos de los Word</button>
+                    <p class="acu-ayuda" style="margin-top:8px;">«Todas las etapas» y «Cambios de Calidad de Operaciones». Luego puedes editarlos.</p></div>`;
+                return;
+            }
+            if (!fl.length) { cont.innerHTML = '<div class="card acu-vacio">Ningún acuerdo coincide con los filtros.</div>'; return; }
+            // Agrupado por etapa: primero los que aplican a todas, luego cada etapa.
+            const grupos = [['', 'Todas las etapas'], ...Object.entries(ETAPAS)];
+            const ordenar = (x, y) => (x.seccion || '').localeCompare(y.seccion || '') || (x.titulo || '').localeCompare(y.titulo || '');
+            cont.innerHTML = grupos.map(([clave, nombre]) => {
+                const items = fl.filter((a) => clave ? (a.etapas.length === 1 && a.etapas[0] === clave) : a.etapas.length !== 1).sort(ordenar);
+                if (!items.length) return '';
+                return `<div class="acu-grupo-titulo">${esc(nombre)}</div>${items.map(htmlItem).join('')}`;
+            }).join('');
+        }
+
+        // ---------- Editor ----------
+        function filaPaso(p, i) {
+            p = p || {};
+            return `<tr data-i="${i}">
+                <td style="width:90px;"><input type="text" class="acu-campo" data-f="codigo" value="${esc(p.codigo)}" placeholder="180998" aria-label="Código"></td>
+                <td><textarea class="acu-campo" data-f="descripcion" aria-label="Descripción">${esc(p.descripcion)}</textarea>
+                    <input type="text" class="acu-campo" data-f="nota" value="${esc(p.nota)}" placeholder="Nota (opcional): qué cambia" style="margin-top:4px;" aria-label="Nota"></td>
+                <td style="width:120px;"><select class="acu-campo" data-f="etapa" aria-label="Etapa"><option value="">(la del acuerdo)</option>
+                    ${Object.entries(ETAPAS).map(([k, v]) => `<option value="${k}"${p.etapa === k ? ' selected' : ''}>${v}</option>`).join('')}</select></td>
+                <td style="width:120px;"><input type="text" class="acu-campo" data-f="tipoDato" value="${esc(p.tipoDato)}" list="acuTiposDato" aria-label="Tipo dato"></td>
+                <td class="acu-chk"><input type="checkbox" data-f="rPor"${p.rPor ? ' checked' : ''} aria-label="R. Por"></td>
+                <td class="acu-chk"><input type="checkbox" data-f="vb"${p.vb ? ' checked' : ''} aria-label="V°B°"></td>
+                <td class="acu-chk"><input type="checkbox" data-f="estadoCC"${p.estadoCC ? ' checked' : ''} aria-label="Estado CC"></td>
+                <td style="width:34px;"><button type="button" class="acu-btn acu-btn-mini acu-btn-peligro" data-quitar title="Quitar paso" aria-label="Quitar paso">✕</button></td>
+            </tr>`;
+        }
+
+        async function abrirEditor(original) {
+            const a = normalizar(original || { planta: 'ambas', estado: 'vigente', pasos: [{}] });
+            if (!a.pasos.length) a.pasos = [{}];
+            const r = await Swal.fire(Object.assign(swalBase(), {
+                title: original ? 'Editar acuerdo' : 'Nuevo acuerdo',
+                width: 'min(1020px, 96vw)',
+                showCancelButton: true, confirmButtonText: 'Guardar', cancelButtonText: 'Cancelar',
+                html: `<div class="acu-form">
+                    <div class="acu-form-grid">
+                        <div style="grid-column:1/-1;"><label for="acuFTitulo">Título</label>
+                            <input id="acuFTitulo" class="acu-campo" value="${esc(a.titulo)}" placeholder="Ej.: Despejes sin V°B°"></div>
+                        <div><label for="acuFPlanta">Planta</label><select id="acuFPlanta" class="acu-campo">
+                            ${Object.entries(PLANTAS).map(([k, v]) => `<option value="${k}"${a.planta === k ? ' selected' : ''}>${v}</option>`).join('')}</select></div>
+                        <div><label>Etapas</label><div class="acu-form-checks">
+                            ${Object.entries(ETAPAS).map(([k, v]) => `<label><input type="checkbox" class="acuFEtapa" value="${k}"${a.etapas.includes(k) ? ' checked' : ''}> ${v}</label>`).join('')}</div>
+                            <div class="acu-ayuda">Ninguna marcada = todas las etapas.</div></div>
+                        <div><label for="acuFSeccion">Sección del RMD</label>
+                            <input id="acuFSeccion" class="acu-campo" value="${esc(a.seccion)}" list="acuSecciones" placeholder="NOTAS IMPORTANTES"></div>
+                        <div><label for="acuFTipo">Qué se hace</label><select id="acuFTipo" class="acu-campo">
+                            ${Object.entries(TIPOS).map(([k, v]) => `<option value="${k}"${a.tipo === k ? ' selected' : ''}>${v}</option>`).join('')}</select></div>
+                        <div><label for="acuFFase">Desde la fase</label><select id="acuFFase" class="acu-campo">
+                            <option value="0">Cualquier fase</option>
+                            ${[1, 2, 3, 4, 5].map((n) => `<option value="${n}"${a.faseDesde === n ? ' selected' : ''}>Fase ${n} en adelante (incluye ${n}R)</option>`).join('')}</select></div>
+                        <div><label for="acuFCondicion">Otra condición (opcional)</label>
+                            <input id="acuFCondicion" class="acu-campo" value="${esc(a.condicion)}" placeholder="Solo si el producto…"></div>
+                        <div><label for="acuFArea">Pedido por (área)</label>
+                            <input id="acuFArea" class="acu-campo" value="${esc(a.area)}" list="acuAreas" placeholder="Calidad de Operaciones"></div>
+                        <div><label for="acuFDesde">Vigente desde</label>
+                            <input id="acuFDesde" type="date" class="acu-campo" value="${esc(a.vigenteDesde)}"></div>
+                        <div style="grid-column:1/-1;"><label for="acuFDetalle">Explicación</label>
+                            <textarea id="acuFDetalle" class="acu-campo" placeholder="Qué se acordó y por qué, en palabras simples">${esc(a.detalle)}</textarea></div>
+                    </div>
+                    <label>Pasos</label>
+                    <div class="acu-tabla-wrap" style="margin-top:0;"><table class="acu-tabla"><thead><tr>
+                        <th>Código</th><th>Descripción</th><th>Etapa</th><th>Tipo dato</th><th class="acu-chk">R. Por</th><th class="acu-chk">V°B°</th><th class="acu-chk">Estado CC</th><th></th></tr></thead>
+                        <tbody id="acuFPasos">${a.pasos.map(filaPaso).join('')}</tbody></table></div>
+                    <button type="button" class="acu-btn acu-btn-mini" id="acuFAgregarPaso" style="margin-top:8px;">+ Agregar paso</button>
+                    <datalist id="acuSecciones">${SECCIONES.map((s) => `<option value="${s}">`).join('')}</datalist>
+                    <datalist id="acuTiposDato">${TIPOS_DATO.filter(Boolean).map((s) => `<option value="${s}">`).join('')}</datalist>
+                    <datalist id="acuAreas">${[...new Set(['Calidad de Operaciones', 'Documentación', 'Producción', 'Aseguramiento de la Calidad', ...lista.map((x) => x.area).filter(Boolean)])].map((s) => `<option value="${esc(s)}">`).join('')}</datalist>
+                </div>`,
+                didOpen: () => {
+                    const tbody = document.getElementById('acuFPasos');
+                    document.getElementById('acuFAgregarPaso').addEventListener('click', () => {
+                        tbody.insertAdjacentHTML('beforeend', filaPaso({}, tbody.children.length));
+                        tbody.lastElementChild.querySelector('input').focus();
+                    });
+                    tbody.addEventListener('click', (e) => { const b = e.target.closest('[data-quitar]'); if (b) b.closest('tr').remove(); });
+                },
+                preConfirm: () => {
+                    const val = (id) => document.getElementById(id).value;
+                    const pasos = [...document.querySelectorAll('#acuFPasos tr')].map((tr) => {
+                        const p = {};
+                        tr.querySelectorAll('[data-f]').forEach((el) => { p[el.dataset.f] = el.type === 'checkbox' ? el.checked : el.value; });
+                        return p;
+                    });
+                    const out = Object.assign({}, a, {
+                        titulo: val('acuFTitulo'), planta: val('acuFPlanta'),
+                        etapas: [...document.querySelectorAll('.acuFEtapa:checked')].map((c) => c.value),
+                        seccion: val('acuFSeccion'), tipo: val('acuFTipo'), condicion: val('acuFCondicion'), faseDesde: val('acuFFase'),
+                        area: val('acuFArea'), vigenteDesde: val('acuFDesde'), detalle: val('acuFDetalle'), pasos
+                    });
+                    if (!out.titulo.trim() && !out.seccion.trim()) { Swal.showValidationMessage('Ponle un título o una sección'); return false; }
+                    if (pasos.some((p) => p.codigo && !/^\d+$/.test(String(p.codigo).trim()))) { Swal.showValidationMessage('El código de paso debe ser solo números'); return false; }
+                    return out;
+                }
+            }));
+            if (!r.isConfirmed) return;
+            await guardar(r.value, original ? 'Editó el acuerdo' : 'Creó el acuerdo');
+        }
+
+        function porId(id) { return lista.find((a) => a.id === id); }
+
+        async function cambiarEstado(id) {
+            const a = porId(id); if (!a) return;
+            const anular = a.estado !== 'anulado';
+            const r = await Swal.fire(Object.assign(swalBase(), {
+                icon: anular ? 'warning' : 'question',
+                title: anular ? '¿Anular este acuerdo?' : '¿Reactivar este acuerdo?',
+                text: anular ? 'Deja de aplicarse y el portal ya no avisará por él. Sigue visible en «Anulados» y se puede reactivar.' : 'Vuelve a aplicarse para todos.',
+                showCancelButton: true, confirmButtonText: anular ? 'Anular' : 'Reactivar', cancelButtonText: 'Cancelar'
+            }));
+            if (!r.isConfirmed) return;
+            await guardar(Object.assign({}, a, { estado: anular ? 'anulado' : 'vigente' }), anular ? 'Anuló el acuerdo' : 'Reactivó el acuerdo');
+        }
+
+        function verHistorial(id) {
+            const a = porId(id); if (!a) return;
+            const filas = a.historial.slice().reverse().map((h) => `<tr><td style="white-space:nowrap;">${esc(fechaHoraTxt(h.fecha))}</td><td>${esc(h.por)}</td><td>${esc(h.accion)}</td></tr>`).join('');
+            Swal.fire(Object.assign(swalBase(), {
+                title: 'Historial', width: 'min(620px, 94vw)', confirmButtonText: 'Cerrar',
+                html: `<div class="acu-tabla-wrap"><table class="acu-tabla"><thead><tr><th>Fecha</th><th>Quién</th><th>Qué</th></tr></thead><tbody>${filas || '<tr><td colspan="3">Sin registros</td></tr>'}</tbody></table></div>`
+            }));
+        }
+
+        // ---------- Exportar / Importar (Excel) ----------
+        const COLS_ACU = [['ID', 'id'], ['Título', 'titulo'], ['Planta', 'planta'], ['Etapas', 'etapas'], ['Sección', 'seccion'], ['Qué se hace', 'tipo'], ['Desde la fase', 'faseDesde'], ['Condición', 'condicion'],
+            ['Explicación', 'detalle'], ['Pedido por', 'area'], ['Vigente desde', 'vigenteDesde'], ['Estado', 'estado'], ['Creado por', 'creadoPor'], ['Creado', 'creadoEn'],
+            ['Actualizado por', 'actualizadoPor'], ['Actualizado', 'actualizadoEn']];
+        const COLS_PASO = [['ID acuerdo', 'id'], ['Orden', 'orden'], ['Código', 'codigo'], ['Descripción', 'descripcion'], ['Etapa', 'etapa'], ['Tipo dato', 'tipoDato'],
+            ['R. Por', 'rPor'], ['V°B°', 'vb'], ['Estado CC', 'estadoCC'], ['Nota', 'nota']];
+
+        function exportar() {
+            if (!lista.length) { Swal.fire(Object.assign(swalBase(), { icon: 'info', title: 'No hay acuerdos para exportar' })); return; }
+            const acu = lista.map((a) => Object.fromEntries(COLS_ACU.map(([t, k]) => [t, k === 'etapas' ? a.etapas.join(', ') : k === 'faseDesde' ? (a.faseDesde || '') : (a[k] || '')])));
+            const pasos = [];
+            lista.forEach((a) => a.pasos.forEach((p, i) => pasos.push(Object.fromEntries(COLS_PASO.map(([t, k]) => [t,
+                k === 'id' ? a.id : k === 'orden' ? i + 1 : (typeof p[k] === 'boolean' ? (p[k] ? 'SI' : '') : (p[k] || ''))])))));
+            const hist = [];
+            lista.forEach((a) => a.historial.forEach((h) => hist.push({ 'ID acuerdo': a.id, 'Fecha': h.fecha, 'Quién': h.por, 'Qué': h.accion })));
+            const wb = XLSX.utils.book_new();
+            const hoja = (filas, cols) => { const ws = XLSX.utils.json_to_sheet(filas, { header: cols }); ws['!cols'] = cols.map((c) => ({ wch: /Descrip|Explic/.test(c) ? 70 : /Título/.test(c) ? 36 : 16 })); return ws; };
+            XLSX.utils.book_append_sheet(wb, hoja(acu, COLS_ACU.map((c) => c[0])), 'Acuerdos');
+            XLSX.utils.book_append_sheet(wb, hoja(pasos, COLS_PASO.map((c) => c[0])), 'Pasos');
+            XLSX.utils.book_append_sheet(wb, hoja(hist, ['ID acuerdo', 'Fecha', 'Quién', 'Qué']), 'Historial');
+            XLSX.writeFile(wb, `Acuerdos_RMD_${dayjs().format('YYYY-MM-DD_HHmm')}.xlsx`);
+        }
+
+        function leerExcel(buf) {
+            const wb = XLSX.read(buf, { type: 'array' });
+            const filas = (nombre) => wb.Sheets[nombre] ? XLSX.utils.sheet_to_json(wb.Sheets[nombre], { defval: '', raw: false }) : null;
+            const acu = filas('Acuerdos');
+            if (!acu) throw new Error('El archivo no tiene la hoja «Acuerdos». Usa un Excel exportado desde esta pestaña.');
+            const pasos = filas('Pasos') || [];
+            const hist = filas('Historial') || [];
+            const si = (v) => /^(si|sí|x|true|1|✓)$/i.test(String(v).trim());
+            return acu.filter((f) => String(f['ID'] || '').trim()).map((f) => {
+                const a = Object.fromEntries(COLS_ACU.map(([t, k]) => [k, String(f[t] == null ? '' : f[t]).trim()]));
+                a.pasos = pasos.filter((p) => String(p['ID acuerdo']).trim() === a.id)
+                    .sort((x, y) => (+x['Orden'] || 0) - (+y['Orden'] || 0))
+                    .map((p) => Object.fromEntries(COLS_PASO.slice(2).map(([t, k]) => [k, ['rPor', 'vb', 'estadoCC'].includes(k) ? si(p[t]) : String(p[t] == null ? '' : p[t]).trim()])));
+                a.historial = hist.filter((h) => String(h['ID acuerdo']).trim() === a.id).map((h) => ({ fecha: h['Fecha'], por: h['Quién'], accion: h['Qué'] }));
+                return normalizar(a);
+            });
+        }
+
+        async function importar(ev) {
+            const file = ev.target.files && ev.target.files[0];
+            ev.target.value = '';
+            if (!file) return;
+            let entrantes;
+            try { entrantes = leerExcel(await file.arrayBuffer()); }
+            catch (err) { Swal.fire(Object.assign(swalBase(), { icon: 'error', title: 'No se pudo leer el archivo', text: err.message })); return; }
+            // Se compara por ID: los nuevos se agregan; los que ya existen solo se reemplazan si el archivo trae una edición más reciente.
+            const nuevos = [], actualizar = [];
+            let iguales = 0;
+            entrantes.forEach((a) => {
+                const actual = porId(a.id);
+                if (!actual) nuevos.push(a);
+                else if (new Date(a.actualizadoEn) > new Date(actual.actualizadoEn)) actualizar.push(a);
+                else iguales++;
+            });
+            if (!nuevos.length && !actualizar.length) {
+                Swal.fire(Object.assign(swalBase(), { icon: 'info', title: 'Nada que importar', text: `Los ${entrantes.length} acuerdos del archivo ya están aquí, iguales o más recientes.` }));
+                return;
+            }
+            const r = await Swal.fire(Object.assign(swalBase(), {
+                icon: 'question', title: 'Importar acuerdos',
+                html: `<div style="text-align:left;font-size:13px;line-height:1.7;">${nuevos.length} acuerdos nuevos se agregarán.<br>${actualizar.length} acuerdos se actualizarán con una versión más reciente del archivo.<br>${iguales} ya están al día y no se tocan.<br><br>Lo importado lo verán todos.</div>`,
+                showCancelButton: true, confirmButtonText: 'Importar', cancelButtonText: 'Cancelar'
+            }));
+            if (!r.isConfirmed) return;
+            const u = await pedirUsuario();
+            if (!u) return;
+            for (const a of [...nuevos, ...actualizar]) {
+                a.historial = a.historial.concat([{ fecha: ahora(), por: u, accion: 'Importó desde ' + file.name }]).slice(-50);
+                await storeSet(PREFIJO + a.id, a);
+                const i = lista.findIndex((x) => x.id === a.id);
+                if (i >= 0) lista[i] = a; else lista.push(a);
+            }
+            try { await dbStore.setItem(CACHE_KEY, lista); } catch (e) { /* caché no crítica */ }
+            render();
+            Swal.fire(Object.assign(swalBase(), { icon: 'success', title: 'Acuerdos importados', timer: 1800, showConfirmButton: false }));
+        }
+
+        // ---------- Acuerdos iniciales (contenido de los dos Word) ----------
+        const INICIALES = [
+            { titulo: 'Precauciones: controlar a los compañeros', planta: 'ambas', etapas: [], seccion: 'PRECAUCIONES', tipo: 'agregar', area: 'Documentación',
+              detalle: 'En todas las etapas (fabricación, envase y acondicionado), la sección Precauciones lleva este paso.',
+              pasos: [{ codigo: '180998', descripcion: 'CONTROLAR QUE SUS COMPAÑEROS REALICEN LO MISMO.', tipoDato: 'Múltiple' }] },
+            { titulo: 'Notas importantes: V°B° solo del jefe o supervisor', planta: 'ambas', etapas: [], seccion: 'NOTAS IMPORTANTES', tipo: 'agregar', area: 'Documentación',
+              detalle: 'En todas las etapas, la sección Notas importantes lleva este paso.',
+              pasos: [{ codigo: '182341', descripcion: 'LOS VISTOS BUENOS (V°B°) SERAN REALIZADOS Y REGISTRADOS EXCLUSIVAMENTE POR EL JEFE O SUPERVISOR DE SECCION, QUIEN DEBERA REVISAR QUE LA DATA REGISTRADA SEA CONTEMPORANEA SEGUN EL POE PDOC-207 VIGENTE.', tipoDato: 'Múltiple' }] },
+            { titulo: 'Despejes sin V°B°', planta: 'ambas', etapas: [], seccion: 'PROCEDIMIENTO', tipo: 'reemplazar', faseDesde: 2, area: 'Documentación',
+              detalle: 'Desde la fase 2 (también 2R) los despejes ya no llevan visto bueno: en el cuerpo del RMD, el paso de despeje se cambia por el de su etapa.',
+              pasos: [
+                { codigo: '184004', etapa: 'FABRICACION', descripcion: 'REALIZAR EL DESPEJE DE LA SALA SEGUN INSTRUCTIVO IPRO-P212 VIGENTE.' },
+                { codigo: '184008', etapa: 'ENVASE', descripcion: 'REALIZAR EL DESPEJE DE LA SALA SEGUN INSTRUCTIVO IPRO-P212 VIGENTE.' },
+                { codigo: '184495', etapa: 'ACONDICIONADO', descripcion: 'VERIFICAR EL DESPEJE DE LA LINEA DE TRABAJO ANTES DE INICIAR EL PROCESO Y REGISTRAR EN EL FORMATO DE INSPECCION EN LINEAS DE PRODUCCION (FPRO-250 VIGENTE), SEGUN INSTRUCTIVO IPRO-P212 VIGENTE.' },
+                { codigo: '184497', etapa: 'ACONDICIONADO', descripcion: 'REALIZAR EL DESPEJE DE LA LINEA DE TRABAJO Y REGISTRAR EN EL FORMATO DE INSPECCION EN LINEAS DE PRODUCCION (FPRO-250 VIGENTE), SEGUN INSTRUCTIVO IPRO-P212 VIGENTE.' }] },
+            { titulo: 'Conteo final: «Y/O PERSONAL DESIGNADO»', planta: 'ambas', etapas: ['ACONDICIONADO'], seccion: 'PROCEDIMIENTO', tipo: 'reemplazar', area: 'Documentación',
+              detalle: 'En acondicionado se cambia el paso del conteo final por este, que agrega «Y/O PERSONAL DESIGNADO».',
+              pasos: [{ codigo: '185192', descripcion: 'TERMINADO EL PROCESO, REALIZAR EL CONTEO DE LA CANTIDAD ACONDICIONADA. EN CASO DE QUE EN EL NIVEL SUPERIOR DEL PRODUCTO ACONDICIONADO (PLATAFORMAS) SE ENCUENTRE UNA CAJA INCOMPLETA, EL RESPONSABLE DE LA ENTREGA VERIFICARA EL MISMO Y LE COLOCARA ETIQUETA DE SALDO MAS SU FIRMA, ASI COMO EL VISTO DEL JEFE, SUPERVISOR DE LA SECCION Y/O PERSONAL DESIGNADO.', nota: 'Cambio: se agrega «Y/O PERSONAL DESIGNADO».' }] },
+            { titulo: 'Calidad en Operaciones: muestreo en fabricación', planta: 'ambas', etapas: ['FABRICACION'], seccion: '', tipo: 'agregar', area: 'Calidad de Operaciones',
+              detalle: 'Calidad en Operaciones muestrea y registra (Realizado por) y el jefe o supervisor verifica (V°B°).',
+              pasos: [
+                { codigo: '180900', descripcion: 'EL PERSONAL DE CALIDAD EN OPERACIONES INGRESA A LA SALA DE FABRICACION Y REALIZA EL MUESTREO PARA LOS ANALISIS CORRESPONDIENTES SEGUN EL POE PCPR-202 VIGENTE.', tipoDato: 'Realizado por', rPor: true },
+                { codigo: '180901', descripcion: 'CALIDAD EN OPERACIONES REGISTRA LOS RESULTADOS:', tipoDato: 'Realizado por', rPor: true },
+                { codigo: '180902', descripcion: 'EL JEFE O SUPERVISOR DE LA SECCION VERIFICA LA CONFORMIDAD DEL REGISTRO DE RESULTADOS EMITIDOS POR CALIDAD EN OPERACIONES.', tipoDato: 'Visto bueno', vb: true }] },
+            { titulo: 'Envase: granel aprobado', planta: 'ambas', etapas: ['ENVASE'], seccion: 'NOTAS IMPORTANTES', tipo: 'agregar', area: 'Calidad de Operaciones',
+              detalle: 'En envase, verificar que Notas importantes tenga este paso.',
+              pasos: [{ codigo: '180966', descripcion: 'VERIFICAR QUE EL GRANEL TENGA LA APROBACION DE CONTROL DE CALIDAD O CALIDAD EN OPERACIONES, SEGUN APLIQUE.', tipoDato: 'Múltiple' }] },
+            { titulo: 'Calidad en Operaciones: muestreo en envase', planta: 'ambas', etapas: ['ENVASE'], seccion: '', tipo: 'agregar', area: 'Calidad de Operaciones',
+              pasos: [{ codigo: '180942', descripcion: 'EL PERSONAL DE CALIDAD EN OPERACIONES INGRESA A LA SALA DE ENVASE Y REALIZA EL MUESTREO PARA LOS ANALISIS CORRESPONDIENTES SEGUN POE PCPR-202 VIGENTE.', tipoDato: 'Realizado por', rPor: true, estadoCC: true }] },
+            { titulo: 'Calidad en Operaciones: control inspectivo en acondicionado', planta: 'ambas', etapas: ['ACONDICIONADO'], seccion: '', tipo: 'agregar', area: 'Calidad de Operaciones',
+              pasos: [{ codigo: '180934', descripcion: 'EL PERSONAL DE CALIDAD EN OPERACIONES REALIZA EL CONTROL INSPECTIVO DEL PROCESO Y RETIRA SUS MUESTRAS PARA LOS ANALISIS CORRESPONDIENTES SEGUN EL POE PCPR-204 VIGENTE.', tipoDato: 'Realizado por', rPor: true, estadoCC: true }] }
+        ];
+
+        async function cargarIniciales() {
+            if (lista.length) return;
+            const u = await pedirUsuario();
+            if (!u) return;
+            const fecha = ahora();
+            for (const base of INICIALES) {
+                const a = normalizar(Object.assign({}, base, { creadoPor: u, actualizadoPor: u, creadoEn: fecha, actualizadoEn: fecha,
+                    historial: [{ fecha, por: u, accion: 'Cargó el acuerdo desde los Word anteriores' }] }));
+                await storeSet(PREFIJO + a.id, a);
+                lista.push(a);
+            }
+            try { await dbStore.setItem(CACHE_KEY, lista); } catch (e) { /* caché no crítica */ }
+            render();
+        }
+
+        function iniciar() {
+            const seg = document.getElementById('acuFiltroPlanta');
+            if (!seg) return;
+            seg.addEventListener('click', (e) => {
+                const b = e.target.closest('button'); if (!b) return;
+                filtroPlanta = b.dataset.v;
+                seg.querySelectorAll('button').forEach((x) => x.classList.toggle('activo', x === b));
+                render();
+            });
+            ['acuFiltroEtapa', 'acuFiltroEstado'].forEach((id) => document.getElementById(id).addEventListener('change', render));
+            document.getElementById('acuBuscar').addEventListener('input', render);
+        }
+        if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', iniciar); else iniciar();
+
+        return {
+            alEntrar: () => { if (!cargado) cargar(); else render(); },
+            recargarPronto, nuevo: () => abrirEditor(null), editar: (id) => abrirEditor(porId(id)),
+            cambiarEstado, historial: verHistorial, exportar, importar, cargarIniciales,
+            _lista: () => lista
+        };
     })();
     </script>
 </body>
