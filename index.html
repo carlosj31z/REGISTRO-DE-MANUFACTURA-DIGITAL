@@ -10749,7 +10749,7 @@ async function maybeAutoStartTour() {
             a.etapas = (Array.isArray(a.etapas) ? a.etapas : String(a.etapas || '').split(/[,;]/)).map((e) => String(e).trim().toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g, '')).filter((e) => ETAPAS[e]);
             a.seccion = String(a.seccion || '').trim().toUpperCase();
             a.condicion = String(a.condicion || '').trim();
-            a.faseDesde = Math.max(0, Math.min(9, parseInt(a.faseDesde, 10) || 0));   // 0 = cualquier fase; 2 = fase 2, 2R y siguientes
+            a.faseDesde = Math.max(0, Math.min(2, parseInt(a.faseDesde, 10) || 0));   // 0 = cualquier fase; 1 = solo fase 1; 2 = fase 2, 2R y siguientes
             a.tipo = TIPOS[a.tipo] ? a.tipo : 'agregar';
             a.detalle = String(a.detalle || '').trim();
             a.area = String(a.area || '').trim();
@@ -10870,7 +10870,7 @@ async function maybeAutoStartTour() {
                             <span class="acu-chip">${esc(etapasTxt)}</span>
                             ${a.seccion ? `<span class="acu-chip">Sección: ${esc(a.seccion)}</span>` : ''}
                             <span class="acu-chip acu-chip-tipo">${esc(TIPOS[a.tipo])}</span>
-                            ${a.faseDesde ? `<span class="acu-chip acu-chip-cond" title="Aplica cuando la fase del RMD (1.ª línea de Observaciones) es ${a.faseDesde} o mayor, con o sin R">Desde fase ${a.faseDesde} (incluye ${a.faseDesde}R)</span>` : ''}
+                            ${a.faseDesde ? `<span class="acu-chip acu-chip-cond" title="Según la fase del RMD (1.ª línea de Observaciones)">${a.faseDesde === 1 ? 'Solo fase 1' : 'Fase 2 (incluye 2R)'}</span>` : ''}
                             ${a.condicion ? `<span class="acu-chip acu-chip-cond">${esc(a.condicion)}</span>` : ''}
                             ${a.estado === 'anulado' ? '<span class="acu-chip acu-chip-anulado">Anulado</span>' : ''}
                         </div>
@@ -10951,9 +10951,8 @@ async function maybeAutoStartTour() {
                             <input id="acuFSeccion" class="acu-campo" value="${esc(a.seccion)}" list="acuSecciones" placeholder="NOTAS IMPORTANTES"></div>
                         <div><label for="acuFTipo">Qué se hace</label><select id="acuFTipo" class="acu-campo">
                             ${Object.entries(TIPOS).map(([k, v]) => `<option value="${k}"${a.tipo === k ? ' selected' : ''}>${v}</option>`).join('')}</select></div>
-                        <div><label for="acuFFase">Desde la fase</label><select id="acuFFase" class="acu-campo">
-                            <option value="0">Cualquier fase</option>
-                            ${[1, 2, 3, 4, 5].map((n) => `<option value="${n}"${a.faseDesde === n ? ' selected' : ''}>Fase ${n} en adelante (incluye ${n}R)</option>`).join('')}</select></div>
+                        <div><label for="acuFFase">Fase</label><select id="acuFFase" class="acu-campo">
+                            ${[[0, 'Cualquier fase'], [1, 'Fase 1'], [2, 'Fase 2 (incluye 2R)']].map(([n, t]) => `<option value="${n}"${a.faseDesde === n ? ' selected' : ''}>${t}</option>`).join('')}</select></div>
                         <div><label for="acuFCondicion">Otra condición (opcional)</label>
                             <input id="acuFCondicion" class="acu-campo" value="${esc(a.condicion)}" placeholder="Solo si el producto…"></div>
                         <div><label for="acuFArea">Pedido por (área)</label>
