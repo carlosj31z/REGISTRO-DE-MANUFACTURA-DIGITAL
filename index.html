@@ -10699,7 +10699,7 @@ async function maybeAutoStartTour() {
         const PLANTAS = { ambas: 'Ambas plantas', planta1: 'Planta 1 ATE', planta2: 'Planta 2 LIMA' };
         const ETAPAS = { FABRICACION: 'Fabricación', ENVASE: 'Envase', ACONDICIONADO: 'Acondicionado' };
         const TIPOS = { agregar: 'Agregar paso', reemplazar: 'Reemplazar paso', configurar: 'Configurar paso', quitar: 'Quitar paso', nota: 'Indicación' };
-        const SECCIONES = ['PRECAUCIONES', 'NOTAS IMPORTANTES', 'DESPEJE', 'PROCEDIMIENTO', 'CONTROL DE PROCESO', 'CALIDAD EN OPERACIONES', 'ENTREGA'];
+        const SECCIONES = ['PRECAUCIONES', 'NOTAS IMPORTANTES', 'PROCEDIMIENTO', 'CONTROL DE PROCESO', 'ENTREGA'];
         const TIPOS_DATO = ['', 'Múltiple', 'Realizado por', 'Visto bueno', 'Texto', 'Numérico', 'Fecha'];
         let lista = [];
         let cargado = false;
@@ -10742,6 +10742,7 @@ async function maybeAutoStartTour() {
             a.etapas = (Array.isArray(a.etapas) ? a.etapas : String(a.etapas || '').split(/[,;]/)).map((e) => String(e).trim().toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g, '')).filter((e) => ETAPAS[e]);
             a.seccion = String(a.seccion || '').trim().toUpperCase();
             a.condicion = String(a.condicion || '').trim();
+            a.faseDesde = Math.max(0, Math.min(9, parseInt(a.faseDesde, 10) || 0));   // 0 = cualquier fase; 2 = fase 2, 2R y siguientes
             a.tipo = TIPOS[a.tipo] ? a.tipo : 'agregar';
             a.detalle = String(a.detalle || '').trim();
             a.area = String(a.area || '').trim();
@@ -10859,6 +10860,7 @@ async function maybeAutoStartTour() {
                             <span class="acu-chip">${esc(etapasTxt)}</span>
                             ${a.seccion ? `<span class="acu-chip">Sección: ${esc(a.seccion)}</span>` : ''}
                             <span class="acu-chip acu-chip-tipo">${esc(TIPOS[a.tipo])}</span>
+                            ${a.faseDesde ? `<span class="acu-chip acu-chip-cond" title="Aplica cuando la fase del RMD (1.ª línea de Observaciones) es ${a.faseDesde} o mayor, con o sin R">Desde fase ${a.faseDesde} (incluye ${a.faseDesde}R)</span>` : ''}
                             ${a.condicion ? `<span class="acu-chip acu-chip-cond">${esc(a.condicion)}</span>` : ''}
                             ${a.estado === 'anulado' ? '<span class="acu-chip acu-chip-anulado">Anulado</span>' : ''}
                         </div>
@@ -10936,8 +10938,11 @@ async function maybeAutoStartTour() {
                             <input id="acuFSeccion" class="acu-campo" value="${esc(a.seccion)}" list="acuSecciones" placeholder="NOTAS IMPORTANTES"></div>
                         <div><label for="acuFTipo">Qué se hace</label><select id="acuFTipo" class="acu-campo">
                             ${Object.entries(TIPOS).map(([k, v]) => `<option value="${k}"${a.tipo === k ? ' selected' : ''}>${v}</option>`).join('')}</select></div>
-                        <div><label for="acuFCondicion">Condición (opcional)</label>
-                            <input id="acuFCondicion" class="acu-campo" value="${esc(a.condicion)}" placeholder="Solo fase 2"></div>
+                        <div><label for="acuFFase">Desde la fase</label><select id="acuFFase" class="acu-campo">
+                            <option value="0">Cualquier fase</option>
+                            ${[1, 2, 3, 4, 5].map((n) => `<option value="${n}"${a.faseDesde === n ? ' selected' : ''}>Fase ${n} en adelante (incluye ${n}R)</option>`).join('')}</select></div>
+                        <div><label for="acuFCondicion">Otra condición (opcional)</label>
+                            <input id="acuFCondicion" class="acu-campo" value="${esc(a.condicion)}" placeholder="Solo si el producto…"></div>
                         <div><label for="acuFArea">Pedido por (área)</label>
                             <input id="acuFArea" class="acu-campo" value="${esc(a.area)}" list="acuAreas" placeholder="Calidad de Operaciones"></div>
                         <div><label for="acuFDesde">Vigente desde</label>
@@ -10972,7 +10977,7 @@ async function maybeAutoStartTour() {
                     const out = Object.assign({}, a, {
                         titulo: val('acuFTitulo'), planta: val('acuFPlanta'),
                         etapas: [...document.querySelectorAll('.acuFEtapa:checked')].map((c) => c.value),
-                        seccion: val('acuFSeccion'), tipo: val('acuFTipo'), condicion: val('acuFCondicion'),
+                        seccion: val('acuFSeccion'), tipo: val('acuFTipo'), condicion: val('acuFCondicion'), faseDesde: val('acuFFase'),
                         area: val('acuFArea'), vigenteDesde: val('acuFDesde'), detalle: val('acuFDetalle'), pasos
                     });
                     if (!out.titulo.trim() && !out.seccion.trim()) { Swal.showValidationMessage('Ponle un título o una sección'); return false; }
@@ -11009,7 +11014,7 @@ async function maybeAutoStartTour() {
         }
 
         // ---------- Exportar / Importar (Excel) ----------
-        const COLS_ACU = [['ID', 'id'], ['Título', 'titulo'], ['Planta', 'planta'], ['Etapas', 'etapas'], ['Sección', 'seccion'], ['Qué se hace', 'tipo'], ['Condición', 'condicion'],
+        const COLS_ACU = [['ID', 'id'], ['Título', 'titulo'], ['Planta', 'planta'], ['Etapas', 'etapas'], ['Sección', 'seccion'], ['Qué se hace', 'tipo'], ['Desde la fase', 'faseDesde'], ['Condición', 'condicion'],
             ['Explicación', 'detalle'], ['Pedido por', 'area'], ['Vigente desde', 'vigenteDesde'], ['Estado', 'estado'], ['Creado por', 'creadoPor'], ['Creado', 'creadoEn'],
             ['Actualizado por', 'actualizadoPor'], ['Actualizado', 'actualizadoEn']];
         const COLS_PASO = [['ID acuerdo', 'id'], ['Orden', 'orden'], ['Código', 'codigo'], ['Descripción', 'descripcion'], ['Etapa', 'etapa'], ['Tipo dato', 'tipoDato'],
@@ -11017,7 +11022,7 @@ async function maybeAutoStartTour() {
 
         function exportar() {
             if (!lista.length) { Swal.fire(Object.assign(swalBase(), { icon: 'info', title: 'No hay acuerdos para exportar' })); return; }
-            const acu = lista.map((a) => Object.fromEntries(COLS_ACU.map(([t, k]) => [t, k === 'etapas' ? a.etapas.join(', ') : (a[k] || '')])));
+            const acu = lista.map((a) => Object.fromEntries(COLS_ACU.map(([t, k]) => [t, k === 'etapas' ? a.etapas.join(', ') : k === 'faseDesde' ? (a.faseDesde || '') : (a[k] || '')])));
             const pasos = [];
             lista.forEach((a) => a.pasos.forEach((p, i) => pasos.push(Object.fromEntries(COLS_PASO.map(([t, k]) => [t,
                 k === 'id' ? a.id : k === 'orden' ? i + 1 : (typeof p[k] === 'boolean' ? (p[k] ? 'SI' : '') : (p[k] || ''))])))));
@@ -11093,11 +11098,11 @@ async function maybeAutoStartTour() {
             { titulo: 'Precauciones: controlar a los compañeros', planta: 'ambas', etapas: [], seccion: 'PRECAUCIONES', tipo: 'agregar', area: 'Documentación',
               detalle: 'En todas las etapas (fabricación, envase y acondicionado), la sección Precauciones lleva este paso.',
               pasos: [{ codigo: '180998', descripcion: 'CONTROLAR QUE SUS COMPAÑEROS REALICEN LO MISMO.', tipoDato: 'Múltiple' }] },
-            { titulo: 'Notas importantes: V°B° solo del jefe o supervisor', planta: 'ambas', etapas: [], seccion: 'NOTAS IMPORTANTES', tipo: 'agregar', condicion: 'Solo fase 2', area: 'Documentación',
+            { titulo: 'Notas importantes: V°B° solo del jefe o supervisor', planta: 'ambas', etapas: [], seccion: 'NOTAS IMPORTANTES', tipo: 'agregar', area: 'Documentación',
               detalle: 'En todas las etapas, la sección Notas importantes lleva este paso.',
               pasos: [{ codigo: '182341', descripcion: 'LOS VISTOS BUENOS (V°B°) SERAN REALIZADOS Y REGISTRADOS EXCLUSIVAMENTE POR EL JEFE O SUPERVISOR DE SECCION, QUIEN DEBERA REVISAR QUE LA DATA REGISTRADA SEA CONTEMPORANEA SEGUN EL POE PDOC-207 VIGENTE.', tipoDato: 'Múltiple' }] },
-            { titulo: 'Despejes sin V°B°', planta: 'ambas', etapas: [], seccion: 'DESPEJE', tipo: 'reemplazar', area: 'Documentación',
-              detalle: 'Los despejes ya no llevan visto bueno. El paso de despeje se cambia por el de su etapa (estructura Procedimiento).',
+            { titulo: 'Despejes sin V°B°', planta: 'ambas', etapas: [], seccion: 'PROCEDIMIENTO', tipo: 'reemplazar', faseDesde: 2, area: 'Documentación',
+              detalle: 'Desde la fase 2 (también 2R) los despejes ya no llevan visto bueno: en el cuerpo del RMD, el paso de despeje se cambia por el de su etapa.',
               pasos: [
                 { codigo: '184004', etapa: 'FABRICACION', descripcion: 'REALIZAR EL DESPEJE DE LA SALA SEGUN INSTRUCTIVO IPRO-P212 VIGENTE.' },
                 { codigo: '184008', etapa: 'ENVASE', descripcion: 'REALIZAR EL DESPEJE DE LA SALA SEGUN INSTRUCTIVO IPRO-P212 VIGENTE.' },
@@ -11106,7 +11111,7 @@ async function maybeAutoStartTour() {
             { titulo: 'Conteo final: «Y/O PERSONAL DESIGNADO»', planta: 'ambas', etapas: ['ACONDICIONADO'], seccion: 'PROCEDIMIENTO', tipo: 'reemplazar', area: 'Documentación',
               detalle: 'En acondicionado se cambia el paso del conteo final por este, que agrega «Y/O PERSONAL DESIGNADO».',
               pasos: [{ codigo: '185192', descripcion: 'TERMINADO EL PROCESO, REALIZAR EL CONTEO DE LA CANTIDAD ACONDICIONADA. EN CASO DE QUE EN EL NIVEL SUPERIOR DEL PRODUCTO ACONDICIONADO (PLATAFORMAS) SE ENCUENTRE UNA CAJA INCOMPLETA, EL RESPONSABLE DE LA ENTREGA VERIFICARA EL MISMO Y LE COLOCARA ETIQUETA DE SALDO MAS SU FIRMA, ASI COMO EL VISTO DEL JEFE, SUPERVISOR DE LA SECCION Y/O PERSONAL DESIGNADO.', nota: 'Cambio: se agrega «Y/O PERSONAL DESIGNADO».' }] },
-            { titulo: 'Calidad en Operaciones: muestreo en fabricación', planta: 'ambas', etapas: ['FABRICACION'], seccion: 'CALIDAD EN OPERACIONES', tipo: 'agregar', area: 'Calidad de Operaciones',
+            { titulo: 'Calidad en Operaciones: muestreo en fabricación', planta: 'ambas', etapas: ['FABRICACION'], seccion: '', tipo: 'agregar', area: 'Calidad de Operaciones',
               detalle: 'Calidad en Operaciones muestrea y registra (Realizado por) y el jefe o supervisor verifica (V°B°).',
               pasos: [
                 { codigo: '180900', descripcion: 'EL PERSONAL DE CALIDAD EN OPERACIONES INGRESA A LA SALA DE FABRICACION Y REALIZA EL MUESTREO PARA LOS ANALISIS CORRESPONDIENTES SEGUN EL POE PCPR-202 VIGENTE.', tipoDato: 'Realizado por', rPor: true },
@@ -11115,10 +11120,10 @@ async function maybeAutoStartTour() {
             { titulo: 'Envase: granel aprobado', planta: 'ambas', etapas: ['ENVASE'], seccion: 'NOTAS IMPORTANTES', tipo: 'agregar', area: 'Calidad de Operaciones',
               detalle: 'En envase, verificar que Notas importantes tenga este paso.',
               pasos: [{ codigo: '180966', descripcion: 'VERIFICAR QUE EL GRANEL TENGA LA APROBACION DE CONTROL DE CALIDAD O CALIDAD EN OPERACIONES, SEGUN APLIQUE.', tipoDato: 'Múltiple' }] },
-            { titulo: 'Calidad en Operaciones: muestreo en envase', planta: 'ambas', etapas: ['ENVASE'], seccion: 'CALIDAD EN OPERACIONES', tipo: 'agregar', area: 'Calidad de Operaciones',
+            { titulo: 'Calidad en Operaciones: muestreo en envase', planta: 'ambas', etapas: ['ENVASE'], seccion: '', tipo: 'agregar', area: 'Calidad de Operaciones',
               pasos: [{ codigo: '180942', descripcion: 'EL PERSONAL DE CALIDAD EN OPERACIONES INGRESA A LA SALA DE ENVASE Y REALIZA EL MUESTREO PARA LOS ANALISIS CORRESPONDIENTES SEGUN POE PCPR-202 VIGENTE.', tipoDato: 'Realizado por', rPor: true, estadoCC: true }] },
-            { titulo: 'Calidad en Operaciones: control inspectivo en acondicionado', planta: 'ambas', etapas: ['ACONDICIONADO'], seccion: 'CALIDAD EN OPERACIONES', tipo: 'agregar', area: 'Calidad de Operaciones',
-              pasos: [{ codigo: '180934', descripcion: 'EL PERSONAL DE CALIDAD EN OPERACIONES REALIZA EL CONTROL INSPECTIVO DEL PROCESO Y RETIRA SUS MUESTRAS PARA LOS ANALISIS CORRESPONDIENTES SEGUN EL POE PCPR-204 VIGENTE.', tipoDato: 'Realizado por', estadoCC: true, nota: 'Por confirmar: la captura del Word estaba cortada (R. Por y V°B°).' }] }
+            { titulo: 'Calidad en Operaciones: control inspectivo en acondicionado', planta: 'ambas', etapas: ['ACONDICIONADO'], seccion: '', tipo: 'agregar', area: 'Calidad de Operaciones',
+              pasos: [{ codigo: '180934', descripcion: 'EL PERSONAL DE CALIDAD EN OPERACIONES REALIZA EL CONTROL INSPECTIVO DEL PROCESO Y RETIRA SUS MUESTRAS PARA LOS ANALISIS CORRESPONDIENTES SEGUN EL POE PCPR-204 VIGENTE.', tipoDato: 'Realizado por', rPor: true, estadoCC: true }] }
         ];
 
         async function cargarIniciales() {
