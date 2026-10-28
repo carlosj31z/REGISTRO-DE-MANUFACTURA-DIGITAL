@@ -10658,6 +10658,13 @@ async function maybeAutoStartTour() {
         #tab-acuerdos .acu-detalle { font-size:12.5px; color:var(--slate-300); margin-top:10px; line-height:1.55; white-space:pre-wrap; }
         #tab-acuerdos .acu-item-acc { display:flex; gap:6px; flex-wrap:wrap; }
         #tab-acuerdos .acu-pie { font-size:10.5px; color:var(--slate-500); margin-top:10px; }
+        .acu-imgs { display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; }
+        .acu-imgs img { height:84px; max-width:220px; object-fit:cover; border:1px solid var(--card-border); border-radius:8px; cursor:zoom-in; background:#fff; }
+        .acu-imgs-ed { display:flex; flex-wrap:wrap; gap:8px; align-items:flex-start; padding:10px; border:1px dashed var(--card-border); border-radius:10px; text-align:left; }
+        .acu-imgs-ed.sobre { border-color:#38bdf8; }
+        .acu-imgs-ed figure { margin:0; width:170px; display:flex; flex-direction:column; gap:4px; }
+        .acu-imgs-ed figure img { width:100%; height:96px; object-fit:cover; border-radius:6px; border:1px solid var(--card-border); background:#fff; }
+        .acu-imgs-ed figcaption { display:flex; gap:4px; }
         .acu-tabla-wrap { overflow-x:auto; margin-top:12px; border:1px solid var(--card-border); border-radius:10px; }
         .acu-tabla { width:100%; border-collapse:collapse; font-size:12px; }
         .acu-tabla th { background:var(--table-head-bg); color:var(--slate-400); font-weight:650; font-size:10.5px; text-transform:uppercase; letter-spacing:.04em; text-align:left; padding:8px 10px; white-space:nowrap; }
@@ -10756,6 +10763,9 @@ async function maybeAutoStartTour() {
                 rPor: !!p.rPor, vb: !!p.vb, estadoCC: !!p.estadoCC,
                 nota: String(p.nota || '').trim()
             })).filter((p) => p.codigo || p.descripcion);
+            // imágenes pegadas o elegidas (data URL reducida); también las escribe la pestaña Acuerdos del portal
+            a.imagenes = (Array.isArray(a.imagenes) ? a.imagenes : []).filter((i) => i && /^data:image\/(png|jpe?g|webp|gif);base64,/.test(i.src || ''))
+                .map((i, k) => ({ id: String(i.id || 'img' + (k + 1)), nombre: String(i.nombre || '').trim(), src: i.src }));
             a.historial = Array.isArray(a.historial) ? a.historial : [];
             a.creadoEn = a.creadoEn || ahora();
             a.actualizadoEn = a.actualizadoEn || a.creadoEn;
@@ -10873,6 +10883,7 @@ async function maybeAutoStartTour() {
                 </div>
                 ${a.detalle ? `<div class="acu-detalle">${esc(a.detalle)}</div>` : ''}
                 ${pasos}
+                ${a.imagenes.length ? `<div class="acu-imgs">${a.imagenes.map((im, k) => `<img src="${esc(im.src)}" alt="${esc(im.nombre || 'Imagen')}" title="${esc(im.nombre || 'Ver imagen')}" onclick="Acuerdos.verImagen('${esc(a.id)}', ${k})">`).join('')}</div>` : ''}
                 ${pie ? `<div class="acu-pie">${esc(pie)}</div>` : ''}
             </div>`;
         }
@@ -10886,8 +10897,8 @@ async function maybeAutoStartTour() {
             if (!cargado) { cont.innerHTML = '<div class="card acu-vacio">Cargando acuerdos…</div>'; return; }
             if (!lista.length) {
                 cont.innerHTML = `<div class="card acu-vacio">Todavía no hay acuerdos registrados.<br><br>
-                    <button type="button" class="acu-btn acu-btn-primario" onclick="Acuerdos.cargarIniciales()">Cargar los acuerdos de los Word</button>
-                    <p class="acu-ayuda" style="margin-top:8px;">«Todas las etapas» y «Cambios de Calidad de Operaciones». Luego puedes editarlos.</p></div>`;
+                    <button type="button" class="acu-btn acu-btn-primario" onclick="Acuerdos.nuevo()">+ Nuevo acuerdo</button>
+                    <p class="acu-ayuda" style="margin-top:8px;">Escribe el acuerdo y, si ayuda, los códigos de paso de referencia y capturas. También se pueden escribir desde el portal SAP (Configuración Maestra › Acuerdos).</p></div>`;
                 return;
             }
             if (!fl.length) { cont.innerHTML = '<div class="card acu-vacio">Ningún acuerdo coincide con los filtros.</div>'; return; }
@@ -10921,6 +10932,8 @@ async function maybeAutoStartTour() {
         async function abrirEditor(original) {
             const a = normalizar(original || { planta: 'ambas', estado: 'vigente', pasos: [{}] });
             if (!a.pasos.length) a.pasos = [{}];
+            const imgs = a.imagenes.map((i) => Object.assign({}, i));
+            let alPegar = null;
             const r = await Swal.fire(Object.assign(swalBase(), {
                 title: original ? 'Editar acuerdo' : 'Nuevo acuerdo',
                 width: 'min(1020px, 96vw)',
@@ -10947,14 +10960,18 @@ async function maybeAutoStartTour() {
                             <input id="acuFArea" class="acu-campo" value="${esc(a.area)}" list="acuAreas" placeholder="Calidad de Operaciones"></div>
                         <div><label for="acuFDesde">Vigente desde</label>
                             <input id="acuFDesde" type="date" class="acu-campo" value="${esc(a.vigenteDesde)}"></div>
-                        <div style="grid-column:1/-1;"><label for="acuFDetalle">Explicación</label>
+                        <div style="grid-column:1/-1;"><label for="acuFDetalle">Acuerdo</label>
                             <textarea id="acuFDetalle" class="acu-campo" placeholder="Qué se acordó y por qué, en palabras simples">${esc(a.detalle)}</textarea></div>
                     </div>
-                    <label>Pasos</label>
+                    <label>Pasos de referencia <span class="acu-ayuda">(opcional)</span></label>
                     <div class="acu-tabla-wrap" style="margin-top:0;"><table class="acu-tabla"><thead><tr>
                         <th>Código</th><th>Descripción</th><th>Etapa</th><th>Tipo dato</th><th class="acu-chk">R. Por</th><th class="acu-chk">V°B°</th><th class="acu-chk">Estado CC</th><th></th></tr></thead>
                         <tbody id="acuFPasos">${a.pasos.map(filaPaso).join('')}</tbody></table></div>
                     <button type="button" class="acu-btn acu-btn-mini" id="acuFAgregarPaso" style="margin-top:8px;">+ Agregar paso</button>
+                    <label style="margin-top:12px;">Imágenes <span class="acu-ayuda">(pega con Ctrl+V una captura, arrástrala aquí o elígela; hasta 8)</span></label>
+                    <div class="acu-imgs-ed" id="acuFImgs"></div>
+                    <button type="button" class="acu-btn acu-btn-mini" id="acuFElegirImg" style="margin-top:8px;">Elegir imagen…</button>
+                    <input type="file" id="acuFImgInput" accept="image/*" multiple hidden>
                     <datalist id="acuSecciones">${SECCIONES.map((s) => `<option value="${s}">`).join('')}</datalist>
                     <datalist id="acuTiposDato">${TIPOS_DATO.filter(Boolean).map((s) => `<option value="${s}">`).join('')}</datalist>
                     <datalist id="acuAreas">${[...new Set(['Calidad de Operaciones', 'Documentación', 'Producción', 'Aseguramiento de la Calidad', ...lista.map((x) => x.area).filter(Boolean)])].map((s) => `<option value="${esc(s)}">`).join('')}</datalist>
@@ -10966,7 +10983,33 @@ async function maybeAutoStartTour() {
                         tbody.lastElementChild.querySelector('input').focus();
                     });
                     tbody.addEventListener('click', (e) => { const b = e.target.closest('[data-quitar]'); if (b) b.closest('tr').remove(); });
+                    const zona = document.getElementById('acuFImgs'), input = document.getElementById('acuFImgInput');
+                    const pintar = () => {
+                        zona.innerHTML = imgs.length ? imgs.map((im, k) => `<figure><img src="${esc(im.src)}" alt=""><figcaption>
+                            <input class="acu-campo" data-img-nombre="${k}" value="${esc(im.nombre)}" placeholder="Nombre (opcional)">
+                            <button type="button" class="acu-btn acu-btn-mini acu-btn-peligro" data-img-quitar="${k}" title="Quitar la imagen" aria-label="Quitar la imagen">✕</button></figcaption></figure>`).join('')
+                            : '<span class="acu-ayuda">Sin imágenes.</span>';
+                    };
+                    const agregar = async (files) => {
+                        for (const f of [...files].filter((x) => /^image\//.test(x.type))) {
+                            if (imgs.length >= MAX_IMGS) { Swal.showValidationMessage(`Hasta ${MAX_IMGS} imágenes por acuerdo`); break; }
+                            try { imgs.push({ id: 'img' + nuevoId(), nombre: f.name && !/^image\.\w+$/.test(f.name) ? f.name.replace(/\.\w+$/, '') : '', src: await comprimirImagen(f) }); }
+                            catch (e) { Swal.showValidationMessage(e.message); }
+                        }
+                        pintar();
+                    };
+                    pintar();
+                    document.getElementById('acuFElegirImg').addEventListener('click', () => input.click());
+                    input.addEventListener('change', () => { agregar(input.files || []); input.value = ''; });
+                    zona.addEventListener('click', (e) => { const b = e.target.closest('[data-img-quitar]'); if (b) { imgs.splice(+b.dataset.imgQuitar, 1); pintar(); } });
+                    zona.addEventListener('input', (e) => { const k = e.target.dataset.imgNombre; if (k !== undefined && imgs[+k]) imgs[+k].nombre = e.target.value.trim(); });
+                    zona.addEventListener('dragover', (e) => { e.preventDefault(); zona.classList.add('sobre'); });
+                    zona.addEventListener('dragleave', () => zona.classList.remove('sobre'));
+                    zona.addEventListener('drop', (e) => { e.preventDefault(); zona.classList.remove('sobre'); agregar((e.dataTransfer && e.dataTransfer.files) || []); });
+                    alPegar = (e) => { const fs = [...((e.clipboardData && e.clipboardData.files) || [])].filter((f) => /^image\//.test(f.type)); if (fs.length) { e.preventDefault(); agregar(fs); } };
+                    document.addEventListener('paste', alPegar);
                 },
+                willClose: () => { if (alPegar) document.removeEventListener('paste', alPegar); },
                 preConfirm: () => {
                     const val = (id) => document.getElementById(id).value;
                     const pasos = [...document.querySelectorAll('#acuFPasos tr')].map((tr) => {
@@ -10978,9 +11021,10 @@ async function maybeAutoStartTour() {
                         titulo: val('acuFTitulo'), planta: val('acuFPlanta'),
                         etapas: [...document.querySelectorAll('.acuFEtapa:checked')].map((c) => c.value),
                         seccion: val('acuFSeccion'), tipo: val('acuFTipo'), condicion: val('acuFCondicion'), faseDesde: val('acuFFase'),
-                        area: val('acuFArea'), vigenteDesde: val('acuFDesde'), detalle: val('acuFDetalle'), pasos
+                        area: val('acuFArea'), vigenteDesde: val('acuFDesde'), detalle: val('acuFDetalle'), pasos, imagenes: imgs
                     });
-                    if (!out.titulo.trim() && !out.seccion.trim()) { Swal.showValidationMessage('Ponle un título o una sección'); return false; }
+                    if (!out.titulo.trim() && !out.detalle.trim()) { Swal.showValidationMessage('Escribe al menos el título o el texto del acuerdo'); return false; }
+                    if (JSON.stringify(out).length > 6e6) { Swal.showValidationMessage('El acuerdo pesa demasiado: quita alguna imagen'); return false; }
                     if (pasos.some((p) => p.codigo && !/^\d+$/.test(String(p.codigo).trim()))) { Swal.showValidationMessage('El código de paso debe ser solo números'); return false; }
                     return out;
                 }
@@ -11033,6 +11077,10 @@ async function maybeAutoStartTour() {
             XLSX.utils.book_append_sheet(wb, hoja(acu, COLS_ACU.map((c) => c[0])), 'Acuerdos');
             XLSX.utils.book_append_sheet(wb, hoja(pasos, COLS_PASO.map((c) => c[0])), 'Pasos');
             XLSX.utils.book_append_sheet(wb, hoja(hist, ['ID acuerdo', 'Fecha', 'Quién', 'Qué']), 'Historial');
+            // cada imagen en trozos de 30 000 caracteres (una celda de Excel admite 32 767); el portal lee el mismo formato
+            const imgs = [];
+            lista.forEach((a) => a.imagenes.forEach((im) => { for (let k = 0; k * 30000 < im.src.length; k++) imgs.push({ 'ID acuerdo': a.id, 'ID imagen': im.id, 'Nombre': im.nombre, 'Parte': k + 1, 'Datos': im.src.slice(k * 30000, (k + 1) * 30000) }); }));
+            XLSX.utils.book_append_sheet(wb, hoja(imgs, ['ID acuerdo', 'ID imagen', 'Nombre', 'Parte', 'Datos']), 'Imagenes');
             XLSX.writeFile(wb, `Acuerdos_RMD_${dayjs().format('YYYY-MM-DD_HHmm')}.xlsx`);
         }
 
@@ -11043,6 +11091,7 @@ async function maybeAutoStartTour() {
             if (!acu) throw new Error('El archivo no tiene la hoja «Acuerdos». Usa un Excel exportado desde esta pestaña.');
             const pasos = filas('Pasos') || [];
             const hist = filas('Historial') || [];
+            const imgs = filas('Imagenes') || [];
             const si = (v) => /^(si|sí|x|true|1|✓)$/i.test(String(v).trim());
             return acu.filter((f) => String(f['ID'] || '').trim()).map((f) => {
                 const a = Object.fromEntries(COLS_ACU.map(([t, k]) => [k, String(f[t] == null ? '' : f[t]).trim()]));
@@ -11050,6 +11099,11 @@ async function maybeAutoStartTour() {
                     .sort((x, y) => (+x['Orden'] || 0) - (+y['Orden'] || 0))
                     .map((p) => Object.fromEntries(COLS_PASO.slice(2).map(([t, k]) => [k, ['rPor', 'vb', 'estadoCC'].includes(k) ? si(p[t]) : String(p[t] == null ? '' : p[t]).trim()])));
                 a.historial = hist.filter((h) => String(h['ID acuerdo']).trim() === a.id).map((h) => ({ fecha: h['Fecha'], por: h['Quién'], accion: h['Qué'] }));
+                const trozos = imgs.filter((x) => String(x['ID acuerdo']).trim() === a.id);
+                a.imagenes = [...new Set(trozos.map((x) => String(x['ID imagen'])))].map((idImg) => {
+                    const t = trozos.filter((x) => String(x['ID imagen']) === idImg).sort((x, y) => (+x['Parte'] || 0) - (+y['Parte'] || 0));
+                    return { id: idImg, nombre: String(t[0]['Nombre'] || ''), src: t.map((x) => String(x['Datos'])).join('') };
+                });
                 return normalizar(a);
             });
         }
@@ -11093,52 +11147,26 @@ async function maybeAutoStartTour() {
             Swal.fire(Object.assign(swalBase(), { icon: 'success', title: 'Acuerdos importados', timer: 1800, showConfirmButton: false }));
         }
 
-        // ---------- Acuerdos iniciales (contenido de los dos Word) ----------
-        const INICIALES = [
-            { titulo: 'Precauciones: controlar a los compañeros', planta: 'ambas', etapas: [], seccion: 'PRECAUCIONES', tipo: 'agregar', area: 'Documentación',
-              detalle: 'En todas las etapas (fabricación, envase y acondicionado), la sección Precauciones lleva este paso.',
-              pasos: [{ codigo: '180998', descripcion: 'CONTROLAR QUE SUS COMPAÑEROS REALICEN LO MISMO.', tipoDato: 'Múltiple' }] },
-            { titulo: 'Notas importantes: V°B° solo del jefe o supervisor', planta: 'ambas', etapas: [], seccion: 'NOTAS IMPORTANTES', tipo: 'agregar', area: 'Documentación',
-              detalle: 'En todas las etapas, la sección Notas importantes lleva este paso.',
-              pasos: [{ codigo: '182341', descripcion: 'LOS VISTOS BUENOS (V°B°) SERAN REALIZADOS Y REGISTRADOS EXCLUSIVAMENTE POR EL JEFE O SUPERVISOR DE SECCION, QUIEN DEBERA REVISAR QUE LA DATA REGISTRADA SEA CONTEMPORANEA SEGUN EL POE PDOC-207 VIGENTE.', tipoDato: 'Múltiple' }] },
-            { titulo: 'Despejes sin V°B°', planta: 'ambas', etapas: [], seccion: 'PROCEDIMIENTO', tipo: 'reemplazar', faseDesde: 2, area: 'Documentación',
-              detalle: 'Desde la fase 2 (también 2R) los despejes ya no llevan visto bueno: en el cuerpo del RMD, el paso de despeje se cambia por el de su etapa.',
-              pasos: [
-                { codigo: '184004', etapa: 'FABRICACION', descripcion: 'REALIZAR EL DESPEJE DE LA SALA SEGUN INSTRUCTIVO IPRO-P212 VIGENTE.' },
-                { codigo: '184008', etapa: 'ENVASE', descripcion: 'REALIZAR EL DESPEJE DE LA SALA SEGUN INSTRUCTIVO IPRO-P212 VIGENTE.' },
-                { codigo: '184495', etapa: 'ACONDICIONADO', descripcion: 'VERIFICAR EL DESPEJE DE LA LINEA DE TRABAJO ANTES DE INICIAR EL PROCESO Y REGISTRAR EN EL FORMATO DE INSPECCION EN LINEAS DE PRODUCCION (FPRO-250 VIGENTE), SEGUN INSTRUCTIVO IPRO-P212 VIGENTE.' },
-                { codigo: '184497', etapa: 'ACONDICIONADO', descripcion: 'REALIZAR EL DESPEJE DE LA LINEA DE TRABAJO Y REGISTRAR EN EL FORMATO DE INSPECCION EN LINEAS DE PRODUCCION (FPRO-250 VIGENTE), SEGUN INSTRUCTIVO IPRO-P212 VIGENTE.' }] },
-            { titulo: 'Conteo final: «Y/O PERSONAL DESIGNADO»', planta: 'ambas', etapas: ['ACONDICIONADO'], seccion: 'PROCEDIMIENTO', tipo: 'reemplazar', area: 'Documentación',
-              detalle: 'En acondicionado se cambia el paso del conteo final por este, que agrega «Y/O PERSONAL DESIGNADO».',
-              pasos: [{ codigo: '185192', descripcion: 'TERMINADO EL PROCESO, REALIZAR EL CONTEO DE LA CANTIDAD ACONDICIONADA. EN CASO DE QUE EN EL NIVEL SUPERIOR DEL PRODUCTO ACONDICIONADO (PLATAFORMAS) SE ENCUENTRE UNA CAJA INCOMPLETA, EL RESPONSABLE DE LA ENTREGA VERIFICARA EL MISMO Y LE COLOCARA ETIQUETA DE SALDO MAS SU FIRMA, ASI COMO EL VISTO DEL JEFE, SUPERVISOR DE LA SECCION Y/O PERSONAL DESIGNADO.', nota: 'Cambio: se agrega «Y/O PERSONAL DESIGNADO».' }] },
-            { titulo: 'Calidad en Operaciones: muestreo en fabricación', planta: 'ambas', etapas: ['FABRICACION'], seccion: '', tipo: 'agregar', area: 'Calidad de Operaciones',
-              detalle: 'Calidad en Operaciones muestrea y registra (Realizado por) y el jefe o supervisor verifica (V°B°).',
-              pasos: [
-                { codigo: '180900', descripcion: 'EL PERSONAL DE CALIDAD EN OPERACIONES INGRESA A LA SALA DE FABRICACION Y REALIZA EL MUESTREO PARA LOS ANALISIS CORRESPONDIENTES SEGUN EL POE PCPR-202 VIGENTE.', tipoDato: 'Realizado por', rPor: true },
-                { codigo: '180901', descripcion: 'CALIDAD EN OPERACIONES REGISTRA LOS RESULTADOS:', tipoDato: 'Realizado por', rPor: true },
-                { codigo: '180902', descripcion: 'EL JEFE O SUPERVISOR DE LA SECCION VERIFICA LA CONFORMIDAD DEL REGISTRO DE RESULTADOS EMITIDOS POR CALIDAD EN OPERACIONES.', tipoDato: 'Visto bueno', vb: true }] },
-            { titulo: 'Envase: granel aprobado', planta: 'ambas', etapas: ['ENVASE'], seccion: 'NOTAS IMPORTANTES', tipo: 'agregar', area: 'Calidad de Operaciones',
-              detalle: 'En envase, verificar que Notas importantes tenga este paso.',
-              pasos: [{ codigo: '180966', descripcion: 'VERIFICAR QUE EL GRANEL TENGA LA APROBACION DE CONTROL DE CALIDAD O CALIDAD EN OPERACIONES, SEGUN APLIQUE.', tipoDato: 'Múltiple' }] },
-            { titulo: 'Calidad en Operaciones: muestreo en envase', planta: 'ambas', etapas: ['ENVASE'], seccion: '', tipo: 'agregar', area: 'Calidad de Operaciones',
-              pasos: [{ codigo: '180942', descripcion: 'EL PERSONAL DE CALIDAD EN OPERACIONES INGRESA A LA SALA DE ENVASE Y REALIZA EL MUESTREO PARA LOS ANALISIS CORRESPONDIENTES SEGUN POE PCPR-202 VIGENTE.', tipoDato: 'Realizado por', rPor: true, estadoCC: true }] },
-            { titulo: 'Calidad en Operaciones: control inspectivo en acondicionado', planta: 'ambas', etapas: ['ACONDICIONADO'], seccion: '', tipo: 'agregar', area: 'Calidad de Operaciones',
-              pasos: [{ codigo: '180934', descripcion: 'EL PERSONAL DE CALIDAD EN OPERACIONES REALIZA EL CONTROL INSPECTIVO DEL PROCESO Y RETIRA SUS MUESTRAS PARA LOS ANALISIS CORRESPONDIENTES SEGUN EL POE PCPR-204 VIGENTE.', tipoDato: 'Realizado por', rPor: true, estadoCC: true }] }
-        ];
-
-        async function cargarIniciales() {
-            if (lista.length) return;
-            const u = await pedirUsuario();
-            if (!u) return;
-            const fecha = ahora();
-            for (const base of INICIALES) {
-                const a = normalizar(Object.assign({}, base, { creadoPor: u, actualizadoPor: u, creadoEn: fecha, actualizadoEn: fecha,
-                    historial: [{ fecha, por: u, accion: 'Cargó el acuerdo desde los Word anteriores' }] }));
-                await storeSet(PREFIJO + a.id, a);
-                lista.push(a);
-            }
-            try { await dbStore.setItem(CACHE_KEY, lista); } catch (e) { /* caché no crítica */ }
-            render();
+        // ---------- Imágenes ----------
+        const MAX_IMGS = 8, LADO_IMG = 1600;
+        // Reduce la imagen (lado mayor 1600 px, WebP o JPEG) para que la fila de Supabase no pese de más; igual que el portal.
+        function comprimirImagen(archivo) {
+            return new Promise((ok, mal) => {
+                const url = URL.createObjectURL(archivo), img = new Image();
+                img.onload = () => {
+                    const k = Math.min(1, LADO_IMG / Math.max(img.naturalWidth, img.naturalHeight, 1)), c = document.createElement('canvas');
+                    c.width = Math.max(1, Math.round(img.naturalWidth * k)); c.height = Math.max(1, Math.round(img.naturalHeight * k));
+                    const g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height); g.drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(url);
+                    let src = c.toDataURL('image/webp', 0.82); if (!src.startsWith('data:image/webp')) src = c.toDataURL('image/jpeg', 0.85);
+                    ok(src);
+                };
+                img.onerror = () => { URL.revokeObjectURL(url); mal(new Error(`«${archivo.name || 'imagen'}» no es una imagen que el navegador pueda abrir`)); };
+                img.src = url;
+            });
+        }
+        function verImagen(id, k) {
+            const a = porId(id), im = a && a.imagenes[k]; if (!im) return;
+            Swal.fire(Object.assign(swalBase(), { imageUrl: im.src, imageAlt: im.nombre || 'Imagen', title: im.nombre || undefined, width: 'min(1200px, 96vw)', showConfirmButton: false, showCloseButton: true }));
         }
 
         function iniciar() {
@@ -11158,7 +11186,7 @@ async function maybeAutoStartTour() {
         return {
             alEntrar: () => { if (!cargado) cargar(); else render(); },
             recargarPronto, nuevo: () => abrirEditor(null), editar: (id) => abrirEditor(porId(id)),
-            cambiarEstado, historial: verHistorial, exportar, importar, cargarIniciales,
+            cambiarEstado, historial: verHistorial, exportar, importar, verImagen,
             _lista: () => lista
         };
     })();

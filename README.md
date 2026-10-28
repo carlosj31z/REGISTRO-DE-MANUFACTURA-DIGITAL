@@ -359,11 +359,12 @@ Si vas a tocar Producción, estos son los patrones defensivos que ya están inst
 
 ## 13. Pestaña Acuerdos
 
-Reemplaza los Word «TODAS LAS ETAPAS» y «CAMBIOS DE CALIDAD DE OPERACIONES». Cada acuerdo dice qué paso debe ir en qué sección y etapa del RMD (con Tipo dato, R. Por, V°B° y Estado CC), para qué planta (Planta 1 ATE, Planta 2 LIMA o ambas), desde qué fase aplica (p. ej. fase 2, que incluye 2R y las siguientes; la fase sale de la 1.ª línea de Observaciones) y una condición opcional en texto y quién lo pidió.
+Reemplaza los Word «TODAS LAS ETAPAS» y «CAMBIOS DE CALIDAD DE OPERACIONES»: los acuerdos se escriben a mano (no se cargan de los Word), aquí o en el portal SAP (Configuración Maestra › Acuerdos). Cada acuerdo tiene un texto libre y puede llevar pasos de referencia e imágenes. Dice qué paso debe ir en qué sección y etapa del RMD (con Tipo dato, R. Por, V°B° y Estado CC), para qué planta (Planta 1 ATE, Planta 2 LIMA o ambas), desde qué fase aplica (p. ej. fase 2, que incluye 2R y las siguientes; la fase sale de la 1.ª línea de Observaciones) y una condición opcional en texto y quién lo pidió.
 
 - **Dónde se guarda:** en Supabase, tabla `rmd_dashboard_kv`, una fila por acuerdo con la key `acuerdo:<id>` (así dos personas editando acuerdos distintos no se pisan). No hace falta crear tablas nuevas. Realtime avisa a las otras PCs y recargan la lista (`Acuerdos.recargarPronto`, llamado desde `onRemoteKeyChanged`). La lista también queda en la caché local (`acuerdos_cache`) por si no hay red.
 - **Quién edita:** la primera vez se pide el nombre y se guarda en `localStorage` (`acuerdos_usuario`). Cada cambio queda en el historial del acuerdo.
 - **Anular en vez de borrar:** un acuerdo anulado deja de aplicarse pero sigue visible en el filtro «Anulados» y se puede reactivar.
-- **Exportar / Importar:** Excel con hojas `Acuerdos`, `Pasos` e `Historial`. Al importar se compara por ID: los nuevos se agregan y los existentes solo se reemplazan si el archivo trae una edición más reciente.
-- **Portal SAP:** el script de mejoras del portal lee las mismas filas `acuerdo:*` para mostrarlas y avisar si un RMD no cumple.
+- **Imágenes:** se pegan con Ctrl+V, se arrastran o se eligen; se reducen (lado mayor 1600 px, WebP o JPEG) y se guardan dentro del mismo acuerdo (`imagenes: [{ id, nombre, src }]`, hasta 8).
+- **Exportar / Importar:** Excel con hojas `Acuerdos`, `Pasos`, `Historial` e `Imagenes` (cada imagen en trozos de 30 000 caracteres; el portal usa el mismo formato). Al importar se compara por ID: los nuevos se agregan y los existentes solo se reemplazan si el archivo trae una edición más reciente.
+- **Portal SAP:** el script de mejoras del portal lee y escribe las mismas filas `acuerdo:*` (pestaña «Acuerdos» de Configuración Maestra, desde la v1.103.0) y avisa si un RMD no cumple.
 - Todo el código está en el bloque `const Acuerdos = (() => { … })()` al final de `index.html`.
