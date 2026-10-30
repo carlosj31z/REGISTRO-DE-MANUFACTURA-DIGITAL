@@ -12606,7 +12606,7 @@ async function maybeAutoStartTour() {
             XLSX.utils.book_append_sheet(wb, hojaInfo([['Número', `${det.titulo} · ${det.sub}`], ['En el status', Number.isFinite(det.numero) ? det.numero : ''], ['Filas del detalle', det.filas.length],
                 ['Qué cuenta', det.explica || ''], ...(det.aviso ? [['Aviso', det.aviso]] : []), ['Datos de SAP del', sapTxt(ultimo)], ['Periodo del status', ultimo ? ultimo.per.texto : ''],
                 ['Descargado el', dayjs().format('DD/MM/YYYY HH:mm')]]), 'Info');
-            XLSX.writeFile(wb, `Detalle_Status_RMD_${nombreArchivo(`${det.titulo} ${det.pl === 'ambas' ? 'P1 y P2' : det.pl}`)}.xlsx`);
+            XLSX.writeFile(wb, `Detalle_Status_RMD_${nombreArchivo(`${det.titulo} ${det.pl === 'ambas' ? 'P1 y P2' : det.pl}`)}.xlsx`, { compression: true });
         }
         // Todo junto: una hoja por parte de la pestaña, con lo que cuenta cada número (se filtra en Excel por mes, casilla, etc.).
         function exportarTodo() {
@@ -12637,7 +12637,8 @@ async function maybeAutoStartTour() {
             }
             hoja('Ruta 2 caracterizaciones', 'r2', detalleRuta(d, 'r2', 'ambas', 'todo').filas, 'RMD con Motivo CARACTERIZACION que cuentan en la Ruta 2: situación, estatus y responsable.');
             XLSX.utils.book_append_sheet(wb, hojaInfo(info), 'Info');
-            XLSX.writeFile(wb, `Detalle_Status_RMD_${d.per.hasta.format('YYYY-MM-DD')}.xlsx`);
+            // Comprimido: con los datos reales pesa unas tres veces menos (sin comprimir pasaba de 6 MB).
+            XLSX.writeFile(wb, `Detalle_Status_RMD_${d.per.hasta.format('YYYY-MM-DD')}.xlsx`, { compression: true });
         }
 
         function pintar() {
