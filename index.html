@@ -11359,12 +11359,12 @@ async function maybeAutoStartTour() {
         .sts-det-n { color:#94a3b8; font-variant-numeric:tabular-nums; }
         .sts-det-wrap { max-height:min(58vh, 560px); overflow:auto; border:1px solid rgba(255, 255, 255, .1); border-radius:8px; }
         .sts-det-tabla { width:100%; border-collapse:collapse; font-size:12px; }
-        .sts-det-tabla th { position:sticky; top:0; z-index:1; background:#1e293b; color:#94a3b8; font-size:10.5px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; text-align:left; padding:8px; white-space:nowrap; }
+        .sts-det-tabla th { position:sticky; top:0; z-index:1; background:#1e293b; color:#94a3b8; font-size:10.5px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; text-align:left; vertical-align:bottom; padding:8px; white-space:normal; word-break:normal; overflow-wrap:normal; }
         .sts-det-tabla td { padding:7px 8px; border-top:1px solid rgba(255, 255, 255, .07); color:#e2e8f0; vertical-align:top; white-space:nowrap; word-break:normal; overflow-wrap:normal; }
         .sts-det-tabla tr:hover td { background:rgba(255, 255, 255, .04); }
         .sts-det-tabla td.mono { font-variant-numeric:tabular-nums; white-space:nowrap; }
-        .sts-det-tabla td.desc { min-width:200px; white-space:normal; }
-        .sts-det-tabla td.obs { min-width:180px; max-width:300px; white-space:normal; font-size:11.5px; color:#cbd5e1; }
+        .sts-det-tabla td.desc { min-width:150px; white-space:normal; }
+        .sts-det-tabla td.obs { min-width:140px; max-width:260px; white-space:normal; font-size:11.5px; color:#cbd5e1; }
         .sts-det-estado { font-size:11px; font-weight:600; padding:2px 7px; border-radius:6px; background:rgba(255, 255, 255, .08); white-space:nowrap; }
         .sts-det-estado.ok { background:rgba(81, 181, 127, .16); color:#6ee7b7; }
         .sts-det-vacio { color:#94a3b8; padding:18px 0; text-align:center; }
@@ -12566,7 +12566,7 @@ async function maybeAutoStartTour() {
                 html: `<div class="sts-det"><div class="sts-det-sub">${esc(det.sub)}</div>
                     ${det.aviso ? `<div class="sts-det-aviso">${esc(det.aviso)}</div>` : ''}
                     ${det.explica ? `<p class="sts-det-explica">${esc(det.explica)}</p>` : ''}${tabla}</div>`,
-                width: 'min(1200px, 96vw)', background: '#0f172a', color: '#e2e8f0', customClass: { popup: 'sts-det-popup' },
+                width: 'min(1320px, 96vw)', background: '#0f172a', color: '#e2e8f0', customClass: { popup: 'sts-det-popup' },
                 confirmButtonText: 'Cerrar', showDenyButton: filas.length > 0, denyButtonText: 'Descargar Excel', denyButtonColor: '#475569',
                 preDeny: () => { exportarDetalle(det); return false; },
                 didOpen: (el) => {
