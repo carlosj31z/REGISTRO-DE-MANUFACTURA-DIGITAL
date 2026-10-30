@@ -11516,35 +11516,45 @@ async function maybeAutoStartTour() {
             return { v: 1, generado: t.generado || new Date().toISOString(), desde, leidos, items };
         }
         // Estado de un RMD justo antes del primer cambio leído de su Trazabilidad, si ya existía (se registró antes).
-        const ANTERIOR_A = { SUSPENDIDO: 'AUTORIZADO', AUTORIZADO: 'INGRESADO', CANCELADO: 'INGRESADO', INGRESADO: 'AUTORIZADO' };
+        const ANTERIOR_A = { SUSPENDIDO: 'AUTORIZADO', AUTORIZADO: 'INGRESADO', CANCELADO: 'INGRESADO', INGRESADO: 'AUTORIZADO', 'SOLICITUD APROBADA': 'SOLICITADO', 'SOLICITUD RECHAZADA': 'SOLICITADO' };
         // Línea de tiempo de un RMD: [[ms, ESTADO], …] en orden, terminando en su estado de hoy (ahora = cuándo se leyó SAP).
         // null = sin cambios conocidos: siempre como hoy.
-        function lineaDeTiempo(e, traz, ahora) {
+        function lineaDeTiempo(e, traz, ahora, suspendidoEn) {
             const t = traz && traz.items && traz.items[claveTrazabilidad(e)];
             let ev;
             if (t && t.length) {
                 ev = t.map(([s, l]) => [s * 1000, LETRA_ESTADO[l]]).filter((x) => x[1]);
                 const prev = ev.length && ANTERIOR_A[ev[0][1]];
                 if (prev && Number.isFinite(e.fecha) && e.fecha < ev[0][0] - 3600000) ev.unshift([e.fecha, prev]);
-            } else ev = lineaAproximada(e);
+            } else if (traz && Date.parse(traz.desde)) {
+                // Sin cambios en la Trazabilidad leída: ya estaba como hoy cuando empieza (o desde su registro, si es posterior).
+                const desde = Date.parse(traz.desde);
+                ev = [[Number.isFinite(e.fecha) && e.fecha > desde ? e.fecha : 0, e.estadoNorm]];
+            } else ev = lineaAproximada(e, suspendidoEn);
             if (!ev || !ev.length) return null;
             const ult = ev[ev.length - 1];
             if (ult[1] !== e.estadoNorm) ev.push([Math.max(ahora, ult[0]), e.estadoNorm]);
             return ev;
         }
         // Sin Trazabilidad: Fecha Solicitud, Fecha Registro y Fecha Autorización de SAP. En un Suspendido la Fecha Autorización
-        // es la de su suspensión, así que su autorización se toma en su registro; un Cancelado no cuenta nunca.
-        function lineaAproximada(e) {
+        // es la de su última autorización; se suspende al autorizarse una versión posterior del mismo máster (suspendidoEn) o,
+        // si no la hay, se toma suspendido desde esa autorización. Un Cancelado no cuenta nunca.
+        const diaDeSap = (txt) => { const m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(String(txt || '').trim()); return m ? new Date(+m[3], +m[2] - 1, +m[1], 23, 59).getTime() : null; };
+        function lineaAproximada(e, suspendidoEn) {
             if (e.estadoNorm === 'CANCELADO') return [[0, 'CANCELADO']];
             const fila = filaDetalleDeEntrada(e);
-            const dia = (txt) => { const m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(String(txt || '').trim()); return m ? new Date(+m[3], +m[2] - 1, +m[1], 23, 59).getTime() : null; };
-            const est = e.estadoNorm, tS = dia(fila && fila.fechaSolicitud), tR = Number.isFinite(e.fecha) ? e.fecha : null, tA = dia(fila && fila.fechaAutorizacion);
+            const est = e.estadoNorm, tS = diaDeSap(fila && fila.fechaSolicitud), tR = Number.isFinite(e.fecha) ? e.fecha : null, tA = diaDeSap(fila && fila.fechaAutorizacion);
             const ev = [];
             if (tS) ev.push([tS, 'SOLICITADO']);
             if ((est === 'SOLICITUD APROBADA' || est === 'SOLICITUD RECHAZADA') && (tA || tS)) ev.push([tA || tS, est]);
             if (tR) ev.push([tR, 'INGRESADO']);
             if (est === 'AUTORIZADO' && (tA || tR)) ev.push([tA || tR, 'AUTORIZADO']);
-            if (est === 'SUSPENDIDO') { if (tR) ev.push([tR, 'AUTORIZADO']); if (tA) ev.push([tA, 'SUSPENDIDO']); }
+            if (est === 'SUSPENDIDO') {
+                const tU = tA || tR;
+                if (tU) ev.push([tU, 'AUTORIZADO']);
+                const tX = Number.isFinite(suspendidoEn) && suspendidoEn >= (tU || 0) ? suspendidoEn : tU;
+                if (tX) ev.push([tX, 'SUSPENDIDO']);
+            }
             let ult = -Infinity;
             return ev.map(([t, x]) => { ult = Math.max(t, ult); return [ult, x]; });
         }
@@ -11553,9 +11563,30 @@ async function maybeAutoStartTour() {
         function indiceHistorico(traz) {
             if (historico && historico.datos === rmdPrecisoDatos && historico.traz === traz && historico.detalle === rmdAutorizadosDetalle) return historico;
             const ahora = Date.parse(rmdPrecisoDatos.estadosActualizados || rmdPrecisoDatos.generado || '') || Date.now();
+            const susp = traz ? new Map() : suspensionesAproximadas(rmdPrecisoDatos);
             historico = { datos: rmdPrecisoDatos, traz, detalle: rmdAutorizadosDetalle, ahora,
-                idx: construirIndicePreciso(rmdPrecisoDatos, { conCancelados: true, linea: (e) => lineaDeTiempo(e, traz, ahora) }) };
+                idx: construirIndicePreciso(rmdPrecisoDatos, { conCancelados: true, linea: (e) => lineaDeTiempo(e, traz, ahora, susp.get(claveTrazabilidad(e))) }) };
             return historico;
+        }
+        // Sin Trazabilidad: cuándo se suspendió cada versión Suspendida = la primera Fecha Autorización de una versión posterior
+        // del mismo máster (linaje) y etapa, porque al autorizarse una versión SAP suspende la anterior. clave → ms.
+        function suspensionesAproximadas(datos) {
+            const grupos = new Map(), res = new Map();
+            datos.filas.forEach(([rmd, linaje, version, estado, etapaTxt, , , , , , solicitud]) => {
+                const etapa = mapEtapaAFija(normalizeEtapa(etapaTxt)), est = normalizeEstadoRmd(estado);
+                if (!etapa || !linaje || (est !== 'AUTORIZADO' && est !== 'SUSPENDIDO')) return;
+                const e = { rmd, sol: solicitud || '', version: Number(version) || 0, etapa, est };
+                e.tA = diaDeSap((filaDetalleDeEntrada(e) || {}).fechaAutorizacion);
+                const k = `${linaje}|${etapa}`;
+                if (!grupos.has(k)) grupos.set(k, []);
+                grupos.get(k).push(e);
+            });
+            grupos.forEach((g) => g.forEach((e) => {
+                if (e.est !== 'SUSPENDIDO') return;
+                const t = g.filter((x) => x.version > e.version && x.tA).map((x) => x.tA);
+                if (t.length) res.set(claveTrazabilidad(e), Math.min(...t));
+            }));
+            return res;
         }
         function entradaEn(x, t) {
             const l = x.linea;
