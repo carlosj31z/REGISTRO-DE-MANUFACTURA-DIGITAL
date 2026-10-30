@@ -3295,6 +3295,133 @@ alter publication supabase_realtime add table public.rmd_dashboard_kv;`;
             return historial;
         }
 
+        // ==================== PROGRAMA ACUMULADO (pestaña Status RMD) ====================
+        // El Programa de Producción se reemplaza con cada carga y solo conserva las fechas desde hoy. Para contar los
+        // pendientes desde que se usa la página, cada carga suma sus productos a prod_acumulado_<planta>, que nunca se
+        // borra (tampoco al limpiar el programa). Una entrada por material:
+        //   { v: 1, inicio, detalleDesde, actualizado, cargas: [ISO…], items: { material: { p: producto, a: [áreas], e: entró,
+        //     u: última carga en que estaba, s: primera carga en que ya no estaba (null si sigue), n: cargas en que estuvo } } }
+        // Mientras no exista (hasta la primera carga con esta versión), se reconstruye con lo que la página ya guardaba.
+        // Detalle con que el historial anota cada carga (hasta agosto de 2026 las plantas se llamaban Planta 1 y Planta 2).
+        const RE_CARGA_PROGRAMA = { planta1: /^Excel de Producción \(Planta (?:ATE|1)\)/, planta2: /^Excel de Producción \(Planta (?:LIMA|2)\)/ };
+        const TOLERANCIA_CARGA_MS = 30 * 60000; // el DNI se registra segundos antes que la foto de la misma carga
+        function sumarCargaAlAcumulado(acc, data, fecha) {
+            const enCarga = new Set();
+            (data || []).forEach(p => {
+                const m = normalizeMaterialCode(p.codigo);
+                if (!m) return;
+                const it = acc.items[m] || (acc.items[m] = { p: '', a: [], e: fecha, u: fecha, s: null, n: 0 });
+                if (fecha < it.e) it.e = fecha;
+                if (fecha >= it.u) { it.u = fecha; it.s = null; }
+                if (p.producto) it.p = p.producto;
+                if (p.area && !it.a.includes(p.area)) it.a.push(p.area);
+                if (!enCarga.has(m)) { it.n++; enCarga.add(m); }
+            });
+            Object.values(acc.items).forEach(it => { if (!it.s && it.u < fecha) it.s = fecha; });
+            if (!acc.cargas.includes(fecha)) { acc.cargas.push(fecha); acc.cargas.sort(); }
+            acc.inicio = acc.cargas[0];
+            if (!acc.detalleDesde || fecha < acc.detalleDesde) acc.detalleDesde = fecha;
+            acc.actualizado = new Date().toISOString();
+            return acc;
+        }
+        // Una sola fecha por carga: el DNI del historial y la foto de la misma carga van con segundos de diferencia.
+        function unirFechasDeCarga(fechas) {
+            const out = [];
+            [...new Set(fechas.filter(Boolean))].sort().forEach(f => {
+                const ult = out[out.length - 1];
+                if (ult && Date.parse(f) - Date.parse(ult) <= TOLERANCIA_CARGA_MS) out[out.length - 1] = f; else out.push(f);
+            });
+            return out;
+        }
+        // Reconstrucción con lo guardado antes de esta versión. Cada foto de prod_historial (hasta 30, la más reciente
+        // primero) dice qué productos entraron (nuevos), siguieron (reprogramados) o salieron (desaparecidos) respecto de la
+        // carga anterior, y cuántos había antes y después. El programa entero de cada carga sale de ir hacia atrás desde el
+        // actual (antes = después − nuevos + desaparecidos) mientras cuadren esos totales, o de la propia foto cuando sus
+        // cambios suman el total (nadie quedó igual, lo normal porque cada carga deja solo las fechas desde hoy). Si no,
+        // de esa carga solo se sabe lo que aparece en sus cambios. La carga anterior a una foto es la última conocida antes
+        // de ella (fotos e historial de trazabilidad, fechasCarga): tras limpiar el programa, la primera carga no deja foto.
+        function reconstruirAcumulado(hist, dataActual, fechasCarga) {
+            const fotos = (Array.isArray(hist) ? hist : []).filter(h => h && h.fecha && h.cambios).sort((a, b) => (a.fecha < b.fecha ? 1 : -1));
+            const actual = Array.isArray(dataActual) ? dataActual : [];
+            const cargasConocidas = unirFechasDeCarga([...(fechasCarga || []), ...fotos.map(f => f.fecha)]);
+            const anteriorA = (fecha) => cargasConocidas.filter(x => Date.parse(x) < Date.parse(fecha) - TOLERANCIA_CARGA_MS).pop() || fecha;
+            const presentes = new Map(); // fecha de carga -> Map(material -> { producto, areas })
+            const marcar = (fecha, p) => {
+                const m = normalizeMaterialCode(p && p.codigo);
+                if (!m) return;
+                let x = presentes.get(fecha);
+                if (!x) presentes.set(fecha, x = new Map());
+                const y = x.get(m) || { producto: '', areas: new Set() };
+                if (p.producto) y.producto = p.producto;
+                if (p.area) y.areas.add(p.area);
+                x.set(m, y);
+            };
+            const mapa = (lista) => new Map(lista.map(p => [claveMaterial(p), p]));
+            const cuadra = (m, total) => typeof total !== 'number' || m.size === total;
+            const ultimaCarga = cargasConocidas[cargasConocidas.length - 1] || null;
+            const huboOtraCarga = fotos.length > 0 && ultimaCarga && Date.parse(ultimaCarga) > Date.parse(fotos[0].fecha) + TOLERANCIA_CARGA_MS;
+            let completo = null; // el programa entero tras la foto que se recorre
+            if (fotos.length && !huboOtraCarga) completo = mapa(actual);
+            else actual.forEach(p => marcar(ultimaCarga || new Date().toISOString(), p));
+            fotos.forEach((f, i) => {
+                const c = f.cambios, nuevos = c.nuevos || [], siguen = c.reprogramados || [], salieron = c.desaparecidos || [];
+                const fechaAntes = anteriorA(f.fecha);
+                if (completo && !cuadra(completo, f.totalMaterialesAhora)) completo = null;
+                if (!completo && nuevos.length + siguen.length === f.totalMaterialesAhora) completo = mapa([...nuevos, ...siguen]);
+                if (completo) completo.forEach(p => marcar(f.fecha, p));
+                nuevos.forEach(p => marcar(f.fecha, p));
+                siguen.forEach(p => { marcar(f.fecha, p); marcar(fechaAntes, p); });
+                salieron.forEach(p => marcar(fechaAntes, p));
+                let antes = null;
+                if (completo) {
+                    antes = new Map(completo);
+                    nuevos.forEach(p => antes.delete(claveMaterial(p)));
+                    salieron.forEach(p => antes.set(claveMaterial(p), p));
+                    if (!cuadra(antes, f.totalMaterialesAntes)) antes = null;
+                }
+                if (!antes && siguen.length + salieron.length === f.totalMaterialesAntes) antes = mapa([...siguen, ...salieron]);
+                // La carga anterior a esta foto: si es la de la foto siguiente, allí se marca; si no dejó foto, aquí.
+                if (antes && (i + 1 === fotos.length || Date.parse(fechaAntes) > Date.parse(fotos[i + 1].fecha) + TOLERANCIA_CARGA_MS)) antes.forEach(p => marcar(fechaAntes, p));
+                completo = antes && i + 1 < fotos.length && Date.parse(fechaAntes) <= Date.parse(fotos[i + 1].fecha) + TOLERANCIA_CARGA_MS ? antes : null;
+            });
+            const acc = { v: 1, inicio: null, detalleDesde: null, actualizado: new Date().toISOString(), reconstruido: true, cargas: [], items: {} };
+            const conDetalle = [...presentes.keys()].sort();
+            acc.cargas = unirFechasDeCarga([...conDetalle, ...cargasConocidas]);
+            acc.inicio = acc.cargas[0] || null;
+            acc.detalleDesde = conDetalle[0] || null;
+            conDetalle.forEach(fecha => presentes.get(fecha).forEach((x, m) => {
+                const it = acc.items[m] || (acc.items[m] = { p: '', a: [], e: fecha, u: fecha, s: null, n: 0 });
+                if (fecha > it.u) it.u = fecha;
+                if (x.producto) it.p = x.producto;
+                x.areas.forEach(a => { if (!it.a.includes(a)) it.a.push(a); });
+                it.n++;
+            }));
+            const enActual = new Set(actual.map(p => normalizeMaterialCode(p.codigo)).filter(Boolean));
+            Object.entries(acc.items).forEach(([m, it]) => {
+                it.s = enActual.has(m) ? null : (acc.cargas.find(f => Date.parse(f) > Date.parse(it.u) + TOLERANCIA_CARGA_MS) || null);
+            });
+            return acc;
+        }
+        function fechasDeCargaPrograma(historial, plantaKey) {
+            const re = RE_CARGA_PROGRAMA[plantaKey];
+            return (Array.isArray(historial) ? historial : []).filter(h => h && h.fecha && h.accion === 'Carga de archivo' && re && re.test(h.detalle || '')).map(h => h.fecha);
+        }
+        // El acumulado guardado o, si todavía no hay, el reconstruido (sin guardarlo: se guarda con la próxima carga).
+        async function leerAcumuladoPrograma(plantaKey) {
+            const acc = await storeGet(`prod_acumulado_${plantaKey}`);
+            if (acc && acc.v === 1 && acc.items) return acc;
+            const [hist, prod, hTraz] = await Promise.all([storeGet(`prod_historial_${plantaKey}`), storeGet(`prod_data_${plantaKey}`), storeGet('historial_trazabilidad')]);
+            return reconstruirAcumulado(hist, prod && prod.data, fechasDeCargaPrograma(hTraz, plantaKey));
+        }
+        // Con cada carga del programa, después de su foto en el historial (así la reconstrucción ya la incluye).
+        async function acumularCargaPrograma(plantaKey, data) {
+            const clave = `prod_acumulado_${plantaKey}`;
+            const guardado = await storeGet(clave);
+            const acc = guardado && guardado.v === 1 && guardado.items ? sumarCargaAlAcumulado(guardado, data, new Date().toISOString())
+                : await leerAcumuladoPrograma(plantaKey);
+            return storeSet(clave, acc);
+        }
+
         function escapeHtmlHistProd(s) { const d = document.createElement('div'); d.textContent = s == null ? '' : String(s); return d.innerHTML; }
 
         // Modal principal del historial de trazabilidad del Programa de
@@ -4734,6 +4861,10 @@ function buildDateColumnMapPlanta1(headerRow, weekLabelRow, hiddenCols) {
                     if (guardadoOk && dataAnteriorParaComparar.length > 0) {
                         await registrarSnapshotProduccion(plantaObjetivo, dataAnteriorParaComparar, nuevaProductionData);
                     }
+                    // Programa acumulado (pestaña Status RMD): esta carga se suma a todo lo programado antes.
+                    if (guardadoOk) {
+                        try { await acumularCargaPrograma(plantaObjetivo, nuevaProductionData); } catch (accErr) { console.error('Programa acumulado:', accErr); }
+                    }
 
                     if (currentPlanta === plantaObjetivo) {
                         // El usuario sigue viendo la misma planta: reflejamos el
@@ -5933,8 +6064,11 @@ async function downloadPlanProduccionFromCloud() {
         // Índices. Una "cadena" = TODOS los RMD de un mismo material (receta o Código por Defecto) en una misma etapa,
         // de cualquier máster (no depende del Código Agrupador, que en SAP puede cambiar entre versiones). No se usa el "Linaje" (codigoversionprincipal) para agrupar: en los datos reales viene vacío en la
         // mayoría de las versiones (ej. ANDREWS Fabricación v1…v8 no están enlazadas), así que partiría cadenas.
-        function construirIndicePreciso(datos) {
+        // opciones (solo para el Programa acumulado de Status RMD, que mira cada etapa en fechas pasadas): conCancelados = también
+        // los Cancelados (antes de cancelarse contaban); linea(e) = línea de tiempo de cada RMD (StatusRmd.lineaDeTiempo).
+        function construirIndicePreciso(datos, opciones) {
             if (!datos || !Array.isArray(datos.filas) || datos.filas.length === 0) return null;
+            const conCancelados = !!(opciones && opciones.conCancelados), lineaDe = opciones && opciones.linea;
             const agregarLista = (map, k, v) => { let s = map.get(k); if (!s) { s = []; map.set(k, s); } s.push(v); };
             const agregarSet = (map, k, v) => { let s = map.get(k); if (!s) { s = new Set(); map.set(k, s); } s.add(v); };
             const idx = {
@@ -5946,8 +6080,9 @@ async function downloadPlanProduccionFromCloud() {
                 const etapa = mapEtapaAFija(normalizeEtapa(etapaTxt));
                 if (!etapa) return;
                 const estadoNorm = normalizeEstadoRmd(estado);
-                if (ESTADOS_IGNORADOS_RMD.has(estadoNorm)) return; // Cancelados: no cuentan
+                if (ESTADOS_IGNORADOS_RMD.has(estadoNorm) && !conCancelados) return; // Cancelados: no cuentan
                 const e = { rmd, sol: solicitud || '', version: Number(version) || 0, estado, estadoNorm, etapa, desc, defecto, fecha: Number.isFinite(fechaRegistro) ? fechaRegistro : null, rea: esMasterReacondicionado(desc) };
+                if (lineaDe) e.linea = lineaDe(e);
                 const materiales = new Set();
                 if (defecto) materiales.add(defecto);
                 (recetas || []).forEach(([m]) => { if (m) materiales.add(m); });
@@ -6825,6 +6960,14 @@ async function downloadPlanProduccionFromCloud() {
                 // llegan y se conservan las de la última sincronización.
                 const ops = msg.opSap ? normalizarOpsSap(msg.opSap) : null;
                 if (ops) { opsSap = ops; await storeSet('val_op_sap', ops); }
+                // Script v1.108.0+: la Trazabilidad de SAP (fecha de cada cambio de estado de cada RMD) para el Programa acumulado
+                // de Status RMD. Se suma a la ya guardada. Si falla, el maestro se procesa igual.
+                if (msg.trazabilidad) {
+                    try {
+                        const traz = StatusRmd.trazabilidadDesdePuente(msg.trazabilidad, await storeGet('val_rmd_trazabilidad'));
+                        if (traz) await storeSet('val_rmd_trazabilidad', traz);
+                    } catch (err) { console.error('Trazabilidad de SAP:', err); }
+                }
                 const r = await procesarFilasRmd(rows, { fileName: `SAP_${String(msg.generado || '').slice(0, 10) || 'portal'}.xlsx`, origen: 'sap', generado: msg.generado,
                     usuarioTxt: identidadSap ? identidadSap.usuarioTxt : null });
                 responder(r && r.ok ? { ok: true, resumen: r.resumen } : { ok: false, motivo: (r && r.motivo) || 'no se pudo procesar' });
@@ -6960,6 +7103,7 @@ async function downloadPlanProduccionFromCloud() {
                             fechaRegistro: fechaRegistroCol !== -1 ? fechaTexto(row[fechaRegistroCol]) : '',
                             usuarioRegistro: usuarioRegistroCol !== -1 ? String(row[usuarioRegistroCol] || '').trim() : '',
                             fechaAutorizacion: fechaAutorizacionCol !== -1 ? fechaTexto(row[fechaAutorizacionCol]) : '',
+                            fechaSolicitud: fechaSolicitudCol !== -1 ? fechaTexto(row[fechaSolicitudCol]) : '',
                             usuarioAutorizacion: usuarioAutorizacionCol !== -1 ? String(row[usuarioAutorizacionCol] || '').trim() : ''
                         });
                     });
@@ -9424,12 +9568,12 @@ function updateForecastActiveFiltersBadge() {
             'dashboard_products_rmd', 'dashboard_activity_rmd',
             'prod_data_planta1', 'prod_data_planta2',
             'prod_archivo_original_planta1', 'prod_archivo_original_planta2',
-            'prod_historial_planta1', 'prod_historial_planta2',
+            'prod_historial_planta1', 'prod_historial_planta2', 'prod_acumulado_planta1', 'prod_acumulado_planta2',
             'forecast_data', 'forecast_months_meta',
             'val_flags', 'val_rmd_autorizados_detalle', 'val_rmd_preciso', 'val_cambios_sap', 'val_op_sap',
             'val_manual_autorizados', 'val_manual_autorizados_meta', 'val_manual_autorizados_forecast', 'val_manual_autorizados_forecast_meta',
             'val_responsables_etapa', 'val_estatus_etapa',
-            'val_rmd_indicadores_mes', 'val_rmd_caracterizaciones', 'val_estatus_caracterizacion',
+            'val_rmd_indicadores_mes', 'val_rmd_caracterizaciones', 'val_estatus_caracterizacion', 'val_rmd_trazabilidad',
             'historial_trazabilidad', 'tour_completed'
         ];
 
@@ -11020,6 +11164,9 @@ async function maybeAutoStartTour() {
            planta, de los datos de SAP; se resumen al sincronizar o cargar el Exportado (indicadoresDesdeFilas → val_rmd_indicadores_mes).
          - Ruta 1, Programa: las etapas del Programa de Producción de cada planta con la misma evaluación de la pestaña
            Producción (árbol + RMD de SAP + autorizaciones manuales) y el Estatus elegido en cada etapa pendiente.
+         - Programa acumulado: cada etapa de cada producto que alguna vez entró al programa (prod_acumulado_<planta>), pendiente
+           desde que entró hasta que se autoriza, con las fechas de la Trazabilidad de SAP (val_rmd_trazabilidad); por mes y
+           planta: venían, nuevos, autorizados y quedan.
          - Ruta 2, Caracterizaciones: los RMD de SAP con Motivo CARACTERIZACION (caracterizacionesDesdeFilas →
            val_rmd_caracterizaciones). Autorizado/Suspendido en SAP = autorizado; el resto, pendiente con el Estatus que se
            elige aquí mismo (val_estatus_caracterizacion: { id: { e: estatus, r: responsable de PEND CC, f: fecha } }). -->
@@ -11144,6 +11291,16 @@ async function maybeAutoStartTour() {
         #tab-status .sts-estado { font-size:11px; font-weight:600; padding:2px 8px; border-radius:6px; background:var(--surface-1-faint); color:var(--slate-300); white-space:nowrap; }
         #tab-status .sts-estado.ok { background:rgba(var(--ok-rgb) / .14); color:rgb(var(--ok-rgb)); }
 
+        #tab-status .sts-meses { margin-top:12px; }
+        #tab-status .sts-meses th:not(:first-child), #tab-status .sts-meses td.mono { text-align:right; }
+        #tab-status .sts-meses td.aut { color:rgb(var(--copper-rgb)); font-weight:600; }
+        #tab-status .sts-meses td.fuerte { font-weight:700; }
+        #tab-status .sts-meses tr.actual td { background:var(--surface-1-faint); }
+        #tab-status .sts-desglose { display:flex; flex-direction:column; gap:6px; margin-top:12px; }
+        #tab-status .sts-desglose-fila { display:flex; flex-wrap:wrap; align-items:center; gap:6px; }
+        #tab-status .sts-desglose-lbl { font-size:10.5px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:var(--slate-400); margin-right:2px; }
+        #tab-status .sts-tabla td.obs { min-width:200px; max-width:320px; font-size:11.5px; color:var(--slate-300); }
+
         #tab-status .sts-esqueleto { display:grid; gap:12px; }
         #tab-status .sts-esqueleto div { height:86px; border-radius:14px; background:linear-gradient(90deg, var(--surface-1-faint) 0%, var(--surface-1) 50%, var(--surface-1-faint) 100%); background-size:200% 100%; animation:sts-brillo 1.4s ease-in-out infinite; }
         #tab-status .sts-esqueleto div:first-child { height:64px; }
@@ -11179,7 +11336,7 @@ async function maybeAutoStartTour() {
         let ultimo = null;          // último cálculo mostrado (es lo que va al PowerPoint)
         let graficos = [];
         let estatusCar = {};        // val_estatus_caracterizacion
-        const vista = { detalleAbierto: false, planta: '', soloPendientes: true };
+        const vista = { detalleAbierto: false, planta: '', soloPendientes: true, acuAbierto: false, acuPlanta: '', acuLista: 'pend' };
 
         // ---------- Lo que se guarda con cada sincronización con SAP / Exportado RMD ----------
         // Fecha de SAP → dayjs local: Date del Excel, ISO (con o sin hora) o DD/MM/AAAA.
@@ -11307,6 +11464,231 @@ async function maybeAutoStartTour() {
             return r;
         }
 
+        // ---------- Programa acumulado: pendientes y autorizados por mes ----------
+        // Cada etapa (RMD) de cada producto que alguna vez entró al Programa de Producción (prod_acumulado_<planta>) cuenta
+        // como pendiente desde que su producto entró al programa hasta que se autoriza; si después vuelve a quedar pendiente
+        // (versión nueva, suspensión), cuenta otra vez. El estado de la etapa en cada fecha sale del mismo cálculo de
+        // Producción (estadoDeCadenaPrecisa) con cada RMD como estaba en esa fecha según su línea de tiempo: la Trazabilidad
+        // de SAP (val_rmd_trazabilidad, que manda el script v1.108.0+ con «Enviar a Status RMD») o, sin ella, sus fechas de
+        // solicitud, registro y autorización. Así cuenta también lo que se autorizó y luego se suspendió (SAP deja en el RMD
+        // solo la última fecha de autorización; la Trazabilidad guarda cada cambio).
+        const LETRA_ESTADO = { S: 'SOLICITADO', A: 'SOLICITUD APROBADA', R: 'SOLICITUD RECHAZADA', I: 'INGRESADO', U: 'AUTORIZADO', X: 'SUSPENDIDO', C: 'CANCELADO' };
+        const LETRA_DE_ESTADO = Object.fromEntries(Object.entries(LETRA_ESTADO).map(([l, e]) => [e, l]));
+        // Si se reabre en menos de un día (p. ej. se autorizó, se volvió a Ingresado y se autorizó de nuevo), es el mismo pendiente.
+        const REABIERTO_MS = 24 * 3600000;
+        const claveTrazabilidad = (e) => `${e.rmd || ''}|${e.sol || ''}|${e.version}|${e.etapa}`;
+        function estadoDeTrazabilidad(txt) {
+            const t = normalizeEstadoRmd(txt);
+            if (!t) return null;
+            if (t.includes('RECHAZ')) return 'SOLICITUD RECHAZADA';
+            if (t.includes('APROBAD')) return 'SOLICITUD APROBADA';
+            if (t.includes('SOLICIT')) return 'SOLICITADO';
+            if (t.includes('SUSPEN')) return 'SUSPENDIDO';
+            if (t.includes('CANCEL') || t.includes('ANULA')) return 'CANCELADO';
+            if (t.includes('AUTORIZ')) return 'AUTORIZADO';
+            if (t.includes('INGRES')) return 'INGRESADO';
+            return null;
+        }
+        // Lo que manda el script: { v: 1, generado, desde, items: [[código, código de solicitud, versión, etapa, [[fecha ISO, estado], …]], …] }
+        // (los RMD con algún cambio desde «desde»; las solicitudes, que no tienen Trazabilidad, con su Fecha Solicitud y la
+        // de su aprobación o rechazo). Se guarda compacto ({ clave: [[segundos, letra], …] }) y SUMADO a lo ya guardado: lo
+        // leído en sincronizaciones anteriores no se pierde.
+        function trazabilidadDesdePuente(t, guardada) {
+            if (!t || !Array.isArray(t.items)) return null;
+            const previa = guardada && guardada.v === 1 && guardada.items ? guardada : null;
+            const items = Object.assign({}, previa ? previa.items : {});
+            let leidos = 0;
+            t.items.forEach((x) => {
+                if (!Array.isArray(x) || !Array.isArray(x[4])) return;
+                const etapa = mapEtapaAFija(normalizeEtapa(String(x[3] || '')));
+                if (!etapa) return;
+                const clave = claveTrazabilidad({ rmd: String(x[0] || '').trim(), sol: String(x[1] || '').trim(), version: Number(x[2]) || 0, etapa });
+                const ev = new Map((items[clave] || []).map((y) => [y[0] + y[1], y]));
+                x[4].forEach((y) => {
+                    const ms = Date.parse(y && y[0]), l = LETRA_DE_ESTADO[estadoDeTrazabilidad(y && y[1])];
+                    if (Number.isFinite(ms) && l) { const s = Math.round(ms / 1000); ev.set(s + l, [s, l]); }
+                });
+                if (!ev.size) return;
+                items[clave] = [...ev.values()].sort((a, b) => a[0] - b[0]);
+                leidos++;
+            });
+            const desde = [t.desde, previa && previa.desde].filter(Boolean).sort()[0] || null;
+            return { v: 1, generado: t.generado || new Date().toISOString(), desde, leidos, items };
+        }
+        // Estado de un RMD justo antes del primer cambio leído de su Trazabilidad, si ya existía (se registró antes).
+        const ANTERIOR_A = { SUSPENDIDO: 'AUTORIZADO', AUTORIZADO: 'INGRESADO', CANCELADO: 'INGRESADO', INGRESADO: 'AUTORIZADO' };
+        // Línea de tiempo de un RMD: [[ms, ESTADO], …] en orden, terminando en su estado de hoy (ahora = cuándo se leyó SAP).
+        // null = sin cambios conocidos: siempre como hoy.
+        function lineaDeTiempo(e, traz, ahora) {
+            const t = traz && traz.items && traz.items[claveTrazabilidad(e)];
+            let ev;
+            if (t && t.length) {
+                ev = t.map(([s, l]) => [s * 1000, LETRA_ESTADO[l]]).filter((x) => x[1]);
+                const prev = ev.length && ANTERIOR_A[ev[0][1]];
+                if (prev && Number.isFinite(e.fecha) && e.fecha < ev[0][0] - 3600000) ev.unshift([e.fecha, prev]);
+            } else ev = lineaAproximada(e);
+            if (!ev || !ev.length) return null;
+            const ult = ev[ev.length - 1];
+            if (ult[1] !== e.estadoNorm) ev.push([Math.max(ahora, ult[0]), e.estadoNorm]);
+            return ev;
+        }
+        // Sin Trazabilidad: Fecha Solicitud, Fecha Registro y Fecha Autorización de SAP. En un Suspendido la Fecha Autorización
+        // es la de su suspensión, así que su autorización se toma en su registro; un Cancelado no cuenta nunca.
+        function lineaAproximada(e) {
+            if (e.estadoNorm === 'CANCELADO') return [[0, 'CANCELADO']];
+            const fila = filaDetalleDeEntrada(e);
+            const dia = (txt) => { const m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(String(txt || '').trim()); return m ? new Date(+m[3], +m[2] - 1, +m[1], 23, 59).getTime() : null; };
+            const est = e.estadoNorm, tS = dia(fila && fila.fechaSolicitud), tR = Number.isFinite(e.fecha) ? e.fecha : null, tA = dia(fila && fila.fechaAutorizacion);
+            const ev = [];
+            if (tS) ev.push([tS, 'SOLICITADO']);
+            if ((est === 'SOLICITUD APROBADA' || est === 'SOLICITUD RECHAZADA') && (tA || tS)) ev.push([tA || tS, est]);
+            if (tR) ev.push([tR, 'INGRESADO']);
+            if (est === 'AUTORIZADO' && (tA || tR)) ev.push([tA || tR, 'AUTORIZADO']);
+            if (est === 'SUSPENDIDO') { if (tR) ev.push([tR, 'AUTORIZADO']); if (tA) ev.push([tA, 'SUSPENDIDO']); }
+            let ult = -Infinity;
+            return ev.map(([t, x]) => { ult = Math.max(t, ult); return [ult, x]; });
+        }
+        // Índice de RMD con Cancelados y líneas de tiempo; se rehace solo si cambian los datos de SAP o la Trazabilidad.
+        let historico = null;
+        function indiceHistorico(traz) {
+            if (historico && historico.datos === rmdPrecisoDatos && historico.traz === traz && historico.detalle === rmdAutorizadosDetalle) return historico;
+            const ahora = Date.parse(rmdPrecisoDatos.estadosActualizados || rmdPrecisoDatos.generado || '') || Date.now();
+            historico = { datos: rmdPrecisoDatos, traz, detalle: rmdAutorizadosDetalle, ahora,
+                idx: construirIndicePreciso(rmdPrecisoDatos, { conCancelados: true, linea: (e) => lineaDeTiempo(e, traz, ahora) }) };
+            return historico;
+        }
+        function entradaEn(x, t) {
+            const l = x.linea;
+            if (!l) return x.estadoNorm === 'CANCELADO' || (Number.isFinite(x.fecha) && x.fecha > t) ? null : x;
+            let est = null;
+            for (let i = 0; i < l.length && l[i][0] <= t; i++) est = l[i][1];
+            if (!est || est === 'CANCELADO') return null;
+            const fecha = Number.isFinite(x.fecha) && x.fecha <= t ? x.fecha : null;
+            return est === x.estadoNorm && fecha === x.fecha ? x : Object.assign({}, x, { estado: est, estadoNorm: est, fecha });
+        }
+        function cadenaEn(H, material, etapa, t) {
+            const lista = [];
+            (H.idx.porMatEtapa.get(`${material}::${etapa}`) || []).forEach((x) => { const y = entradaEn(x, t); if (y) lista.push(y); });
+            return estadoDeCadenaPrecisa(lista);
+        }
+        const sapPendienteEn = (H, mats, etapa, t) => mats.some((m) => { const c = cadenaEn(H, m, etapa, t); return c ? c.pendiente : true; });
+        // Periodos en que una etapa estuvo pendiente desde que su producto entró al programa (desde): [{ ini, fin (null = sigue),
+        // entro (ya estaba pendiente al entrar), cierre }]. cierre: 'autorizado' (se autorizó un RMD de la etapa), 'manual'
+        // (autorización a mano en Producción) u 'otro' (se canceló la versión nueva, se rechazó o aprobó la solicitud: dejó de
+        // estar pendiente sin autorizarse). manualDesde: fecha de la autorización a mano vigente (0 si no se sabe), o null.
+        function periodosPendientes(H, mats, etapa, desde, manualDesde, hasta) {
+            const tiempos = new Set([desde]), autorizaciones = new Set();
+            mats.forEach((m) => (H.idx.porMatEtapa.get(`${m}::${etapa}`) || []).forEach((x) => (x.linea || []).forEach(([t, est]) => {
+                if (t > desde && t <= hasta) tiempos.add(t);
+                if (est === 'AUTORIZADO') autorizaciones.add(t);
+            })));
+            if (manualDesde !== null && manualDesde > desde && manualDesde <= hasta) tiempos.add(manualDesde);
+            const res = [];
+            let abierto = null;
+            [...tiempos].sort((a, b) => a - b).forEach((t) => {
+                const sap = sapPendienteEn(H, mats, etapa, t), manual = manualDesde !== null && manualDesde <= t;
+                if (sap && !manual) {
+                    if (abierto) return;
+                    const ult = res[res.length - 1];
+                    if (ult && t - ult.fin < REABIERTO_MS) { ult.fin = null; ult.cierre = null; abierto = ult; return; }
+                    abierto = { ini: t, fin: null, entro: t === desde, cierre: null };
+                    res.push(abierto);
+                } else if (abierto) {
+                    abierto.fin = t;
+                    abierto.cierre = sap ? 'manual' : (autorizaciones.has(t) ? 'autorizado' : 'otro');
+                    abierto = null;
+                }
+            });
+            return res;
+        }
+        // Lo que el equipo anota en la Observación del RMD que deja pendiente la etapa (palabras contadas en el portal, oct 2026).
+        const MOTIVOS_OBSERVACION = [
+            ['Control de cambio', /\bPEND(?:IENTE|\.)?\s*(?:DE\s+)?(?:APROB(?:ACI[OÓ]N)?\s+(?:DEL?\s+)?)?(?:CC\b|C\.C|CALIDAD)|\bCC\s+LOTIZADO\s+PEND|\bPEND(?:IENTE|\.)?\s+(?:EL\s+)?(?:C[OÓ]DIGO\s+DE\s+CC|CONTROL\s+DE\s+CAMBIO)|\bSE\s+SUSPENDE\s+POR\s+[\w\/.-]*?-?CC\b/i],
+            ['Jefe / Gerencia', /\bPEND(?:IENTE|\.)?\s*(?:DE\s+)?(?:APROB(?:ACI[OÓ]N)?\s+(?:DEL?\s+)?)?(?:JEF|GER)/i],
+            ['Fase I', /\bPEND(?:IENTE|\.)?\s+(?:ACTUALIZAR\s+)?FASE\s*(?:I|1)\b/i],
+            ['Borrador', /\bBORRADOR\b/i],
+            ['Por ingresar', /\bPOR\s+INGRESAR\b/i],
+            ['Otro pendiente', /\bPEND(?:IENTES?|\.)?(?![A-ZÁÉÍÓÚÑ])/i]
+        ];
+        const motivoObservacion = (obs) => { const t = String(obs || ''); const x = MOTIVOS_OBSERVACION.find(([, re]) => re.test(t)); return x ? x[0] : 'Sin anotación'; };
+        // Dónde está hoy una etapa pendiente: el RMD (o la falta de RMD) que la deja pendiente, con su Observación.
+        function situacionHoy(d) {
+            const c = d.candidatos.find((x) => x.pendiente) || d.candidatos[0];
+            if (!c || c.sinRmd) return { c, estado: 'Sin RMD', obs: '', motivo: 'Sin anotación' };
+            const fila = filaDetalleDeEntrada(c), obs = (fila && fila.observacion) || '';
+            const estado = c.masNuevo || c.estadoNorm === 'INGRESADO' ? 'Ingresado' : c.estadoNorm === 'SOLICITADO' ? 'Solicitado' : c.estadoNorm === 'SUSPENDIDO' ? 'Suspendido' : c.estado;
+            return { c, estado, obs, motivo: motivoObservacion(obs) };
+        }
+        const ORDEN_ESTADO_HOY = ['Sin RMD', 'Solicitado', 'Ingresado', 'Suspendido'];
+        function acumuladoDePlanta(H, acc, prod) {
+            const r = { productos: 0, fuera: 0, sinArbol: 0, periodos: [], porMaterial: new Map(), inicio: acc && acc.inicio, detalleDesde: acc && acc.detalleDesde,
+                cargas: acc && Array.isArray(acc.cargas) ? acc.cargas.length : 0, reconstruido: !!(acc && acc.reconstruido) };
+            if (!acc || !acc.items) return r;
+            const enPrograma = new Set(((prod && prod.data) || []).map((p) => normalizeMaterialCode(p.codigo)).filter(Boolean));
+            Object.entries(acc.items).forEach(([m, it]) => {
+                const desde = Date.parse(it.e);
+                if (!Number.isFinite(desde)) return;
+                const ev = evaluarMaterialPreciso(m);
+                const item = { m, producto: it.p || ev.descripcion || '', actual: enPrograma.has(m), entro: it.e, salio: it.s, ev };
+                r.productos++;
+                if (!item.actual) r.fuera++;
+                if (!ev.conArbol && !ev.verificable) r.sinArbol++;
+                r.porMaterial.set(m, item);
+                ev.etapas.forEach((etapa) => {
+                    const mats = ev.detalle[etapa].candidatos.map((c) => c.material);
+                    const fija = mapEtapaAFija(etapa), key = fija ? responsableKey(m, fija) : null;
+                    let manualDesde = null;
+                    if (key && manualAutorizados.has(key)) { const f = Date.parse(((manualAutorizadosMeta.get(key) || {}).f) || ''); manualDesde = Number.isFinite(f) ? f : 0; }
+                    periodosPendientes(H, mats, etapa, desde, manualDesde, Math.max(H.ahora, Date.now())).forEach((p) => r.periodos.push(Object.assign(p, { m, etapa })));
+                });
+            });
+            return r;
+        }
+        // Por mes: venían (pendientes al empezar), nuevos, autorizados (en SAP o a mano), sin autorizar (cerrados de otra
+        // forma) y quedan (al terminar; en el mes en curso, hoy). venían + nuevos − autorizados − sin autorizar = quedan.
+        const esAutorizacion = (p) => p.fin !== null && p.cierre !== 'otro';
+        function flujosPorMes(periodos, meses) {
+            return meses.map((m) => {
+                const ini = m.valueOf(), fin = m.add(1, 'month').valueOf();
+                const r = { mes: m.format('YYYY-MM'), venian: 0, nuevos: 0, autorizados: 0, otros: 0, quedan: 0 };
+                periodos.forEach((p) => {
+                    if (p.ini < ini && (p.fin === null || p.fin >= ini)) r.venian++;
+                    if (p.ini >= ini && p.ini < fin) r.nuevos++;
+                    if (p.fin !== null && p.fin >= ini && p.fin < fin) r[esAutorizacion(p) ? 'autorizados' : 'otros']++;
+                    if (p.ini < fin && (p.fin === null || p.fin >= fin)) r.quedan++;
+                });
+                return r;
+            });
+        }
+        async function calcularAcumulado() {
+            if (!rmdPrecisoDatos || !rmdPreciso || !rmdPreciso.totalEntradas) return { error: 'Faltan los RMD de SAP: usa «Enviar a Status RMD» en el portal o carga el Exportado RMD en Producción.' };
+            await asegurarMotorArboles();
+            const [acc1, acc2, d1, d2, traz] = await Promise.all([leerAcumuladoPrograma('planta1'), leerAcumuladoPrograma('planta2'),
+                storeGet('prod_data_planta1'), storeGet('prod_data_planta2'), storeGet('val_rmd_trazabilidad')]);
+            const trazOk = traz && traz.v === 1 && traz.items ? traz : null;
+            const H = indiceHistorico(trazOk);
+            const res = { H, P1: acumuladoDePlanta(H, acc1, d1), P2: acumuladoDePlanta(H, acc2, d2), traz: !!trazOk, trazDesde: trazOk && trazOk.desde,
+                sinArbol: motorArboles.estado !== 'listo' };
+            ['P1', 'P2'].forEach((pl) => {
+                const x = res[pl], meses = [];
+                if (x.detalleDesde) for (let m = dayjs(x.detalleDesde).startOf('month'); !m.isAfter(dayjs(), 'month'); m = m.add(1, 'month')) meses.push(m);
+                x.meses = flujosPorMes(x.periodos, meses);
+                x.pendientesHoy = x.periodos.filter((p) => p.fin === null).length;
+                x.autorizadosTotal = x.periodos.filter(esAutorizacion).length;
+                x.otrosTotal = x.periodos.filter((p) => p.fin !== null && !esAutorizacion(p)).length;
+                x.porEstado = {}; x.porObs = {}; x.fueraPend = 0;
+                x.periodos.forEach((p) => {
+                    if (p.fin !== null) return;
+                    const item = x.porMaterial.get(p.m), s = situacionHoy(item.ev.detalle[p.etapa]);
+                    p.hoy = s;
+                    x.porEstado[s.estado] = (x.porEstado[s.estado] || 0) + 1;
+                    x.porObs[s.motivo] = (x.porObs[s.motivo] || 0) + 1;
+                    if (!item.actual) x.fueraPend++;
+                });
+            });
+            return res;
+        }
+
         // ---------- Periodo ----------
         function periodo() {
             const d = document.getElementById('stsDesde'), h = document.getElementById('stsHasta');
@@ -11328,7 +11710,8 @@ async function maybeAutoStartTour() {
         // ---------- Cálculo completo ----------
         async function calcular() {
             const per = periodo();
-            const [indicadores, r1, car, est] = await Promise.all([storeGet('val_rmd_indicadores_mes'), calcularRuta1(), storeGet('val_rmd_caracterizaciones'), storeGet('val_estatus_caracterizacion')]);
+            const [indicadores, r1, car, est, acu] = await Promise.all([storeGet('val_rmd_indicadores_mes'), calcularRuta1(), storeGet('val_rmd_caracterizaciones'),
+                storeGet('val_estatus_caracterizacion'), calcularAcumulado()]);
             estatusCar = (est && typeof est === 'object') ? est : {};
             const porMes = (indicadores && indicadores.porMes) || {};
             const serie = (planta, campo) => per.meses.map((m) => ((porMes[m.format('YYYY-MM')] || {})[planta] || {})[campo] || 0);
@@ -11338,7 +11721,7 @@ async function maybeAutoStartTour() {
                 sinDatos: !indicadores, generado: indicadores && indicadores.generado
             };
             const items = (car && Array.isArray(car.items)) ? car.items : [];
-            return { per, programa, r1, r2: ruta2(items), car: { items, sinDatos: !car, generado: car && car.generado } };
+            return { per, programa, r1, acu, r2: ruta2(items), car: { items, sinDatos: !car, generado: car && car.generado } };
         }
 
         // ---------- Vista ----------
@@ -11483,6 +11866,106 @@ async function maybeAutoStartTour() {
                 <p class="sts-nota">RMD de SAP con Motivo CARACTERIZACION. Autorizado o Suspendido en SAP cuenta como autorizado; el resto, como pendiente, según el Estatus elegido en la tabla. % de avance = autorizados / (autorizados + pendientes).</p>
             </section>`;
         }
+        // ---------- Programa acumulado (vista) ----------
+        const nombreMes = (clave) => { const m = dayjs(clave + '-01'); return `${MESES[m.month()]} ${m.year()}`; };
+        const fmtMs = (ms) => (Number.isFinite(ms) ? dayjs(ms).format('DD/MM/YYYY') : '—');
+        const diasEntre = (a, b) => Math.max(0, dayjs(b).startOf('day').diff(dayjs(a).startOf('day'), 'day'));
+        function htmlAcumulado(d) {
+            const a = d.acu;
+            const cab = `<div class="sts-seccion-cab"><div>
+                    <div class="sts-seccion-titulo"><span class="sts-num">ACUMULADO</span>Programa acumulado – pendientes y autorizados por mes</div>
+                    <div class="sts-seccion-sub">Todas las etapas (RMD) de los productos que entraron al Programa de Producción, mes a mes</div>
+                </div></div>`;
+            if (a.error) return `<section class="sts-seccion">${cab}<div class="sts-aviso"><span>${esc(a.error)}</span></div></section>`;
+            const avisos = [];
+            if (!a.traz) avisos.push('Las fechas de autorización son aproximadas (Fecha Registro y Fecha Autorización de SAP). Las reales llegan de la Trazabilidad del portal con «Enviar a Status RMD» y el script v1.108.0 o posterior.');
+            if (a.sinArbol) avisos.push('No se pudo cargar el árbol de materiales de SAP: solo se cuenta el RMD del propio código de cada producto.');
+            const inicio = [a.P1.inicio, a.P2.inicio].filter(Boolean).sort()[0], detalle = [a.P1.detalleDesde, a.P2.detalleDesde].filter(Boolean).sort()[0];
+            if (inicio && detalle && dayjs(detalle).diff(dayjs(inicio), 'day') > 0) avisos.push(`Hay cargas del programa desde el ${fmtDia(inicio)}, pero la lista de productos de cada carga se guarda desde el ${fmtDia(detalle)}: lo anterior no se puede contar.`);
+            const mesActual = dayjs().format('YYYY-MM');
+            const chips = (titulo, conteo, orden) => {
+                const claves = Object.keys(conteo).sort((x, y) => (orden ? (orden.indexOf(x) + 1 || 99) - (orden.indexOf(y) + 1 || 99) : conteo[y] - conteo[x]));
+                return `<div class="sts-desglose-fila"><span class="sts-desglose-lbl">${titulo}</span>${claves.length ? claves.map((k) => `<span class="sts-chip">${esc(k)} <b>${conteo[k]}</b></span>`).join('') : '<span class="sts-chip">ninguno</span>'}</div>`;
+            };
+            const panel = (pl) => {
+                const x = a[pl];
+                if (!x.productos) return `<div class="sts-panel"><div class="sts-planta">${PLANTAS[pl]}</div><p class="sts-vacio">Todavía no hay cargas del Programa de Producción con su lista de productos.</p></div>`;
+                const conOtros = x.otrosTotal > 0;
+                const filas = x.meses.map((m) => `<tr${m.mes === mesActual ? ' class="actual"' : ''}><td>${esc(nombreMes(m.mes))}${m.mes === mesActual ? ' <span class="sts-chip">en curso</span>' : ''}</td><td class="mono">${m.venian}</td><td class="mono">${m.nuevos}</td><td class="mono aut">${m.autorizados}</td>${conOtros ? `<td class="mono">${m.otros}</td>` : ''}<td class="mono fuerte">${m.quedan}</td></tr>`).join('');
+                return `<div class="sts-panel">
+                    <div class="sts-planta">${PLANTAS[pl]} <span class="sts-chip">${plural(x.productos, 'producto', 'productos')} desde el ${fmtDia(x.detalleDesde)}</span></div>
+                    <div class="sts-kpis">
+                        <div class="sts-kpi"><small>Pendientes hoy</small><b>${x.pendientesHoy}</b></div>
+                        <div class="sts-kpi naranja"><small>Autorizados desde el ${fmtDia(x.detalleDesde)}</small><b>${x.autorizadosTotal}</b></div>
+                    </div>
+                    <div class="sts-grafico-titulo">Etapas nuevas y autorizadas cada mes, y las que quedan pendientes al cierre</div>
+                    <div class="sts-grafico"><canvas id="stsAcu${pl}" role="img" aria-label="${esc(`${PLANTAS[pl]}: etapas nuevas, autorizadas y pendientes al cierre de ${x.meses.map((m) => nombreMes(m.mes)).join(', ')}`)}"></canvas></div>
+                    <div class="sts-tabla-wrap sts-meses"><table class="sts-tabla">
+                        <thead><tr><th>Mes</th><th title="Etapas pendientes al empezar el mes">Venían</th><th title="Etapas que quedaron pendientes en el mes: su producto entró al programa sin RMD autorizado, o se abrió una versión nueva o se suspendió">Nuevos</th><th title="Etapas pendientes que se autorizaron en el mes (en SAP o a mano en Producción)">Autorizados</th>${conOtros ? '<th title="Dejaron de estar pendientes sin autorizarse: se canceló la versión nueva o se rechazó o aprobó la solicitud">Sin autorizar</th>' : ''}<th title="Etapas pendientes al terminar el mes (en el mes en curso, hoy)">Quedan</th></tr></thead>
+                        <tbody>${filas}</tbody></table></div>
+                    <div class="sts-desglose">
+                        ${chips('Quedan hoy en SAP', x.porEstado, ORDEN_ESTADO_HOY)}
+                        ${chips('Según la Observación', x.porObs, null)}
+                        ${x.fueraPend ? `<div class="sts-desglose-fila"><span class="sts-desglose-lbl">Ya no programados</span><span class="sts-chip">${plural(x.fueraPend, 'etapa pendiente de productos que ya no están en el programa actual', 'etapas pendientes de productos que ya no están en el programa actual')}</span></div>` : ''}
+                    </div>
+                </div>`;
+            };
+            return `<section class="sts-seccion">${cab}
+                ${avisos.map((t) => `<div class="sts-aviso"><span>${esc(t)}</span></div>`).join('')}
+                <div class="sts-paneles">${panel('P1')}${panel('P2')}</div>
+                ${a.P1.productos || a.P2.productos ? htmlListaAcumulado(d) : ''}
+                <p class="sts-nota">Cada etapa del árbol de producción de cada producto que alguna vez entró al programa cuenta como pendiente desde que su producto entró hasta que se autoriza su RMD (o se autoriza a mano en Producción), aunque después haya salido del programa. Si vuelve a quedar pendiente (versión nueva o suspensión), cuenta otra vez. ${a.traz ? `Las fechas salen de la Trazabilidad de SAP${a.trazDesde ? ` (cambios desde el ${fmtDia(a.trazDesde)})` : ''}.` : ''} Venían + Nuevos − Autorizados − Sin autorizar = Quedan.</p>
+            </section>`;
+        }
+        function htmlListaAcumulado(d) {
+            const a = d.acu;
+            const mesesAut = [...new Set(['P1', 'P2'].flatMap((pl) => (a[pl].meses || []).filter((m) => m.autorizados).map((m) => m.mes)))].sort().reverse();
+            const modo = vista.acuLista !== 'pend' && mesesAut.includes(vista.acuLista) ? vista.acuLista : 'pend';
+            const filas = [];
+            ['P1', 'P2'].forEach((pl) => {
+                if (vista.acuPlanta && vista.acuPlanta !== pl) return;
+                a[pl].periodos.forEach((p) => {
+                    if (modo === 'pend' ? p.fin !== null : (!esAutorizacion(p) || dayjs(p.fin).format('YYYY-MM') !== modo)) return;
+                    filas.push({ pl, p, it: a[pl].porMaterial.get(p.m) });
+                });
+            });
+            filas.sort((x, y) => (modo === 'pend' ? x.p.ini - y.p.ini : x.p.fin - y.p.fin) || x.it.m.localeCompare(y.it.m));
+            const etq = (e) => ETAPAS_FIJAS_LABEL[e] || e;
+            const producto = (it) => `${esc(it.producto)}${it.actual ? '' : ` <span class="sts-chip" title="${esc(it.salio ? `Salió del programa el ${fmtDia(it.salio)}` : 'Ya no está en el programa actual')}">ya no programado</span>`}`;
+            const ref = (c) => (c.rmd ? `RMD ${c.rmd}` : (c.sol ? `solicitud ${c.sol}` : ''));
+            const filaPend = ({ pl, p, it }) => {
+                const s = p.hoy || situacionHoy(it.ev.detalle[p.etapa]), c = s.c;
+                const sap = !c || c.sinRmd ? 'Sin RMD en SAP' : `${s.estado} v${c.version}${ref(c) ? ' · ' + ref(c) : ''}`;
+                return `<tr><td>${pl}</td><td class="mono">${esc(it.m)}</td><td class="desc">${producto(it)}</td><td>${esc(etq(p.etapa))}</td>
+                    <td class="mono">${fmtMs(p.ini)}</td><td class="mono">${diasEntre(p.ini, Date.now())}</td><td><span class="sts-estado">${esc(sap)}</span></td>
+                    <td class="obs">${s.motivo !== 'Sin anotación' ? `<span class="sts-tag gris">${esc(s.motivo)}</span> ` : ''}<span title="${esc(s.obs)}">${esc(s.obs.length > 70 ? s.obs.slice(0, 68) + '…' : s.obs)}</span></td></tr>`;
+            };
+            const filaAut = ({ pl, p, it }) => {
+                let como = 'A mano en Producción';
+                if (p.cierre !== 'manual') {
+                    const mats = it.ev.detalle[p.etapa].candidatos.map((c) => c.material);
+                    const u = mats.map((m) => cadenaEn(a.H, m, p.etapa, p.fin)).filter(Boolean).map((c) => c.ultima).sort((x, y) => y.version - x.version)[0];
+                    como = u ? `${u.estado} v${u.version}${ref(u) ? ' · ' + ref(u) : ''}` : 'Resuelto en SAP';
+                }
+                return `<tr><td>${pl}</td><td class="mono">${esc(it.m)}</td><td class="desc">${producto(it)}</td><td>${esc(etq(p.etapa))}</td>
+                    <td class="mono">${fmtMs(p.ini)}</td><td class="mono">${fmtMs(p.fin)}</td><td class="mono">${diasEntre(p.ini, p.fin)}</td><td><span class="sts-estado ok">${esc(como)}</span></td></tr>`;
+            };
+            const seg = `<div class="sts-seg" role="group" aria-label="Planta">${[['', 'Ambas plantas'], ['P1', 'Ate'], ['P2', 'Lima']].map(([v, l]) => `<button type="button" class="${vista.acuPlanta === v ? 'activo' : ''}" onclick='StatusRmd.filtrarAcumulado("acuPlanta", ${JSON.stringify(v)})'>${l}</button>`).join('')}</div>`;
+            const sel = `<select class="sts-select" aria-label="Qué etapas mostrar" onchange='StatusRmd.filtrarAcumulado("acuLista", this.value)'>
+                <option value="pend"${modo === 'pend' ? ' selected' : ''}>Pendientes hoy</option>
+                ${mesesAut.map((k) => `<option value="${k}"${modo === k ? ' selected' : ''}>Autorizados en ${esc(nombreMes(k).toLowerCase())}</option>`).join('')}</select>`;
+            const cabeza = modo === 'pend'
+                ? '<th>Planta</th><th>Código</th><th>Producto</th><th>Etapa</th><th>Pendiente desde</th><th>Días</th><th>Estado en SAP</th><th>Observación</th>'
+                : '<th>Planta</th><th>Código</th><th>Producto</th><th>Etapa</th><th>Pendiente desde</th><th>Autorizado</th><th>Días</th><th>RMD</th>';
+            return `<details class="sts-detalle"${vista.acuAbierto ? ' open' : ''} ontoggle="StatusRmd._detalleAcumulado(this.open)">
+                <summary>Etapas del programa acumulado · pendientes de hoy y autorizadas por mes</summary>
+                <div class="sts-detalle-cuerpo">
+                    <div class="sts-filtros">${seg}${sel}<span class="sts-chip">${plural(filas.length, 'etapa', 'etapas')}</span></div>
+                    ${filas.length ? `<div class="sts-tabla-wrap"><table class="sts-tabla"><thead><tr>${cabeza}</tr></thead>
+                        <tbody>${filas.map(modo === 'pend' ? filaPend : filaAut).join('')}</tbody></table></div>` : '<p class="sts-vacio">No hay etapas con estos filtros.</p>'}
+                </div>
+            </details>`;
+        }
         function dibujarGraficos(d) {
             graficos.forEach((g) => g.destroy()); graficos = [];
             if (typeof Chart === 'undefined') return;
@@ -11507,10 +11990,33 @@ async function maybeAutoStartTour() {
                     }
                 }));
             });
+            // Programa acumulado: nuevos y autorizados de cada mes (barras) y los que quedan pendientes al cierre (línea), en una sola escala.
+            const plum = `rgb(${css.getPropertyValue('--plum-rgb').trim() || '160 123 187'})`;
+            ['P1', 'P2'].forEach((pl) => {
+                const el = document.getElementById('stsAcu' + pl), x = d.acu && !d.acu.error ? d.acu[pl] : null;
+                if (!el || !x || !x.meses.length) return;
+                const varios = new Set(x.meses.map((m) => m.mes.slice(0, 4))).size > 1 || x.meses.length > 6;
+                graficos.push(new Chart(el, {
+                    type: 'bar',
+                    data: {
+                        labels: x.meses.map((m) => { const f = dayjs(m.mes + '-01'); return varios ? `${MESES_CORTOS[f.month()]} ${f.format('YY')}` : MESES[f.month()]; }),
+                        datasets: [
+                            { type: 'line', label: 'Quedan pendientes', data: x.meses.map((m) => m.quedan), borderColor: plum, backgroundColor: plum, borderWidth: 2, pointRadius: 4, pointHoverRadius: 6, tension: 0, order: 0 },
+                            { label: 'Nuevos', data: x.meses.map((m) => m.nuevos), backgroundColor: '#A6A6A6', borderRadius: 4, maxBarThickness: 34, order: 1 },
+                            { label: 'Autorizados', data: x.meses.map((m) => m.autorizados), backgroundColor: '#E07B24', borderRadius: 4, maxBarThickness: 34, order: 1 }
+                        ]
+                    },
+                    options: {
+                        responsive: true, maintainAspectRatio: false, animation: false, interaction: { mode: 'index', intersect: false },
+                        plugins: { legend: { position: 'top', align: 'end', labels: { color: texto, boxWidth: 10, boxHeight: 10, font: { size: 11 } } } },
+                        scales: { x: { ticks: { color: texto }, grid: { display: false } }, y: { beginAtZero: true, ticks: { color: texto, precision: 0 }, grid: { color: 'rgba(128,128,128,0.14)' }, border: { display: false } } }
+                    }
+                }));
+            });
         }
         function pintar() {
             const cont = document.getElementById('stsContenido');
-            cont.innerHTML = htmlMeta(ultimo) + htmlResumen(ultimo) + htmlPrograma(ultimo) + htmlRuta1(ultimo) + htmlRuta2(ultimo);
+            cont.innerHTML = htmlMeta(ultimo) + htmlResumen(ultimo) + htmlPrograma(ultimo) + htmlRuta1(ultimo) + htmlAcumulado(ultimo) + htmlRuta2(ultimo);
             dibujarGraficos(ultimo);
         }
         let calculando = null;
@@ -11620,7 +12126,10 @@ async function maybeAutoStartTour() {
             setEstatus: (id, valor) => guardarEstatus(id, { e: valor }),
             setResponsable: (id, valor) => guardarEstatus(id, { r: valor }),
             filtrar: (campo, valor) => { vista[campo] = valor; if (ultimo) pintar(); },
+            filtrarAcumulado: (campo, valor) => { vista[campo] = valor; vista.acuAbierto = true; if (ultimo) pintar(); },
             _detalle: (abierto) => { vista.detalleAbierto = abierto; },
+            _detalleAcumulado: (abierto) => { vista.acuAbierto = abierto; },
+            trazabilidadDesdePuente, lineaDeTiempo, motivoObservacion,
             _ultimo: () => ultimo, _valoresPpt: valoresPpt
         };
     })();
