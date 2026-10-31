@@ -7529,9 +7529,17 @@ async function downloadPlanProduccionFromCloud() {
             return `${mats.join('+')}::${fija}`;
         }
         let migracionClavesPendiente = false;
+        // Orden del flujo de la plantilla: Borrador → Ingresar → Flujo SAP / Control de cambio → Por revisión.
+        const avanceEstatus = (e) => ({ 'BORRADOR': 1, 'INGRESAR': 2, 'FLUJO SAP': 3, [ESTATUS_CC]: 3, 'POR REVISIÓN': 4 }[ESTATUS_RENOMBRADOS[e] || e] || 0);
         function migrarClaveDeEtapa(producto, fija, d) {
             const nueva = claveDeEtapa(producto, fija, d), vieja = responsableKey(producto, fija);
             if (nueva === vieja) return;
+            // Si la etapa ya tiene estatus (otra presentación que comparte el granel, o uno puesto con la clave nueva), queda el
+            // más avanzado del flujo, con su responsable.
+            if (estatusEtapa.has(vieja) && estatusEtapa.has(nueva) && avanceEstatus(estatusEtapa.get(vieja)) > avanceEstatus(estatusEtapa.get(nueva))) {
+                estatusEtapa.set(nueva, estatusEtapa.get(vieja));
+                if (responsablesEtapa.has(vieja)) responsablesEtapa.set(nueva, responsablesEtapa.get(vieja)); else responsablesEtapa.delete(nueva);
+            }
             const pasar = (m) => { if (!m.has(vieja)) return; if (!m.has(nueva)) m.set(nueva, m.get(vieja)); m.delete(vieja); migracionClavesPendiente = true; };
             [estatusEtapa, responsablesEtapa, manualAutorizadosMeta, manualAutorizadosForecastMeta].forEach(pasar);
             [manualAutorizados, manualAutorizadosForecast].forEach(set => { if (set.has(vieja)) { set.delete(vieja); set.add(nueva); migracionClavesPendiente = true; } });
