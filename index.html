@@ -11705,7 +11705,9 @@ async function maybeAutoStartTour() {
                 const v = dato(m, pl, 'autBk');
                 if (v !== null) return v;
                 const x = cd && (cd.porMes[m.format('YYYY-MM')] || {})[pl];
-                return x && Number.isFinite(x.autBk) && x.aut === dato(m, pl, 'aut') ? x.autBk : null;
+                // Con las versiones de la última sincronización (puede diferir en unas pocas de lo guardado): nunca más que los autorizados.
+                const aut = dato(m, pl, 'aut');
+                return x && Number.isFinite(x.autBk) && aut !== null ? Math.min(x.autBk, aut) : null;
             };
             const fila = (m, pl) => {
                 const pend = dato(m, pl, 'pend'), ant = dato(m.subtract(1, 'month'), pl, 'pend'), aut = dato(m, pl, 'aut');
@@ -11818,7 +11820,7 @@ async function maybeAutoStartTour() {
                 </div></div>
                 ${avisos.map((t) => `<div class="sts-aviso"><span>${esc(t)}</span></div>`).join('')}
                 <div class="sts-paneles">${panel('P1')}${panel('P2')}</div>
-                <p class="sts-nota">Con las fórmulas del cuadro del área de RMD: pendiente anterior + solicitados = acumulado; acumulado − autorizados = pendientes; % autorizados = autorizados / acumulado (meta: no menos de ${META_AUTORIZADOS} %). Todo sale del portal RMD, con las fechas de SAP de cada versión de RMD, sin Cancelados ni solicitudes: <b>autorizados</b> son los RMD Autorizados o Suspendidos con Fecha Autorización en el mes; <b>pendientes</b>, los registrados y aún sin autorizar al cierre del mes (el mes en curso: los Ingresados a la fecha de los datos de SAP). Así, los <b>solicitados</b> son los RMD registrados en el mes. Los autorizados se parten en <b>del mes</b> (registrados en el mes) y <b>del backlog</b> (registrados antes, pendientes al empezar el mes). El <b>backlog</b> es el pendiente anterior. El total del año parte de lo pendiente al cierre del año anterior, y su % es autorizados del año / acumulado del año.</p>
+                <p class="sts-nota">Con las fórmulas del cuadro del área de RMD: pendiente anterior + solicitados = acumulado; acumulado − autorizados = pendientes; % autorizados = autorizados / acumulado (meta: no menos de ${META_AUTORIZADOS} %). Todo sale del portal RMD, con las fechas de SAP de cada versión de RMD, sin Cancelados ni solicitudes: <b>autorizados</b> son los RMD Autorizados o Suspendidos con Fecha Autorización en el mes; <b>pendientes</b>, los registrados y aún sin autorizar al cierre del mes (el mes en curso: los Ingresados a la fecha de los datos de SAP). Así, los <b>solicitados</b> son los RMD registrados en el mes. Los autorizados se parten en <b>del mes</b> (registrados en el mes) y <b>del backlog</b> (registrados antes, pendientes al empezar el mes). El <b>backlog</b> es el pendiente anterior: lo que SAP tenía registrado y sin autorizar al cerrar el mes anterior (puede diferir del saldo que se arrastra a mano en el registro del área; en octubre de 2026 ambos coincidieron). El total del año parte de lo pendiente al cierre del año anterior, y su % es autorizados del año / acumulado del año.</p>
             </section>`;
         }
         function anillo(pct) {
