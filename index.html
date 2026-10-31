@@ -829,7 +829,13 @@
         .op-sin-rmd-tag { font-size: 9.5px; font-weight: 700; padding: 0 0.3rem; border-radius: 0.3rem; color: rgb(var(--semaforo-ambar-rgb)); background: rgb(var(--semaforo-ambar-rgb) / 0.12); border: 1px solid rgb(var(--semaforo-ambar-rgb) / 0.4); white-space: nowrap; }
         .op-sin-rmd-num { font-weight: 700; color: var(--slate-100); font-variant-numeric: tabular-nums; }
         .op-sin-rmd .chip-sap { max-width: 10rem; }
-        .ops-fila { display: flex; flex-direction: column; gap: 0.15rem; margin-top: 0.3rem; padding-top: 0.3rem; border-top: 1px dashed var(--slate-700); }
+        /* Fila compacta de las OP sin RMD (por defecto ocultas) */
+        .ops-resumen-btn { display: flex; align-items: center; gap: 0.4rem; width: 100%; text-align: left; font-size: 11px; color: var(--slate-300); padding: 0.15rem 0.25rem; border-radius: 0.4rem; }
+        .ops-resumen-btn:hover { background: rgb(var(--semaforo-ambar-rgb) / 0.08); }
+        .ops-resumen-accion { margin-left: auto; font-weight: 700; color: rgb(var(--semaforo-ambar-rgb)); text-decoration: underline; }
+        /* Pendientes por etapa: los productos del programa que usan la etapa, y la etapa ya autorizada en SAP */
+        .etapa-para { display: block; font-size: 10px; color: var(--slate-400); margin-top: 0.15rem; cursor: help; }
+        .badge-autorizado-sap { display: inline-flex; font-size: 10px; font-weight: 600; padding: 0.125rem 0.5rem; border-radius: 9999px; white-space: nowrap; color: rgb(var(--ok-rgb)); background: rgb(var(--ok-rgb) / 0.1); border: 1px solid rgb(var(--ok-rgb) / 0.35); cursor: help; }
         .badge-op-sap { display: inline-flex; align-items: center; gap: 0.25rem; font-size: 10px; font-weight: 600; padding: 0.125rem 0.5rem; border-radius: 9999px; white-space: nowrap; color: rgb(var(--semaforo-ambar-rgb)); background: rgb(var(--semaforo-ambar-rgb) / 0.1); border: 1px solid rgb(var(--semaforo-ambar-rgb) / 0.35); }
         .nota-manual { font-size: 9.5px; line-height: 1.3; font-weight: 600; color: rgb(var(--ok-rgb)); white-space: nowrap; cursor: help; }
         /* Filtros por etapa (Etapa, Estado en SAP, Antigüedad) de las tablas de RMD pendientes */
@@ -2026,7 +2032,7 @@
                 <div class="flex items-center gap-1.5 flex-wrap">
                     <button onclick="validacionFiltroEstado='todos'; refiltrarValidacionFiltros();" id="filtroValTodos" class="filter-pill active px-3 py-1.5 rounded-lg text-[11px] font-medium">Todos<span class="pill-count" id="pillCountTodos"></span></button>
                     <button onclick="validacionFiltroEstado='pendientes'; refiltrarValidacionFiltros();" id="filtroValPendientes" class="filter-pill px-3 py-1.5 rounded-lg text-[11px] font-medium">Pendientes<span class="pill-count" id="pillCountPendientes"></span></button>
-                    <button onclick="validacionFiltroEstado='autorizados'; refiltrarValidacionFiltros();" id="filtroValAutorizados" class="filter-pill px-3 py-1.5 rounded-lg text-[11px] font-medium">Autorizados manual<span class="pill-count" id="pillCountAutorizados"></span></button>
+                    <button onclick="validacionFiltroEstado='autorizados'; refiltrarValidacionFiltros();" id="filtroValAutorizados" class="filter-pill px-3 py-1.5 rounded-lg text-[11px] font-medium" title="Etapas autorizadas en SAP o a mano">Autorizados<span class="pill-count" id="pillCountAutorizados"></span></button>
                 </div>
                 <div class="flex items-center gap-1.5 flex-wrap" id="filtrosEtapaProd">
                     <select id="filtroEtapaProd" onchange="setFiltroEtapa('produccion','etapa',this.value)" class="field-input filtro-etapa-select" title="Mostrar solo esta etapa" aria-label="Filtrar por etapa">
@@ -2038,8 +2044,8 @@
                     <select id="filtroEdadProd" onchange="setFiltroEtapa('produccion','edad',this.value)" class="field-input filtro-etapa-select" title="Antigüedad del pendiente: días desde la Fecha Registro en SAP del RMD que decide la etapa" aria-label="Filtrar por antigüedad del pendiente">
                         <option value="">Antigüedad: todas</option><option value="le7">Hasta 7 días</option><option value="gt7">Más de 7 días</option><option value="gt30">Más de 30 días</option><option value="gt90">Más de 90 días</option>
                     </select>
-                    <select id="filtroEstatusProd" onchange="setFiltroEtapa('produccion','estatus',this.value)" class="field-input filtro-etapa-select" title="Estatus elegido en la etapa pendiente (PEND CC, POR INGRESAR…); &quot;Sin estatus&quot;: etapas pendientes a las que aún no se les asignó" aria-label="Filtrar por estatus de la etapa">
-                        <option value="">Estatus: todos</option><option value="PENDIENTE-PRO">PENDIENTE-PRO</option><option value="POR INGRESAR">POR INGRESAR</option><option value="FLUJO SAP">FLUJO SAP</option><option value="POR REVISION">POR REVISION</option><option value="PEND CC">PEND CC</option><option value="SIN ESTATUS">Sin estatus</option>
+                    <select id="filtroEstatusProd" onchange="setFiltroEtapa('produccion','estatus',this.value)" class="field-input filtro-etapa-select" title="Estatus elegido en la etapa pendiente (BORRADOR, INGRESAR…); &quot;Sin estatus&quot;: etapas pendientes a las que aún no se les asignó" aria-label="Filtrar por estatus de la etapa">
+                        <option value="">Estatus: todos</option><option value="BORRADOR">BORRADOR</option><option value="INGRESAR">INGRESAR</option><option value="FLUJO SAP">FLUJO SAP</option><option value="CONTROL DE CAMBIO">CONTROL DE CAMBIO</option><option value="POR REVISIÓN">POR REVISIÓN</option><option value="SIN ESTATUS">Sin estatus</option>
                     </select>
                     <button type="button" id="filtrosEtapaLimpiarProd" onclick="limpiarFiltrosEtapa('produccion')" class="filtro-etapa-limpiar" style="display:none;">Quitar filtros</button>
                 </div>
@@ -2049,18 +2055,22 @@
             <div class="overflow-x-auto overflow-y-auto rounded-lg border border-slate-700/50 custom-scrollbar" id="tablaPendientesWrapper" style="display:none; max-height:70vh;">
                 <table class="w-full text-xs table-fixed" id="tablaPendientes">
     <colgroup>
-        <col style="width:12%">
-        <col style="width:28%">
+        <col style="width:6%">
         <col style="width:10%">
-        <col style="width:13%">
-        <col style="width:27%">
-        <col style="width:10%">
+        <col style="width:24%">
+        <col style="width:9%">
+        <col style="width:11%">
+        <col style="width:16%">
+        <col style="width:11%">
+        <col style="width:7%">
+        <col style="width:6%">
     </colgroup>
     <thead class="sticky top-0 z-10">
     <tr class="text-left uppercase text-[10px] tracking-wider">
+        <th class="py-2">Planta</th>
         <th class="py-2">Material</th>
         <th class="py-2">Descripción</th>
-        <th class="py-2">Área(s)</th>
+        <th class="py-2">Área</th>
         <th class="py-2">
             <div class="flex items-center gap-1">
                 <span>Inicio de Producción</span>
@@ -2069,7 +2079,9 @@
                 </button>
             </div>
         </th>
-        <th class="py-2">Etapa(s) Pendiente(s)</th>
+        <th class="py-2">Etapa pendiente</th>
+        <th class="py-2">Estatus</th>
+        <th class="py-2">Responsable</th>
         <th class="py-2">Estado</th>
     </tr>
 </thead>
@@ -2306,9 +2318,9 @@
                     </button>
                 </div>
                 <div class="flex items-center gap-1.5 flex-wrap">
-                    <button onclick="validacionForecastFiltroEstado='todos'; refiltrarValidacionForecastFiltros();" id="filtroValForecastTodos" class="filter-pill active px-3 py-1.5 rounded-lg text-[11px] font-medium">Todos</button>
-                    <button onclick="validacionForecastFiltroEstado='pendientes'; refiltrarValidacionForecastFiltros();" id="filtroValForecastPendientes" class="filter-pill px-3 py-1.5 rounded-lg text-[11px] font-medium">Pendientes</button>
-                    <button onclick="validacionForecastFiltroEstado='autorizados'; refiltrarValidacionForecastFiltros();" id="filtroValForecastAutorizados" class="filter-pill px-3 py-1.5 rounded-lg text-[11px] font-medium">Autorizados manual</button>
+                    <button onclick="validacionForecastFiltroEstado='todos'; refiltrarValidacionForecastFiltros();" id="filtroValForecastTodos" class="filter-pill active px-3 py-1.5 rounded-lg text-[11px] font-medium">Todos<span class="pill-count" id="pillCountForecastTodos"></span></button>
+                    <button onclick="validacionForecastFiltroEstado='pendientes'; refiltrarValidacionForecastFiltros();" id="filtroValForecastPendientes" class="filter-pill px-3 py-1.5 rounded-lg text-[11px] font-medium">Pendientes<span class="pill-count" id="pillCountForecastPendientes"></span></button>
+                    <button onclick="validacionForecastFiltroEstado='autorizados'; refiltrarValidacionForecastFiltros();" id="filtroValForecastAutorizados" class="filter-pill px-3 py-1.5 rounded-lg text-[11px] font-medium" title="Etapas autorizadas en SAP o a mano">Autorizados<span class="pill-count" id="pillCountForecastAutorizados"></span></button>
                 </div>
                 <div class="flex items-center gap-1.5 flex-wrap" id="filtrosEtapaForecast">
                     <select id="filtroEtapaForecast" onchange="setFiltroEtapa('forecast','etapa',this.value)" class="field-input filtro-etapa-select" title="Mostrar solo esta etapa" aria-label="Filtrar por etapa">
@@ -2320,8 +2332,8 @@
                     <select id="filtroEdadForecast" onchange="setFiltroEtapa('forecast','edad',this.value)" class="field-input filtro-etapa-select" title="Antigüedad del pendiente: días desde la Fecha Registro en SAP del RMD que decide la etapa" aria-label="Filtrar por antigüedad del pendiente">
                         <option value="">Antigüedad: todas</option><option value="le7">Hasta 7 días</option><option value="gt7">Más de 7 días</option><option value="gt30">Más de 30 días</option><option value="gt90">Más de 90 días</option>
                     </select>
-                    <select id="filtroEstatusForecast" onchange="setFiltroEtapa('forecast','estatus',this.value)" class="field-input filtro-etapa-select" title="Estatus elegido en la etapa pendiente (PEND CC, POR INGRESAR…); &quot;Sin estatus&quot;: etapas pendientes a las que aún no se les asignó" aria-label="Filtrar por estatus de la etapa">
-                        <option value="">Estatus: todos</option><option value="PENDIENTE-PRO">PENDIENTE-PRO</option><option value="POR INGRESAR">POR INGRESAR</option><option value="FLUJO SAP">FLUJO SAP</option><option value="POR REVISION">POR REVISION</option><option value="PEND CC">PEND CC</option><option value="SIN ESTATUS">Sin estatus</option>
+                    <select id="filtroEstatusForecast" onchange="setFiltroEtapa('forecast','estatus',this.value)" class="field-input filtro-etapa-select" title="Estatus elegido en la etapa pendiente (BORRADOR, INGRESAR…); &quot;Sin estatus&quot;: etapas pendientes a las que aún no se les asignó" aria-label="Filtrar por estatus de la etapa">
+                        <option value="">Estatus: todos</option><option value="BORRADOR">BORRADOR</option><option value="INGRESAR">INGRESAR</option><option value="FLUJO SAP">FLUJO SAP</option><option value="CONTROL DE CAMBIO">CONTROL DE CAMBIO</option><option value="POR REVISIÓN">POR REVISIÓN</option><option value="SIN ESTATUS">Sin estatus</option>
                     </select>
                     <button type="button" id="filtrosEtapaLimpiarForecast" onclick="limpiarFiltrosEtapa('forecast')" class="filtro-etapa-limpiar" style="display:none;">Quitar filtros</button>
                 </div>
@@ -2332,11 +2344,13 @@
                 <table class="w-full text-xs" id="tablaPendientesForecast">
                     <thead class="sticky top-0 bg-slate-900/95 backdrop-blur z-10">
                         <tr class="text-left text-slate-400 uppercase text-[10px] tracking-wider border-b border-slate-700/50">
+    <th class="py-2">Planta</th>
     <th class="py-2">Material</th>
     <th class="py-2">Descripción</th>
-    <th class="py-2">Planta</th>
     <th class="py-2">Meses Programados</th>
-    <th class="py-2">Etapa(s) Pendiente(s)</th>
+    <th class="py-2">Etapa</th>
+    <th class="py-2">Estatus</th>
+    <th class="py-2">Responsable</th>
     <th class="py-2">Estado</th>
 </tr>
                     </thead>
@@ -4619,24 +4633,19 @@ function buildDateColumnMapPlanta1(headerRow, weekLabelRow, hiddenCols) {
             }
         }
 
-        function processFileProd(file) {
-            // Se captura la planta ANTES de leer el archivo (operación asíncrona).
-            // Si el usuario cambia de planta mientras el Excel se está leyendo o
-            // procesando, esta función sigue tratando el archivo como de la
-            // planta que estaba activa cuando se inició la carga — evita que el
-            // archivo se guarde o parsee con el formato/planta equivocada.
-            const plantaObjetivo = currentPlanta;
-            Swal.fire({ title: `Analizando (${plantaObjetivo === 'planta1' ? 'Planta ATE' : 'Planta LIMA'})...`, allowOutsideClick: false, didOpen: () => Swal.showLoading(), background: '#0f172a' });
-            const reader = new FileReader();
-            reader.onload = async (ev) => {
-                try {
-                    const data = new Uint8Array(ev.target.result);
-                    // cellStyles: sin esta opción SheetJS no llena '!rows' /
-                    // '!cols', y getHiddenRowSet/getHiddenColSet nunca veían
-                    // las filas y columnas ocultas (caso real, ATE S43/2026:
-                    // filas ocultas con "anular" en PEQUEÑO VOLUMEN 2 y
-                    // LIQ-L5-STRUNK se contaban como producción).
-                    const wb = XLSX.read(data, { type: 'array', cellDates: true, cellStyles: true });
+        // Hoja ACO del programa de LIMA: en el área de acondicionado se hacen el envase y el acondicionado, y cada celda dice
+        // cuál: EA (envase y acondicionado), E (envase) o A (acondicionado). Devuelve 'EA', 'E' o 'A', o null si la celda dice
+        // otra cosa (esa celda no cuenta como producción). Admite espacios y separadores: «E A», «E/A», «E-A», «A+E».
+        function claveEtapaHojaAco(texto) {
+            const t = String(texto || '').toUpperCase().replace(/[\s./+\-_,;]+/g, '');
+            if (t === 'EA' || t === 'AE') return 'EA';
+            if (t === 'E' || t === 'A') return t;
+            return null;
+        }
+
+        // Lee el Excel del Programa de Producción de una planta, sin guardar nada: los productos con sus fechas desde hoy (y,
+        // en la hoja ACO de LIMA, las del envase y el acondicionado) y las áreas (hojas) leídas.
+        function leerProgramaProduccion(wb, plantaObjetivo) {
                     const pmap = new Map();
                     const areasDeEstaCarga = new Set();
 
@@ -4787,6 +4796,7 @@ function buildDateColumnMapPlanta1(headerRow, weekLabelRow, hiddenCols) {
     // header/fechas (que puede coincidir con labelRowIdx en Planta LIMA nueva).
     const dataStartIdx = Math.max(labelRowIdx, headerRowIdx) + 1;
     const dataRows = rows.slice(dataStartIdx);
+    const esHojaAcoLima = !planta1Format && sn.trim().toUpperCase() === 'ACO';
     dataRows.forEach((row, relIdx) => {
         const absoluteRowIdx = dataStartIdx + relIdx;
         if (hiddenRows.has(absoluteRowIdx) || !row || row.length === 0) return;
@@ -4798,6 +4808,7 @@ function buildDateColumnMapPlanta1(headerRow, weekLabelRow, hiddenCols) {
 
         const prod = productoColIdx !== -1 ? String(row[productoColIdx] || "").trim() : "";
         const scheduledDates = [];
+        const fechasEnvase = [], fechasAcond = [];
         Object.keys(dateColMap).forEach(colIdx => {
             const cellVal = row[colIdx];
             const cellStr = (cellVal !== undefined && cellVal !== null) ? String(cellVal).trim() : "";
@@ -4810,6 +4821,13 @@ function buildDateColumnMapPlanta1(headerRow, weekLabelRow, hiddenCols) {
             // programada.
             if (planta1Format && containsExcludedTermPlanta1(cellStr)) return;
             if (!planta1Format && containsExcludedTermPlanta2(cellStr)) return;
+            if (esHojaAcoLima) {
+                // Hoja ACO de LIMA: solo cuentan EA (envase y acondicionado), E (envase) y A (acondicionado).
+                const clave = claveEtapaHojaAco(cellStr);
+                if (!clave) return;
+                if (clave.includes('E')) fechasEnvase.push(dateColMap[colIdx]);
+                if (clave.includes('A')) fechasAcond.push(dateColMap[colIdx]);
+            }
             scheduledDates.push(dateColMap[colIdx]);
         });
 
@@ -4819,12 +4837,43 @@ function buildDateColumnMapPlanta1(headerRow, weekLabelRow, hiddenCols) {
                 const key = `${cod}_${sn}`;
                 if (!pmap.has(key)) pmap.set(key, { codigo: cod, producto: prod, area: sn, fechas: new Set(futureDates) });
                 else futureDates.forEach(d => pmap.get(key).fechas.add(d));
+                if (esHojaAcoLima) {
+                    const it = pmap.get(key);
+                    it.fechasEtapa = it.fechasEtapa || { ENVASE: new Set(), ACONDICIONADO: new Set() };
+                    filtrarFechasFuturas(fechasEnvase).forEach(d => it.fechasEtapa.ENVASE.add(d));
+                    filtrarFechasFuturas(fechasAcond).forEach(d => it.fechasEtapa.ACONDICIONADO.add(d));
+                }
             }
         }
     });
 });
 
-                    const nuevaProductionData = Array.from(pmap.values()).map(p => ({ ...p, fechas: Array.from(p.fechas).sort((a, b) => new Date(a) - new Date(b)) }));
+                    const ordenarFechas = (set) => Array.from(set).sort((a, b) => new Date(a) - new Date(b));
+                    const nuevaProductionData = Array.from(pmap.values()).map(p => ({ ...p, fechas: ordenarFechas(p.fechas),
+                        ...(p.fechasEtapa ? { fechasEtapa: { ENVASE: ordenarFechas(p.fechasEtapa.ENVASE), ACONDICIONADO: ordenarFechas(p.fechasEtapa.ACONDICIONADO) } } : {}) }));
+
+                    return { data: nuevaProductionData, areas: areasDeEstaCarga };
+        }
+
+        function processFileProd(file) {
+            // Se captura la planta ANTES de leer el archivo (operación asíncrona).
+            // Si el usuario cambia de planta mientras el Excel se está leyendo o
+            // procesando, esta función sigue tratando el archivo como de la
+            // planta que estaba activa cuando se inició la carga — evita que el
+            // archivo se guarde o parsee con el formato/planta equivocada.
+            const plantaObjetivo = currentPlanta;
+            Swal.fire({ title: `Analizando (${plantaObjetivo === 'planta1' ? 'Planta ATE' : 'Planta LIMA'})...`, allowOutsideClick: false, didOpen: () => Swal.showLoading(), background: '#0f172a' });
+            const reader = new FileReader();
+            reader.onload = async (ev) => {
+                try {
+                    const data = new Uint8Array(ev.target.result);
+                    // cellStyles: sin esta opción SheetJS no llena '!rows' /
+                    // '!cols', y getHiddenRowSet/getHiddenColSet nunca veían
+                    // las filas y columnas ocultas (caso real, ATE S43/2026:
+                    // filas ocultas con "anular" en PEQUEÑO VOLUMEN 2 y
+                    // LIQ-L5-STRUNK se contaban como producción).
+                    const wb = XLSX.read(data, { type: 'array', cellDates: true, cellStyles: true });
+                    const { data: nuevaProductionData, areas: areasDeEstaCarga } = leerProgramaProduccion(wb, plantaObjetivo);
 
                     // Se captura la versión anterior ANTES de sobrescribirla,
                     // para poder comparar y generar el historial de
@@ -5515,10 +5564,13 @@ function buildDateColumnMapPlanta1(headerRow, weekLabelRow, hiddenCols) {
         // RMD — es un selector propio de Producción/Forecast, con la misma
         // lista de opciones y responsable por defecto que se usa allá, pero
         // totalmente independiente y editable en cada etapa.
-        const ESTATUS_ETAPA_OPCIONES = ['PENDIENTE-PRO', 'POR INGRESAR', 'FLUJO SAP', 'POR REVISION', 'PEND CC'];
+        // Los nombres de la plantilla del status (PPTX del equipo, oct 2026): BORRADOR, INGRESAR, FLUJO SAP, CONTROL DE CAMBIO y
+        // POR REVISIÓN. Lo guardado con los nombres anteriores se lee con los nuevos (ESTATUS_RENOMBRADOS).
+        const ESTATUS_ETAPA_OPCIONES = ['BORRADOR', 'INGRESAR', 'FLUJO SAP', 'CONTROL DE CAMBIO', 'POR REVISIÓN'];
+        const ESTATUS_CC = 'CONTROL DE CAMBIO';
         // «PEND RMD OFICIAL» se llama «POR REVISION» desde oct 2026, como en la lámina 3 del status: lo guardado con el nombre
         // anterior se lee con el nuevo (y se guarda así con el próximo cambio de estatus).
-        const ESTATUS_RENOMBRADOS = { 'PEND RMD OFICIAL': 'POR REVISION' };
+        const ESTATUS_RENOMBRADOS = { 'PEND RMD OFICIAL': 'POR REVISIÓN', 'POR REVISION': 'POR REVISIÓN', 'PENDIENTE-PRO': 'BORRADOR', 'POR INGRESAR': 'INGRESAR', 'PEND CC': ESTATUS_CC };
         const estatusVigente = (v) => ESTATUS_RENOMBRADOS[String(v || '').trim().toUpperCase()] || v;
         const mapaEstatusEtapa = (lista) => new Map((lista || []).map(([k, v]) => [k, estatusVigente(v)]));
 
@@ -5528,11 +5580,11 @@ function buildDateColumnMapPlanta1(headerRow, weekLabelRow, hiddenCols) {
         // tener que leer el texto del desplegable.
         function claseColorEstatus(estatus) {
             switch (estatus) {
-                case 'PENDIENTE-PRO': return 'est-pendiente-pro';
-                case 'POR INGRESAR': return 'est-por-ingresar';
+                case 'BORRADOR': return 'est-pendiente-pro';
+                case 'INGRESAR': return 'est-por-ingresar';
                 case 'FLUJO SAP': return 'est-flujo-sap';
-                case 'POR REVISION': return 'est-por-revision';
-                case 'PEND CC': return 'est-pend-cc';
+                case 'POR REVISIÓN': return 'est-por-revision';
+                case ESTATUS_CC: return 'est-pend-cc';
                 default: return '';
             }
         }
@@ -5544,10 +5596,10 @@ function buildDateColumnMapPlanta1(headerRow, weekLabelRow, hiddenCols) {
         // defecto único — el usuario debe elegir manualmente cuál de los
         // dos aplica (ver window.setEstatusEtapa y window.setResponsableEtapa).
         const ESTATUS_ETAPA_RESPONSABLE_DEFECTO = {
-            'PENDIENTE-PRO': 'PRO',
-            'POR INGRESAR': 'DOC',
+            'BORRADOR': 'PRO',
+            'INGRESAR': 'DOC',
             'FLUJO SAP': 'PRO',
-            'POR REVISION': 'DOC'
+            'POR REVISIÓN': 'DOC'
         };
         // Map<"material::etapaFija", estatus>, misma clave que responsablesEtapa.
         let estatusEtapa = new Map();
@@ -6427,18 +6479,6 @@ async function downloadPlanProduccionFromCloud() {
         }
         // Revisión desde runValidacion*: sin await (la tabla se pinta con las autorizaciones ya actualizadas en memoria).
         function revisarAutorizacionesManuales() { guardarRevisionManuales(aplicarCaducidadManuales(), false); }
-        // Texto "a mano el DD/MM" de una etapa tachada, con su estado real en SAP en el tooltip.
-        function notaManualHtml(p, fija, origen) {
-            const key = responsableKey(p.material, fija);
-            const m = (origen === 'forecast' ? manualAutorizadosForecastMeta : manualAutorizadosMeta).get(key);
-            const d = p.detallePreciso && p.detallePreciso[fija];
-            const pend = d ? d.candidatos.filter(c => c.pendiente) : [];
-            const cuando = m && m.f ? `el ${dayjs(m.f).format('DD/MM/YYYY HH:mm')}` : (m && m.desde ? `antes del ${dayjs(m.desde).format('DD/MM/YYYY')}` : '');
-            const title = `Autorizada a mano en Status RMD${cuando ? ' ' + cuando : ''}. En SAP: ${pend.length ? pend.map(textoCandidato).join('; ') : 'sin datos'}. `
-                + 'Caduca sola (sin DNI) cuando SAP la autorice o registre una versión nueva.';
-            return `<span class="nota-manual" title="${escapeHtmlRmdConfig(title)}">a mano${m && m.f ? ' · ' + dayjs(m.f).format('DD/MM') : ''}</span>`;
-        }
-
         // Identidades para el historial que no piden DNI: acciones automáticas de Status RMD y sincronizaciones hechas con
         // la sesión del portal SAP (el script envía el usuario con el que se inició sesión en el portal).
         const IDENTIDAD_AUTOMATICA = { ok: true, usuarioTxt: 'Status RMD (automático)' };
@@ -6729,21 +6769,11 @@ async function downloadPlanProduccionFromCloud() {
                 + `<span>${esc(claseOpTxt(o.clase))}${conTag ? ' · ' + esc(o.material) : ''} · v. fab. ${esc(o.verid || '-')} · ${o.inicio ? dayjs(o.inicio).format('DD/MM') : '-'}</span>`
                 + `<span class="chip-sap chip-sap--${clase}">${esc(estadoOpTxt(o))}</span></div>`;
         }
-        // Reparte las órdenes sin RMD entre las filas de Producción: cada orden va a la fila del producto cuyo propio código o
-        // árbol (cualquier etapa) tiene su material; las que no caen en ninguna fila forman filas propias, una por material.
+        // Agrupa las órdenes sin RMD por material, en filas propias de la tabla de Producción.
         // enPrograma: materiales de los productos programados y de sus árboles (para distinguir "Solo en SAP").
-        function repartirOpsSinRmd(filas, ops, enPrograma) {
-            const porMaterial = new Map();
-            filas.forEach(f => {
-                f.opsSinRmd = [];
-                const mats = new Set([f.material]);
-                Object.values(f.detallePreciso || {}).forEach(d => ((d && d.candidatos) || []).forEach(c => mats.add(c.material)));
-                mats.forEach(m => { let l = porMaterial.get(m); if (!l) porMaterial.set(m, (l = [])); l.push(f); });
-            });
+        function filasOpsSinRmd(ops, enPrograma) {
             const propias = new Map();
             ops.forEach(o => {
-                const destino = porMaterial.get(o.material);
-                if (destino) { destino.forEach(f => f.opsSinRmd.push(o)); return; }
                 let x = propias.get(o.material);
                 if (!x) {
                     x = { material: o.material, descripcion: o.desc || '-', estado: 'opsap', soloSap: !enPrograma.has(o.material), opsSinRmd: [], fechaProxima: null, plantasSet: new Set(), clases: new Set() };
@@ -6823,31 +6853,6 @@ async function downloadPlanProduccionFromCloud() {
         }
         // Hoja "Detalle SAP" para los Excel exportados (Producción y Forecast): una fila por código pendiente de cada etapa
         // pendiente (lo mismo que la ventana de la etapa). No toca la hoja con formato de la macro.
-        function hojaDetalleSap(pendientes) {
-            if (!rmdPreciso) return null;
-            const filas = [];
-            (pendientes || []).forEach(p => (p.etapasPendientes || []).forEach(et => {
-                const fija = mapEtapaAFija(et); const d = fija && p.detallePreciso && p.detallePreciso[fija];
-                if (!d) return;
-                d.candidatos.filter(c => c.pendiente).forEach(c => {
-                    const cadena = estadoDeCadenaPrecisa(rmdPreciso.porMatEtapa.get(`${c.material}::${fija}`) || []);
-                    const u = cadena && cadena.ultima; const fila = u ? filaDetalleDeEntrada(u) : null;
-                    filas.push({
-                        'Material': p.material, 'Descripción': p.descripcion || '', 'Etapa': ETAPAS_FIJAS_LABEL[fija] || fija,
-                        'Código de la etapa': c.material, 'Ruta del árbol': (c.rutas || []).join(', ') || NIVEL_PRECISO_TXT[d.nivel] || '',
-                        'RMD': u ? (u.rmd || (u.sol ? 'Solicitud ' + u.sol : '')) : '', 'Versión': u ? u.version : '',
-                        'Estado en SAP': u ? u.estado : 'Sin RMD', 'Registro': u && u.fecha ? dayjs(u.fecha).format('YYYY-MM-DD') : '',
-                        'Antigüedad (días)': u && u.fecha ? diasDesde(u.fecha) : '',
-                        'Observación': (fila && fila.observacion) || ''
-                    });
-                });
-            }));
-            if (filas.length === 0) return null;
-            const ws = XLSX.utils.json_to_sheet(filas);
-            ws['!cols'] = [{ wch: 13 }, { wch: 42 }, { wch: 15 }, { wch: 15 }, { wch: 24 }, { wch: 13 }, { wch: 8 }, { wch: 16 }, { wch: 12 }, { wch: 10 }, { wch: 80 }];
-            ws['!autofilter'] = { ref: `A1:K${filas.length + 1}` };
-            return ws;
-        }
         function mostrarEtapaPrecisa(material, etapaFija, origen) {
             const P = rmdPreciso;
             const lbl = ETAPAS_FIJAS_LABEL[etapaFija] || etapaFija;
@@ -7311,12 +7316,12 @@ async function downloadPlanProduccionFromCloud() {
         async function toggleManualAutorizadoEtapa(material, etapaFija) {
             const key = responsableKey(material, etapaFija);
             const vaAMarcarComoAutorizada = !manualAutorizados.has(key);
-            if (vaAMarcarComoAutorizada && estatusEtapa.get(key) === 'PEND CC' && !responsablesEtapa.get(key)) {
+            if (vaAMarcarComoAutorizada && estatusEtapa.get(key) === ESTATUS_CC && !responsablesEtapa.get(key)) {
                 // PEND CC es responsabilidad compartida entre ASC y PRO: no se
                 // permite autorizar la etapa hasta que el usuario elija cuál
                 // de los dos aplica — evita dejar un registro "autorizado"
                 // sin responsable definido.
-                Swal.fire({ icon: 'warning', title: 'Falta elegir responsable', text: 'Esta etapa está en PEND CC: elige primero si el responsable es ASC o PRO antes de autorizarla.', background: '#0f172a', timer: 3000, showConfirmButton: false });
+                Swal.fire({ icon: 'warning', title: 'Falta elegir responsable', text: 'Esta etapa está en CONTROL DE CAMBIO: elige primero si el responsable es ASC o PRO antes de autorizarla.', background: '#0f172a', timer: 3000, showConfirmButton: false });
                 return;
             }
             // Sin DNI: queda con su fecha y la huella de lo pendiente en SAP, y caduca sola (ver motivoCaducidadManual).
@@ -7360,12 +7365,13 @@ async function downloadPlanProduccionFromCloud() {
             // medias (sin árbol no se sabe qué etapas tiene cada producto).
             if (esperarMotorArboles(emptyState, tableWrapper, toolbar)) return;
             avisoMotorArboles(tableWrapper, 'avisoArbolProduccion');
-            revisarAutorizacionesManuales(); // las que SAP ya autorizó o con versión nueva dejan de tapar la etapa
 
             const materialAreas = new Map();
             const materialPlantas = new Map(); // qué planta(s) aportan cada material (solo relevante en consolidado)
             const materialFechaMin = new Map(); // fecha más próxima por material
             const materialDescPrograma = new Map(); // descripción del Programa de Producción, de respaldo
+            const materialFechaAco = new Map(); // LIMA: fecha del envase y del acondicionado según la hoja ACO
+            const materialFechaOtras = new Map(); // fecha más próxima en las demás hojas
 
             productionData.forEach(p => {
                 if (currentAreaFilter !== 'TODAS' && p.area !== currentAreaFilter) return;
@@ -7387,118 +7393,59 @@ async function downloadPlanProduccionFromCloud() {
                     const primeraFecha = p.fechas[0];
                     const actual = materialFechaMin.get(cod);
                     if (!actual || primeraFecha < actual) materialFechaMin.set(cod, primeraFecha);
+                    // La hoja ACO de LIMA da la fecha del envase y del acondicionado; las demás hojas, la del resto de etapas.
+                    if (p.fechasEtapa) {
+                        const aco = materialFechaAco.get(cod) || {};
+                        ['ENVASE', 'ACONDICIONADO'].forEach(et => { const f = (p.fechasEtapa[et] || [])[0]; if (f && (!aco[et] || f < aco[et])) aco[et] = f; });
+                        materialFechaAco.set(cod, aco);
+                    } else {
+                        const otra = materialFechaOtras.get(cod);
+                        if (!otra || primeraFecha < otra) materialFechaOtras.set(cod, primeraFecha);
+                    }
                 }
             });
 
-            let revisados = 0, autorizados = 0;
-            const pendientes = [];
             const enPrograma = new Set(); // productos programados y los materiales de sus árboles (para las OP sin RMD)
-
+            const productos = [];
             materialAreas.forEach((areas, cod) => {
-                revisados++;
-                const fechaProxima = materialFechaMin.get(cod) || null;
                 const r = evaluarMaterialPreciso(cod);
                 enPrograma.add(cod);
                 Object.values(r.detalle || {}).forEach(d => ((d && d.candidatos) || []).forEach(c => enPrograma.add(c.material)));
-                const desc = r.descripcion || materialDescPrograma.get(cod) || '';
-                const areasTxt = Array.from(areas).join(', ');
-                const etapasPend = r.etapas.filter(e => r.detalle[e].pendiente);
-                if (!r.conArbol && !r.verificable) {
-                    // Sin árbol de producción no se puede asegurar que todas sus etapas estén autorizadas: se muestra para
-                    // revisar, con lo que sí se pudo ver (el RMD de su propio código).
-                    pendientes.push({
-                        material: cod, descripcion: desc || '-', areas: areasTxt, etapasPendientes: etapasPend, detallePreciso: r.detalle, sinArbol: r.sinArbol, fechaProxima,
-                        motivo: `Sin árbol de producción: ${r.sinArbol}` + (etapasPend.length ? ' | ' + etapasPend.map(e => motivoEtapaPrecisa(r.detalle[e])).join(' | ')
-                            : (r.etapas.length ? ' (su propio RMD está resuelto; sus etapas anteriores no se pueden verificar)' : ' y no tiene RMD propio en SAP'))
-                    });
-                    return;
-                }
-                if (etapasPend.length === 0) { autorizados++; return; }
-                pendientes.push({ material: cod, descripcion: desc || '-', areas: areasTxt, etapasPendientes: etapasPend, detallePreciso: r.detalle, motivo: etapasPend.map(e => motivoEtapaPrecisa(r.detalle[e])).join(' | '), fechaProxima });
-            });
-
-// 🔽 REEMPLAZASTE ESTA LÍNEA:
-// pendientes.sort((a, b) => a.material.localeCompare(b.material));
-// POR ESTAS:
-pendientes.sort((a, b) => {
-    if (!a.fechaProxima && !b.fechaProxima) return a.material.localeCompare(b.material);
-    if (!a.fechaProxima) return 1;
-    if (!b.fechaProxima) return -1;
-    return a.fechaProxima.localeCompare(b.fechaProxima);
-});
-
-// Cada fila lleva de qué planta(s) proviene el material, en los 3 modos
-// (Planta ATE, Planta LIMA, Consolidado). En vistas individuales siempre será una
-// sola planta; en consolidado puede ser una o ambas si el mismo código se
-// programó en las dos.
-pendientes.forEach(p => {
-    const plantas = materialPlantas.get(p.material);
-    p.plantas = plantas && plantas.size > 0 ? Array.from(plantas).map(pl => pl === 'planta1' ? 'ATE' : 'LIMA').sort().join(' + ') : '';
-});
-
-            const pendientesReales = [];
-            const autorizadosManualLista = [];
-            pendientes.forEach(p => {
-                // Si el producto no tiene etapas pendientes concretas (sin
-                // árbol de producción y con su propio RMD resuelto), la
-                // autorización manual por etapa no aplica — no se puede
-                // autorizar "a ciegas" sin saber qué etapa es.
-                if (!p.etapasPendientes || p.etapasPendientes.length === 0) {
-                    pendientesReales.push(p);
-                    return;
-                }
-                const etapasAunPendientes = p.etapasPendientes.filter(et => {
-                    const fija = mapEtapaAFija(et);
-                    if (!fija) return true;
-                    // Se aparta una etapa solo si el equipo la autorizó manualmente (y la autorización sigue vigente).
-                    return !manualAutorizados.has(responsableKey(p.material, fija));
+                const plantas = Array.from(materialPlantas.get(cod) || []).map(pl => (pl === 'planta1' ? 'ATE' : 'LIMA'));
+                const aco = materialFechaAco.get(cod) || {}, otras = materialFechaOtras.get(cod) || null, min = materialFechaMin.get(cod) || null;
+                productos.push({
+                    material: cod, descripcion: r.descripcion || materialDescPrograma.get(cod) || '', r, areas: Array.from(areas), plantas, fechaProxima: min,
+                    // Inicio de producción de cada etapa: envase y acondicionado con la hoja ACO (LIMA) si el código está ahí;
+                    // las demás etapas, con las otras hojas del programa.
+                    fechaDe: (fija) => ((fija === 'ENVASE' || fija === 'ACONDICIONADO') && aco[fija]) || otras || min,
+                    motivoRevisar: !r.conArbol ? `Sin árbol de producción: ${r.sinArbol}` : ''
                 });
-                const etapasYaAutorizadasManual = p.etapasPendientes.filter(et => {
-                    const fija = mapEtapaAFija(et);
-                    return fija && manualAutorizados.has(responsableKey(p.material, fija));
-                });
-                if (etapasAunPendientes.length === 0) {
-                    // Todas las etapas de este producto quedaron autorizadas
-                    // manualmente: el producto completo pasa a autorizados.
-                    autorizadosManualLista.push({ ...p, etapasAutorizadasManual: p.etapasPendientes });
-                } else if (etapasAunPendientes.length < p.etapasPendientes.length) {
-                    // Autorizado parcialmente: sigue pendiente, con las
-                    // etapas que de verdad faltan Y con las que ya se
-                    // autorizaron manualmente (para poder revertir cada una
-                    // por separado sin que "desaparezcan" de la vista).
-                    pendientesReales.push({ ...p, etapasPendientes: etapasAunPendientes, etapasAutorizadasManual: etapasYaAutorizadasManual });
-                } else {
-                    pendientesReales.push(p);
-                }
             });
-
-            limpiarResponsablesDeMaterialesAutorizados();
-
-            const autorizadosTotal = autorizados + autorizadosManualLista.length;
-            // RMD Pendientes: suma de etapas individuales pendientes (no de
-            // productos) — un mismo producto puede tener varias etapas
-            // pendientes a la vez, cada una cuenta por separado. Si un
-            // producto está pendiente pero sin etapas concretas (sin árbol de
-            // producción), cuenta como 1.
-            const rmdPendientesTotal = pendientesReales.reduce((sum, p) => sum + (p.etapasPendientes && p.etapasPendientes.length > 0 ? p.etapasPendientes.length : 1), 0);
-            ultimoResultadoValidacion = { revisados, autorizados: autorizadosTotal, pendientes: pendientesReales, autorizadosManual: autorizadosManualLista, rmdPendientes: rmdPendientesTotal };
+            revisarAutorizacionesManuales(); // las que SAP ya autorizó o con versión nueva dejan de tapar la etapa
+            const { filas: etapas, pendientesPorProducto } = etapasDeProductos(productos, manualAutorizados);
+            guardarMigracionClaves();
+            const revisados = productos.length;
+            const productosPendientes = productos.filter(p => pendientesPorProducto.get(p.material) > 0)
+                .map(p => ({ material: p.material, descripcion: p.descripcion, areas: p.areas.join(', '), plantas: p.plantas.sort().join(' + '), fechaProxima: p.fechaProxima }));
+            const etapasPendientes = etapas.filter(f => f.estado === 'pendiente');
+            const etapasManual = etapas.filter(f => f.estado === 'autorizado');
+            const autorizadosTotal = revisados - productosPendientes.length;
+            // RMD Pendientes: etapas pendientes, cada una UNA vez aunque la compartan varios productos del programa.
+            const rmdPendientesTotal = etapasPendientes.length;
+            ultimoResultadoValidacion = { revisados, autorizados: autorizadosTotal, pendientes: productosPendientes, etapas, etapasPendientes, autorizadosManual: etapasManual, rmdPendientes: rmdPendientesTotal };
 
             animateCounter('kpi-val-revisados', revisados, 1.2);
             animateCounter('kpi-val-autorizados', autorizadosTotal, 1.2);
-            animateCounter('kpi-val-pendientes', pendientesReales.length, 1.2);
+            animateCounter('kpi-val-pendientes', productosPendientes.length, 1.2);
             animateCounter('kpi-val-rmd', rmdPendientesTotal, 1.2);
             actualizarContadorPanelRmd(rmdPendientesTotal);
 
-            const filasPendientes = pendientesReales.map(p => ({ ...p, estado: 'pendiente' }));
-            const filasAutorizadas = autorizadosManualLista.map(p => ({ ...p, estado: 'autorizado' }));
-            // OP sin RMD de SAP: en la fila del producto que las contiene o, con el área en TODAS, en filas propias (por fecha
-            // de inicio, entre las pendientes). No cuentan en los KPI.
+            // OP sin RMD de SAP: filas propias (por fecha de inicio), que no cuentan en los KPI y por defecto van compactadas.
             const opsSinRmd = opsSinRmdDe(currentPlanta);
-            const filasOps = opsSinRmd ? repartirOpsSinRmd([...filasPendientes, ...filasAutorizadas], opsSinRmd, enPrograma) : [];
+            const filasOps = opsSinRmd ? filasOpsSinRmd(opsSinRmd, enPrograma) : [];
             ultimoResultadoValidacion.opsSinRmd = opsSinRmd || [];
             ultimoResultadoValidacion.enPrograma = enPrograma;
-            const porFecha = (a, b) => (a.fechaProxima || '9999').localeCompare(b.fechaProxima || '9999') || a.material.localeCompare(b.material);
-            const todasLasFilas = [...(currentAreaFilter === 'TODAS' ? [...filasPendientes, ...filasOps].sort(porFecha) : filasPendientes), ...filasAutorizadas];
+            const todasLasFilas = ordenarFilasEtapa([...etapas, ...filasOps]);
 
             if (todasLasFilas.length === 0) {
                 emptyState.style.display = 'block';
@@ -7512,6 +7459,7 @@ pendientes.forEach(p => {
                 renderTablaPendientes(todasLasFilas);
             }
             renderSummaryProd();
+            if (typeof StatusRmd !== 'undefined' && StatusRmd.pintarAcumuladoProduccion) StatusRmd.pintarAcumuladoProduccion();
         }
 
         function refiltrarValidacionFiltros() {
@@ -7536,15 +7484,6 @@ pendientes.forEach(p => {
             else if (dias <= 3) { cls = 'urg-pronto'; txt = `En ${dias} días`; }
             else { cls = 'urg-normal'; txt = `En ${dias} días`; }
             return `<span class="urg-chip ${cls}">${txt}</span>`;
-        }
-
-        function actualizarContadoresPendientes(filas) {
-            const set = (id, n) => { const el = document.getElementById(id); if (el) el.textContent = n; };
-            // las filas de OP sin RMD (estado 'opsap') cuentan como pendientes
-            const autorizados = filas.filter(f => f.estado === 'autorizado').length;
-            set('pillCountTodos', filas.length);
-            set('pillCountPendientes', filas.length - autorizados);
-            set('pillCountAutorizados', autorizados);
         }
 
         function actualizarContadorPanelRmd(total) {
@@ -7574,9 +7513,87 @@ pendientes.forEach(p => {
             return `<span class="chip-sap chip-sap--${clase}" title="${escapeHtmlRmdConfig(lineas.join('\n'))}">${escapeHtmlRmdConfig(texto)}</span>`;
         }
 
-        // ---- Filtros por etapa de las tablas de RMD pendientes: Etapa, Estado en SAP y Antigüedad del pendiente ----
-        // Se aplican a CADA etapa de la fila (pendiente o autorizada a mano) con su estado real en SAP: una fila se ve si
-        // alguna de sus etapas cumple y, dentro de la fila, solo se muestran las etapas que cumplen. Los KPI no cambian.
+        // ==================== PENDIENTES POR ETAPA (Producción y Forecast) ====================
+        // Cada fila es una etapa: el RMD de un material en una etapa (su propio código: el granel de la Fabricación, el
+        // producto terminado del Acondicionado…), no el producto programado. Dos presentaciones que comparten la Fabricación
+        // del mismo granel comparten esa fila, y cuenta una sola vez, con la fecha de inicio más próxima de sus productos. Su
+        // Estatus, responsable y autorización a mano se guardan con el código de la etapa (material::ETAPA); lo guardado antes
+        // con el código del producto pasa solo al de la etapa (migrarClaveDeEtapa).
+        const codigoDeEtapa = (producto, d) => (d && d.codigo) || producto;
+        const claveDeEtapa = (producto, fija, d) => responsableKey(codigoDeEtapa(producto, d), fija);
+        function idEtapaPrograma(producto, fija, d) {
+            const mats = d && d.candidatos && d.candidatos.length ? Array.from(new Set(d.candidatos.map(c => c.material))).sort() : [producto];
+            return `${mats.join('+')}::${fija}`;
+        }
+        let migracionClavesPendiente = false;
+        function migrarClaveDeEtapa(producto, fija, d) {
+            const nueva = claveDeEtapa(producto, fija, d), vieja = responsableKey(producto, fija);
+            if (nueva === vieja) return;
+            const pasar = (m) => { if (!m.has(vieja)) return; if (!m.has(nueva)) m.set(nueva, m.get(vieja)); m.delete(vieja); migracionClavesPendiente = true; };
+            [estatusEtapa, responsablesEtapa, manualAutorizadosMeta, manualAutorizadosForecastMeta].forEach(pasar);
+            [manualAutorizados, manualAutorizadosForecast].forEach(set => { if (set.has(vieja)) { set.delete(vieja); set.add(nueva); migracionClavesPendiente = true; } });
+        }
+        function guardarMigracionClaves() {
+            if (!migracionClavesPendiente) return;
+            migracionClavesPendiente = false;
+            Promise.all([saveEstatusEtapa(), saveResponsablesEtapa(), saveManualAutorizados(), saveManualAutorizadosForecast()])
+                .catch(err => console.error('No se pudieron guardar las claves por etapa:', err));
+        }
+        // productos: [{ material, descripcion, r (evaluarMaterialPreciso), areas, plantas, meses, fechaDe(fija), motivoRevisar }];
+        // manual: las autorizaciones a mano (Producción o Forecast). Devuelve una fila por etapa con estado 'pendiente',
+        // 'autorizado' (a mano) o 'sap' (autorizada en SAP), y cuántas etapas le quedan pendientes a cada producto.
+        function etapasDeProductos(productos, manual) {
+            const porId = new Map(), pendientesPorProducto = new Map();
+            const P = rmdPreciso;
+            productos.forEach(pr => {
+                const r = pr.r;
+                let pend = 0;
+                const agregar = (id, base, fecha) => {
+                    let f = porId.get(id);
+                    if (!f) { f = Object.assign({ id, productos: [], areasSet: new Set(), plantasSet: new Set(), mesesSet: new Set(), fechaProxima: null }, base); porId.set(id, f); }
+                    if (!f.productos.some(x => x.material === pr.material)) f.productos.push({ material: pr.material, descripcion: pr.descripcion });
+                    (pr.areas || []).forEach(a => f.areasSet.add(a));
+                    (pr.plantas || []).forEach(x => f.plantasSet.add(x));
+                    (pr.meses || []).forEach(x => f.mesesSet.add(x));
+                    if (fecha && (!f.fechaProxima || fecha < f.fechaProxima)) f.fechaProxima = fecha;
+                    return f;
+                };
+                const etapasPend = r.etapas.filter(e => r.detalle[e].pendiente);
+                if (!r.conArbol && !r.verificable && !etapasPend.length) {
+                    // Sin árbol y con su propio RMD resuelto (o sin RMD propio): queda para revisar, sin una etapa concreta.
+                    agregar(`${pr.material}::REVISAR`, { fija: null, codigo: pr.material, clave: null, descripcion: pr.descripcion, d: null, estado: 'pendiente', producto: pr.material,
+                        revisar: pr.motivoRevisar || 'Sin árbol de producción' }, pr.fechaDe(null));
+                    pend++;
+                } else {
+                    r.etapas.forEach(e => {
+                        const d = r.detalle[e], fija = mapEtapaAFija(e) || e;
+                        migrarClaveDeEtapa(pr.material, fija, d);
+                        const codigo = codigoDeEtapa(pr.material, d), clave = claveDeEtapa(pr.material, fija, d);
+                        const estado = !d.pendiente ? 'sap' : (manual.has(clave) ? 'autorizado' : 'pendiente');
+                        const f = agregar(idEtapaPrograma(pr.material, fija, d), { fija, codigo, clave, d, estado, producto: pr.material,
+                            descripcion: (P && P.descDeMaterial.get(codigo)) || (codigo === pr.material ? pr.descripcion : ''), sinArbol: r.conArbol ? '' : (r.sinArbol || '') }, pr.fechaDe(fija));
+                        if (f.estado === 'pendiente') pend++;
+                    });
+                }
+                pendientesPorProducto.set(pr.material, pend);
+            });
+            const filas = Array.from(porId.values()).map(({ areasSet, plantasSet, mesesSet, ...f }) => ({ ...f, areas: Array.from(areasSet).join(', '),
+                plantas: Array.from(plantasSet).sort().join(' + '), meses: Array.from(mesesSet), material: f.codigo }));
+            return { filas, pendientesPorProducto };
+        }
+        // Pendientes primero (por fecha de inicio), luego las autorizadas a mano y al final las autorizadas en SAP.
+        const ORDEN_ESTADO_FILA = { pendiente: 0, opsap: 0, autorizado: 1, sap: 2 };
+        function ordenarFilasEtapa(filas) {
+            const idx = (f) => (f.fija ? ETAPAS_FIJAS.indexOf(f.fija) : -1);
+            return filas.sort((a, b) => (ORDEN_ESTADO_FILA[a.estado] - ORDEN_ESTADO_FILA[b.estado]) || (a.fechaProxima || '9999').localeCompare(b.fechaProxima || '9999')
+                || idx(a) - idx(b) || String(a.material).localeCompare(String(b.material)));
+        }
+        // Estatus y responsable de una fila pendiente.
+        const estatusDeFila = (f) => (f.clave && estatusEtapa.get(f.clave)) || '';
+        const responsableDeFila = (f) => (f.clave && responsablesEtapa.get(f.clave)) || '';
+
+        // ---- Filtros de las tablas: Etapa, Estado en SAP, Antigüedad del pendiente y Estatus ----
+        // Se aplican a cada fila (etapa) con su estado real en SAP. Los KPI no cambian.
         const filtrosEtapaProd = { etapa: '', sap: '', edad: '', estatus: '' };
         const filtrosEtapaForecast = { etapa: '', sap: '', edad: '', estatus: '' };
         const ESTADOS_SAP_FILTRO = ['INGRESADO', 'SUSPENDIDO', 'SOLICITADO'];
@@ -7594,35 +7611,23 @@ pendientes.forEach(p => {
             }
             return true;
         }
-        function etapaPasaFiltros(p, et, fx) {
-            const fija = mapEtapaAFija(et);
-            if (fx.etapa && fija !== fx.etapa) return false;
-            // Estatus del recuadro de la etapa (PEND CC, POR INGRESAR…); "SIN ESTATUS": pendientes sin estatus asignado
+        function filaPasaFiltros(f, fx) {
+            if (!filtrosEtapaActivos(fx)) return true;
+            if (f.estado === 'opsap') return false;
+            if (fx.etapa && f.fija !== fx.etapa) return false;
+            // Estatus de la etapa pendiente; "SIN ESTATUS": pendientes sin estatus asignado
             if (fx.estatus) {
-                const e = fija ? (estatusEtapa.get(responsableKey(p.material, fija)) || '') : '';
+                if (f.estado !== 'pendiente') return false;
+                const e = estatusDeFila(f);
                 if (fx.estatus === 'SIN ESTATUS' ? !!e : e !== fx.estatus) return false;
             }
             if (!fx.sap && !fx.edad) return true;
-            const d = fija && p.detallePreciso && p.detallePreciso[fija];
-            return !!(d && d.candidatos.some(c => candidatoPasaFiltros(c, fx)));
+            return !!(f.d && f.d.candidatos.some(c => candidatoPasaFiltros(c, fx)));
         }
-        function aplicarFiltrosEtapa(filas, fx) {
-            if (!filtrosEtapaActivos(fx)) return filas;
-            return filas.map(f => {
-                const pend = f.estado === 'autorizado' ? [] : (f.etapasPendientes || []).filter(et => etapaPasaFiltros(f, et, fx));
-                // el Estatus solo se asigna a etapas pendientes: al filtrar por él no se muestran las autorizadas a mano
-                const man = fx.estatus ? [] : (f.etapasAutorizadasManual || []).filter(et => etapaPasaFiltros(f, et, fx));
-                if (!pend.length && !man.length) return null;
-                return { ...f, etapasPendientes: f.estado === 'autorizado' ? f.etapasPendientes : pend, etapasAutorizadasManual: man };
-            }).filter(Boolean);
-        }
-        function textoContadorFilas(visibles, filas, fx) {
-            let txt = `${visibles.length} de ${filas.length} materiales`;
-            if (filtrosEtapaActivos(fx)) {
-                const n = visibles.reduce((a, f) => a + (f.estado === 'autorizado' ? 0 : (f.etapasPendientes || []).length) + (f.etapasAutorizadasManual || []).length, 0);
-                txt += ` · ${plural(n, 'etapa', 'etapas')}`;
-            }
-            return txt;
+        const aplicarFiltrosEtapa = (filas, fx) => filas.filter(f => filaPasaFiltros(f, fx));
+        function textoContadorFilas(visibles, filas) {
+            const n = (l) => l.filter(f => f.estado !== 'opsap').length;
+            return `${n(visibles)} de ${plural(n(filas), 'etapa', 'etapas')}`;
         }
         window.setFiltroEtapa = function (origen, campo, valor) {
             filtrosEtapaDe(origen)[campo] = valor || '';
@@ -7643,115 +7648,132 @@ pendientes.forEach(p => {
             const limpiar = document.getElementById('filtrosEtapaLimpiar' + suf);
             if (limpiar) limpiar.style.display = filtrosEtapaActivos(fx) ? '' : 'none';
         }
-
-        // Celda "Etapa(s) Pendiente(s)" de una fila (Producción y Forecast): cada etapa pendiente con su estado en SAP, la
-        // antigüedad del pendiente, su Estatus, responsable y el botón ✓; debajo, las autorizadas a mano (tachadas) con su
-        // estado real en SAP, desde cuándo están autorizadas y el botón Revertir.
-        function htmlEtapasDeFila(p, origen) {
-            const fc = origen === 'forecast';
-            const toggle = fc ? 'toggleManualAutorizadoEtapaForecast' : 'toggleManualAutorizadoEtapa';
-            const idEstatus = fc ? 'estatusfc_' : 'estatus_', idResp = fc ? 'respfcpendcc_' : 'resppendcc_';
-            const mat = p.material;
-            const esAutorizado = p.estado === 'autorizado';
-            const filaPendiente = (et) => {
-                const fija = mapEtapaAFija(et);
-                const labelTxt = fija ? ETAPAS_FIJAS_LABEL[fija] : et;
-                if (!fija) return `<div class="etapa-fila-grid"><span class="text-red-300">${escapeHtmlRmdConfig(labelTxt)}</span></div>`;
-                const key = responsableKey(mat, fija);
-                const estatusActual = estatusEtapa.get(key) || '';
-                const estatusOpciones = ['', ...ESTATUS_ETAPA_OPCIONES].map(e => `<option value="${e}" ${e === estatusActual ? 'selected' : ''}>${e || 'Estatus...'}</option>`).join('');
-                const valorActual = responsablesEtapa.get(key) || '';
-                // PEND CC es responsabilidad COMPARTIDA entre ASC y PRO: a diferencia del resto de estatus (que derivan el
-                // responsable automáticamente), aquí el usuario elige cuál de los dos aplica — el select queda resaltado en
-                // rojo mientras no se haya elegido ninguno, para que no pase desapercibido.
-                const respHtml = estatusActual === 'PEND CC'
-                    ? `<select id="${idResp}${mat}_${fija}" onchange="setResponsableEtapa('${mat}','${fija}', this.value)" class="etapa-estatus-select${valorActual ? '' : ' etapa-estatus-select--alerta'}" title="PEND CC: elige si el responsable es ASC o PRO">${['', 'ASC', 'PRO'].map(r => `<option value="${r}" ${r === valorActual ? 'selected' : ''}>${r || 'Elegir...'}</option>`).join('')}</select>`
-                    : `<span class="etapa-responsable-auto" title="Responsable asignado automáticamente según el Estatus">${valorActual || '—'}</span>`;
-                const d = p.detallePreciso && p.detallePreciso[fija];
-                return `<div class="etapa-fila-grid">
-                    <span class="etapa-label-celda"><span class="text-red-300 cursor-pointer hover:underline" onclick="mostrarDetalleEtapa('${mat}','${fija}','${origen}')" title="Ver el código y el RMD de esta etapa">${labelTxt}</span><span class="chip-sap-fila">${chipSapEtapa(p, fija)}${d ? edadPendienteHtml(candidatoDelChip(d)) : ''}</span></span>
-                    <select id="${idEstatus}${mat}_${fija}" onchange="setEstatusEtapa('${mat}','${fija}', this.value)" class="etapa-estatus-select ${claseColorEstatus(estatusActual)}" title="Estatus de ${labelTxt}">${estatusOpciones}</select>
-                    ${respHtml}
-                    <button onclick="${toggle}('${mat}','${fija}')" class="text-emerald-400 hover:text-emerald-300 border border-emerald-500/40 hover:border-emerald-400 bg-emerald-500/5 hover:bg-emerald-500/10 rounded px-1.5 py-0.5 transition-colors" title="Autorizar solo esta etapa (caduca sola cuando SAP la autorice o registre una versión nueva)">✓</button>
-                </div>`;
-            };
-            const filaAutorizada = (et) => {
-                const fija = mapEtapaAFija(et);
-                const labelTxt = fija ? ETAPAS_FIJAS_LABEL[fija] : et;
-                if (!fija) return `<div class="etapa-fila-grid"><span class="etapa-autorizada-manual line-through">${escapeHtmlRmdConfig(labelTxt)}</span></div>`;
-                return `<div class="etapa-fila-grid">
-                    <span class="etapa-label-celda"><span class="etapa-autorizada-manual line-through cursor-pointer" onclick="mostrarDetalleEtapa('${mat}','${fija}','${origen}')" title="Ver el código y el RMD de esta etapa">${labelTxt}</span><span class="chip-sap-fila">${chipSapEtapa(p, fija)}${notaManualHtml(p, fija, origen)}</span></span>
-                    <button onclick="${toggle}('${mat}','${fija}')" class="justify-self-start text-[10px] font-medium text-slate-400 hover:text-slate-200 border border-slate-600 hover:border-slate-400 px-1.5 py-0.5 rounded transition-colors" title="Revertir la autorización manual de esta etapa">Revertir</button>
-                </div>`;
-            };
-            // En una fila "Autorizado manual" todas sus etapas están autorizadas a mano: se muestran una sola vez (tachadas).
-            const pendientes = esAutorizado ? [] : (p.etapasPendientes || []);
-            const manuales = p.etapasAutorizadasManual || [];
-            if (!pendientes.length && !manuales.length) {
-                return `<span class="${esAutorizado ? 'etapa-autorizada-manual line-through' : 'text-red-300'}">${escapeHtmlRmdConfig(p.motivo || 'Sin datos de etapa')}</span>`;
+        // Filas que se ven con el filtro Todos / Pendientes / Autorizados, la búsqueda y los filtros de etapa.
+        function filasVisiblesEtapa(filas, estado, busqueda, fx) {
+            let v = filas;
+            if (estado === 'pendientes') v = v.filter(f => f.estado === 'pendiente' || f.estado === 'opsap');
+            else if (estado === 'autorizados') v = v.filter(f => f.estado === 'autorizado' || f.estado === 'sap');
+            const q = String(busqueda || '').trim().toLowerCase();
+            if (q) {
+                v = v.filter(f => String(f.material).toLowerCase().includes(q) || (f.descripcion || '').toLowerCase().includes(q)
+                    || (f.productos || []).some(p => p.material.includes(q) || (p.descripcion || '').toLowerCase().includes(q))
+                    || (f.opsSinRmd || []).some(o => o.orden.includes(q) || o.material.includes(q)));
             }
-            return pendientes.map(filaPendiente).join('') + manuales.map(filaAutorizada).join('')
-                + (p.sinArbol ? `<span class="text-[10px] text-amber-400" title="${escapeHtmlRmdConfig(p.motivo || '')}">⚠ Sin árbol de producción: etapas anteriores sin verificar</span>` : '');
+            return aplicarFiltrosEtapa(v, fx);
         }
+        function actualizarContadoresPendientes(filas, ids) {
+            const set = (id, n) => { const el = document.getElementById(id); if (el) el.textContent = n; };
+            const etapas = filas.filter(f => f.estado !== 'opsap');
+            const aut = etapas.filter(f => f.estado === 'autorizado' || f.estado === 'sap').length;
+            set(ids[0], etapas.length); set(ids[1], etapas.length - aut); set(ids[2], aut);
+        }
+
+        // Celdas de una etapa (Producción y Forecast): la etapa con su estado en SAP y la antigüedad del pendiente; el Estatus;
+        // el responsable; y la acción (✓ autorizar a mano, Revertir, o «Autorizado» si SAP ya la autorizó).
+        function celdasDeEtapa(f, origen) {
+            const esc = escapeHtmlRmdConfig, fc = origen === 'forecast';
+            const toggle = fc ? 'toggleManualAutorizadoEtapaForecast' : 'toggleManualAutorizadoEtapa';
+            if (!f.fija) {
+                return {
+                    etapa: `<span class="text-amber-300" title="${esc(f.revisar || '')}">⚠ Revisar: ${esc(f.revisar || 'sin datos de etapa')}</span>`,
+                    estatus: '<span class="text-slate-500">—</span>', resp: '<span class="text-slate-500">—</span>', accion: ''
+                };
+            }
+            const mat = esc(f.codigo), fija = f.fija, label = ETAPAS_FIJAS_LABEL[fija] || fija;
+            const chip = chipSapEtapa({ detallePreciso: { [fija]: f.d } }, fija);
+            const verDetalle = `mostrarDetalleEtapa('${esc(f.producto)}','${fija}','${origen}')`;
+            if (f.estado === 'sap') {
+                const c = f.d.candidatos[0];
+                return {
+                    etapa: `<span class="etapa-label-celda"><span class="text-emerald-300 cursor-pointer hover:underline" onclick="${verDetalle}" title="Ver el código y el RMD de esta etapa">${label}</span><span class="chip-sap-fila">${chip}</span></span>`,
+                    estatus: '<span class="text-slate-500">—</span>', resp: '<span class="text-slate-500">—</span>',
+                    accion: `<span class="badge-autorizado-sap" title="${esc(c && !c.sinRmd ? `Autorizado en SAP: ${textoCandidato(c)}` : 'Resuelta en SAP')}">Autorizado</span>`
+                };
+            }
+            if (f.estado === 'autorizado') {
+                const m = (fc ? manualAutorizadosForecastMeta : manualAutorizadosMeta).get(f.clave);
+                return {
+                    etapa: `<span class="etapa-label-celda"><span class="etapa-autorizada-manual line-through cursor-pointer" onclick="${verDetalle}" title="Ver el código y el RMD de esta etapa">${label}</span><span class="chip-sap-fila">${chip}<span class="nota-manual" title="Autorizada a mano${m && m.f ? ' el ' + dayjs(m.f).format('DD/MM/YYYY HH:mm') : ''}. Caduca sola cuando SAP la autorice o registre una versión nueva.">a mano${m && m.f ? ' · ' + dayjs(m.f).format('DD/MM') : ''}</span></span></span>`,
+                    estatus: '<span class="text-slate-500">—</span>', resp: '<span class="text-slate-500">—</span>',
+                    accion: `<button onclick="${toggle}('${mat}','${fija}')" class="text-[10px] font-medium text-slate-400 hover:text-slate-200 border border-slate-600 hover:border-slate-400 px-1.5 py-0.5 rounded transition-colors" title="Revertir la autorización manual de esta etapa">Revertir</button>`
+                };
+            }
+            const estatusActual = estatusDeFila(f), valorActual = responsableDeFila(f);
+            const idEstatus = fc ? 'estatusfc_' : 'estatus_', idResp = fc ? 'respfcpendcc_' : 'resppendcc_';
+            const opciones = ['', ...ESTATUS_ETAPA_OPCIONES].map(e => `<option value="${e}" ${e === estatusActual ? 'selected' : ''}>${e || 'Estatus...'}</option>`).join('');
+            // Control de cambio es de ASC o de PRO: se elige (el select queda resaltado mientras no se elija).
+            const resp = estatusActual === ESTATUS_CC
+                ? `<select id="${idResp}${mat}_${fija}" onchange="setResponsableEtapa('${mat}','${fija}', this.value)" class="etapa-estatus-select${valorActual ? '' : ' etapa-estatus-select--alerta'}" title="Control de cambio: elige si el responsable es ASC o PRO">${['', 'ASC', 'PRO'].map(r => `<option value="${r}" ${r === valorActual ? 'selected' : ''}>${r || 'Elegir...'}</option>`).join('')}</select>`
+                : `<span class="etapa-responsable-auto" title="Responsable asignado automáticamente según el Estatus">${esc(valorActual || '—')}</span>`;
+            return {
+                etapa: `<span class="etapa-label-celda"><span class="text-red-300 cursor-pointer hover:underline" onclick="${verDetalle}" title="Ver el código y el RMD de esta etapa">${label}</span><span class="chip-sap-fila">${chip}${edadPendienteHtml(candidatoDelChip(f.d))}</span></span>`
+                    + (f.sinArbol ? `<span class="block text-[10px] text-amber-400" title="${esc(f.sinArbol)}">⚠ Sin árbol de producción: etapas anteriores sin verificar</span>` : ''),
+                estatus: `<select id="${idEstatus}${mat}_${fija}" onchange="setEstatusEtapa('${mat}','${fija}', this.value)" class="etapa-estatus-select ${claseColorEstatus(estatusActual)}" title="Estatus de ${label}">${opciones}</select>`,
+                resp,
+                accion: `<button onclick="${toggle}('${mat}','${fija}')" class="text-emerald-400 hover:text-emerald-300 border border-emerald-500/40 hover:border-emerald-400 bg-emerald-500/5 hover:bg-emerald-500/10 rounded px-1.5 py-0.5 transition-colors" title="Autorizar solo esta etapa (caduca sola cuando SAP la autorice o registre una versión nueva)">✓</button>`
+            };
+        }
+        // Productos del programa que usan la etapa (cuando no es el propio producto, o son varios).
+        function htmlProductosDeEtapa(f) {
+            const otros = (f.productos || []).filter(p => p.material !== f.codigo);
+            if (!otros.length) return '';
+            const esc = escapeHtmlRmdConfig;
+            return `<span class="etapa-para" title="${esc(otros.map(p => `${p.material} ${p.descripcion || ''}`).join('\n'))}">Para ${otros.length === 1 ? esc(otros[0].material) : `${otros.length} productos: ${esc(otros.slice(0, 3).map(p => p.material).join(', '))}${otros.length > 3 ? '…' : ''}`}</span>`;
+        }
+        const plantaCelda = (f) => escapeHtmlRmdConfig(f.plantas || (currentPlanta === 'planta1' ? 'ATE' : currentPlanta === 'planta2' ? 'LIMA' : '') || '—');
+
+        // OP sin RMD: por defecto compactadas en una sola fila; se despliegan con su botón.
+        let mostrarOpsSinRmd = false;
+        window.toggleOpsSinRmd = function () { mostrarOpsSinRmd = !mostrarOpsSinRmd; refiltrarTablaPendientes(); };
 
         function renderTablaPendientes(filas) {
             window.__ultimasFilasValidacion = filas;
-            actualizarContadoresPendientes(filas);
+            actualizarContadoresPendientes(filas, ['pillCountTodos', 'pillCountPendientes', 'pillCountAutorizados']);
 
-            let visibles = filas;
-            if (validacionFiltroEstado === 'pendientes') visibles = visibles.filter(f => f.estado !== 'autorizado');
-            else if (validacionFiltroEstado === 'autorizados') visibles = visibles.filter(f => f.estado === 'autorizado');
-
-            if (validacionBusqueda.trim()) {
-                const q = validacionBusqueda.trim().toLowerCase();
-                // también por número de orden de las OP sin RMD
-                visibles = visibles.filter(f => f.material.toLowerCase().includes(q) || (f.descripcion || '').toLowerCase().includes(q)
-                    || (f.opsSinRmd || []).some(o => o.orden.includes(q) || o.material.includes(q)));
-            }
-
+            let visibles = filasVisiblesEtapa(filas, validacionFiltroEstado, validacionBusqueda, filtrosEtapaProd);
             if (validacionFiltroFechas.size > 0) {
                 visibles = visibles.filter(f => f.fechaProxima && validacionFiltroFechas.has(dayjs(f.fechaProxima).format('YYYY-MM-DD')));
             }
-            visibles = aplicarFiltrosEtapa(visibles, filtrosEtapaProd);
             actualizarControlesFiltrosEtapa('produccion');
 
             const body = document.getElementById('tablaPendientesBody');
             const contador = document.getElementById('validacionContadorFilas');
-            if (contador) contador.textContent = textoContadorFilas(visibles, filas, filtrosEtapaProd);
+            if (contador) contador.textContent = textoContadorFilas(visibles, filas);
 
-            if (visibles.length === 0) {
-                body.innerHTML = `<tr><td colspan="6" class="text-center text-slate-500 py-6 text-xs">Ningún material coincide con el filtro/búsqueda actual.</td></tr>`;
+            const ops = visibles.filter(f => f.estado === 'opsap');
+            const etapas = visibles.filter(f => f.estado !== 'opsap');
+            const nOps = ops.reduce((t, f) => t + f.opsSinRmd.length, 0);
+            const filaOps = nOps ? `<tr class="fila-ops-resumen"><td colspan="9" class="py-1.5">
+                    <button type="button" onclick="toggleOpsSinRmd()" class="ops-resumen-btn" aria-expanded="${mostrarOpsSinRmd}">
+                        <span class="op-sin-rmd-tag">OP sin RMD</span> ${plural(nOps, 'orden de producción de SAP', 'órdenes de producción de SAP')} sin RMD autorizado (${plural(ops.length, 'material', 'materiales')})
+                        <span class="ops-resumen-accion">${mostrarOpsSinRmd ? 'Ocultar' : 'Ver'}</span></button></td></tr>` : '';
+
+            if (!etapas.length && !nOps) {
+                body.innerHTML = `<tr><td colspan="9" class="text-center text-slate-500 py-6 text-xs">Ninguna etapa coincide con el filtro/búsqueda actual.</td></tr>`;
                 return;
             }
-
-            body.innerHTML = visibles.map(p => {
-                if (p.estado === 'opsap') return filaOpsSinRmdHtml(p);
-                const esAutorizado = p.estado === 'autorizado';
-                const rowCls = esAutorizado
-                    ? 'border-b border-slate-800/60 last:border-0 fila-autorizada-manual transition-colors'
-                    : 'border-b border-slate-800/60 last:border-0 hover:bg-slate-800/40 transition-colors';
-                const badge = esAutorizado
-                    ? '<span class="inline-flex items-center gap-1 text-[10px] font-semibold badge-autorizado-manual px-2 py-0.5 rounded-full whitespace-nowrap"><svg xmlns="http://www.w3.org/2000/svg" class="h-2.5 w-2.5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.7 5.3a1 1 0 010 1.4l-8 8a1 1 0 01-1.4 0l-4-4a1 1 0 111.4-1.4L8 12.6l7.3-7.3a1 1 0 011.4 0z" clip-rule="evenodd"/></svg>Autorizado manual</span>'
-                    : '<span class="inline-flex items-center gap-1 text-[10px] font-semibold text-red-300 bg-red-500/10 border border-red-500/30 px-2 py-0.5 rounded-full whitespace-nowrap">Pendiente</span>';
-                const fechaTxt = p.fechaProxima ? dayjs(p.fechaProxima).format('YYYY-MM-DD') : '-';
-                // La etiqueta de planta solo se muestra en la tabla cuando estamos
-                // en consolidado (en Planta ATE/2 individuales sería redundante
-                // repetirla en cada fila, ya que sería siempre la misma). El dato
-                // p.plantas en sí siempre está disponible para el export a Excel.
-                const plantaTag = (currentPlanta === 'consolidado' && p.plantas) ? ` <span class="text-[9px] text-purple-300/80 bg-purple-500/10 border border-purple-500/30 px-1 py-0.5 rounded whitespace-nowrap" title="Planta(s) de origen">${p.plantas}</span>` : '';
-                return `<tr class="${rowCls}" title="${escapeHtmlRmdConfig(p.motivo || '')}">
-                    <td class="whitespace-nowrap py-2"><span class="mat-code">${p.material}</span></td>
-                    <td class="text-slate-200 py-2">${escapeHtmlRmdConfig(p.descripcion || '-')}</td>
-                    <td class="text-slate-400 whitespace-nowrap py-2">${escapeHtmlRmdConfig(p.areas || '')}${plantaTag}</td>
-                    <td class="whitespace-nowrap py-2"><div class="fecha-inicio"><span class="fecha-inicio-valor">${fechaTxt}</span>${esAutorizado ? '' : urgenciaInicioHtml(p.fechaProxima)}</div></td>
-                    <td class="py-2"><div class="flex flex-col gap-1">${htmlEtapasDeFila(p, 'produccion')}</div>${htmlOpsDeFila(p)}</td>
-                    <td class="py-2">${badge}</td>
+            const esc = escapeHtmlRmdConfig;
+            body.innerHTML = etapas.map(f => {
+                const c = celdasDeEtapa(f, 'produccion');
+                const rowCls = f.estado === 'pendiente' ? 'border-b border-slate-800/60 last:border-0 hover:bg-slate-800/40 transition-colors'
+                    : 'border-b border-slate-800/60 last:border-0 fila-autorizada-manual transition-colors';
+                const fechaTxt = f.fechaProxima ? dayjs(f.fechaProxima).format('YYYY-MM-DD') : '-';
+                return `<tr class="${rowCls}">
+                    <td class="whitespace-nowrap py-2 text-slate-300">${plantaCelda(f)}</td>
+                    <td class="whitespace-nowrap py-2"><span class="mat-code">${esc(f.codigo)}</span></td>
+                    <td class="text-slate-200 py-2">${esc(f.descripcion || '-')}${htmlProductosDeEtapa(f)}</td>
+                    <td class="text-slate-400 py-2">${esc(f.areas || '')}</td>
+                    <td class="whitespace-nowrap py-2"><div class="fecha-inicio"><span class="fecha-inicio-valor">${fechaTxt}</span>${f.estado === 'pendiente' ? urgenciaInicioHtml(f.fechaProxima) : ''}</div></td>
+                    <td class="py-2">${c.etapa}</td>
+                    <td class="py-2">${c.estatus}</td>
+                    <td class="py-2">${c.resp}</td>
+                    <td class="py-2">${c.accion}</td>
                 </tr>`;
-            }).join('');
+            }).join('') + filaOps + (mostrarOpsSinRmd ? ops.map(filaOpsSinRmdHtml).join('') : '');
 
             // El Estatus guardado manda sobre lo que el navegador haya dejado seleccionado.
             body.querySelectorAll('select[id^="estatus_"]').forEach(sel => {
-                const parts = sel.id.split('_'); // estatus_<material>_<etapaFija>
+                const parts = sel.id.split('_'); // estatus_<código de la etapa>_<etapaFija>
                 const valorGuardado = estatusEtapa.get(responsableKey(parts[1], parts.slice(2).join('_'))) || '';
                 if (sel.value !== valorGuardado) sel.value = valorGuardado;
             });
@@ -7759,26 +7781,20 @@ pendientes.forEach(p => {
 
         function refiltrarTablaPendientes() { if (window.__ultimasFilasValidacion) renderTablaPendientes(window.__ultimasFilasValidacion); }
 
-        // Órdenes de SAP sin RMD de una fila del programa (debajo de sus etapas).
-        function htmlOpsDeFila(p) {
-            const ops = p.opsSinRmd || [];
-            return ops.length ? `<div class="ops-fila">${ops.map(o => htmlOpSinRmd(o, true)).join('')}</div>` : '';
-        }
-        // Fila propia de un material con OP sin RMD que no está en ninguna fila del programa: "Solo en SAP" si no está en el
-        // programa (ni en el árbol de sus productos; p. ej. un reacondicionado) y "OP sin RMD" si está pero con todas sus
-        // etapas autorizadas (la orden usa una versión de fabricación sin RMD autorizado).
+        // Fila de un material con OP sin RMD: "Solo en SAP" si no está en el programa (ni en el árbol de sus productos; p. ej.
+        // un reacondicionado) y "OP sin RMD" si está pero la orden usa una versión de fabricación sin RMD autorizado.
         function filaOpsSinRmdHtml(p) {
             const esc = escapeHtmlRmdConfig;
-            const plantaTag = (currentPlanta === 'consolidado' && p.plantas) ? ` <span class="text-[9px] text-purple-300/80 bg-purple-500/10 border border-purple-500/30 px-1 py-0.5 rounded whitespace-nowrap" title="Planta(s) de origen">${esc(p.plantas)}</span>` : '';
             const badge = p.soloSap
                 ? '<span class="badge-op-sap" title="Orden de producción de SAP de un material que no está en el Programa de Producción (ni en el árbol de sus productos)">Solo en SAP</span>'
                 : '<span class="badge-op-sap" title="El producto está en el programa con sus etapas autorizadas, pero la orden usa una versión de fabricación sin RMD autorizado">OP sin RMD</span>';
             return `<tr class="border-b border-slate-800/60 last:border-0 hover:bg-slate-800/40 transition-colors">
+                <td class="whitespace-nowrap py-2 text-slate-300">${esc(p.plantas || '—')}</td>
                 <td class="whitespace-nowrap py-2"><span class="mat-code">${esc(p.material)}</span></td>
                 <td class="text-slate-200 py-2">${esc(p.descripcion || '-')}</td>
-                <td class="text-slate-400 whitespace-nowrap py-2">${esc(p.areas || '')}${plantaTag}</td>
+                <td class="text-slate-400 py-2">${esc(p.areas || '')}</td>
                 <td class="whitespace-nowrap py-2"><div class="fecha-inicio"><span class="fecha-inicio-valor">${p.fechaProxima ? dayjs(p.fechaProxima).format('YYYY-MM-DD') : '-'}</span>${urgenciaInicioHtml(p.fechaProxima)}</div></td>
-                <td class="py-2"><div class="flex flex-col gap-1">${p.opsSinRmd.map(o => htmlOpSinRmd(o, false)).join('')}</div></td>
+                <td class="py-2" colspan="3"><div class="flex flex-col gap-1">${p.opsSinRmd.map(o => htmlOpSinRmd(o, false)).join('')}</div></td>
                 <td class="py-2">${badge}</td>
             </tr>`;
         }
@@ -7966,84 +7982,6 @@ pendientes.forEach(p => {
             totalFondo: 'E5E7EB'
         };
 
-        // Mismo criterio que EsColumnaDeEtapa en VBA: coincidencia EXACTA
-        // con el nombre de una de las 5 etapas fijas.
-        function macroEsColumnaDeEtapa(nombreCol) {
-            return ['FABRICACIÓN', 'RECUBRIMIENTO', 'INSPECCIÓN', 'ENVASE', 'ACONDICIONADO'].includes((nombreCol || '').trim().toUpperCase());
-        }
-        // Mismo criterio que EsColumnaDeActividadPendiente: prefijo exacto.
-        function macroEsColumnaDeActividadPendiente(nombreCol) {
-            return (nombreCol || '').trim().toUpperCase().startsWith('ACTIVIDAD PENDIENTE ');
-        }
-
-        // Aplica el mismo formato que FormatearHojaDatos: encabezado oscuro,
-        // bordes, filas alternas, colores condicionales por valor en las
-        // columnas de Etapa y de Actividad Pendiente, columna Planta
-        // centrada y en negrita, autofiltro y panel congelado.
-        // `headers` es el array de nombres de columna en orden (mismo orden
-        // que las claves del primer objeto de wsData).
-        function aplicarFormatoEstiloMacro(ws, headers, cantidadFilas) {
-            const numCols = headers.length;
-            const styleHeader = {
-                fill: { patternType: 'solid', fgColor: { rgb: MACRO_COLOR.encabezadoFondo } },
-                font: { bold: true, sz: 10, color: { rgb: MACRO_COLOR.encabezadoTexto } },
-                alignment: { horizontal: 'center', vertical: 'center', wrapText: true },
-                border: bordeCompleto(MACRO_COLOR.bordeSuave)
-            };
-            for (let c = 0; c < numCols; c++) {
-                const addr = XLSX.utils.encode_cell({ r: 0, c });
-                if (ws[addr]) ws[addr].s = styleHeader;
-            }
-            if (!ws['!rows']) ws['!rows'] = [];
-            ws['!rows'][0] = { hpt: 30 };
-
-            const colPlantaIdx = headers.findIndex(h => h.trim().toUpperCase() === 'PLANTA');
-
-            for (let f = 1; f <= cantidadFilas; f++) {
-                const filaPar = (f + 1) % 2 === 0; // (f Mod 2) = 0 en VBA, con f empezando en 2
-                for (let c = 0; c < numCols; c++) {
-                    const addr = XLSX.utils.encode_cell({ r: f, c });
-                    const cell = ws[addr];
-                    if (!cell) continue;
-                    const nombreCol = headers[c];
-                    const valorCelda = String(cell.v == null ? '' : cell.v).trim().toUpperCase();
-                    let s = {
-                        font: { sz: 10, name: 'Calibri' },
-                        alignment: { vertical: 'center' },
-                        border: bordeCompleto(MACRO_COLOR.bordeSuave)
-                    };
-                    if (filaPar) s.fill = { patternType: 'solid', fgColor: { rgb: MACRO_COLOR.filaAlterna } };
-
-                    if (macroEsColumnaDeEtapa(nombreCol)) {
-                        s.alignment.horizontal = 'center';
-                        s.font.bold = true;
-                        if (valorCelda === 'X') { s.font.color = { rgb: MACRO_COLOR.etapaXTexto }; s.fill = { patternType: 'solid', fgColor: { rgb: MACRO_COLOR.etapaXFondo } }; }
-                        else if (valorCelda === 'AUTORIZADO') { s.font.color = { rgb: MACRO_COLOR.etapaAutorizadoTexto }; s.fill = { patternType: 'solid', fgColor: { rgb: MACRO_COLOR.etapaAutorizadoFondo } }; }
-                        else if (valorCelda === 'SIN DATOS') { s.font.color = { rgb: MACRO_COLOR.etapaSinDatosTexto }; s.fill = { patternType: 'solid', fgColor: { rgb: MACRO_COLOR.etapaSinDatosFondo } }; }
-                    } else if (macroEsColumnaDeActividadPendiente(nombreCol)) {
-                        s.alignment.horizontal = 'center';
-                        s.font.bold = true;
-                        if (valorCelda === 'PENDIENTE-PRO') { s.font.color = { rgb: MACRO_COLOR.actPendienteProTexto }; s.fill = { patternType: 'solid', fgColor: { rgb: MACRO_COLOR.actPendienteProFondo } }; }
-                        else if (valorCelda === 'POR INGRESAR') { s.font.color = { rgb: MACRO_COLOR.actPorIngresarTexto }; s.fill = { patternType: 'solid', fgColor: { rgb: MACRO_COLOR.actPorIngresarFondo } }; }
-                        else if (valorCelda === 'FLUJO SAP') { s.font.color = { rgb: MACRO_COLOR.actFlujoSapTexto }; s.fill = { patternType: 'solid', fgColor: { rgb: MACRO_COLOR.actFlujoSapFondo } }; }
-                        else if (valorCelda === 'POR REVISION' || valorCelda === 'PEND RMD OFICIAL') { s.font.color = { rgb: MACRO_COLOR.actPorRevisionTexto }; s.fill = { patternType: 'solid', fgColor: { rgb: MACRO_COLOR.actPorRevisionFondo } }; }
-                        else if (valorCelda === 'PEND CC') { s.font.color = { rgb: MACRO_COLOR.actPendCcTexto }; s.fill = { patternType: 'solid', fgColor: { rgb: MACRO_COLOR.actPendCcFondo } }; }
-                        else if (valorCelda === 'NO APLICA') { s.font.color = { rgb: MACRO_COLOR.actNoAplicaTexto }; s.fill = { patternType: 'solid', fgColor: { rgb: MACRO_COLOR.actNoAplicaFondo } }; }
-                    } else if (c === colPlantaIdx) {
-                        s.alignment.horizontal = 'center';
-                        s.font.bold = true;
-                    }
-                    cell.s = s;
-                }
-            }
-
-            // Ancho de la columna Descripción, igual que ColumnWidth = 42 en VBA.
-            const colDescIdx = headers.findIndex(h => h.trim().toUpperCase().startsWith('DESCRIPCI'));
-            if (colDescIdx !== -1 && ws['!cols'] && ws['!cols'][colDescIdx]) {
-                ws['!cols'][colDescIdx].wch = 42;
-            }
-        }
-
         function bordeCompleto(colorHex) {
             const b = { style: 'thin', color: { rgb: colorHex } };
             return { top: b, bottom: b, left: b, right: b };
@@ -8064,7 +8002,7 @@ pendientes.forEach(p => {
         // Excel completa solo para verlo en pantalla.
         function calcularMatrizActividadResponsable(filasObjeto) {
             const ETAPAS = ['FABRICACIÓN', 'RECUBRIMIENTO', 'INSPECCIÓN', 'ENVASE', 'ACONDICIONADO'];
-            const ACTIVIDADES = ['PENDIENTE-PRO', 'POR INGRESAR', 'FLUJO SAP', 'POR REVISION', 'PEND CC'];
+            const ACTIVIDADES = ESTATUS_ETAPA_OPCIONES;
             const RESPONSABLES = ['DOC', 'PRO', 'ASC', 'IDE'];
             const matrizActResp = {};
             ACTIVIDADES.forEach(a => { matrizActResp[a] = {}; RESPONSABLES.forEach(r => matrizActResp[a][r] = 0); });
@@ -8361,93 +8299,121 @@ pendientes.forEach(p => {
             });
         }
 
-        async function exportPendientesToExcel() {
-            const { pendientes } = ultimoResultadoValidacion;
-            if (!pendientes || pendientes.length === 0) {
-                Swal.fire({ icon: 'info', title: 'Nada que exportar', text: 'No hay materiales pendientes para exportar en este momento.', background: '#0f172a', timer: 2000, showConfirmButton: false });
+        // ---- Excel de Producción y Forecast: una fila por etapa, como la tabla de la página ----
+        // Columnas para filtrar en Excel: Planta, Material, Descripción, Área (o Mes), Inicio de producción, Etapa pendiente,
+        // Estatus y Responsable; después, lo de SAP y los productos del programa que usan la etapa.
+        function filaExcelDeEtapa(f, origen) {
+            const c = f.d ? candidatoDelChip(f.d) : null, fila = c && !c.sinRmd ? filaDetalleDeEntrada(c) : null;
+            const fc = origen === 'forecast';
+            const base = fc
+                ? { 'Planta': f.centros || '', 'Material': f.codigo, 'Descripción': f.descripcion || '', 'Mes(es)': (f.meses || []).join(', ') }
+                : { 'Planta': f.plantas || (currentPlanta === 'planta1' ? 'ATE' : currentPlanta === 'planta2' ? 'LIMA' : ''), 'Material': f.codigo, 'Descripción': f.descripcion || '', 'Área': f.areas || '',
+                    'Inicio de producción': f.fechaProxima ? dayjs(f.fechaProxima).format('YYYY-MM-DD') : '' };
+            const situacion = f.estado === 'sap' ? 'AUTORIZADO' : (f.estado === 'autorizado' ? 'AUTORIZADO A MANO' : '');
+            return Object.assign(base, {
+                'Etapa pendiente': f.fija ? (ETAPAS_FIJAS_LABEL[f.fija] || f.fija) : 'REVISAR',
+                'Estatus': f.estado === 'pendiente' ? estatusDeFila(f) : situacion,
+                'Responsable': f.estado === 'pendiente' ? responsableDeFila(f) : '',
+                'Estado en SAP': !f.d ? (f.revisar || '') : (c && !c.sinRmd ? c.estado : 'Sin RMD'),
+                'RMD': c && !c.sinRmd ? (c.rmd || (c.sol ? 'Solicitud ' + c.sol : '')) : '',
+                'Versión': c && !c.sinRmd ? c.version : '',
+                'Antigüedad (días)': f.estado === 'pendiente' && c && !c.sinRmd && Number.isFinite(c.fecha) ? diasDesde(c.fecha) : '',
+                'Para los productos': (f.productos || []).map(p => p.material).join(', '),
+                'Observación': (fila && fila.observacion) || ''
+            });
+        }
+        function hojaEtapasExcel(filas, origen) {
+            const datos = filas.map(f => filaExcelDeEtapa(f, origen));
+            const headers = Object.keys(datos[0]);
+            const ws = XLSX.utils.json_to_sheet(datos, { header: headers });
+            const anchos = { 'Planta': 10, 'Material': 13, 'Descripción': 44, 'Área': 16, 'Mes(es)': 22, 'Inicio de producción': 13, 'Etapa pendiente': 16, 'Estatus': 19, 'Responsable': 12,
+                'Estado en SAP': 14, 'RMD': 13, 'Versión': 8, 'Antigüedad (días)': 10, 'Para los productos': 26, 'Observación': 60 };
+            ws['!cols'] = headers.map(h => ({ wch: anchos[h] || 12 }));
+            ws['!autofilter'] = { ref: `A1:${XLSX.utils.encode_col(headers.length - 1)}${datos.length + 1}` };
+            ws['!views'] = [{ state: 'frozen', ySplit: 1 }];
+            // Encabezado oscuro, filas alternas y el Estatus con el color de la página.
+            const COLOR_ESTATUS = { 'BORRADOR': ['actPendienteProTexto', 'actPendienteProFondo'], 'INGRESAR': ['actPorIngresarTexto', 'actPorIngresarFondo'], 'FLUJO SAP': ['actFlujoSapTexto', 'actFlujoSapFondo'],
+                'POR REVISIÓN': ['actPorRevisionTexto', 'actPorRevisionFondo'], [ESTATUS_CC]: ['actPendCcTexto', 'actPendCcFondo'] };
+            const colEstatus = headers.indexOf('Estatus');
+            for (let r = 0; r <= datos.length; r++) {
+                for (let c = 0; c < headers.length; c++) {
+                    const addr = XLSX.utils.encode_cell({ r, c });
+                    if (!ws[addr]) ws[addr] = { t: 's', v: '' };
+                    if (r === 0) { ws[addr].s = { fill: { patternType: 'solid', fgColor: { rgb: MACRO_COLOR.encabezadoFondo } }, font: { bold: true, sz: 10, color: { rgb: MACRO_COLOR.encabezadoTexto } }, alignment: { vertical: 'center', wrapText: true }, border: bordeCompleto(MACRO_COLOR.bordeSuave) }; continue; }
+                    const s = { font: { sz: 10, name: 'Calibri' }, alignment: { vertical: 'center' }, border: bordeCompleto(MACRO_COLOR.bordeSuave) };
+                    if (r % 2 === 0) s.fill = { patternType: 'solid', fgColor: { rgb: MACRO_COLOR.filaAlterna } };
+                    const col = c === colEstatus && COLOR_ESTATUS[String(ws[addr].v)];
+                    if (col) { s.font.bold = true; s.font.color = { rgb: MACRO_COLOR[col[0]] }; s.fill = { patternType: 'solid', fgColor: { rgb: MACRO_COLOR[col[1]] } }; }
+                    ws[addr].s = s;
+                }
+            }
+            if (!ws['!rows']) ws['!rows'] = [];
+            ws['!rows'][0] = { hpt: 28 };
+            return ws;
+        }
+        // Las mismas filas, con la forma que esperan el resumen y el gráfico por responsable (una columna por etapa).
+        function construirFilasPendientesParaResumen(etapas, origen) {
+            return etapas.filter(f => f.estado === 'pendiente' && f.fija).map(f => {
+                const label = ETAPAS_FIJAS_LABEL[f.fija];
+                return { 'Material': f.codigo, 'Planta': (origen === 'forecast' ? f.centros : f.plantas) || (currentPlanta === 'planta1' ? 'ATE' : currentPlanta === 'planta2' ? 'LIMA' : ''),
+                    [label]: 'X', [`Actividad Pendiente ${label}`]: estatusDeFila(f), [`Responsable ${label}`]: responsableDeFila(f) };
+            });
+        }
+        async function exportarEtapasExcel(origen) {
+            const res = origen === 'forecast' ? ultimoResultadoValidacionForecast : ultimoResultadoValidacion;
+            const etapas = ordenarFilasEtapa(((res && res.etapas) || []).slice());
+            const pend = etapas.filter(f => f.estado === 'pendiente'), aut = etapas.filter(f => f.estado !== 'pendiente');
+            if (!pend.length && !aut.length) {
+                Swal.fire({ icon: 'info', title: 'Nada que exportar', text: 'No hay etapas para exportar en este momento.', background: '#0f172a', timer: 2000, showConfirmButton: false });
                 return;
             }
             Swal.fire({ title: 'Generando Excel...', allowOutsideClick: false, didOpen: () => Swal.showLoading(), background: '#0f172a' });
             try {
-                const wsData = pendientes.map(p => {
-                    // Set de etapas fijas que SÍ están pendientes para este material
-                    // (traduciendo cada etapa cruda del material a una de las 5 fijas).
-                    const pendientesFijasSet = new Set((p.etapasPendientes || []).map(mapEtapaAFija).filter(Boolean));
-                    // Caso especial: el material está en la lista de pendientes pero
-                    // no por una etapa concreta (no se encontró en Base de Datos, o
-                    // no tiene agrupador válido) — no hay que marcar "AUTORIZADO" en
-                    // ese caso, porque induciría a pensar que está todo en regla.
-                    const sinDatosDeEtapa = (!p.etapasPendientes || p.etapasPendientes.length === 0);
-                    // Columna Planta: ATE / LIMA / ATE + LIMA (si el material se
-                    // programó en ambas plantas, solo posible en modo Consolidado).
-                    const plantaTxt = p.plantas || '';
-                    const row = {
-                        'Material': p.material, 'Descripción': p.descripcion, 'Planta': plantaTxt, 'Área(s)': p.areas,
-                        'Inicio de Producción': p.fechaProxima ? dayjs(p.fechaProxima).format('YYYY-MM-DD') : '-'
-                    };
-                    ETAPAS_FIJAS.forEach(fija => {
-                        const label = ETAPAS_FIJAS_LABEL[fija];
-                        const estaPendiente = pendientesFijasSet.has(fija);
-                        if (sinDatosDeEtapa) {
-                            row[label] = 'SIN DATOS';
-                            row[`Actividad Pendiente ${label}`] = 'NO APLICA';
-                            row[`Responsable ${label}`] = 'NO APLICA';
-                        } else {
-                            row[label] = estaPendiente ? 'X' : 'AUTORIZADO';
-                            row[`Actividad Pendiente ${label}`] = estaPendiente ? (estatusEtapa.get(responsableKey(p.material, fija)) || '') : 'NO APLICA';
-                            row[`Responsable ${label}`] = estaPendiente ? (responsablesEtapa.get(responsableKey(p.material, fija)) || '') : 'NO APLICA';
-                        }
-                    });
-                    return row;
-                });
-                const headers = Object.keys(wsData[0]);
-                const ws = XLSX.utils.json_to_sheet(wsData);
-                // Anchos: Material, Descripción, Planta, Área(s), Inicio, luego 3 columnas
-                // (etapa + actividad pendiente + responsable) x 5 etapas.
-                ws['!cols'] = [{ wch: 14 }, { wch: 45 }, { wch: 10 }, { wch: 20 }, { wch: 16 },
-                    ...ETAPAS_FIJAS.flatMap(() => [{ wch: 14 }, { wch: 20 }, { wch: 16 }])];
-                // Autofiltro sobre todo el rango de datos, para poder filtrar por
-                // Planta (ATE/LIMA), Etapa, Actividad Pendiente, Responsable, etc.
-                // directamente en Excel.
-                const numCols = 5 + ETAPAS_FIJAS.length * 3;
-                const lastColLetter = XLSX.utils.encode_col(numCols - 1);
-                ws['!autofilter'] = { ref: `A1:${lastColLetter}${wsData.length + 1}` };
-                // Congela la fila de encabezado para que quede visible al hacer scroll.
-                ws['!freeze'] = { xSplit: 0, ySplit: 1, topLeftCell: 'A2', activePane: 'bottomLeft', state: 'frozen' };
-
-                // Formato de colores por celda — mismo resultado visual que
-                // antes solo se lograba ejecutando la macro sobre el archivo
-                // ya exportado. Ya no hace falta ningún paso manual aparte.
-                aplicarFormatoEstiloMacro(ws, headers, wsData.length);
-
                 const wb = XLSX.utils.book_new();
-                XLSX.utils.book_append_sheet(wb, ws, 'Materiales Pendientes');
-
-                // Hoja "Resumen": tabla Planta x Etapa, acumulado por
-                // Responsable y tabla de contraste — mismo contenido que
-                // generaba la macro, calculado aquí directamente.
-                const { ws: wsResumen } = await construirHojaResumenMacro(wsData, headers);
-                XLSX.utils.book_append_sheet(wb, wsResumen, 'Resumen');
-                const wsSap = hojaDetalleSap(pendientes);
-                if (wsSap) XLSX.utils.book_append_sheet(wb, wsSap, 'Detalle SAP');
-                const wsOps = hojaOpsSinRmd(ultimoResultadoValidacion && ultimoResultadoValidacion.opsSinRmd, ultimoResultadoValidacion && ultimoResultadoValidacion.enPrograma);
-                if (wsOps) XLSX.utils.book_append_sheet(wb, wsOps, 'OP sin RMD');
-
-                const plantaSufijo =currentPlanta === 'consolidado' ? 'Consolidado' : (currentPlanta === 'planta1' ? 'Planta1' : 'Planta2');
-                const nombreBase = `Materiales_Pendientes_RMD_${plantaSufijo}_${dayjs().format('YYYYMMDD_HHmm')}`;
-                XLSX.writeFile(wb, `${nombreBase}.xlsx`);
-
-                // El gráfico de contraste ya NO se descarga automáticamente
-                // aquí — el usuario lo ve dentro de la página con el botón
-                // "Gráfico por Responsable" (ver mostrarGraficoResponsableModal),
-                // y desde ahí puede descargarlo como PNG si lo necesita.
-
+                if (pend.length) XLSX.utils.book_append_sheet(wb, hojaEtapasExcel(pend, origen), 'Etapas pendientes');
+                const filasResumen = construirFilasPendientesParaResumen(pend, origen);
+                if (filasResumen.length) {
+                    const { ws: wsResumen } = await construirHojaResumenMacro(filasResumen, ['Material', 'Planta']);
+                    XLSX.utils.book_append_sheet(wb, wsResumen, 'Resumen');
+                }
+                if (aut.length) XLSX.utils.book_append_sheet(wb, hojaEtapasExcel(aut, origen), 'Etapas autorizadas');
+                if (origen !== 'forecast') {
+                    const wsOps = hojaOpsSinRmd(res && res.opsSinRmd, res && res.enPrograma);
+                    if (wsOps) XLSX.utils.book_append_sheet(wb, wsOps, 'OP sin RMD');
+                }
+                const sufijo = origen === 'forecast' ? 'Forecast' : (currentPlanta === 'consolidado' ? 'Consolidado' : (currentPlanta === 'planta1' ? 'Planta1' : 'Planta2'));
+                XLSX.writeFile(wb, `${origen === 'forecast' ? 'Forecast_' : ''}Etapas_Pendientes_RMD_${sufijo}_${dayjs().format('YYYYMMDD_HHmm')}.xlsx`, { compression: true });
                 Swal.close();
             } catch (err) {
-                console.error('Error al generar el Excel de Producción:', err);
-                Swal.fire({ icon: 'error', title: 'No se pudo generar el Excel', text: 'Ocurrió un error al aplicar el formato o generar el resumen. Intenta de nuevo.', background: '#0f172a' });
+                console.error('Error al generar el Excel:', err);
+                Swal.fire({ icon: 'error', title: 'No se pudo generar el Excel', text: 'Ocurrió un error al generar el archivo. Intenta de nuevo.', background: '#0f172a' });
             }
         }
+        async function exportPendientesToExcel() { return exportarEtapasExcel('produccion'); }
+        async function exportPendientesForecastToExcel() { return exportarEtapasExcel('forecast'); }
+        async function copiarEtapasAlPortapapeles(origen, btnId, labelId) {
+            const btn = document.getElementById(btnId), label = document.getElementById(labelId), originalLabel = label.textContent;
+            const res = origen === 'forecast' ? ultimoResultadoValidacionForecast : ultimoResultadoValidacion;
+            const pend = ordenarFilasEtapa(((res && res.etapas) || []).filter(f => f.estado === 'pendiente'));
+            if (!pend.length) {
+                Swal.fire({ icon: 'info', title: 'Nada que copiar', text: 'No hay etapas pendientes para copiar en este momento.', background: '#0f172a', timer: 2000, showConfirmButton: false });
+                return;
+            }
+            const filas = pend.map(f => filaExcelDeEtapa(f, origen));
+            const headers = Object.keys(filas[0]).filter(h => h !== 'Observación');
+            const tsv = [headers.join('\t'), ...filas.map(r => headers.map(h => String(r[h] === undefined ? '' : r[h]).replace(/[\t\n]+/g, ' ')).join('\t'))].join('\n');
+            try {
+                await navigator.clipboard.writeText(tsv);
+                label.textContent = '¡Copiado!';
+                btn.classList.add('copied');
+                setTimeout(() => { label.textContent = originalLabel; btn.classList.remove('copied'); }, 2000);
+            } catch (err) {
+                console.error(err);
+                Swal.fire({ icon: 'error', title: 'No se pudo copiar', text: 'El navegador bloqueó el acceso al portapapeles.', background: '#0f172a' });
+            }
+        }
+        async function copyPendientesToClipboard() { return copiarEtapasAlPortapapeles('produccion', 'copyPendientesBtn', 'copyPendientesLabel'); }
+        async function copyPendientesForecastToClipboard() { return copiarEtapasAlPortapapeles('forecast', 'copyPendientesForecastBtn', 'copyPendientesForecastLabel'); }
 
         // Descarga una imagen PNG (en base64, sin el prefijo data:) con el
         // nombre indicado, usando el mismo patrón de <a download> que ya usa
@@ -8459,33 +8425,6 @@ pendientes.forEach(p => {
             document.body.appendChild(a);
             a.click();
             a.remove();
-        }
-
-        // Construye las mismas filas de datos (Material, Etapa, Actividad
-        // Pendiente, Responsable, etc.) que usan las funciones de
-        // exportación a Excel, a partir de la lista de pendientes ya
-        // calculada en pantalla — sin depender de generar el Excel. Se usa
-        // tanto para exportar como para el modal del gráfico.
-        function construirFilasPendientesParaResumen(pendientes, origen) {
-            return pendientes.map(p => {
-                const pendientesFijasSet = new Set((p.etapasPendientes || []).map(mapEtapaAFija).filter(Boolean));
-                const sinDatosDeEtapa = (!p.etapasPendientes || p.etapasPendientes.length === 0);
-                const row = { 'Material': p.material, 'Planta': origen === 'forecast' ? p.centros : (p.plantas || '') };
-                ETAPAS_FIJAS.forEach(fija => {
-                    const label = ETAPAS_FIJAS_LABEL[fija];
-                    const estaPendiente = pendientesFijasSet.has(fija);
-                    if (sinDatosDeEtapa) {
-                        row[label] = 'SIN DATOS';
-                        row[`Actividad Pendiente ${label}`] = 'NO APLICA';
-                        row[`Responsable ${label}`] = 'NO APLICA';
-                    } else {
-                        row[label] = estaPendiente ? 'X' : 'AUTORIZADO';
-                        row[`Actividad Pendiente ${label}`] = estaPendiente ? (estatusEtapa.get(responsableKey(p.material, fija)) || '') : 'NO APLICA';
-                        row[`Responsable ${label}`] = estaPendiente ? (responsablesEtapa.get(responsableKey(p.material, fija)) || '') : 'NO APLICA';
-                    }
-                });
-                return row;
-            });
         }
 
         // Modal "Gráfico por Responsable": muestra dentro de la misma página
@@ -8563,8 +8502,9 @@ pendientes.forEach(p => {
         let chartResponsableModalInst = null;
         let chartDonaResponsableModalInst = null;
         function mostrarGraficoResponsableModal(origen) {
-            const { pendientes } = origen === 'forecast' ? ultimoResultadoValidacionForecast : ultimoResultadoValidacion;
-            if (!pendientes || pendientes.length === 0) {
+            const res = origen === 'forecast' ? ultimoResultadoValidacionForecast : ultimoResultadoValidacion;
+            const pendientes = (res && res.etapasPendientes) || [];
+            if (!pendientes.length) {
                 Swal.fire({ icon: 'info', title: 'Nada que graficar', text: 'No hay materiales pendientes en este momento.', background: '#0f172a', timer: 2200, showConfirmButton: false });
                 return;
             }
@@ -8625,32 +8565,6 @@ pendientes.forEach(p => {
                     if (chartDonaResponsableModalInst) { chartDonaResponsableModalInst.destroy(); chartDonaResponsableModalInst = null; }
                 }
             });
-        }
-
-        async function copyPendientesToClipboard() {
-            const btn = document.getElementById('copyPendientesBtn');
-            const label = document.getElementById('copyPendientesLabel');
-            const originalLabel = label.textContent;
-            const { pendientes } = ultimoResultadoValidacion;
-
-            if (!pendientes || pendientes.length === 0) {
-                Swal.fire({ icon: 'info', title: 'Nada que copiar', text: 'No hay materiales pendientes para copiar en este momento.', background: '#0f172a', timer: 2000, showConfirmButton: false });
-                return;
-            }
-
-            const header = ['Material', 'Descripción', 'Área(s)', 'Etapa(s) Pendiente(s)'].join('\t');
-            const lines = pendientes.map(p => [p.material, p.descripcion, p.areas, (p.etapasPendientes && p.etapasPendientes.length > 0 ? p.etapasPendientes.join(', ') : '-')].join('\t'));
-            const tsv = [header, ...lines].join('\n');
-
-            try {
-                await navigator.clipboard.writeText(tsv);
-                label.textContent = '¡Copiado!';
-                btn.classList.add('copied');
-                setTimeout(() => { label.textContent = originalLabel; btn.classList.remove('copied'); }, 2000);
-            } catch (err) {
-                console.error(err);
-                Swal.fire({ icon: 'error', title: 'No se pudo copiar', text: 'El navegador bloqueó el acceso al portapapeles.', background: '#0f172a' });
-            }
         }
 
         // ==================== MÓDULO FORECAST (sin cambios) ====================
@@ -8970,10 +8884,10 @@ function updateForecastActiveFiltersBadge() {
         async function toggleManualAutorizadoEtapaForecast(material, etapaFija) {
             const key = responsableKey(material, etapaFija);
             const vaAMarcarComoAutorizada = !manualAutorizadosForecast.has(key);
-            if (vaAMarcarComoAutorizada && estatusEtapa.get(key) === 'PEND CC' && !responsablesEtapa.get(key)) {
+            if (vaAMarcarComoAutorizada && estatusEtapa.get(key) === ESTATUS_CC && !responsablesEtapa.get(key)) {
                 // Misma regla que en Producción: PEND CC no se puede autorizar
                 // sin haber elegido antes si el responsable es ASC o PRO.
-                Swal.fire({ icon: 'warning', title: 'Falta elegir responsable', text: 'Esta etapa está en PEND CC: elige primero si el responsable es ASC o PRO antes de autorizarla.', background: '#0f172a', timer: 3000, showConfirmButton: false });
+                Swal.fire({ icon: 'warning', title: 'Falta elegir responsable', text: 'Esta etapa está en CONTROL DE CAMBIO: elige primero si el responsable es ASC o PRO antes de autorizarla.', background: '#0f172a', timer: 3000, showConfirmButton: false });
                 return;
             }
             if (manualAutorizadosForecast.has(key)) { manualAutorizadosForecast.delete(key); manualAutorizadosForecastMeta.delete(key); }
@@ -9028,71 +8942,35 @@ function updateForecastActiveFiltersBadge() {
             avisoMotorArboles(tableWrapper, 'avisoArbolForecast');
             revisarAutorizacionesManuales();
 
-            let revisados = 0, autorizados = 0;
-            const pendientes = [];
-
+            const productos = [];
             getFilteredForecastData().forEach(mat => {
                 const cod = normalizeMaterialCode(mat.material);
                 if (!cod) return;
-                revisados++;
-                const mesesLabel = mat.meses.map(mk => dayjs(mk + '-01').format('MMM YYYY'));
-                const plantaLabel = (mat.centros || []).map(c => `${getCentroLabel(c)} (${c})`).join(', ') || '-';
                 const r = evaluarMaterialPreciso(cod);
-                const desc = r.descripcion || mat.descripcion || '';
-                const etapasPend = r.etapas.filter(e => r.detalle[e].pendiente);
-                if (!r.conArbol && !r.verificable) {
-                    pendientes.push({
-                        material: cod, descripcion: desc || '-', centros: plantaLabel, meses: mesesLabel, etapasPendientes: etapasPend, detallePreciso: r.detalle, sinArbol: r.sinArbol,
-                        motivo: `Sin árbol de producción: ${r.sinArbol}` + (etapasPend.length ? ' | ' + etapasPend.map(e => motivoEtapaPrecisa(r.detalle[e])).join(' | ')
-                            : (r.etapas.length ? ' (su propio RMD está resuelto; sus etapas anteriores no se pueden verificar)' : ' y no tiene RMD propio en SAP'))
-                    });
-                    return;
-                }
-                if (etapasPend.length === 0) { autorizados++; return; }
-                pendientes.push({ material: cod, descripcion: desc || '-', centros: plantaLabel, meses: mesesLabel, etapasPendientes: etapasPend, detallePreciso: r.detalle, motivo: etapasPend.map(e => motivoEtapaPrecisa(r.detalle[e])).join(' | ') });
-            });
-
-            pendientes.sort((a, b) => a.material.localeCompare(b.material));
-
-            const pendientesReales = [];
-            const autorizadosManualLista = [];
-            pendientes.forEach(p => {
-                if (!p.etapasPendientes || p.etapasPendientes.length === 0) {
-                    pendientesReales.push(p);
-                    return;
-                }
-                const etapasAunPendientes = p.etapasPendientes.filter(et => {
-                    const fija = mapEtapaAFija(et);
-                    if (!fija) return true;
-                    // Como en Producción: solo se aparta una etapa si el equipo la autorizó manualmente.
-                    return !manualAutorizadosForecast.has(responsableKey(p.material, fija));
+                productos.push({
+                    material: cod, descripcion: r.descripcion || mat.descripcion || '', r,
+                    plantas: (mat.centros || []).map(c => `${getCentroLabel(c)} (${c})`), meses: mat.meses.slice(),
+                    fechaDe: () => (mat.meses.length ? mat.meses.slice().sort()[0] + '-01' : null),
+                    motivoRevisar: !r.conArbol ? `Sin árbol de producción: ${r.sinArbol}` : ''
                 });
-                const etapasYaAutorizadasManualFc = p.etapasPendientes.filter(et => {
-                    const fija = mapEtapaAFija(et);
-                    return fija && manualAutorizadosForecast.has(responsableKey(p.material, fija));
-                });
-                if (etapasAunPendientes.length === 0 && etapasYaAutorizadasManualFc.length > 0) {
-                    autorizadosManualLista.push({ ...p, etapasAutorizadasManual: p.etapasPendientes });
-                } else if (etapasAunPendientes.length === 0) {
-                    // Todas las etapas descartadas por el árbol: el producto
-                    // sale de la lista sin contarlo como autorizado.
-                } else if (etapasAunPendientes.length < p.etapasPendientes.length) {
-                    pendientesReales.push({ ...p, etapasPendientes: etapasAunPendientes, etapasAutorizadasManual: etapasYaAutorizadasManualFc });
-                } else {
-                    pendientesReales.push(p);
-                }
             });
-
-            const autorizadosTotal = autorizados + autorizadosManualLista.length;
-            const rmdPendientesTotal = pendientesReales.reduce((sum, p) => sum + (p.etapasPendientes && p.etapasPendientes.length > 0 ? p.etapasPendientes.length : 1), 0);
-            ultimoResultadoValidacionForecast = { revisados, autorizados: autorizadosTotal, pendientes: pendientesReales, autorizadosManual: autorizadosManualLista, rmdPendientes: rmdPendientesTotal };
+            const { filas: etapas, pendientesPorProducto } = etapasDeProductos(productos, manualAutorizadosForecast);
+            guardarMigracionClaves();
+            etapas.forEach(f => { f.meses = f.meses.sort().map(mk => dayjs(mk + '-01').format('MMM YYYY')); f.centros = f.plantas; });
+            const revisados = productos.length;
+            const productosPendientes = productos.filter(p => pendientesPorProducto.get(p.material) > 0).map(p => ({ material: p.material, descripcion: p.descripcion, centros: p.plantas.join(', ') }));
+            const etapasPendientes = etapas.filter(f => f.estado === 'pendiente');
+            const autorizadosTotal = revisados - productosPendientes.length;
+            const rmdPendientesTotal = etapasPendientes.length;
+            ultimoResultadoValidacionForecast = { revisados, autorizados: autorizadosTotal, pendientes: productosPendientes, etapas, etapasPendientes,
+                autorizadosManual: etapas.filter(f => f.estado === 'autorizado'), rmdPendientes: rmdPendientesTotal };
 
             animateCounter('kpi-val-revisados-forecast', revisados, 1.2);
             animateCounter('kpi-val-autorizados-forecast', autorizadosTotal, 1.2);
-            animateCounter('kpi-val-pendientes-forecast', pendientesReales.length, 1.2);
+            animateCounter('kpi-val-pendientes-forecast', productosPendientes.length, 1.2);
             animateCounter('kpi-val-rmd-forecast', rmdPendientesTotal, 1.2);
 
-            const todasLasFilas = [...pendientesReales.map(p => ({ ...p, estado: 'pendiente' })), ...autorizadosManualLista.map(p => ({ ...p, estado: 'autorizado' }))];
+            const todasLasFilas = ordenarFilasEtapa(etapas.slice());
             const hayFiltrosActivos = currentForecastPlantFilter !== 'TODAS' || forecastMonthFilterMode !== 'todos';
 
             if (todasLasFilas.length === 0) {
@@ -9120,43 +8998,32 @@ function updateForecastActiveFiltersBadge() {
 
         function renderTablaPendientesForecast(filas) {
             window.__ultimasFilasValidacionForecast = filas;
-
-            let visibles = filas;
-            if (validacionForecastFiltroEstado === 'pendientes') visibles = visibles.filter(f => f.estado === 'pendiente');
-            else if (validacionForecastFiltroEstado === 'autorizados') visibles = visibles.filter(f => f.estado === 'autorizado');
-
-            if (validacionForecastBusqueda.trim()) {
-                const q = validacionForecastBusqueda.trim().toLowerCase();
-                visibles = visibles.filter(f => f.material.toLowerCase().includes(q) || (f.descripcion || '').toLowerCase().includes(q));
-            }
-            visibles = aplicarFiltrosEtapa(visibles, filtrosEtapaForecast);
+            actualizarContadoresPendientes(filas, ['pillCountForecastTodos', 'pillCountForecastPendientes', 'pillCountForecastAutorizados']);
+            const visibles = filasVisiblesEtapa(filas, validacionForecastFiltroEstado, validacionForecastBusqueda, filtrosEtapaForecast);
             actualizarControlesFiltrosEtapa('forecast');
 
             const body = document.getElementById('tablaPendientesForecastBody');
             const contador = document.getElementById('validacionForecastContadorFilas');
-            if (contador) contador.textContent = textoContadorFilas(visibles, filas, filtrosEtapaForecast);
+            if (contador) contador.textContent = textoContadorFilas(visibles, filas);
 
             if (visibles.length === 0) {
-                body.innerHTML = `<tr><td colspan="6" class="text-center text-slate-500 py-6 text-xs">Ningún material coincide con el filtro/búsqueda actual.</td></tr>`;
+                body.innerHTML = `<tr><td colspan="8" class="text-center text-slate-500 py-6 text-xs">Ninguna etapa coincide con el filtro/búsqueda actual.</td></tr>`;
                 return;
             }
-
-            body.innerHTML = visibles.map(p => {
-                const mesesHtml = (p.meses || []).map(m => `<span class="mes-chip">${m}</span>`).join('');
-                const esAutorizado = p.estado === 'autorizado';
-                const rowCls = esAutorizado
-                    ? 'border-b border-slate-800/60 last:border-0 fila-autorizada-manual transition-colors'
-                    : 'border-b border-slate-800/60 last:border-0 hover:bg-slate-800/40 transition-colors';
-                const badge = esAutorizado
-                    ? '<span class="inline-flex items-center gap-1 text-[10px] font-semibold badge-autorizado-manual px-2 py-0.5 rounded-full whitespace-nowrap"><svg xmlns="http://www.w3.org/2000/svg" class="h-2.5 w-2.5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.7 5.3a1 1 0 010 1.4l-8 8a1 1 0 01-1.4 0l-4-4a1 1 0 111.4-1.4L8 12.6l7.3-7.3a1 1 0 011.4 0z" clip-rule="evenodd"/></svg>Autorizado manual</span>'
-                    : '<span class="inline-flex items-center gap-1 text-[10px] font-semibold text-red-300 bg-red-500/10 border border-red-500/30 px-2 py-0.5 rounded-full whitespace-nowrap">Pendiente</span>';
-                return `<tr class="${rowCls}" title="${escapeHtmlRmdConfig(p.motivo || '')}">
-                    <td class="font-medium text-slate-200 whitespace-nowrap py-2">${p.material}</td>
-                    <td class="text-slate-300 py-2">${escapeHtmlRmdConfig(p.descripcion || '-')}</td>
-                    <td class="text-slate-400 whitespace-nowrap py-2">${escapeHtmlRmdConfig(p.centros || '-')}</td>
-                    <td class="py-2">${mesesHtml}</td>
-                    <td class="py-2"><div class="flex flex-col gap-1">${htmlEtapasDeFila(p, 'forecast')}</div></td>
-                    <td class="py-2">${badge}</td>
+            const esc = escapeHtmlRmdConfig;
+            body.innerHTML = visibles.map(f => {
+                const c = celdasDeEtapa(f, 'forecast');
+                const rowCls = f.estado === 'pendiente' ? 'border-b border-slate-800/60 last:border-0 hover:bg-slate-800/40 transition-colors'
+                    : 'border-b border-slate-800/60 last:border-0 fila-autorizada-manual transition-colors';
+                return `<tr class="${rowCls}">
+                    <td class="text-slate-400 py-2">${esc(f.centros || '-')}</td>
+                    <td class="font-medium text-slate-200 whitespace-nowrap py-2">${esc(f.codigo)}</td>
+                    <td class="text-slate-300 py-2">${esc(f.descripcion || '-')}${htmlProductosDeEtapa(f)}</td>
+                    <td class="py-2">${(f.meses || []).map(m => `<span class="mes-chip">${esc(m)}</span>`).join('')}</td>
+                    <td class="py-2">${c.etapa}</td>
+                    <td class="py-2">${c.estatus}</td>
+                    <td class="py-2">${c.resp}</td>
+                    <td class="py-2">${c.accion}</td>
                 </tr>`;
             }).join('');
 
@@ -9169,113 +9036,6 @@ function updateForecastActiveFiltersBadge() {
         }
 
         function refiltrarTablaPendientesForecast() { if (window.__ultimasFilasValidacionForecast) renderTablaPendientesForecast(window.__ultimasFilasValidacionForecast); }
-
-        async function exportPendientesForecastToExcel() {
-    const { pendientes } = ultimoResultadoValidacionForecast;
-    if (!pendientes || pendientes.length === 0) {
-        Swal.fire({ icon: 'info', title: 'Nada que exportar', text: 'No hay materiales pendientes para exportar con los filtros actuales.', background: '#0f172a', timer: 2200, showConfirmButton: false });
-        return;
-    }
-    Swal.fire({ title: 'Generando Excel...', allowOutsideClick: false, didOpen: () => Swal.showLoading(), background: '#0f172a' });
-    try {
-        const wsData = pendientes.map(p => {
-            // Mismo patrón que exportPendientesToExcel (Producción): se desglosa
-            // cada una de las 5 etapas fijas en su propia columna, junto con su
-            // responsable — asignado a mano, o autocompletado por defecto al
-            // elegir un Estatus de etapa (ver window.setEstatusEtapa).
-            const pendientesFijasSet = new Set((p.etapasPendientes || []).map(mapEtapaAFija).filter(Boolean));
-            const sinDatosDeEtapa = (!p.etapasPendientes || p.etapasPendientes.length === 0);
-            const row = {
-                'Material': p.material,
-                'Descripción': p.descripcion,
-                'Planta': p.centros,
-                'Mes(es) Programado(s)': (p.meses || []).join(', ')
-            };
-            ETAPAS_FIJAS.forEach(fija => {
-                const label = ETAPAS_FIJAS_LABEL[fija];
-                const estaPendiente = pendientesFijasSet.has(fija);
-                if (sinDatosDeEtapa) {
-                    row[label] = 'SIN DATOS';
-                    row[`Actividad Pendiente ${label}`] = 'NO APLICA';
-                    row[`Responsable ${label}`] = 'NO APLICA';
-                } else {
-                    row[label] = estaPendiente ? 'X' : 'AUTORIZADO';
-                    row[`Actividad Pendiente ${label}`] = estaPendiente ? (estatusEtapa.get(responsableKey(p.material, fija)) || '') : 'NO APLICA';
-                    row[`Responsable ${label}`] = estaPendiente ? (responsablesEtapa.get(responsableKey(p.material, fija)) || '') : 'NO APLICA';
-                }
-            });
-            row['Motivo'] = p.motivo || '';
-            return row;
-        });
-        const headersForecast = Object.keys(wsData[0]);
-        const wsDetalle = XLSX.utils.json_to_sheet(wsData);
-        // Anchos: Material, Descripción, Planta, Mes(es), luego 3 columnas
-        // (etapa + actividad pendiente + responsable) x 5 etapas, y por último Motivo.
-        wsDetalle['!cols'] = [{ wch: 14 }, { wch: 42 }, { wch: 16 }, { wch: 34 },
-            ...ETAPAS_FIJAS.flatMap(() => [{ wch: 14 }, { wch: 20 }, { wch: 16 }]),
-            { wch: 50 }];
-        // Autofiltro sobre todo el rango de datos (mismo patrón que Producción).
-        const numColsForecast = 4 + ETAPAS_FIJAS.length * 3 + 1;
-        const lastColLetterForecast = XLSX.utils.encode_col(numColsForecast - 1);
-        wsDetalle['!autofilter'] = { ref: `A1:${lastColLetterForecast}${wsData.length + 1}` };
-        wsDetalle['!views'] = [{ state: 'frozen', ySplit: 1 }];
-
-        // Formato de colores por celda — mismo resultado visual que antes
-        // solo se lograba ejecutando la macro sobre el archivo ya exportado.
-        aplicarFormatoEstiloMacro(wsDetalle, headersForecast, wsData.length);
-
-        const wb = XLSX.utils.book_new();
-
-        // Hoja "Resumen": tabla Planta x Etapa, acumulado por Responsable y
-        // tabla de contraste — igual que en Producción. El resumen anterior
-        // de filtros/KPIs se quitó por no ser útil; esta es ahora la única
-        // hoja de resumen del libro.
-        const { ws: wsResumen } = await construirHojaResumenMacro(wsData, headersForecast);
-        XLSX.utils.book_append_sheet(wb, wsResumen, 'Resumen');
-        XLSX.utils.book_append_sheet(wb, wsDetalle, 'Detalle Pendientes');
-        const wsSapFc = hojaDetalleSap(pendientes);
-        if (wsSapFc) XLSX.utils.book_append_sheet(wb, wsSapFc, 'Detalle SAP');
-
-        const nombreBase = `Forecast_Materiales_Pendientes_RMD_${dayjs().format('YYYYMMDD_HHmm')}`;
-        XLSX.writeFile(wb, `${nombreBase}.xlsx`);
-
-        // El gráfico de contraste ya NO se descarga automáticamente aquí —
-        // el usuario lo ve dentro de la página con el botón "Gráfico por
-        // Responsable" (ver mostrarGraficoResponsableModal), y desde ahí
-        // puede descargarlo como PNG si lo necesita.
-
-        Swal.close();
-    } catch (err) {
-        console.error('Error al generar el Excel de Forecast:', err);
-        Swal.fire({ icon: 'error', title: 'No se pudo generar el Excel', text: 'Ocurrió un error al aplicar el formato o generar el resumen. Intenta de nuevo.', background: '#0f172a' });
-    }
-}
-
-        async function copyPendientesForecastToClipboard() {
-            const btn = document.getElementById('copyPendientesForecastBtn');
-            const label = document.getElementById('copyPendientesForecastLabel');
-            const originalLabel = label.textContent;
-            const { pendientes } = ultimoResultadoValidacionForecast;
-
-            if (!pendientes || pendientes.length === 0) {
-                Swal.fire({ icon: 'info', title: 'Nada que copiar', text: 'No hay materiales pendientes para copiar en este momento.', background: '#0f172a', timer: 2000, showConfirmButton: false });
-                return;
-            }
-
-            const header = ['Material', 'Descripción', 'Planta', 'Mes(es) Programado(s)', 'N° Etapas Pendientes', 'Etapa(s) Pendiente(s)'].join('\t');
-            const lines = pendientes.map(p => [p.material, p.descripcion, p.centros, (p.meses || []).join(', '), (p.etapasPendientes && p.etapasPendientes.length > 0 ? p.etapasPendientes.length : 1), (p.etapasPendientes && p.etapasPendientes.length > 0 ? p.etapasPendientes.join(', ') : '-')].join('\t'));
-            const tsv = [header, ...lines].join('\n');
-
-            try {
-                await navigator.clipboard.writeText(tsv);
-                label.textContent = '¡Copiado!';
-                btn.classList.add('copied');
-                setTimeout(() => { label.textContent = originalLabel; btn.classList.remove('copied'); }, 2000);
-            } catch (err) {
-                console.error(err);
-                Swal.fire({ icon: 'error', title: 'No se pudo copiar', text: 'El navegador bloqueó el acceso al portapapeles.', background: '#0f172a' });
-            }
-        }
 
         function clearForecastData() {
             Swal.fire({ title: '¿Limpiar datos de Forecast?', icon: 'warning', showCancelButton: true, confirmButtonText: 'Sí', cancelButtonText: 'No', background: '#0f172a', color: '#f8fafc', width: 'min(420px, 92vw)', customClass: { confirmButton: 'bg-red-600 px-4 py-2.5 rounded text-white mr-2 text-xs min-w-[44px]', cancelButton: 'bg-slate-600 px-4 py-2.5 rounded text-white text-xs min-w-[44px]' }, buttonsStyling: false }).then(async (res) => {
@@ -11404,10 +11164,10 @@ async function maybeAutoStartTour() {
         const MESES_CORTOS = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'set', 'oct', 'nov', 'dic'];
         const PLANTAS = { P1: 'P1 · Planta Ate', P2: 'P2 · Planta Lima' };
         // Estatus de un RMD pendiente (mismos que Producción) y su responsable. PEND CC es ASC o PRO, según se elija.
-        const ESTATUS = ['PENDIENTE-PRO', 'POR INGRESAR', 'FLUJO SAP', 'POR REVISION', 'PEND CC'];
-        const RESPONSABLE_ESTATUS = { 'PENDIENTE-PRO': 'PRO', 'POR INGRESAR': 'DOC', 'FLUJO SAP': 'PRO', 'POR REVISION': 'DOC' };
+        const ESTATUS = ESTATUS_ETAPA_OPCIONES;
+        const RESPONSABLE_ESTATUS = ESTATUS_ETAPA_RESPONSABLE_DEFECTO;
         // Casilla de la lámina 3 (y 5) que cuenta cada estatus: BORRADOR, INGRESAR, FLUJO SAP, POR REVISION y Control de cambio.
-        const CAMPO_ESTATUS = { 'PENDIENTE-PRO': 'bor', 'POR INGRESAR': 'ing', 'FLUJO SAP': 'flu', 'POR REVISION': 'rev', 'PEND CC': 'cc' };
+        const CAMPO_ESTATUS = { 'BORRADOR': 'bor', 'INGRESAR': 'ing', 'FLUJO SAP': 'flu', 'POR REVISIÓN': 'rev', [ESTATUS_CC]: 'cc' };
         // Caracterizaciones guardadas con «PEND RMD OFICIAL» (nombre anterior de POR REVISION).
         const conEstatusVigente = (o) => { Object.values(o || {}).forEach((x) => { if (x && x.e) x.e = estatusVigente(x.e); }); return o; };
         const ES_CARACTERIZACION = (motivo) => normalizeEstadoRmd(motivo).replace(/\s+/g, '').includes('CARACTERIZ');
@@ -11536,7 +11296,7 @@ async function maybeAutoStartTour() {
         // Casilla y responsable con que cuenta un pendiente según su Estatus (PEND CC: el responsable elegido, PRO o ASC).
         function clasePendiente(estatus, responsable) {
             const campo = CAMPO_ESTATUS[estatus] || '';
-            const resp = !campo ? '' : (estatus === 'PEND CC' ? responsable : RESPONSABLE_ESTATUS[estatus]);
+            const resp = !campo ? '' : (estatus === ESTATUS_CC ? responsable : RESPONSABLE_ESTATUS[estatus]);
             return { campo, resp: ['DOC', 'PRO', 'ASC'].includes(resp) ? resp : '' };
         }
         function sumarPendiente(c, estatus, responsable) {
@@ -12077,8 +11837,8 @@ async function maybeAutoStartTour() {
                 const sel = resuelto ? `<span class="sts-estado ok">${esAutorizadoSap(it) ? 'AUTORIZADO' : 'No cuenta'}</span>`
                     : `<select class="sts-select" aria-label="Estatus de ${esc(it.descripcion)}" onchange='StatusRmd.setEstatus(${idAttr}, this.value)'>
                         <option value="">Sin estatus</option>${ESTATUS.map((s) => `<option${e.e === s ? ' selected' : ''}>${s}</option>`).join('')}</select>`;
-                const resp = resuelto ? '' : (e.e === 'PEND CC'
-                    ? `<select class="sts-select${e.r ? '' : ' alerta'}" aria-label="Responsable de PEND CC" onchange='StatusRmd.setResponsable(${idAttr}, this.value)'><option value="">Elegir…</option><option${e.r === 'PRO' ? ' selected' : ''}>PRO</option><option${e.r === 'ASC' ? ' selected' : ''}>ASC</option></select>`
+                const resp = resuelto ? '' : (e.e === ESTATUS_CC
+                    ? `<select class="sts-select${e.r ? '' : ' alerta'}" aria-label="Responsable del control de cambio" onchange='StatusRmd.setResponsable(${idAttr}, this.value)'><option value="">Elegir…</option><option${e.r === 'PRO' ? ' selected' : ''}>PRO</option><option${e.r === 'ASC' ? ' selected' : ''}>ASC</option></select>`
                     : tagResp(RESPONSABLE_ESTATUS[e.e] || ''));
                 return `<tr>
                     <td>${it.planta}</td>
@@ -12672,7 +12432,7 @@ async function maybeAutoStartTour() {
             const guardado = await storeGet('val_estatus_caracterizacion');
             if (guardado && typeof guardado === 'object') estatusCar = conEstatusVigente(guardado);
             const nuevo = Object.assign({}, estatusCar[id] || {}, cambio, { f: new Date().toISOString() });
-            if (nuevo.e !== 'PEND CC') delete nuevo.r;
+            if (nuevo.e !== ESTATUS_CC) delete nuevo.r;
             if (!nuevo.e) delete estatusCar[id]; else estatusCar[id] = nuevo;
             await storeSet('val_estatus_caracterizacion', estatusCar);
             if (ultimo) { ultimo.r2 = ruta2(ultimo.car.items); pintar(); }
