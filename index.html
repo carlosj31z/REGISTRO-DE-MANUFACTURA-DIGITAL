@@ -11278,9 +11278,9 @@ async function maybeAutoStartTour() {
         //    autBk: los que no tienen su ingreso real en el mes (venían del backlog); el resto son del mes.
         //  - pend (Pendientes al cierre del mes = backlog del mes siguiente): RMD Ingresados (desde su ingreso real o su registro),
         //    solicitudes abiertas (Solicitado o Solicitud Aprobada, desde su Fecha Solicitud) y los Suspendidos por reeditar (masivos,
-        //    nueva edición), de ese mes o antiguos, mientras el RMD no tenga otra versión Ingresada o Autorizada. No cuentan los que
+        //    nueva edición) suspendidos desde 2026 (con fecha en la Trazabilidad de SAP), mientras el RMD no tenga otra versión Ingresada o Autorizada. No cuentan los que
         //    SAP suspende al autorizar otra versión. La fecha de suspensión sale de la Trazabilidad de SAP (script v1.108.0+, desde
-        //    2026); un suspendido de antes, sin otra versión, es antiguo: pendiente desde antes del cuadro.
+        //    2026); un suspendido de antes (sin fecha en la Trazabilidad) no cuenta (CONTAR_SUSPENDIDOS_SIN_FECHA).
         //  - fuera: de los pendientes, los que no dependen del área: en el flujo de Producción sin aprobar (Producción Estado
         //    «Enviado», script v1.109.0+, u Observación «PEND JEFE/GER») o en control de cambio (Observación «PEND CC», o
         //    Ingresado con Fecha Autorización: se reabrió). Es una foto: el de cada mes cerrado queda fijo con la última
@@ -11318,6 +11318,11 @@ async function maybeAutoStartTour() {
         }
         // versiones: [{ planta, estado (normalizado), codigo, sol, version, etapa, desc, codDef, fSol, fReg, fIng, fAut, fAutSap, obs, prodEstado }]
         // opciones: { traz (val_rmd_trazabilidad), previo (el cuadro guardado antes, para los «fuera» fijos de los meses cerrados) }.
+        // Versión de las reglas del cuadro: un mes cerrado solo se congela con un cálculo hecho con estas reglas (si cambian,
+        // se vuelve a calcular y se congela con las nuevas).
+        const REGLAS_CUADRO = 2;
+        // Suspendidos sin fecha de suspensión en la Trazabilidad (suspendidos antes de 2026) y sin versión siguiente: no cuentan.
+        const CONTAR_SUSPENDIDOS_SIN_FECHA = false;
         function cuadroDesdeVersiones(versiones, generado, opciones) {
             const { traz, previo } = opciones || {};
             const ahora = Date.parse(generado || '') || Date.now(), mesSap = dayjs(ahora).format('YYYY-MM');
@@ -11332,6 +11337,8 @@ async function maybeAutoStartTour() {
             const grupos = new Map();
             versiones.forEach((v) => {
                 if (!v.planta || (!v.codigo && !v.sol)) return;
+                // Una fecha de ingreso real futura es un error de tipeo en la Observación: se usa la Fecha Registro.
+                if (v.fIng && v.fIng.valueOf() > ahora) v.fIng = null;
                 let id = v.codigo || `S${v.sol}`;
                 while (vers[id]) id += '·';
                 v.id = id; vers[id] = v;
@@ -11378,9 +11385,11 @@ async function maybeAutoStartTour() {
                         // suspendió al autorizarla y no cuenta; si no, es un suspendido antiguo por reeditar (siguiente edición,
                         // masivo), pendiente desde antes del cuadro hasta que su siguiente edición se solicite o ingrese (entonces
                         // cuenta esa, no los dos).
+                        // Con datos reales eran más de 1700 suspendidos antiguos sin versión siguiente (masivos y productos que ya
+                        // no se fabrican): inflaban el backlog, así que solo cuentan los suspendidos con fecha en la Trazabilidad.
                         const sig = otras.filter((w) => w.fAut).sort((a, b) => a.fAut - b.fAut)[0];
                         if (sig) { v.fSusp = sig.fAut; v.suspAprox = true; }
-                        else suspensiones.push([v, -Infinity, otras]);
+                        else if (CONTAR_SUSPENDIDOS_SIN_FECHA) suspensiones.push([v, -Infinity, otras]);
                         return;
                     }
                     // Suspendido al autorizar otra versión (SAP lo hace solo): no queda pendiente.
@@ -11431,7 +11440,7 @@ async function maybeAutoStartTour() {
             // cálculo guardado después de cerrarse el mes (previo generado en un mes posterior) y desde ahí se copia igual en cada
             // sincronización (cong). Lo que cambie después entra al mes siguiente por «± Otros».
             if (prev) Object.keys(prev.porMes).forEach((mes) => {
-                if (mes >= mesSap || !(mesPrev > mes)) return;
+                if (mes >= mesSap || !(mesPrev > mes) || prev.reglas !== REGLAS_CUADRO) return;
                 ['P1', 'P2'].forEach((pl) => {
                     const p = (prev.porMes[mes] || {})[pl];
                     if (!p || p.pend === null || p.pend === undefined) return;
@@ -11455,7 +11464,7 @@ async function maybeAutoStartTour() {
                 versCompactas[id] = v.compacta || [v.planta, v.codigo, v.sol, v.version, v.etapa, v.estado, v.desc, dia(v.fSol), dia(v.fReg), dia(v.fIng), dia(v.fAut),
                     v.fSusp ? dia(v.fSusp) + (v.suspAprox ? '~' : '') : '', v.prodEstado || '', v.codDef || '', String(v.obs || '').slice(0, 300), motivoFuera(v), v.fIng ? 1 : 0];
             });
-            return { v: 3, generado: generado || new Date().toISOString(), calculado: new Date().toISOString(), porMes, det, vers: versCompactas,
+            return { v: 3, reglas: REGLAS_CUADRO, generado: generado || new Date().toISOString(), calculado: new Date().toISOString(), porMes, det, vers: versCompactas,
                 conTrazabilidad: !!(traz && traz.items) };
         }
         const CAMPOS_VERS = ['planta', 'codigo', 'sol', 'version', 'etapa', 'estado', 'desc', 'fSol', 'fReg', 'fIng', 'fAut', 'fSusp', 'prodEstado', 'codDef', 'obs', 'fuera', 'conIngreso'];
@@ -11564,8 +11573,17 @@ async function maybeAutoStartTour() {
         async function calcularRuta1() {
             if (!rmdPreciso || !rmdPreciso.totalEntradas) return { error: 'Faltan los RMD de SAP: usa «Enviar a Status RMD» en el portal o carga el Exportado RMD en Producción.' };
             await asegurarMotorArboles();
-            const [d1, d2] = await Promise.all([storeGet('prod_data_planta1'), storeGet('prod_data_planta2')]);
-            return { P1: ruta1DePlanta(d1, 'P1'), P2: ruta1DePlanta(d2, 'P2'), sinArbol: motorArboles.estado !== 'listo' };
+            const [d1, d2, a1, a2] = await Promise.all([storeGet('prod_data_planta1'), storeGet('prod_data_planta2'),
+                storeGet('prod_archivo_original_planta1'), storeGet('prod_archivo_original_planta2')]);
+            const r = { P1: ruta1DePlanta(d1, 'P1'), P2: ruta1DePlanta(d2, 'P2'), sinArbol: motorArboles.estado !== 'listo' };
+            // Horizonte del Programa de Producción: 2 semanas desde la semana en que se cargó (lunes de esa semana + 13 días).
+            [['P1', a1], ['P2', a2]].forEach(([pl, a]) => {
+                const f = a && a.fechaCarga ? dayjs(a.fechaCarga) : null;
+                if (!f || !f.isValid()) return;
+                const ini = f.startOf('day').subtract((f.day() + 6) % 7, 'day');
+                r[pl].horizonte = { ini, fin: ini.add(13, 'day'), carga: f };
+            });
+            return r;
         }
 
         // Ruta 2: autorizado = Autorizado o Suspendido en SAP; una Solicitud Rechazada no cuenta; el resto es pendiente con
@@ -11884,7 +11902,7 @@ async function maybeAutoStartTour() {
                 texto: desde.year() === hasta.year() ? `${desde.format('DD/MM')} – ${hasta.format('DD/MM/YYYY')}` : `${desde.format('DD/MM/YYYY')} – ${hasta.format('DD/MM/YYYY')}`,
                 mesNombre: MESES[hasta.month()], mesAnio: `${MESES[hasta.month()]} ${hasta.year()}`, rango,
                 mesAnterior: MESES[hasta.subtract(1, 'month').month()],
-                // El Programa de PLA dura 2 semanas desde el 1 del mes del status.
+                // Sin fecha de carga del Programa de Producción: 2 semanas desde el 1 del mes del status.
                 programa: `${hasta.startOf('month').format('DD/MM/YYYY')} – ${hasta.startOf('month').add(13, 'day').format('DD/MM/YYYY')}`
             };
         }
@@ -11982,8 +12000,8 @@ async function maybeAutoStartTour() {
             aut: 'Por FECHA de autorización, no por estado: versiones Autorizadas o Suspendidas con Fecha Autorización en el mes (si en el mes se autorizan dos versiones del mismo RMD, cuentan las dos)',
             autMes: 'De los autorizados, los que tienen su ingreso real en el mes',
             autBk: 'De los autorizados, el resto: venían del backlog',
-            pend: 'Al cierre del mes (el mes en curso: a la fecha de los datos de SAP): RMD Ingresados, solicitudes abiertas (Solicitado o Solicitud Aprobada) y suspendidos por reeditar (masivos, nueva edición), de ese mes o antiguos, mientras el RMD no tenga otra versión Ingresada o Autorizada',
-            susp: 'Suspendidos por reeditar (de ese mes o antiguos) que al cierre no tienen otra versión Ingresada o Autorizada. No cuentan los que SAP suspende al autorizar otra versión',
+            pend: 'Al cierre del mes (el mes en curso: a la fecha de los datos de SAP): RMD Ingresados, solicitudes abiertas (Solicitado o Solicitud Aprobada) y suspendidos por reeditar (masivos, nueva edición) suspendidos desde 2026 (con fecha en la Trazabilidad de SAP), mientras el RMD no tenga otra versión Ingresada o Autorizada',
+            susp: 'Suspendidos por reeditar (suspendidos desde 2026, con fecha en la Trazabilidad de SAP) que al cierre no tienen otra versión Ingresada o Autorizada. No cuentan los que SAP suspende al autorizar otra versión',
             fuera: 'Pendientes al cierre que no dependen del área: en el flujo de Producción sin aprobar (jefe / gerente) o en control de cambio',
             pct: `% total = Autorizados / Acumulado. Meta: no menos de ${META_AUTORIZADOS} %`,
             pctArea: `% del área = Autorizados / (Acumulado − pendientes que no dependen del área: flujo de Producción sin aprobar y control de cambio). Meta: no menos de ${META_AUTORIZADOS} %`
@@ -12035,7 +12053,7 @@ async function maybeAutoStartTour() {
                 </div></div>
                 ${avisos.map((t) => `<div class="sts-aviso"><span>${esc(t)}</span></div>`).join('')}
                 <div class="sts-paneles">${panel('P1')}${panel('P2')}</div>
-                <p class="sts-nota">Pendiente anterior + solicitados ± otros = acumulado; acumulado − autorizados = pendientes. <b>Solicitados</b>: RMD con fecha de ingreso real en el mes (AAAAMMDD al inicio de la Observación; sin ella, la Fecha Registro). <b>Autorizados</b>: por fecha de autorización, no por estado (versiones Autorizadas o Suspendidas con Fecha Autorización en el mes); <b>del mes</b> si su ingreso real es del mes y <b>del backlog</b> el resto. <b>Pendientes</b> (backlog del mes siguiente): RMD Ingresados, solicitudes abiertas y suspendidos por reeditar, de ese mes o antiguos, mientras el RMD no tenga otra versión Ingresada o Autorizada (no cuentan los que SAP suspende al autorizar otra versión). <b>Otros</b>: lo que entró o salió del backlog por otro camino, para que la suma cuadre. <b>% total</b> = autorizados / acumulado; <b>% del área</b> = autorizados / (acumulado − pendientes en el flujo de Producción sin aprobar o en control de cambio). Meta: no menos de ${META_AUTORIZADOS} %. Sin Cancelados ni solicitudes rechazadas. Los meses cerrados quedan <b>congelados</b> (🔒) con el primer cálculo hecho después de su cierre; lo que cambie después entra al mes siguiente por «± Otros». Haz clic en un número para ver sus RMD.</p>
+                <p class="sts-nota">Pendiente anterior + solicitados ± otros = acumulado; acumulado − autorizados = pendientes. <b>Solicitados</b>: RMD con fecha de ingreso real en el mes (AAAAMMDD al inicio de la Observación; sin ella, la Fecha Registro). <b>Autorizados</b>: por fecha de autorización, no por estado (versiones Autorizadas o Suspendidas con Fecha Autorización en el mes); <b>del mes</b> si su ingreso real es del mes y <b>del backlog</b> el resto. <b>Pendientes</b> (backlog del mes siguiente): RMD Ingresados, solicitudes abiertas y suspendidos por reeditar suspendidos desde 2026 (con fecha en la Trazabilidad de SAP), mientras el RMD no tenga otra versión Ingresada o Autorizada (no cuentan los que SAP suspende al autorizar otra versión). <b>Otros</b>: lo que entró o salió del backlog por otro camino, para que la suma cuadre. <b>% total</b> = autorizados / acumulado; <b>% del área</b> = autorizados / (acumulado − pendientes en el flujo de Producción sin aprobar o en control de cambio). Meta: no menos de ${META_AUTORIZADOS} %. Sin Cancelados ni solicitudes rechazadas. Los meses cerrados quedan <b>congelados</b> (🔒) con el primer cálculo hecho después de su cierre; lo que cambie después entra al mes siguiente por «± Otros». Haz clic en un número para ver sus RMD.</p>
             </section>`;
         }
         function anillo(pct) {
@@ -12046,6 +12064,20 @@ async function maybeAutoStartTour() {
         // → Autorizado, con el total (pendientes + autorizados) y el % de avance (autorizados / total).
         // ruta: 'r1' (programa) o 'r2' (caracterizaciones), para el detalle de cada número; autKey: el detalle del Autorizado
         // si no es el de la ruta (en la Ruta 1, los autorizados del mes del cuadro).
+        // Rango del Programa de PLA de la lámina: el horizonte de 2 semanas desde la semana de carga del Programa de Producción
+        // de cada planta (si las dos coinciden, uno solo); sin carga, 2 semanas desde el 1 del mes del status.
+        function textoHorizonte(d, pl) {
+            const h = d.r1 && !d.r1.error && d.r1[pl] && d.r1[pl].horizonte;
+            return h ? `${h.ini.format('DD/MM/YYYY')} – ${h.fin.format('DD/MM/YYYY')}` : '';
+        }
+        function rangoPrograma(d) {
+            const a = textoHorizonte(d, 'P1'), b = textoHorizonte(d, 'P2');
+            if (!a && !b) return d.per.programa;
+            if (a === b || !b) return a;
+            if (!a) return b;
+            const corto = (pl) => { const h = d.r1[pl].horizonte; return `${pl} ${h.ini.format('DD/MM')}–${h.fin.format('DD/MM')}`; };
+            return `${corto('P1')} · ${corto('P2')}`;
+        }
         // Backlog de la Ruta 1: pendientes del cuadro al cierre del mes anterior y cuántos de ellos se autorizaron en el mes
         // (autorizados del backlog); % de avance del backlog = autorizados del backlog / backlog.
         function backlogRuta1(d, pl) {
@@ -12094,7 +12126,7 @@ async function maybeAutoStartTour() {
         const leyenda = `<div class="sts-leyenda">${tagResp('PRO')}<span class="sts-chip">Producción</span>${tagResp('DOC')}<span class="sts-chip">QA · Documentación</span>${tagResp('ASC')}<span class="sts-chip">Asuntos regulatorios / CC</span></div>`;
         function htmlRuta1(d) {
             const r1 = d.r1, mes = d.per.hasta.format('YYYY-MM');
-            const extra = (pl) => (r1[pl].sinDatos ? ' <span class="sts-chip">sin Programa de Producción cargado</span>' : ` <span class="sts-chip">${plural(r1[pl].productos, 'producto programado', 'productos programados')}</span>`);
+            const extra = (pl) => (r1[pl].sinDatos ? ' <span class="sts-chip">sin Programa de Producción cargado</span>' : ` <span class="sts-chip">${plural(r1[pl].productos, 'producto programado', 'productos programados')}${r1[pl].horizonte ? ` · ${esc(r1[pl].horizonte.ini.format('DD/MM'))}–${esc(r1[pl].horizonte.fin.format('DD/MM'))}` : ''}</span>`);
             const cuerpo = r1.error ? `<div class="sts-aviso"><span>${esc(r1.error)}</span></div>`
                 : (r1.sinArbol ? '<div class="sts-aviso"><span>No se pudo cargar el árbol de materiales de SAP: solo se cuenta el RMD del propio código de cada producto.</span></div>' : '')
                   + ['P1', 'P2'].map((pl) => htmlRuta(r1[pl], pl, 'r1', { autKey: `cuadro|${pl}|${mes}|aut`, extra: extra(pl),
@@ -12102,10 +12134,10 @@ async function maybeAutoStartTour() {
             return `<section class="sts-seccion">
                 <div class="sts-seccion-cab"><div>
                     <div class="sts-seccion-titulo"><span class="sts-num">RUTA 1</span>Flujo de Programa – P1 y P2</div>
-                    <div class="sts-seccion-sub">RMD pendientes por etapa y responsable · ${esc(d.per.mesAnio)} · Programa PLA ${esc(d.per.programa)}</div>
+                    <div class="sts-seccion-sub">RMD pendientes por etapa y responsable · ${esc(d.per.mesAnio)} · Programa PLA ${esc(rangoPrograma(d))}</div>
                 </div>${leyenda}</div>
                 ${cuerpo}
-                <p class="sts-nota">Pendientes: las etapas del programa sin autorizar, contadas como en Producción (cada etapa una vez, aunque la compartan varias presentaciones) y repartidas según su Estatus. Autorizado: los autorizados del mes del cuadro (${esc(d.per.mesNombre.toLowerCase())}). El total del programa (pendientes + autorizados del mes) es el universo del mes; % de avance del programa = autorizados / total. Backlog: los pendientes del cuadro al cierre de ${esc(d.per.mesAnterior.toLowerCase())}; % de avance del backlog DOC = autorizados del backlog en el mes / backlog. El Programa de PLA dura 2 semanas desde el 1 del mes.</p>
+                <p class="sts-nota">Pendientes: las etapas del programa sin autorizar, contadas como en Producción (cada etapa una vez, aunque la compartan varias presentaciones) y repartidas según su Estatus. Autorizado: los autorizados del mes del cuadro (${esc(d.per.mesNombre.toLowerCase())}). El total del programa (pendientes + autorizados del mes) es el universo del mes; % de avance del programa = autorizados / total. Backlog: los pendientes del cuadro al cierre de ${esc(d.per.mesAnterior.toLowerCase())}; % de avance del backlog DOC = autorizados del backlog en el mes / backlog. Programa PLA: el horizonte de 2 semanas desde la semana en que se cargó el Programa de Producción de cada planta.</p>
             </section>`;
         }
         function htmlTablaCar(d) {
@@ -12945,7 +12977,7 @@ async function maybeAutoStartTour() {
             });
             ruta('R1', d.r1.error ? {} : d.r1); ruta('R2', d.r2);
             // Lámina 3: rango del Programa de PLA, backlog del mes anterior (cuadro) y % de avance del programa y del backlog DOC.
-            v.FECHA_PROGRAMA = d.per.programa; v.MES_ANTERIOR = d.per.mesAnterior.toLowerCase();
+            v.FECHA_PROGRAMA = rangoPrograma(d); v.MES_ANTERIOR = d.per.mesAnterior.toLowerCase();
             ['P1', 'P2'].forEach((pl) => { const b = backlogRuta1(d, pl); v[`R1_${pl}_BK`] = numOGuion(b.n); v[`R1_${pl}_AVANCE_BK`] = b.pctTxt; });
             return v;
         }
