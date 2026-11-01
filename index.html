@@ -11336,10 +11336,12 @@ async function maybeAutoStartTour() {
                 while (vers[id]) id += '·';
                 v.id = id; vers[id] = v;
                 v.inicio = [v.fSol, v.fIng || v.fReg].filter(Boolean).reduce((a, b) => (!a || b.isBefore(a) ? b : a), null);
-                if (ES_REGISTRADO.has(v.estado)) {
-                    const g = `${v.planta}|${v.codDef || v.desc}|${mapEtapaAFija(normalizeEtapa(v.etapa || '')) || v.etapa}`;
-                    if (!grupos.has(g)) grupos.set(g, []);
-                    grupos.get(g).push(v); v.grupo = g;
+                // Grupo de versiones del mismo RMD (planta, código por defecto o descripción, y etapa), con las solicitudes
+                // abiertas: una solicitud de la siguiente edición también reemplaza al suspendido (cuenta ella, no los dos).
+                if (ES_REGISTRADO.has(v.estado) || ES_SOLICITUD_ABIERTA.has(v.estado)) {
+                    const etapa = mapEtapaAFija(normalizeEtapa(v.etapa || '')) || v.etapa;
+                    v.grupos = [v.codDef ? `${v.planta}|C:${v.codDef}|${etapa}` : '', v.desc ? `${v.planta}|D:${String(v.desc).trim().toUpperCase().replace(/\s+/g, ' ')}|${etapa}` : ''].filter(Boolean);
+                    v.grupos.forEach((g) => { if (!grupos.has(g)) grupos.set(g, []); grupos.get(g).push(v); });
                 }
             });
             const fTraz = (v) => (v.trazF === undefined ? (v.trazF = fechasTrazabilidad(v, traz)) : v.trazF);
@@ -11369,14 +11371,16 @@ async function maybeAutoStartTour() {
                 if (estado === 'SUSPENDIDO') {
                     const t = fTraz(v), tX = t && t.susp;
                     if (tX) v.fSusp = dayjs(tX);
-                    const otras = (grupos.get(v.grupo) || []).filter((w) => w !== v && w.version > v.version);
+                    const otras = [...new Set((v.grupos || []).flatMap((g) => grupos.get(g) || []))]
+                        .filter((w) => w !== v && (ES_SOLICITUD_ABIERTA.has(w.estado) ? (!w.version || w.version > v.version) : w.version > v.version));
                     if (!v.fSusp) {
-                        // Sin fecha en la Trazabilidad (se suspendió antes de 2026): si ya hay otra versión, se suspendió por ella
-                        // (al autorizarla, o se reeditó); sin otra versión es un suspendido antiguo por reeditar, pendiente desde
-                        // antes del cuadro.
+                        // Sin fecha en la Trazabilidad (se suspendió antes de 2026): si una versión posterior se autorizó, SAP lo
+                        // suspendió al autorizarla y no cuenta; si no, es un suspendido antiguo por reeditar (siguiente edición,
+                        // masivo), pendiente desde antes del cuadro hasta que su siguiente edición se solicite o ingrese (entonces
+                        // cuenta esa, no los dos).
                         const sig = otras.filter((w) => w.fAut).sort((a, b) => a.fAut - b.fAut)[0];
                         if (sig) { v.fSusp = sig.fAut; v.suspAprox = true; }
-                        if (!otras.length) suspensiones.push([v, -Infinity, otras]);
+                        else suspensiones.push([v, -Infinity, otras]);
                         return;
                     }
                     // Suspendido al autorizar otra versión (SAP lo hace solo): no queda pendiente.
