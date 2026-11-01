@@ -11320,7 +11320,14 @@ async function maybeAutoStartTour() {
         // opciones: { traz (val_rmd_trazabilidad), previo (el cuadro guardado antes, para los «fuera» fijos de los meses cerrados) }.
         // Versión de las reglas del cuadro: un mes cerrado solo se congela con un cálculo hecho con estas reglas (si cambian,
         // se vuelve a calcular y se congela con las nuevas).
-        const REGLAS_CUADRO = 2;
+        const REGLAS_CUADRO = 3;
+        // Pedido del área (01/11/2026): el backlog vuelve a la lógica antigua, solo RMD Ingresados y solicitudes abiertas. Los
+        // suspendidos (masivos) no salen de SAP: el área escribe a mano cuántos masivos quedan pendientes cada mes (columna
+        // «Masivos pendientes» de la tabla de datos manuales), que se suman a los pendientes al mostrar el cuadro.
+        const CONTAR_SUSPENDIDOS = false;
+        // Como en la lógica antigua del área (backlog de octubre: 170 en Ate y 100 en Lima = los Ingresados), las solicitudes
+        // abiertas (Solicitado / Solicitud Aprobada, sin RMD todavía) no son backlog.
+        const CONTAR_SOLICITUDES_ABIERTAS = false;
         // Suspendidos sin fecha de suspensión en la Trazabilidad (suspendidos antes de 2026) y sin versión siguiente: no cuentan.
         const CONTAR_SUSPENDIDOS_SIN_FECHA = false;
         function cuadroDesdeVersiones(versiones, generado, opciones) {
@@ -11373,7 +11380,7 @@ async function maybeAutoStartTour() {
                 // Ingresado o como solicitud abierta. Lo autorizado hoy ya no está pendiente al leer SAP.
                 const tI = v.inicio ? v.inicio.valueOf() : null;
                 if (tI === null) return;
-                if (estado === 'INGRESADO' || ES_SOLICITUD_ABIERTA.has(estado)) tramos.push([v, tI, Infinity]);
+                if (estado === 'INGRESADO' || (CONTAR_SOLICITUDES_ABIERTAS && ES_SOLICITUD_ABIERTA.has(estado))) tramos.push([v, tI, Infinity]);
                 else if ((estado === 'AUTORIZADO' || estado === 'SUSPENDIDO') && v.fAut) tramos.push([v, tI, Math.min(v.fAut.endOf('day').valueOf(), ahora)]);
                 if (estado === 'SUSPENDIDO') {
                     const t = fTraz(v), tX = t && t.susp;
@@ -11414,7 +11421,7 @@ async function maybeAutoStartTour() {
                 };
                 tramos.forEach(([v, a, b]) => { if (a <= t && t < b) pendiente(v); });
                 // Suspendidos por reeditar (de este mes o de antes) que al cierre aún no tienen otra versión Ingresada o Autorizada.
-                suspensiones.forEach(([v, tX, otras]) => {
+                if (CONTAR_SUSPENDIDOS) suspensiones.forEach(([v, tX, otras]) => {
                     if (tX > t) return;
                     if (otras.some((w) => w.inicio && w.inicio.valueOf() <= t)) return;
                     celda(mes, v.planta).susp++; anotar(mes, v.planta, 'susp', v);
@@ -11921,14 +11928,17 @@ async function maybeAutoStartTour() {
             // Indicadores guardados por una versión anterior de la página: se recalculan con el detalle de RMD guardado, si trae la planta.
             const cuadro = ind && ind.v === 3 ? ind : (ind ? cuadroDesdeDetalle(ind.generado, traz) : null);
             const porMes = (cuadro && cuadro.porMes) || {};
-            const dato = (m, pl, k) => { const x = (porMes[m.format('YYYY-MM')] || {})[pl]; return x && Number.isFinite(x[k]) ? x[k] : null; };
+            // Masivos pendientes escritos a mano por el área (ind_horas_efectivas[mes][planta].ma): se suman a los pendientes del mes.
+            const masivos = (m, pl) => { const h = ((horasEf || {})[m.format('YYYY-MM')] || {})[pl]; return h && Number.isFinite(h.ma) ? h.ma : 0; };
+            const datoSap = (m, pl, k) => { const x = (porMes[m.format('YYYY-MM')] || {})[pl]; return x && Number.isFinite(x[k]) ? x[k] : null; };
+            const dato = (m, pl, k) => { const v = datoSap(m, pl, k); return v !== null && k === 'pend' ? v + masivos(m, pl) : v; };
             const fila = (m, pl) => {
                 const pend = dato(m, pl, 'pend'), ant = dato(m.subtract(1, 'month'), pl, 'pend'), aut = dato(m, pl, 'aut'), sol = dato(m, pl, 'sol');
                 const ok = pend !== null && aut !== null && ant !== null && sol !== null;
                 const acum = ok ? pend + aut : null, autBk = ok ? dato(m, pl, 'autBk') : null, fuera = ok ? dato(m, pl, 'fuera') : null;
                 const x = (porMes[m.format('YYYY-MM')] || {})[pl] || {};
                 return { clave: m.format('YYYY-MM'), ini: m.valueOf(), ant: ok ? ant : null, sol: ok ? sol : null, otros: ok ? acum - ant - sol : null, acum, aut: ok ? aut : null,
-                    autMes: autBk === null ? null : aut - autBk, autBk, pend: ok ? pend : null, susp: ok ? dato(m, pl, 'susp') : null, fuera, fijo: !!x.fijo, cong: !!x.cong,
+                    autMes: autBk === null ? null : aut - autBk, autBk, pend: ok ? pend : null, susp: ok ? dato(m, pl, 'susp') : null, fuera, fijo: !!x.fijo, cong: !!x.cong, masivos: masivos(m, pl),
                     pct: ok ? pctDe(aut, acum) : null, pctArea: ok && fuera !== null ? pctDe(aut, acum - fuera) : null, reg: dato(m, pl, 'reg') };
             };
             const meses = [];
@@ -11959,9 +11969,9 @@ async function maybeAutoStartTour() {
                 storeGet('val_estatus_caracterizacion'), calcularAcumulado(), storeGet('val_rmd_trazabilidad'), storeGet(CLAVE_HORAS)]);
             estatusCar = (est && typeof est === 'object') ? conEstatusVigente(est) : {};
             const items = (car && Array.isArray(car.items)) ? car.items : [];
+            horasEf = horas && typeof horas === 'object' ? horas : {};
             const programa = cuadroPrograma(indicadores, per, traz);
             if (!r1.error) ['P1', 'P2'].forEach((pl) => { const a = programa[pl].aut[2]; r1[pl].aut = Number.isFinite(a) ? a : 0; r1[pl].autSinDato = !Number.isFinite(a); });
-            horasEf = horas && typeof horas === 'object' ? horas : {};
             return { per, programa, r1, acu, r2: ruta2(items), car: { items, sinDatos: !car, generado: car && car.generado } };
         }
 
@@ -11993,14 +12003,14 @@ async function maybeAutoStartTour() {
             </div>`;
         }
         const TITULOS_CUADRO = {
-            ant: 'Backlog: pendientes al cierre del mes anterior (RMD Ingresados, solicitudes abiertas y suspendidos por reeditar)',
+            ant: 'Backlog: pendientes al cierre del mes anterior (RMD Ingresados y los masivos pendientes escritos a mano)',
             sol: 'RMD con fecha de ingreso real en el mes (la fecha AAAAMMDD al inicio de la Observación; sin ella, la Fecha Registro)',
             otros: 'Lo que entró o salió del backlog sin ser un ingreso del mes ni una autorización: solicitudes nuevas, suspendidos por reeditar, cancelados, RMD que ya estaban en el backlog y se ingresaron en el mes. Así la suma cuadra',
             acum: 'Pendientes al cierre + autorizados del mes: todo lo que hubo que atender en el mes',
             aut: 'Por FECHA de autorización, no por estado: versiones Autorizadas o Suspendidas con Fecha Autorización en el mes (si en el mes se autorizan dos versiones del mismo RMD, cuentan las dos)',
             autMes: 'De los autorizados, los que tienen su ingreso real en el mes',
             autBk: 'De los autorizados, el resto: venían del backlog',
-            pend: 'Al cierre del mes (el mes en curso: a la fecha de los datos de SAP): RMD Ingresados, solicitudes abiertas (Solicitado o Solicitud Aprobada) y suspendidos por reeditar (masivos, nueva edición) suspendidos desde 2026 (con fecha en la Trazabilidad de SAP), mientras el RMD no tenga otra versión Ingresada o Autorizada',
+            pend: 'Al cierre del mes (el mes en curso: a la fecha de los datos de SAP): RMD Ingresados, más los masivos pendientes escritos a mano en la tabla del final (SAP no los distingue)',
             susp: 'Suspendidos por reeditar (suspendidos desde 2026, con fecha en la Trazabilidad de SAP) que al cierre no tienen otra versión Ingresada o Autorizada. No cuentan los que SAP suspende al autorizar otra versión',
             fuera: 'Pendientes al cierre que no dependen del área: en el flujo de Producción sin aprobar (jefe / gerente) o en control de cambio',
             pct: `% total = Autorizados / Acumulado. Meta: no menos de ${META_AUTORIZADOS} %`,
@@ -12053,7 +12063,7 @@ async function maybeAutoStartTour() {
                 </div></div>
                 ${avisos.map((t) => `<div class="sts-aviso"><span>${esc(t)}</span></div>`).join('')}
                 <div class="sts-paneles">${panel('P1')}${panel('P2')}</div>
-                <p class="sts-nota">Pendiente anterior + solicitados ± otros = acumulado; acumulado − autorizados = pendientes. <b>Solicitados</b>: RMD con fecha de ingreso real en el mes (AAAAMMDD al inicio de la Observación; sin ella, la Fecha Registro). <b>Autorizados</b>: por fecha de autorización, no por estado (versiones Autorizadas o Suspendidas con Fecha Autorización en el mes); <b>del mes</b> si su ingreso real es del mes y <b>del backlog</b> el resto. <b>Pendientes</b> (backlog del mes siguiente): RMD Ingresados, solicitudes abiertas y suspendidos por reeditar suspendidos desde 2026 (con fecha en la Trazabilidad de SAP), mientras el RMD no tenga otra versión Ingresada o Autorizada (no cuentan los que SAP suspende al autorizar otra versión). <b>Otros</b>: lo que entró o salió del backlog por otro camino, para que la suma cuadre. <b>% total</b> = autorizados / acumulado; <b>% del área</b> = autorizados / (acumulado − pendientes en el flujo de Producción sin aprobar o en control de cambio). Meta: no menos de ${META_AUTORIZADOS} %. Sin Cancelados ni solicitudes rechazadas. Los meses cerrados quedan <b>congelados</b> (🔒) con el primer cálculo hecho después de su cierre; lo que cambie después entra al mes siguiente por «± Otros». Haz clic en un número para ver sus RMD.</p>
+                <p class="sts-nota">Pendiente anterior + solicitados ± otros = acumulado; acumulado − autorizados = pendientes. <b>Solicitados</b>: RMD con fecha de ingreso real en el mes (AAAAMMDD al inicio de la Observación; sin ella, la Fecha Registro). <b>Autorizados</b>: por fecha de autorización, no por estado (versiones Autorizadas o Suspendidas con Fecha Autorización en el mes); <b>del mes</b> si su ingreso real es del mes y <b>del backlog</b> el resto. <b>Pendientes</b> (backlog del mes siguiente): RMD Ingresados, como en la lógica del área, más los <b>masivos pendientes</b> escritos a mano en la tabla del final. <b>Otros</b>: lo que entró o salió del backlog por otro camino, para que la suma cuadre. <b>% total</b> = autorizados / acumulado; <b>% del área</b> = autorizados / (acumulado − pendientes en el flujo de Producción sin aprobar o en control de cambio). Meta: no menos de ${META_AUTORIZADOS} %. Sin Cancelados ni solicitudes rechazadas. Los meses cerrados quedan <b>congelados</b> (🔒) con el primer cálculo hecho después de su cierre; lo que cambie después entra al mes siguiente por «± Otros». Haz clic en un número para ver sus RMD.</p>
             </section>`;
         }
         function anillo(pct) {
@@ -12841,26 +12851,27 @@ async function maybeAutoStartTour() {
                     const h = (horasEf[mes] || {})[pl] || {}, f = p[pl].filas.find((y) => y.clave === mes) || {};
                     const an = Number.isFinite(h.an) ? h.an : null, as = Number.isFinite(h.as) ? h.as : null, tot = (an || 0) + (as || 0), aut = Number.isFinite(f.aut) ? f.aut : null;
                     if (an !== null || as !== null) { conHoras = true; tAn += an || 0; tAs += as || 0; if (aut !== null) tAut += aut; }
-                    const campo = (k, v) => `<input type="number" inputmode="decimal" min="0" step="0.5" class="sts-campo sts-horas" data-horas="${mes}|${pl}|${k}" value="${v === null ? '' : v}" aria-label="Horas de ${k === 'an' ? 'analistas' : 'asistentes'} · ${esc(nombreMes(mes))} · ${pl}">`;
+                    const ma = Number.isFinite(h.ma) ? h.ma : null;
+                    const campo = (k, v) => `<input type="number" inputmode="decimal" min="0" step="${k === 'ma' ? 1 : 0.5}" class="sts-campo sts-horas" data-horas="${mes}|${pl}|${k}" value="${v === null ? '' : v}" aria-label="${k === 'ma' ? 'Masivos pendientes' : `Horas de ${k === 'an' ? 'analistas' : 'asistentes'}`} · ${esc(nombreMes(mes))} · ${pl}">`;
                     return `<tr${mes === d.per.hasta.format('YYYY-MM') ? ' class="actual"' : ''} data-horas-fila="${mes}|${pl}"><td class="periodo">${esc(MESES[dayjs(mes + '-01').month()])}</td>
                         <td>${campo('an', an)}</td><td>${campo('as', as)}</td><td class="mono fuerte" data-k="tot">${tot ? num(tot) : '—'}</td>
-                        <td class="mono aut">${numOGuion(aut)}</td><td class="mono" data-k="x100">${tot && aut !== null ? num((aut / tot) * 100) : '—'}</td></tr>`;
+                        <td class="mono aut">${numOGuion(aut)}</td><td class="mono" data-k="x100">${tot && aut !== null ? num((aut / tot) * 100) : '—'}</td><td>${campo('ma', ma)}</td></tr>`;
                 }).join('');
                 const tTot = tAn + tAs;
                 return `<div class="sts-panel"><div class="sts-planta">${PLANTAS[pl]}</div>
                     <div class="sts-tabla-wrap sts-meses"><table class="sts-tabla sts-tabla-horas">
-                        <thead><tr><th>Mes</th><th>Horas analistas</th><th>Horas asistentes</th><th>Total horas</th><th title="Autorizados del cuadro del mes (por fecha de autorización)">Autorizados</th><th title="Autorizados por cada 100 horas efectivas">Autorizados por 100 h</th></tr></thead>
+                        <thead><tr><th>Mes</th><th>Horas analistas</th><th>Horas asistentes</th><th>Total horas</th><th title="Autorizados del cuadro del mes (por fecha de autorización)">Autorizados</th><th title="Autorizados por cada 100 horas efectivas">Autorizados por 100 h</th><th title="Masivos (suspendidos para reeditar) que quedan pendientes al cierre del mes, escritos a mano: se suman a los Pendientes del cuadro del mes">Masivos pendientes</th></tr></thead>
                         <tbody>${filas}<tr class="total"><td class="periodo">Total ${p.anio}</td><td class="mono">${conHoras ? num(tAn) : '—'}</td><td class="mono">${conHoras ? num(tAs) : '—'}</td>
-                        <td class="mono">${conHoras ? num(tTot) : '—'}</td><td class="mono">${conHoras ? tAut : '—'}</td><td class="mono">${tTot ? num((tAut / tTot) * 100) : '—'}</td></tr></tbody>
+                        <td class="mono">${conHoras ? num(tTot) : '—'}</td><td class="mono">${conHoras ? tAut : '—'}</td><td class="mono">${tTot ? num((tAut / tTot) * 100) : '—'}</td><td></td></tr></tbody>
                     </table></div></div>`;
             };
             return `<section class="sts-seccion" id="stsHoras">
                 <div class="sts-seccion-cab"><div>
-                    <div class="sts-seccion-titulo"><span class="sts-num">HORAS</span>Horas efectivas de analistas y asistentes</div>
+                    <div class="sts-seccion-titulo"><span class="sts-num">MANUAL</span>Horas efectivas y masivos pendientes</div>
                     <div class="sts-seccion-sub">Se llenan a mano cada mes · se guardan solas al salir de la casilla</div>
                 </div></div>
                 <div class="sts-paneles">${panel('P1')}${panel('P2')}</div>
-                <p class="sts-nota">Horas efectivas: las trabajadas en RMD en el mes, sin vacaciones, descansos médicos ni otras ausencias. Con ellas se ve cuánto se autorizó con las horas que hubo: <b>autorizados por 100 h</b> = autorizados del mes / total de horas × 100 (los autorizados son los del cuadro del mes, por fecha de autorización). El total del año suma solo los meses con horas.</p>
+                <p class="sts-nota">Horas efectivas: las trabajadas en RMD en el mes, sin vacaciones, descansos médicos ni otras ausencias. Con ellas se ve cuánto se autorizó con las horas que hubo: <b>autorizados por 100 h</b> = autorizados del mes / total de horas × 100 (los autorizados son los del cuadro del mes, por fecha de autorización). El total del año suma solo los meses con horas. <b>Masivos pendientes</b>: los masivos (suspendidos para reeditar) que quedan pendientes al cierre del mes; SAP no los distingue, así que se escriben a mano y se suman a los <b>Pendientes</b> del cuadro de ese mes (y al backlog del mes siguiente), aunque el mes esté congelado.</p>
             </section>`;
         }
         // Vuelve a leer lo guardado justo antes de escribir, para no pisar lo que otra persona cambió.
@@ -12878,6 +12889,7 @@ async function maybeAutoStartTour() {
             const t = String(inp.value).trim().replace(',', '.'), v = t === '' ? null : Number(t);
             if (v !== null && (!Number.isFinite(v) || v < 0)) { inp.value = ''; return; }
             guardarHoras(mes, pl, k, v).then(() => {
+                if (k === 'ma') { actualizar(); return; }
                 const cont = document.getElementById('stsHoras');
                 if (!ultimo || !cont) return;
                 // Solo se cambian los totales (las casillas quedan como están, por si se sigue escribiendo en otra).
