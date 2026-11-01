@@ -2987,16 +2987,36 @@ alter publication supabase_realtime add table public.rmd_dashboard_kv;`;
         // caché local. Si Supabase falla, igual se guarda localmente y se
         // devuelve true (para no bloquear al usuario), pero queda marcado como
         // "pendiente de subir" para reintentarlo más adelante.
+        // Claves grandes que se suben comprimidas (gzip en base64: { __gz }). El detalle de RMD pasó de 5 MB al traer la planta y
+        // las fechas de cada RMD y Supabase dejó de aceptarlo sin avisar (se quedó con el del 29/10/2026); comprimido pesa unas 5
+        // veces menos. storeGet lo descomprime, venga de Supabase o de la caché local.
+        const CLAVES_COMPRIMIDAS = new Set(['val_rmd_autorizados_detalle', 'val_rmd_indicadores_mes']);
+        async function comprimirValor(value) {
+            if (typeof CompressionStream === 'undefined') return value;
+            const flujo = new Blob([JSON.stringify(value)]).stream().pipeThrough(new CompressionStream('gzip'));
+            const bytes = new Uint8Array(await new Response(flujo).arrayBuffer());
+            let bin = '';
+            for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+            return { __gz: btoa(bin) };
+        }
+        async function descomprimirValor(value) {
+            if (!value || typeof value !== 'object' || typeof value.__gz !== 'string') return value;
+            const bin = atob(value.__gz), bytes = new Uint8Array(bin.length);
+            for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+            const flujo = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'));
+            return JSON.parse(await new Response(flujo).text());
+        }
         async function storeSet(key, value, _retried) {
             // Caché local siempre, sin importar cómo salga lo de Supabase.
             try { await dbStore.setItem(key, value); } catch (err) { console.error('Caché local set error:', key, err); }
             ultimoGuardadoPropio.set(key, Date.now());
 
             try {
+                const valor = CLAVES_COMPRIMIDAS.has(key) ? await comprimirValor(value) : value;
                 const res = await fetch(`${SUPABASE_URL}/rest/v1/${SUPABASE_KV_TABLE}?on_conflict=key`, {
                     method: 'POST',
                     headers: supabaseHeaders({ 'Prefer': 'resolution=merge-duplicates,return=minimal' }),
-                    body: JSON.stringify([{ key, value, updated_at: new Date().toISOString() }])
+                    body: JSON.stringify([{ key, value: valor, updated_at: new Date().toISOString() }])
                 });
                 if (!res.ok) throw new Error('HTTP ' + res.status);
                 supabaseKvReachable = true;
@@ -3027,7 +3047,7 @@ alter publication supabase_realtime add table public.rmd_dashboard_kv;`;
                 supabaseKvReachable = true;
                 actualizarIndicadorSupabase();
                 if (rows.length > 0) {
-                    const value = rows[0].value;
+                    const value = await descomprimirValor(rows[0].value);
                     try { await dbStore.setItem(key, value); } catch (e) { /* refresco de caché, no crítico */ }
                     return value;
                 }
@@ -3036,7 +3056,7 @@ alter publication supabase_realtime add table public.rmd_dashboard_kv;`;
                 console.error('Supabase get error, usando caché local:', key, err);
                 supabaseKvReachable = false;
                 actualizarIndicadorSupabase();
-                try { return await dbStore.getItem(key); } catch (e) { console.error('Caché local get error:', key, e); return null; }
+                try { return await descomprimirValor(await dbStore.getItem(key)); } catch (e) { console.error('Caché local get error:', key, e); return null; }
             }
         }
 
@@ -6027,7 +6047,7 @@ async function downloadPlanProduccionFromCloud() {
         // no cuentan; las Suspendidas se apartan si hay un RMD vigente).
         const PORTAL_SAP_ORIGIN = 'https://medifarma-portal-prd-twuxor0u.cpp.cfapps.us10.hana.ondemand.com';
         const ESTADOS_IGNORADOS_RMD = new Set(['CANCELADO']);
-        const CABECERA_CLASICA_RMD = ['Código', 'Código de Solicitud', 'Versión', 'Estado', 'Código por Defecto', 'Código Agrupador', 'Descripción', 'Etapa', 'Fecha Registro', 'Usuario Registro', 'Fecha Autorización', 'Usuario Autorización', 'A/F', 'Fecha Solicitud', 'Planta', 'Sección', 'Motivo', 'Observación'];
+        const CABECERA_CLASICA_RMD = ['Código', 'Código de Solicitud', 'Versión', 'Estado', 'Código por Defecto', 'Código Agrupador', 'Descripción', 'Etapa', 'Fecha Registro', 'Usuario Registro', 'Fecha Autorización', 'Usuario Autorización', 'A/F', 'Fecha Solicitud', 'Planta', 'Sección', 'Motivo', 'Observación', 'Producción Estado'];
         const CABECERA_RECETAS_RMD = ['Linaje', 'Código Receta', 'Versión Receta', 'Descripción Receta', 'Etapa Receta', 'Puesto Trabajo', 'Hoja Ruta', 'Contador'];
         let rmdPrecisoDatos = null; // lo que se guarda: { generado, origen, filas:[[rmd, linaje, version, estado, etapa, agr, defecto, desc, [[material, verid]...], fechaRegistroMs, códigoSolicitud]] } (una por RMD)
         let rmdPreciso = null;      // índices construidos desde rmdPrecisoDatos (no se guardan)
@@ -6111,7 +6131,7 @@ async function downloadPlanProduccionFromCloud() {
             return { generado: null, origen: 'archivo', sinRecetas: true, filas: Array.from(porRmd.values()) };
         }
         // Para las partes que siguen usando el formato clásico (modal de verificación, Status RMD, Consultar RMD): una sola fila por
-        // RMD, con exactamente las 18 columnas del Exportar de SAP.
+        // RMD, con las 18 columnas del Exportar de SAP y «Producción Estado» (la del «Exportado original» del script; vacía si no viene).
         function filasClasicasDeduplicadas(rows) {
             const k = rows[0].map(normCabeceraRmd); const idx = (n) => k.indexOf(n);
             const iRmd = idx('CODIGO'), iSol = idx('CODIGO DE SOLICITUD'), iVer = idx('VERSION'), iEta = idx('ETAPA');
@@ -6949,6 +6969,8 @@ async function downloadPlanProduccionFromCloud() {
             const orden = ['codigo', 'codigoSolicitud', 'version', 'estado', 'codDefecto', 'codAgrupador', 'descripcion', 'etapa', 'fechaRegistro', 'usuarioRegistro',
                 'fechaAut', 'usuarioAutorizacion', 'af', 'fechaSolicitud', 'planta', 'seccion', 'motivo', 'observacion'].map(i);
             const iRec = i('recetas'), iLin = i('linaje');
+            // Script v1.109.0+: «Producción Estado» (Pendiente, Enviado, Aprobado…), para los pendientes que no dependen del área.
+            const iProd = i('produccionEstado');
             // Script v1.18+: Fecha Registro / Solicitud también CON hora (columnas aparte, al final); se usan en lugar
             // de las de solo día para ordenar bien RMD del mismo día y mostrar la fecha local.
             const iRegH = i('fechaRegistroHora'), iSolH = i('fechaSolicitudHora');
@@ -6959,6 +6981,7 @@ async function downloadPlanProduccionFromCloud() {
                 const base = orden.map(x => (f[x] === null || f[x] === undefined ? '' : f[x]));
                 if (iRegH >= 0 && f[iRegH]) base[8] = f[iRegH];
                 if (iSolH >= 0 && f[iSolH]) base[13] = f[iSolH];
+                base.push(iProd >= 0 && f[iProd] !== null && f[iProd] !== undefined ? f[iProd] : '');
                 const recetas = Array.isArray(f[iRec]) ? f[iRec] : [];
                 // receta = [Matnr, Verid, Etapa receta, Descripción, Puesto, Hoja ruta, Contador]
                 if (recetas.length === 0) rows.push([...base, f[iLin] || '', '', '', '', '', '', '', '']);
@@ -7091,6 +7114,7 @@ async function downloadPlanProduccionFromCloud() {
                     const fechaRegistroCol = findCol('fecha registro');
                     const usuarioRegistroCol = findCol('usuario registro');
                     const usuarioAutorizacionCol = findCol('usuario autoriz');
+                    const produccionEstadoCol = findCol('producción estado', 'produccion estado');
                     // Fecha como DD/MM/AAAA para el historial de Consultar RMD (Date del Excel, ISO de SAP o texto).
                     const fechaTexto = (v) => {
                         if (v === null || v === undefined || v === '') return '';
@@ -7134,7 +7158,8 @@ async function downloadPlanProduccionFromCloud() {
                             usuarioRegistro: usuarioRegistroCol !== -1 ? String(row[usuarioRegistroCol] || '').trim() : '',
                             fechaAutorizacion: fechaAutorizacionCol !== -1 ? fechaTexto(row[fechaAutorizacionCol]) : '',
                             fechaSolicitud: fechaSolicitudCol !== -1 ? fechaTexto(row[fechaSolicitudCol]) : '',
-                            usuarioAutorizacion: usuarioAutorizacionCol !== -1 ? String(row[usuarioAutorizacionCol] || '').trim() : ''
+                            usuarioAutorizacion: usuarioAutorizacionCol !== -1 ? String(row[usuarioAutorizacionCol] || '').trim() : '',
+                            produccionEstado: produccionEstadoCol !== -1 ? String(row[produccionEstadoCol] || '').trim() : ''
                         });
                     });
 
@@ -7150,8 +7175,11 @@ async function downloadPlanProduccionFromCloud() {
                     // Pendientes al cierre y autorizados de cada mes por planta, con las fechas de SAP: el cuadro del área de RMD en la
                     // pestaña Status RMD y su PowerPoint. Si falla, la carga sigue.
                     try {
+                        const [traz, previo] = await Promise.all([storeGet('val_rmd_trazabilidad'), storeGet('val_rmd_indicadores_mes')]);
                         const indicadoresMes = StatusRmd.indicadoresDesdeFilas(rows, { estado: estadoCol, planta: plantaCol, fechaAutorizacion: fechaAutorizacionCol,
-                            fechaRegistro: fechaRegistroCol, codigo: codigoRmdCol }, generado);
+                            fechaRegistro: fechaRegistroCol, codigo: codigoRmdCol, solicitud: solicitudCol, version: versionCol, etapa: etapaCol, descripcion: descCol,
+                            codigoPorDefecto: codigoPorDefectoCol, fechaSolicitud: fechaSolicitudCol, observacion: observacionCol, produccionEstado: produccionEstadoCol },
+                            generado, { traz, previo });
                         if (indicadoresMes) await storeSet('val_rmd_indicadores_mes', indicadoresMes);
                     } catch (err) { console.error('Cuadro mensual de Status RMD:', err); }
                     // RMD con Motivo CARACTERIZACION (Ruta 2 de la pestaña Status RMD).
@@ -9370,7 +9398,7 @@ function updateForecastActiveFiltersBadge() {
             'val_manual_autorizados', 'val_manual_autorizados_meta', 'val_manual_autorizados_forecast', 'val_manual_autorizados_forecast_meta',
             'val_responsables_etapa', 'val_estatus_etapa',
             'val_rmd_indicadores_mes', 'val_rmd_caracterizaciones', 'val_estatus_caracterizacion', 'val_rmd_trazabilidad',
-            'historial_trazabilidad', 'tour_completed'
+            'ind_horas_efectivas', 'historial_trazabilidad', 'tour_completed'
         ];
 
         async function exportAllDataAsJson() {
@@ -11109,6 +11137,9 @@ async function maybeAutoStartTour() {
         :is(#tab-status, #prodAcumulado) .sts-meses { margin-top:12px; }
         :is(#tab-status, #prodAcumulado) .sts-meses th:not(:first-child), :is(#tab-status, #prodAcumulado) .sts-meses td.mono { text-align:right; }
         :is(#tab-status, #prodAcumulado) .sts-meses td.aut { color:rgb(var(--copper-rgb)); font-weight:600; }
+        :is(#tab-status, #prodAcumulado) .sts-horas { width:86px; height:30px; text-align:right; font-variant-numeric:tabular-nums; }
+        :is(#tab-status, #prodAcumulado) .sts-meses .sts-partes { display:block; font-size:10.5px; font-weight:500; color:var(--slate-400); white-space:nowrap; }
+        :is(#tab-status, #prodAcumulado) .sts-meses th small { display:block; font-weight:500; text-transform:none; letter-spacing:0; }
         :is(#tab-status, #prodAcumulado) .sts-meses td.fuerte { font-weight:700; }
         :is(#tab-status, #prodAcumulado) .sts-meses tr.actual td { background:var(--surface-1-faint); }
         :is(#tab-status, #prodAcumulado) .sts-meses tr.total td { font-weight:700; border-top:2px solid var(--card-border-highlight); }
@@ -11202,6 +11233,8 @@ async function maybeAutoStartTour() {
         let ultimo = null;          // último cálculo mostrado (es lo que va al PowerPoint)
         let graficos = [], graficosAcu = [];
         let estatusCar = {};        // val_estatus_caracterizacion
+        const CLAVE_HORAS = 'ind_horas_efectivas';
+        let horasEf = {};           // ind_horas_efectivas
         const vista = { detalleAbierto: false, planta: '', soloPendientes: true, acuAbierto: false, acuPlanta: '', acuLista: 'pend' };
 
         // ---------- Lo que se guarda con cada sincronización con SAP / Exportado RMD ----------
@@ -11224,86 +11257,209 @@ async function maybeAutoStartTour() {
             if (/\bLIMA\b|PLANTA\s*2\b|\b1021\b/.test(t)) return 'P2';
             return null;
         }
-        // Lo que pide el cuadro mensual del área de RMD (hoja CONSOLIDADO RMD de su Excel de indicadores), por planta y mes, con
-        // las fechas de SAP de cada versión de RMD Ingresada, Autorizada o Suspendida (sin Cancelados ni solicitudes):
-        //  - aut: Autorizadas o Suspendidas con Fecha Autorización en el mes (SAP suspende la versión anterior al autorizar la
-        //    nueva), cada código una vez. Es lo que más se acerca a sus Autorizados.
-        //  - pend: pendientes al cierre del mes, es decir registradas y aún sin autorizar (el mes en curso: las Ingresadas al leer
-        //    SAP). Como salen de las mismas fechas que aut, lo que deja de estar pendiente es lo autorizado y los Solicitados del
-        //    cuadro (Acumulado − pendiente anterior) son las versiones registradas en el mes: nunca negativos.
-        //  - autBk: de los autorizados, los registrados antes del mes (venían del backlog); el resto son del mes.
+        // Cuadro mensual del área de RMD (hoja CONSOLIDADO RMD de su Excel de indicadores), por planta y mes, con las fechas de
+        // SAP de cada versión de RMD y de cada solicitud (sin Cancelados ni solicitudes rechazadas), como lo pidió el área:
+        //  - sol (Solicitados): RMD con FECHA DE INGRESO REAL en el mes, la que va al inicio de la Observación (AAAAMMDD-II-P-…);
+        //    sin ella, la Fecha Registro.
+        //  - aut (Autorizados): por FECHA de autorización, no por estado: Autorizados o Suspendidos con Fecha Autorización en el
+        //    mes (SAP suspende la versión anterior al autorizar la nueva; si en el mes se autorizan dos versiones, cuentan las dos).
+        //    autBk: los que no tienen su ingreso real en el mes (venían del backlog); el resto son del mes.
+        //  - pend (Pendientes al cierre del mes = backlog del mes siguiente): RMD Ingresados (desde su ingreso real o su registro),
+        //    solicitudes abiertas (Solicitado o Solicitud Aprobada, desde su Fecha Solicitud) y los Suspendidos por reeditar (masivos,
+        //    nueva edición), de ese mes o antiguos, mientras el RMD no tenga otra versión Ingresada o Autorizada. No cuentan los que
+        //    SAP suspende al autorizar otra versión. La fecha de suspensión sale de la Trazabilidad de SAP (script v1.108.0+, desde
+        //    2026); un suspendido de antes, sin otra versión, es antiguo: pendiente desde antes del cuadro.
+        //  - fuera: de los pendientes, los que no dependen del área: en el flujo de Producción sin aprobar (Producción Estado
+        //    «Enviado», script v1.109.0+, u Observación «PEND JEFE/GER») o en control de cambio (Observación «PEND CC», o
+        //    Ingresado con Fecha Autorización: se reabrió). Es una foto: el de cada mes cerrado queda fijo con la última
+        //    sincronización de ese mes (fijo); antes de eso se aproxima con lo de hoy.
         //  - reg: versiones registradas en el mes (Fecha Registro), solo de referencia.
-        // Desde el cierre del año anterior (o 3 meses antes, en enero y febrero). Acumulado, Solicitados y % salen de ahí con las
-        // fórmulas del área (cuadroPrograma).
-        // versiones: las de SAP en su orden, [{ planta, estado (normalizado), codigo, fReg, fAut }]. Con conDetalle devuelve además
-        // qué versiones cuenta cada número (detalle[mes][planta] = { aut, pend, reg }), para el detalle de la pestaña.
-        function cuadroDesdeVersiones(versiones, generado, conDetalle) {
-            const ahora = Date.parse(generado || '') || Date.now();
+        // det[mes][planta] = { pend, aut, sol, susp, fuera }: los RMD de cada número (ids de vers), para el detalle de la pestaña.
+        // Desde el cierre del año anterior (o 3 meses antes, en enero y febrero). Acumulado, Otros y % salen en cuadroPrograma.
+        const RX_PEND_JEFE = /\bPEND(?:IENTE|\.)?\s*(?:DE\s+)?(?:APROB(?:ACI[OÓ]N)?\s+(?:DEL?\s+)?)?(?:JEF|GER)/i;
+        const RX_PEND_CC = /\bPEND(?:IENTE|\.)?\s*(?:DE\s+)?(?:APROB(?:ACI[OÓ]N)?\s+(?:DEL?\s+)?)?(?:CC\b|C\.C|CALIDAD|CONTROL\s+DE\s+CAMBIO)/i;
+        const RX_FLUJO_PRODUCCION = /ENVIAD/i;
+        const MOTIVOS_FUERA = { flujo: 'Flujo de Producción sin aprobar (jefe / gerente)', cc: 'Control de cambio' };
+        // Fecha de ingreso real: AAAAMMDD al inicio de la Observación (como la columna «Fec Ingreso Real» del Excel del área).
+        function fechaIngresoReal(obs) {
+            const m = /^\s*(20\d{2})(\d{2})(\d{2})/.exec(String(obs || ''));
+            if (!m) return null;
+            const d = dayjs(`${m[1]}-${m[2]}-${m[3]}T00:00:00`);
+            return d.isValid() && d.month() + 1 === Number(m[2]) && d.date() === Number(m[3]) ? d : null;
+        }
+        // Por qué un pendiente no depende del área ('flujo', 'cc') o ''.
+        function motivoFuera(v) {
+            if (v.estado !== 'INGRESADO') return '';
+            if (RX_FLUJO_PRODUCCION.test(v.prodEstado || '') || RX_PEND_JEFE.test(v.obs || '')) return 'flujo';
+            if (RX_PEND_CC.test(v.obs || '') || v.fAutSap) return 'cc';
+            return '';
+        }
+        const ES_SOLICITUD_ABIERTA = new Set(['SOLICITADO', 'SOLICITUD APROBADA']);
+        const ES_REGISTRADO = new Set(['INGRESADO', 'AUTORIZADO', 'SUSPENDIDO']);
+        // Fechas de la Trazabilidad de una versión: { susp: ms de su última suspensión, aut: [ms de cada autorización] }.
+        function fechasTrazabilidad(v, traz) {
+            const etapa = mapEtapaAFija(normalizeEtapa(v.etapa || ''));
+            const t = traz && traz.items && etapa ? traz.items[`${v.codigo || ''}|${v.sol || ''}|${v.version}|${etapa}`] : null;
+            if (!t || !t.length) return null;
+            const susp = t.filter((x) => x[1] === 'X').map((x) => x[0] * 1000), aut = t.filter((x) => x[1] === 'U').map((x) => x[0] * 1000);
+            return { susp: susp.length ? susp[susp.length - 1] : null, aut };
+        }
+        // versiones: [{ planta, estado (normalizado), codigo, sol, version, etapa, desc, codDef, fSol, fReg, fIng, fAut, fAutSap, obs, prodEstado }]
+        // opciones: { traz (val_rmd_trazabilidad), previo (el cuadro guardado antes, para los «fuera» fijos de los meses cerrados) }.
+        function cuadroDesdeVersiones(versiones, generado, opciones) {
+            const { traz, previo } = opciones || {};
+            const ahora = Date.parse(generado || '') || Date.now(), mesSap = dayjs(ahora).format('YYYY-MM');
             let inicio = dayjs(ahora).startOf('year').subtract(1, 'month');
             const tresAntes = dayjs(ahora).startOf('month').subtract(3, 'month');
             if (tresAntes.isBefore(inicio)) inicio = tresAntes;
-            const desdeMes = inicio.format('YYYY-MM'), porMes = {}, detalle = {}, vistosAut = new Set(), tramos = [];
-            const celda = (mes, planta) => (porMes[mes] || (porMes[mes] = { P1: { aut: 0, autBk: 0, pend: null, reg: 0 }, P2: { aut: 0, autBk: 0, pend: null, reg: 0 } }))[planta];
-            const anotar = (mes, planta, k, v) => {
-                if (!conDetalle) return;
-                (detalle[mes] || (detalle[mes] = { P1: { aut: [], pend: [], reg: [] }, P2: { aut: [], pend: [], reg: [] } }))[planta][k].push(v);
-            };
+            const desdeMes = inicio.format('YYYY-MM'), porMes = {}, det = {}, vers = {}, usadas = new Set(), vistosAut = new Set(), tramos = [], suspensiones = [];
+            const celda = (mes, pl) => (porMes[mes] || (porMes[mes] = { P1: { aut: 0, autBk: 0, sol: 0, susp: 0, pend: null, fuera: null, reg: 0 }, P2: { aut: 0, autBk: 0, sol: 0, susp: 0, pend: null, fuera: null, reg: 0 } }))[pl];
+            const lista = (mes, pl, k) => ((det[mes] || (det[mes] = { P1: { pend: [], aut: [], sol: [], susp: [], fuera: [] }, P2: { pend: [], aut: [], sol: [], susp: [], fuera: [] } }))[pl][k]);
+            const anotar = (mes, pl, k, v) => { lista(mes, pl, k).push(v.id); usadas.add(v.id); };
+            const mesDe = (d) => (d ? d.format('YYYY-MM') : '');
+            const grupos = new Map();
             versiones.forEach((v) => {
-                const { planta, estado, codigo, fReg, fAut } = v;
-                if (!planta || !codigo || !['INGRESADO', 'AUTORIZADO', 'SUSPENDIDO'].includes(estado)) return;
-                if (fReg && fReg.format('YYYY-MM') >= desdeMes) { celda(fReg.format('YYYY-MM'), planta).reg++; anotar(fReg.format('YYYY-MM'), planta, 'reg', v); }
-                if (fAut && !vistosAut.has(codigo)) {
-                    vistosAut.add(codigo);
-                    const mesAut = fAut.format('YYYY-MM');
-                    if (mesAut >= desdeMes) {
-                        const x = celda(mesAut, planta);
-                        x.aut++;
-                        // Del backlog: registrada antes del mes (estaba pendiente al empezarlo); del mes: registrada en el mes.
-                        if (!fReg || fReg.format('YYYY-MM') < mesAut) x.autBk++;
-                        anotar(mesAut, planta, 'aut', v);
+                if (!v.planta || (!v.codigo && !v.sol)) return;
+                let id = v.codigo || `S${v.sol}`;
+                while (vers[id]) id += '·';
+                v.id = id; vers[id] = v;
+                v.inicio = [v.fSol, v.fIng || v.fReg].filter(Boolean).reduce((a, b) => (!a || b.isBefore(a) ? b : a), null);
+                if (ES_REGISTRADO.has(v.estado)) {
+                    const g = `${v.planta}|${v.codDef || v.desc}|${mapEtapaAFija(normalizeEtapa(v.etapa || '')) || v.etapa}`;
+                    if (!grupos.has(g)) grupos.set(g, []);
+                    grupos.get(g).push(v); v.grupo = g;
+                }
+            });
+            const fTraz = (v) => (v.trazF === undefined ? (v.trazF = fechasTrazabilidad(v, traz)) : v.trazF);
+            Object.values(vers).forEach((v) => {
+                const { planta, estado } = v;
+                if (ES_REGISTRADO.has(estado)) {
+                    if (v.fReg && mesDe(v.fReg) >= desdeMes) celda(mesDe(v.fReg), planta).reg++;
+                    const fIng = v.fIng || v.fReg;
+                    if (fIng && mesDe(fIng) >= desdeMes) { celda(mesDe(fIng), planta).sol++; anotar(mesDe(fIng), planta, 'sol', v); }
+                    if (v.fAut && v.codigo && !vistosAut.has(v.codigo)) {
+                        vistosAut.add(v.codigo);
+                        const mesAut = mesDe(v.fAut);
+                        if (mesAut >= desdeMes) {
+                            const x = celda(mesAut, planta);
+                            x.aut++;
+                            if (!fIng || mesDe(fIng) < mesAut) x.autBk++;
+                            anotar(mesAut, planta, 'aut', v);
+                        }
                     }
                 }
-                // Pendiente desde su registro hasta el día de su autorización (hasta hoy si sigue Ingresada). Lo autorizado hoy
-                // ya no está pendiente al leer SAP.
-                const tR = fReg ? fReg.valueOf() : -Infinity;
-                if (estado === 'INGRESADO') tramos.push([v, tR, Infinity]);
-                else if (fAut) tramos.push([v, tR, Math.min(fAut.endOf('day').valueOf(), ahora)]);
+                // Pendiente desde su solicitud o su ingreso real (o registro) hasta el día de su autorización; hasta hoy si sigue
+                // Ingresado o como solicitud abierta. Lo autorizado hoy ya no está pendiente al leer SAP.
+                const tI = v.inicio ? v.inicio.valueOf() : null;
+                if (tI === null) return;
+                if (estado === 'INGRESADO' || ES_SOLICITUD_ABIERTA.has(estado)) tramos.push([v, tI, Infinity]);
+                else if ((estado === 'AUTORIZADO' || estado === 'SUSPENDIDO') && v.fAut) tramos.push([v, tI, Math.min(v.fAut.endOf('day').valueOf(), ahora)]);
+                if (estado === 'SUSPENDIDO') {
+                    const t = fTraz(v), tX = t && t.susp;
+                    if (tX) v.fSusp = dayjs(tX);
+                    const otras = (grupos.get(v.grupo) || []).filter((w) => w !== v && w.version > v.version);
+                    if (!v.fSusp) {
+                        // Sin fecha en la Trazabilidad (se suspendió antes de 2026): si ya hay otra versión, se suspendió por ella
+                        // (al autorizarla, o se reeditó); sin otra versión es un suspendido antiguo por reeditar, pendiente desde
+                        // antes del cuadro.
+                        const sig = otras.filter((w) => w.fAut).sort((a, b) => a.fAut - b.fAut)[0];
+                        if (sig) { v.fSusp = sig.fAut; v.suspAprox = true; }
+                        if (!otras.length) suspensiones.push([v, -Infinity, otras]);
+                        return;
+                    }
+                    // Suspendido al autorizar otra versión (SAP lo hace solo): no queda pendiente.
+                    const diaX = v.fSusp.startOf('day');
+                    const porAutorizacion = otras.some((w) => {
+                        const tw = (fTraz(w) || {}).aut || [];
+                        if (tw.some((a) => Math.abs(a - tX) <= 36 * 3600000)) return true;
+                        return w.fAut && Math.abs(w.fAut.startOf('day').diff(diaX, 'day')) <= 1;
+                    });
+                    if (porAutorizacion) return;
+                    suspensiones.push([v, tX, otras]);
+                }
             });
             for (let m = inicio; m.valueOf() <= ahora; m = m.add(1, 'month')) {
                 const t = Math.min(m.endOf('month').valueOf(), ahora), mes = m.format('YYYY-MM');
-                celda(mes, 'P1').pend = 0; celda(mes, 'P2').pend = 0;
-                tramos.forEach(([v, a, b]) => { if (a <= t && t < b) { celda(mes, v.planta).pend++; anotar(mes, v.planta, 'pend', v); } });
+                ['P1', 'P2'].forEach((pl) => { const x = celda(mes, pl); x.pend = 0; x.fuera = 0; lista(mes, pl, 'pend'); });
+                const pendiente = (v) => {
+                    const x = celda(mes, v.planta);
+                    x.pend++; anotar(mes, v.planta, 'pend', v);
+                    const mot = motivoFuera(v);
+                    if (mot) { x.fuera++; anotar(mes, v.planta, 'fuera', v); }
+                };
+                tramos.forEach(([v, a, b]) => { if (a <= t && t < b) pendiente(v); });
+                // Suspendidos por reeditar (de este mes o de antes) que al cierre aún no tienen otra versión Ingresada o Autorizada.
+                suspensiones.forEach(([v, tX, otras]) => {
+                    if (tX > t) return;
+                    if (otras.some((w) => w.inicio && w.inicio.valueOf() <= t)) return;
+                    celda(mes, v.planta).susp++; anotar(mes, v.planta, 'susp', v);
+                    pendiente(v);
+                });
             }
-            const res = { v: 2, generado: generado || new Date().toISOString(), calculado: new Date().toISOString(), porMes };
-            return conDetalle ? Object.assign(res, { detalle }) : res;
+            // «Fuera» de los meses cerrados: el de la última sincronización hecha en ese mes, si la hubo.
+            const prev = previo && previo.v === 3 && previo.porMes ? previo : null, mesPrev = prev && prev.generado ? dayjs(prev.generado).format('YYYY-MM') : '';
+            if (prev) Object.keys(porMes).forEach((mes) => {
+                if (mes >= mesSap) return;
+                ['P1', 'P2'].forEach((pl) => {
+                    const p = (prev.porMes[mes] || {})[pl], pd = ((prev.det || {})[mes] || {})[pl];
+                    if (!p || !Number.isFinite(p.fuera) || !(p.fijo || mes === mesPrev)) return;
+                    const x = porMes[mes][pl];
+                    x.fuera = Math.min(p.fuera, x.pend === null ? p.fuera : x.pend); x.fijo = true;
+                    if (pd && Array.isArray(pd.fuera)) {
+                        det[mes][pl].fuera = pd.fuera.slice();
+                        pd.fuera.forEach((id) => { if (!vers[id] && prev.vers && prev.vers[id]) vers[id] = { compacta: prev.vers[id] }; usadas.add(id); });
+                    }
+                });
+            });
+            // Lo que muestra el detalle de cada versión usada (compacto).
+            const dia = (d) => (d ? d.format('YYYY-MM-DD') : '');
+            const versCompactas = {};
+            usadas.forEach((id) => {
+                const v = vers[id];
+                if (!v) return;
+                versCompactas[id] = v.compacta || [v.planta, v.codigo, v.sol, v.version, v.etapa, v.estado, v.desc, dia(v.fSol), dia(v.fReg), dia(v.fIng), dia(v.fAut),
+                    v.fSusp ? dia(v.fSusp) + (v.suspAprox ? '~' : '') : '', v.prodEstado || '', v.codDef || '', String(v.obs || '').slice(0, 300), motivoFuera(v), v.fIng ? 1 : 0];
+            });
+            return { v: 3, generado: generado || new Date().toISOString(), calculado: new Date().toISOString(), porMes, det, vers: versCompactas,
+                conTrazabilidad: !!(traz && traz.items) };
         }
-        function indicadoresDesdeFilas(rows, c, generado) {
-            if (!Array.isArray(rows) || rows.length < 2 || c.planta < 0 || c.estado < 0 || c.codigo < 0) return null;
+        const CAMPOS_VERS = ['planta', 'codigo', 'sol', 'version', 'etapa', 'estado', 'desc', 'fSol', 'fReg', 'fIng', 'fAut', 'fSusp', 'prodEstado', 'codDef', 'obs', 'fuera', 'conIngreso'];
+        const versionDe = (arr) => (Array.isArray(arr) ? Object.fromEntries(CAMPOS_VERS.map((k, i) => [k, arr[i]])) : null);
+        // Filas del Exportado / de SAP → versiones para el cuadro.
+        function versionesDesdeFilas(rows, c) {
             const txt = (r, i) => (i >= 0 && r[i] !== null && r[i] !== undefined ? String(r[i]).trim() : '');
             const versiones = [];
             rows.slice(1).forEach((r) => {
                 if (!r || !r.length) return;
                 const estado = normalizeEstadoRmd(txt(r, c.estado));
-                versiones.push({ planta: plantaDe(r[c.planta]), estado, codigo: txt(r, c.codigo), fReg: c.fechaRegistro >= 0 ? fechaDe(r[c.fechaRegistro]) : null,
-                    fAut: (estado === 'AUTORIZADO' || estado === 'SUSPENDIDO') && c.fechaAutorizacion >= 0 ? fechaDe(r[c.fechaAutorizacion]) : null });
+                if (!ES_REGISTRADO.has(estado) && !ES_SOLICITUD_ABIERTA.has(estado)) return;
+                const obs = txt(r, c.observacion), fAutSap = c.fechaAutorizacion >= 0 ? fechaDe(r[c.fechaAutorizacion]) : null;
+                versiones.push({ planta: plantaDe(r[c.planta]), estado, codigo: txt(r, c.codigo), sol: txt(r, c.solicitud), version: Number(txt(r, c.version)) || 0,
+                    etapa: txt(r, c.etapa), desc: txt(r, c.descripcion), codDef: txt(r, c.codigoPorDefecto), obs, prodEstado: txt(r, c.produccionEstado),
+                    fSol: c.fechaSolicitud >= 0 ? fechaDe(r[c.fechaSolicitud]) : null, fReg: c.fechaRegistro >= 0 ? fechaDe(r[c.fechaRegistro]) : null,
+                    fIng: fechaIngresoReal(obs), fAut: estado === 'AUTORIZADO' || estado === 'SUSPENDIDO' ? fAutSap : null, fAutSap: estado === 'INGRESADO' ? fAutSap : null });
             });
-            return cuadroDesdeVersiones(versiones, generado, false);
+            return versiones;
         }
-        // Las mismas cuentas con las versiones de RMD de la última sincronización (rmdAutorizadosDetalle, que guarda la planta
-        // desde esta versión), para saber qué RMD hay detrás de cada número del cuadro. null si los datos guardados no la tienen.
-        let cuadroDetalleCache = { filas: null, generado: null, res: null };
-        function cuadroConDetalle(generado) {
+        function indicadoresDesdeFilas(rows, c, generado, opciones) {
+            if (!Array.isArray(rows) || rows.length < 2 || c.planta < 0 || c.estado < 0 || c.codigo < 0) return null;
+            return cuadroDesdeVersiones(versionesDesdeFilas(rows, c), generado, opciones);
+        }
+        // Con los indicadores guardados por una versión anterior de la página (v 2): el mismo cálculo con las versiones de RMD de
+        // la última sincronización (rmdAutorizadosDetalle), si traen la planta. null si no.
+        let cuadroDetalleCache = { filas: null, generado: null, traz: null, res: null };
+        function cuadroDesdeDetalle(generado, traz) {
             const filas = Array.isArray(rmdAutorizadosDetalle) ? rmdAutorizadosDetalle : [];
-            if (cuadroDetalleCache.filas === filas && cuadroDetalleCache.generado === generado) return cuadroDetalleCache.res;
+            if (cuadroDetalleCache.filas === filas && cuadroDetalleCache.generado === generado && cuadroDetalleCache.traz === traz) return cuadroDetalleCache.res;
             let res = null;
             if (filas.some((f) => f.planta)) {
-                res = cuadroDesdeVersiones(filas.map((f) => {
-                    const estado = normalizeEstadoRmd(f.estado);
-                    return { planta: f.planta || null, estado, codigo: String(f.codigo || '').trim(), fReg: fechaDe(f.fechaRegistro),
-                        fAut: estado === 'AUTORIZADO' || estado === 'SUSPENDIDO' ? fechaDe(f.fechaAutorizacion) : null, fila: f };
-                }), generado, true);
+                const cab = ['codigo', 'solicitud', 'version', 'estado', 'codigoPorDefecto', 'descripcion', 'etapa', 'fechaRegistro', 'fechaAutorizacion', 'fechaSolicitud', 'planta', 'observacion', 'produccionEstado'];
+                const rows = [cab, ...filas.map((f) => cab.map((k) => f[k]))], i = (k) => cab.indexOf(k);
+                res = cuadroDesdeVersiones(versionesDesdeFilas(rows, { codigo: i('codigo'), solicitud: i('solicitud'), version: i('version'), estado: i('estado'),
+                    codigoPorDefecto: i('codigoPorDefecto'), descripcion: i('descripcion'), etapa: i('etapa'), fechaRegistro: i('fechaRegistro'), fechaAutorizacion: i('fechaAutorizacion'),
+                    fechaSolicitud: i('fechaSolicitud'), planta: i('planta'), observacion: i('observacion'), produccionEstado: i('produccionEstado') }), generado, { traz });
             }
-            cuadroDetalleCache = { filas, generado, res };
+            cuadroDetalleCache = { filas, generado, traz, res };
             return res;
         }
         // Los RMD (y solicitudes) de SAP con Motivo CARACTERIZACION, sin Cancelados. null si los datos no traen Motivo
@@ -11696,45 +11852,46 @@ async function maybeAutoStartTour() {
         }
 
         // ---------- Cuadro del mes (lámina 2) ----------
-        // El cuadro mensual del área de RMD con sus mismas fórmulas: Acumulado = Pendientes + Autorizados del mes; Solicitados =
-        // Acumulado − Pendientes del mes anterior; % = Autorizados / Acumulado, con la meta de no menos de 80 %. Pendientes y
-        // Autorizados salen de SAP (indicadoresDesdeFilas). Por planta: los meses del año del status hasta su mes (filas), el
-        // total del año (desde los pendientes del cierre del año anterior; su % = autorizados del año / acumulado del año) y
-        // los 3 meses del gráfico (tres). null = sin dato.
+        // El cuadro mensual del área de RMD: Pendiente anterior + Solicitados ± Otros = Acumulado; Acumulado − Autorizados =
+        // Pendientes. Pendientes, Solicitados y Autorizados salen de SAP (cuadroDesdeVersiones); Otros es lo que entró o salió del
+        // backlog sin ser un ingreso del mes ni una autorización (solicitudes nuevas, suspendidos por reeditar, cancelados, RMD
+        // que ya estaban en el backlog y se ingresaron en el mes…), para que la suma cuadre. Dos %: el total (Autorizados /
+        // Acumulado) y el del área (Autorizados / lo que depende del área: Acumulado − pendientes en el flujo de Producción o en
+        // control de cambio), con la meta de no menos de 80 %. Por planta: los meses del año del status hasta su mes (filas), el
+        // total del año (desde los pendientes del cierre del año anterior) y los 3 meses del gráfico (tres). null = sin dato.
         const META_AUTORIZADOS = 80;
-        const pctDe = (aut, acum) => (acum > 0 ? Math.round((aut / acum) * 100) : null);
-        // Los autorizados se parten en los del mes (registrados en el mes) y los del backlog (registrados antes): con los
-        // indicadores guardados por una versión anterior, la parte sale de las versiones de RMD guardadas (cuadroConDetalle).
-        function cuadroPrograma(ind, per) {
-            const porMes = (ind && ind.v === 2 && ind.porMes) || {};
-            const cd = ind && ind.v === 2 ? cuadroConDetalle(ind.generado) : null;
+        const pctDe = (aut, base) => (base > 0 ? Math.round((aut / base) * 100) : null);
+        function cuadroPrograma(ind, per, traz) {
+            // Indicadores guardados por una versión anterior de la página: se recalculan con el detalle de RMD guardado, si trae la planta.
+            const cuadro = ind && ind.v === 3 ? ind : (ind ? cuadroDesdeDetalle(ind.generado, traz) : null);
+            const porMes = (cuadro && cuadro.porMes) || {};
             const dato = (m, pl, k) => { const x = (porMes[m.format('YYYY-MM')] || {})[pl]; return x && Number.isFinite(x[k]) ? x[k] : null; };
-            const datoBk = (m, pl) => {
-                const v = dato(m, pl, 'autBk');
-                if (v !== null) return v;
-                const x = cd && (cd.porMes[m.format('YYYY-MM')] || {})[pl];
-                // Con las versiones de la última sincronización (puede diferir en unas pocas de lo guardado): nunca más que los autorizados.
-                const aut = dato(m, pl, 'aut');
-                return x && Number.isFinite(x.autBk) && aut !== null ? Math.min(x.autBk, aut) : null;
-            };
             const fila = (m, pl) => {
-                const pend = dato(m, pl, 'pend'), ant = dato(m.subtract(1, 'month'), pl, 'pend'), aut = dato(m, pl, 'aut');
-                const acum = pend === null || aut === null ? null : pend + aut, sol = acum === null || ant === null ? null : acum - ant;
-                const autBk = aut === null ? null : datoBk(m, pl), autMes = autBk === null ? null : aut - autBk;
-                return { clave: m.format('YYYY-MM'), ini: m.valueOf(), ant, sol, acum, aut, autMes, autBk, pend, pct: acum === null ? null : pctDe(aut, acum), reg: dato(m, pl, 'reg') };
+                const pend = dato(m, pl, 'pend'), ant = dato(m.subtract(1, 'month'), pl, 'pend'), aut = dato(m, pl, 'aut'), sol = dato(m, pl, 'sol');
+                const ok = pend !== null && aut !== null && ant !== null && sol !== null;
+                const acum = ok ? pend + aut : null, autBk = ok ? dato(m, pl, 'autBk') : null, fuera = ok ? dato(m, pl, 'fuera') : null;
+                const x = (porMes[m.format('YYYY-MM')] || {})[pl] || {};
+                return { clave: m.format('YYYY-MM'), ini: m.valueOf(), ant: ok ? ant : null, sol: ok ? sol : null, otros: ok ? acum - ant - sol : null, acum, aut: ok ? aut : null,
+                    autMes: autBk === null ? null : aut - autBk, autBk, pend: ok ? pend : null, susp: ok ? dato(m, pl, 'susp') : null, fuera, fijo: !!x.fijo,
+                    pct: ok ? pctDe(aut, acum) : null, pctArea: ok && fuera !== null ? pctDe(aut, acum - fuera) : null, reg: dato(m, pl, 'reg') };
             };
             const meses = [];
             for (let m = per.hasta.startOf('year'); !m.isAfter(per.hasta, 'month'); m = m.add(1, 'month')) meses.push(m);
-            const res = { sinDatos: !ind, anterior: !!ind && ind.v !== 2, generado: ind && ind.generado, anio: per.hasta.year() };
+            const res = { sinDatos: !ind, anterior: !!ind && !cuadro, recalculado: !!ind && ind.v !== 3 && !!cuadro, cuadro, generado: ind && ind.generado, anio: per.hasta.year(),
+                conTrazabilidad: !!(cuadro && cuadro.conTrazabilidad) };
             ['P1', 'P2'].forEach((pl) => {
-                const filas = meses.map((m) => fila(m, pl)), conDatos = filas.filter((f) => f.sol !== null), ini = conDatos[0];
-                const sol = conDatos.reduce((t, f) => t + f.sol, 0), aut = conDatos.reduce((t, f) => t + f.aut, 0);
-                const partes = conDatos.every((f) => f.autBk !== null);
-                const autBk = partes ? conDatos.reduce((t, f) => t + f.autBk, 0) : null;
-                const total = ini ? { ant: ini.ant, sol, acum: ini.ant + sol, aut, autBk, autMes: autBk === null ? null : aut - autBk, pend: ini.ant + sol - aut, pct: pctDe(aut, ini.ant + sol), desde: ini.ini } : null;
+                const filas = meses.map((m) => fila(m, pl)), conDatos = filas.filter((f) => f.acum !== null), ini = conDatos[0], fin = conDatos[conDatos.length - 1];
+                const suma = (k) => conDatos.reduce((t, f) => t + (f[k] || 0), 0);
+                let total = null;
+                if (ini) {
+                    const sol = suma('sol'), otros = suma('otros'), aut = suma('aut'), autBk = suma('autBk'), acum = ini.ant + sol + otros;
+                    total = { ant: ini.ant, sol, otros, acum, aut, autBk, autMes: aut - autBk, pend: acum - aut, susp: suma('susp'), fuera: fin.fuera,
+                        pct: pctDe(aut, acum), pctArea: fin.fuera === null ? null : pctDe(aut, acum - fin.fuera), desde: ini.ini };
+                }
                 const tres = per.meses.map((m) => fila(m, pl));
                 res[pl] = { filas, total, tres, sol: tres.map((f) => f.sol), aut: tres.map((f) => f.aut), ant: tres.map((f) => f.ant),
-                    autMes: tres.map((f) => f.autMes), autBk: tres.map((f) => f.autBk), pct: tres.map((f) => f.pct) };
+                    autMes: tres.map((f) => f.autMes), autBk: tres.map((f) => f.autBk), pct: tres.map((f) => f.pct), pctArea: tres.map((f) => f.pctArea),
+                    fuera: tres.map((f) => f.fuera), pend: tres.map((f) => f.pend) };
             });
             return res;
         }
@@ -11742,12 +11899,13 @@ async function maybeAutoStartTour() {
         // ---------- Cálculo completo ----------
         async function calcular() {
             const per = periodo();
-            const [indicadores, r1, car, est, acu] = await Promise.all([storeGet('val_rmd_indicadores_mes'), calcularRuta1(), storeGet('val_rmd_caracterizaciones'),
-                storeGet('val_estatus_caracterizacion'), calcularAcumulado()]);
+            const [indicadores, r1, car, est, acu, traz, horas] = await Promise.all([storeGet('val_rmd_indicadores_mes'), calcularRuta1(), storeGet('val_rmd_caracterizaciones'),
+                storeGet('val_estatus_caracterizacion'), calcularAcumulado(), storeGet('val_rmd_trazabilidad'), storeGet(CLAVE_HORAS)]);
             estatusCar = (est && typeof est === 'object') ? conEstatusVigente(est) : {};
             const items = (car && Array.isArray(car.items)) ? car.items : [];
-            const programa = cuadroPrograma(indicadores, per);
+            const programa = cuadroPrograma(indicadores, per, traz);
             if (!r1.error) ['P1', 'P2'].forEach((pl) => { const a = programa[pl].aut[2]; r1[pl].aut = Number.isFinite(a) ? a : 0; r1[pl].autSinDato = !Number.isFinite(a); });
+            horasEf = horas && typeof horas === 'object' ? horas : {};
             return { per, programa, r1, acu, r2: ruta2(items), car: { items, sinDatos: !car, generado: car && car.generado } };
         }
 
@@ -11779,42 +11937,53 @@ async function maybeAutoStartTour() {
             </div>`;
         }
         const TITULOS_CUADRO = {
-            ant: 'Pendientes al cierre del mes anterior',
-            sol: 'Acumulado − pendiente anterior: los RMD registrados en SAP en el mes (Fecha Registro) que siguen pendientes o ya se autorizaron',
+            ant: 'Backlog: pendientes al cierre del mes anterior (RMD Ingresados, solicitudes abiertas y suspendidos por reeditar)',
+            sol: 'RMD con fecha de ingreso real en el mes (la fecha AAAAMMDD al inicio de la Observación; sin ella, la Fecha Registro)',
+            otros: 'Lo que entró o salió del backlog sin ser un ingreso del mes ni una autorización: solicitudes nuevas, suspendidos por reeditar, cancelados, RMD que ya estaban en el backlog y se ingresaron en el mes. Así la suma cuadra',
             acum: 'Pendientes al cierre + autorizados del mes: todo lo que hubo que atender en el mes',
-            aut: 'RMD Autorizados o Suspendidos con Fecha Autorización en el mes (SAP suspende la versión anterior al autorizar la nueva)',
-            autMes: 'De los autorizados, los registrados en el mes',
-            autBk: 'De los autorizados, los que venían del backlog (registrados antes del mes)',
-            pend: 'RMD registrados y aún sin autorizar al cierre del mes (el mes en curso: los Ingresados a la fecha de los datos de SAP)',
-            pct: `% autorizados = Autorizados / Acumulado. Meta: no menos de ${META_AUTORIZADOS} %`
+            aut: 'Por FECHA de autorización, no por estado: versiones Autorizadas o Suspendidas con Fecha Autorización en el mes (si en el mes se autorizan dos versiones del mismo RMD, cuentan las dos)',
+            autMes: 'De los autorizados, los que tienen su ingreso real en el mes',
+            autBk: 'De los autorizados, el resto: venían del backlog',
+            pend: 'Al cierre del mes (el mes en curso: a la fecha de los datos de SAP): RMD Ingresados, solicitudes abiertas (Solicitado o Solicitud Aprobada) y suspendidos por reeditar (masivos, nueva edición), de ese mes o antiguos, mientras el RMD no tenga otra versión Ingresada o Autorizada',
+            susp: 'Suspendidos por reeditar (de ese mes o antiguos) que al cierre no tienen otra versión Ingresada o Autorizada. No cuentan los que SAP suspende al autorizar otra versión',
+            fuera: 'Pendientes al cierre que no dependen del área: en el flujo de Producción sin aprobar (jefe / gerente) o en control de cambio',
+            pct: `% total = Autorizados / Acumulado. Meta: no menos de ${META_AUTORIZADOS} %`,
+            pctArea: `% del área = Autorizados / (Acumulado − pendientes que no dependen del área: flujo de Producción sin aprobar y control de cambio). Meta: no menos de ${META_AUTORIZADOS} %`
         };
         const numOGuion = (n) => (n === null || n === undefined ? '—' : n);
         const pctTxt = (n) => (n === null || n === undefined ? '—' : `${n} %`);
+        const conSigno = (n) => (n > 0 ? `+${n}` : n < 0 ? `−${-n}` : '0');
         // Cuadro del mes de una planta: los meses del año hasta el del status (resaltado) y el total del año.
         function tablaCuadro(x, clave, anio, pl) {
             const fila = (nombre, f, clase, mes) => {
-                const n = (k) => nDet(f[k], `cuadro|${pl}|${mes}|${k}`);
+                const n = (k, txt) => nDet(f[k], `cuadro|${pl}|${mes}|${k}`, txt);
+                const otros = f.otros === null || f.otros === undefined ? '—' : (f.otros === 0 ? '0' : `<button type="button" class="sts-n" data-det="${esc(`cuadro|${pl}|${mes}|otros`)}" title="Ver el detalle y descargarlo en Excel">${conSigno(f.otros)}</button>`);
+                const partes = f.autBk === null || f.autBk === undefined ? '' : `<small class="sts-partes">${n('autMes')} · ${n('autBk')}</small>`;
+                const fueraTxt = f.fuera ? ` title="${esc(`${f.fuera} pendientes no dependen del área${f.fijo ? '' : ' (aproximado con lo de hoy)'}`)}"` : '';
                 return `<tr${clase ? ` class="${clase}"` : ''}><td class="periodo">${esc(nombre)}</td><td class="mono">${n('ant')}</td><td class="mono">${n('sol')}</td>`
-                    + `<td class="mono fuerte">${n('acum')}</td><td class="mono aut">${n('aut')}</td><td class="mono parte">${n('autMes')}</td><td class="mono parte">${n('autBk')}</td>`
-                    + `<td class="mono fuerte">${n('pend')}</td><td class="mono">${pctTxt(f.pct)}</td></tr>`;
+                    + `<td class="mono parte">${otros}</td><td class="mono fuerte">${n('acum')}</td><td class="mono aut">${n('aut')}${partes}</td>`
+                    + `<td class="mono fuerte">${n('pend')}</td><td class="mono">${pctTxt(f.pct)}</td>`
+                    + `<td class="mono"${fueraTxt}>${f.fuera ? nDet(f.fuera, `cuadro|${pl}|${mes}|fuera`, pctTxt(f.pctArea)) : pctTxt(f.pctArea)}</td></tr>`;
             };
             const th = (k, t) => `<th title="${esc(TITULOS_CUADRO[k])}">${t}</th>`;
-            const vacio = { ant: null, sol: null, acum: null, aut: null, autMes: null, autBk: null, pend: null, pct: null };
+            const vacio = { ant: null, sol: null, otros: null, acum: null, aut: null, autMes: null, autBk: null, pend: null, pct: null, pctArea: null, fuera: null };
             return `<div class="sts-tabla-wrap sts-meses"><table class="sts-tabla">
-                <thead><tr><th>Mes</th>${th('ant', 'Pendiente anterior')}${th('sol', '+&nbsp;Solicitados')}${th('acum', '=&nbsp;Acumulado')}${th('aut', '−&nbsp;Autorizados')}${th('autMes', 'del mes')}${th('autBk', 'del backlog')}${th('pend', '=&nbsp;Pendientes')}${th('pct', '%')}</tr></thead>
+                <thead><tr><th>Mes</th>${th('ant', 'Pendiente anterior')}${th('sol', '+&nbsp;Solicitados')}${th('otros', '±&nbsp;Otros')}${th('acum', '=&nbsp;Acumulado')}${th('aut', '−&nbsp;Autorizados <small>del mes · backlog</small>')}${th('pend', '=&nbsp;Pendientes')}${th('pct', '% total')}${th('pctArea', '% del área')}</tr></thead>
                 <tbody>${x.filas.map((f) => fila(MESES[dayjs(f.ini).month()], f, f.clave === clave ? 'actual' : '', f.clave)).join('')}${fila(`Total ${anio}`, x.total || vacio, 'total', 'total')}</tbody></table></div>`;
         }
         function htmlPrograma(d) {
             const p = d.programa, meses = d.per.meses.map((m) => MESES[m.month()]), clave = d.per.hasta.format('YYYY-MM');
             const avisos = [];
             if (p.sinDatos || p.anterior) avisos.push('El cuadro del mes se llena con los datos del portal RMD al pulsar «Enviar a Status RMD» en el portal. Todavía no hay datos calculados con esta versión de la página.');
+            else if (p.recalculado) avisos.push('Calculado con los datos de SAP guardados; con el próximo «Enviar a Status RMD» queda guardado con esta versión de la página.');
+            if (!p.sinDatos && !p.anterior && !p.conTrazabilidad) avisos.push('Sin la Trazabilidad de SAP no se conoce la fecha de suspensión: de los suspendidos por reeditar solo cuentan los que no tienen otra versión. Llega con «Enviar a Status RMD» (script 1.108.0 o posterior).');
             const panel = (pl) => `<div class="sts-panel">
                 <div class="sts-planta">${PLANTAS[pl]}</div>
                 <div class="sts-kpis cuatro">
-                    <div class="sts-kpi"><small>Solicitados</small><b>${nDet(p[pl].sol[2], `cuadro|${pl}|${clave}|sol`)}</b></div>
+                    <div class="sts-kpi"><small>Solicitados</small><b>${nDet(p[pl].sol[2], `cuadro|${pl}|${clave}|sol`)}</b><span class="meta">por fecha de ingreso real</span></div>
                     <div class="sts-kpi"><small>Backlog</small><b>${nDet(p[pl].ant[2], `cuadro|${pl}|${clave}|ant`)}</b><span class="meta">pendiente al empezar el mes</span></div>
                     <div class="sts-kpi naranja"><small>Autorizados</small><b>${nDet(p[pl].aut[2], `cuadro|${pl}|${clave}|aut`)}</b>${p[pl].autBk[2] !== null ? `<span class="meta">${nDet(p[pl].autMes[2], `cuadro|${pl}|${clave}|autMes`)} del mes · ${nDet(p[pl].autBk[2], `cuadro|${pl}|${clave}|autBk`)} del backlog</span>` : ''}</div>
-                    <div class="sts-kpi"><small>% autorizados</small><b>${pctTxt(p[pl].pct[2])}</b><span class="meta">meta ${META_AUTORIZADOS} %</span></div>
+                    <div class="sts-kpi"><small>% autorizados</small><b>${pctTxt(p[pl].pct[2])}</b><span class="meta">del área ${p[pl].fuera[2] ? nDet(p[pl].fuera[2], `cuadro|${pl}|${clave}|fuera`, pctTxt(p[pl].pctArea[2])) : pctTxt(p[pl].pctArea[2])} · meta ${META_AUTORIZADOS} %</span></div>
                 </div>
                 <div class="sts-grafico-titulo">RMD: backlog, solicitados y autorizados, ${esc(d.per.rango)}</div>
                 <div class="sts-grafico"><canvas id="stsGrafico${pl}" role="img" aria-label="Backlog, solicitados y autorizados de ${esc(meses.join(', '))}"></canvas></div>
@@ -11828,7 +11997,7 @@ async function maybeAutoStartTour() {
                 </div></div>
                 ${avisos.map((t) => `<div class="sts-aviso"><span>${esc(t)}</span></div>`).join('')}
                 <div class="sts-paneles">${panel('P1')}${panel('P2')}</div>
-                <p class="sts-nota">Con las fórmulas del cuadro del área de RMD: pendiente anterior + solicitados = acumulado; acumulado − autorizados = pendientes; % autorizados = autorizados / acumulado (meta: no menos de ${META_AUTORIZADOS} %). Todo sale del portal RMD, con las fechas de SAP de cada versión de RMD, sin Cancelados ni solicitudes: <b>autorizados</b> son los RMD Autorizados o Suspendidos con Fecha Autorización en el mes; <b>pendientes</b>, los registrados y aún sin autorizar al cierre del mes (el mes en curso: los Ingresados a la fecha de los datos de SAP). Así, los <b>solicitados</b> son los RMD registrados en el mes. Los autorizados se parten en <b>del mes</b> (registrados en el mes) y <b>del backlog</b> (registrados antes, pendientes al empezar el mes). El <b>backlog</b> es el pendiente anterior: lo que SAP tenía registrado y sin autorizar al cerrar el mes anterior (puede diferir del saldo que se arrastra a mano en el registro del área; en octubre de 2026 ambos coincidieron). El total del año parte de lo pendiente al cierre del año anterior, y su % es autorizados del año / acumulado del año.</p>
+                <p class="sts-nota">Pendiente anterior + solicitados ± otros = acumulado; acumulado − autorizados = pendientes. <b>Solicitados</b>: RMD con fecha de ingreso real en el mes (AAAAMMDD al inicio de la Observación; sin ella, la Fecha Registro). <b>Autorizados</b>: por fecha de autorización, no por estado (versiones Autorizadas o Suspendidas con Fecha Autorización en el mes); <b>del mes</b> si su ingreso real es del mes y <b>del backlog</b> el resto. <b>Pendientes</b> (backlog del mes siguiente): RMD Ingresados, solicitudes abiertas y suspendidos por reeditar, de ese mes o antiguos, mientras el RMD no tenga otra versión Ingresada o Autorizada (no cuentan los que SAP suspende al autorizar otra versión). <b>Otros</b>: lo que entró o salió del backlog por otro camino, para que la suma cuadre. <b>% total</b> = autorizados / acumulado; <b>% del área</b> = autorizados / (acumulado − pendientes en el flujo de Producción sin aprobar o en control de cambio). Meta: no menos de ${META_AUTORIZADOS} %. Sin Cancelados ni solicitudes rechazadas. Haz clic en un número para ver sus RMD.</p>
             </section>`;
         }
         function anillo(pct) {
@@ -12283,12 +12452,16 @@ async function maybeAutoStartTour() {
             fReg: { t: 'Fecha registro', w: 12, mono: true },
             fSol: { t: 'Fecha solicitud', w: 12, mono: true },
             fAut: { t: 'Fecha autorización', w: 12, mono: true },
+            fIng: { t: 'Fecha ingreso real', w: 12, mono: true },
+            fSusp: { t: 'Fecha suspensión', w: 14, mono: true },
+            prodEstado: { t: 'Producción Estado', w: 12 },
+            fuera: { t: 'No depende del área', w: 22 },
             codDef: { t: 'Código por defecto', w: 14, soloExcel: true },
             material: { t: 'Material del RMD', w: 14, soloExcel: true },
             obs: { t: 'Observación', w: 60, obs: true }
         };
         const COLUMNAS_DET = {
-            cuadro: ['planta', 'mes', 'como', 'codigo', 'desc', 'version', 'etapa', 'estado', 'fReg', 'fAut', 'codDef', 'obs'],
+            cuadro: ['planta', 'mes', 'como', 'codigo', 'desc', 'version', 'etapa', 'estado', 'fSol', 'fReg', 'fIng', 'fAut', 'fSusp', 'prodEstado', 'fuera', 'codDef', 'obs'],
             r1: ['planta', 'm', 'producto', 'etapa', 'situacion', 'estatus', 'resp', 'codigo', 'desc', 'version', 'estado', 'material', 'obs'],
             r2: ['planta', 'codigo', 'desc', 'version', 'etapa', 'estado', 'situacion', 'estatus', 'resp', 'fSol', 'fAut', 'codDef', 'obs'],
             acu: ['planta', 'm', 'producto', 'etapa', 'desde', 'hasta', 'dias', 'como', 'codigo', 'desc', 'version', 'estado', 'material', 'obs']
@@ -12300,54 +12473,67 @@ async function maybeAutoStartTour() {
         // Estado de SAP con la misma forma en todas las listas (AUTORIZADO y Autorizado → Autorizado; SIN RMD → Sin RMD).
         const estadoTxt = (e) => { const t = String(e || '').trim(); return t && t === t.toUpperCase() ? (t.charAt(0) + t.slice(1).toLowerCase()).replace(/\brmd\b/g, 'RMD') : t; };
 
-        // Cuadro del mes: las versiones de RMD que cuenta cada número, con las mismas cuentas sobre los datos guardados.
-        const NOMBRES_CUADRO = { ant: 'Pendiente anterior', sol: 'Solicitados', acum: 'Acumulado', aut: 'Autorizados', autMes: 'Autorizados del mes', autBk: 'Autorizados del backlog', pend: 'Pendientes' };
+        // Cuadro del mes: las versiones de RMD (y solicitudes) que cuenta cada número, guardadas con el cálculo (det / vers).
+        const NOMBRES_CUADRO = { ant: 'Pendiente anterior', sol: 'Solicitados', otros: 'Otros', acum: 'Acumulado', aut: 'Autorizados', autMes: 'Autorizados del mes',
+            autBk: 'Autorizados del backlog', pend: 'Pendientes', susp: 'Suspendidos por reeditar', fuera: 'Pendientes que no dependen del área' };
+        const diaIso = (t) => { const m = /^(\d{4})-(\d{2})-(\d{2})(~?)$/.exec(t || ''); return m ? `${m[3]}/${m[2]}/${m[1]}${m[4] ? ' (aprox.)' : ''}` : ''; };
         function detalleCuadro(d, pl, mes, k) {
             const p = d.programa, x = p[pl], total = mes === 'total';
             const f = x && (total ? x.total : x.filas.find((y) => y.clave === mes));
             if (!f || !NOMBRES_CUADRO[k]) return null;
-            const det = { tipo: 'cuadro', pl, titulo: `${NOMBRES_CUADRO[k]} · ${total ? `Total ${p.anio}` : nombreMes(mes)}`, sub: PLANTAS[pl], numero: f[k], explica: TITULOS_CUADRO[k], filas: [] };
-            const cd = cuadroConDetalle(p.generado);
-            if (!cd) {
-                det.aviso = 'El detalle del cuadro aparece con el próximo «Enviar a Status RMD» desde el portal: los datos de SAP guardados son de antes de esta versión de la página y no traen la planta de cada RMD.';
+            const numero = k === 'otros' ? f.otros : f[k];
+            const det = { tipo: 'cuadro', pl, titulo: `${NOMBRES_CUADRO[k]} · ${total ? `Total ${p.anio}` : nombreMes(mes)}`, sub: PLANTAS[pl], numero, explica: TITULOS_CUADRO[k], filas: [] };
+            const c = p.cuadro;
+            if (!c || !c.det) {
+                det.aviso = 'El detalle del cuadro aparece con el próximo «Enviar a Status RMD» desde el portal.';
                 return det;
             }
             const mesSap = dayjs(Date.parse(p.generado || '') || Date.now()).format('YYYY-MM');
             const anterior = (m) => dayjs(m + '-01').subtract(1, 'month').format('YYYY-MM');
-            const lista = (m, kk) => ((cd.detalle[m] || {})[pl] || {})[kk] || [];
-            const porFecha = (campo) => (a, b) => ((a[campo] ? a[campo].valueOf() : -Infinity) - (b[campo] ? b[campo].valueOf() : -Infinity)) || a.codigo.localeCompare(b.codigo);
-            const pendL = (m) => lista(m, 'pend').slice().sort(porFecha('fReg')).map((v) => [v, m, m === mesSap ? 'Pendiente a la fecha de SAP' : 'Pendiente al cierre del mes']);
-            const delBacklog = (v, m) => !v.fReg || v.fReg.format('YYYY-MM') < m;
-            const autL = (m) => lista(m, 'aut').slice().sort(porFecha('fAut')).map((v) => [v, m, delBacklog(v, m) ? 'Autorizado en el mes · del backlog' : 'Autorizado en el mes · registrado en el mes']);
-            // Solicitados: lo que entró al acumulado del mes sin estar pendiente al cierre del anterior (lo registrado en el mes).
-            const solL = (m) => {
-                const antes = new Set(lista(anterior(m), 'pend'));
-                return [...pendL(m), ...autL(m)].filter(([v]) => !antes.has(v)).map(([v, mm, como]) => [v, mm, `Registrado en el mes · ${/^Autorizado/.test(como) ? 'autorizado' : 'pendiente'}`]);
+            const ids = (m, kk) => (((c.det[m] || {})[pl] || {})[kk]) || [];
+            const ver = (id) => versionDe(c.vers[id]) || { codigo: id };
+            const ingresoEn = (v, m) => !!(v.fIng ? v.fIng.slice(0, 7) === m : v.fReg && v.fReg.slice(0, 7) === m);
+            const como = {
+                pend: (m, id) => { const v = ver(id); const s = ids(m, 'susp').includes(id) ? 'Suspendido por reeditar' : (ES_SOLICITUD_ABIERTA.has(v.estado) ? 'Solicitud abierta' : 'Ingresado sin autorizar');
+                    return `${s}${m === mesSap ? ' · a la fecha de SAP' : ' · al cierre'}${ids(m, 'fuera').includes(id) ? ' · no depende del área' : ''}`; },
+                aut: (m, id) => `Autorizado en el mes · ${ingresoEn(ver(id), m) ? 'ingreso real del mes' : 'del backlog'}`,
+                sol: (m, id) => `Ingreso real en el mes${ver(id).conIngreso ? '' : ' (por Fecha Registro: la Observación no trae la fecha)'}`
             };
-            const meses = total ? x.filas.filter((y) => y.sol !== null).map((y) => y.clave) : [mes];
+            const de = (m, kk, comoK) => ids(m, kk).map((id) => [id, m, (como[comoK || kk] || (() => ''))(m, id)]);
+            // Otros: lo que entró al acumulado sin estar en el backlog ni ser un ingreso del mes (suma), lo que salió del backlog o de
+            // los ingresos sin autorizarse (resta) y lo que ya estaba en el backlog y además se ingresó en el mes (resta: cuenta dos veces).
+            const otrosDe = (m) => {
+                const antes = new Set(ids(anterior(m), 'pend')), sol = new Set(ids(m, 'sol')), acum = new Set([...ids(m, 'pend'), ...ids(m, 'aut')]);
+                const r = [];
+                acum.forEach((id) => { if (!antes.has(id) && !sol.has(id)) r.push([id, m, `+1 · Entró al backlog sin ingreso en el mes (${ids(m, 'susp').includes(id) ? 'suspendido por reeditar' : (ES_SOLICITUD_ABIERTA.has(ver(id).estado) ? 'solicitud' : 'pendiente desde antes de su ingreso')})`]); });
+                new Set([...antes, ...sol]).forEach((id) => { if (!acum.has(id)) r.push([id, m, `${antes.has(id) && sol.has(id) ? '−2' : '−1'} · Salió sin autorizarse en el mes (${ver(id).estado === 'SUSPENDIDO' || ver(id).estado === 'AUTORIZADO' ? 'autorizado en otro mes o ya no por reeditar' : 'cancelado, rechazado o con versión nueva'})`]); });
+                antes.forEach((id) => { if (sol.has(id) && acum.has(id)) r.push([id, m, '−1 · Ya estaba en el backlog y se ingresó en el mes (cuenta en los dos)']); });
+                return r;
+            };
+            const meses = total ? x.filas.filter((y) => y.acum !== null).map((y) => y.clave) : [mes];
             if (!meses.length) return det;
             const ultimoMes = meses[meses.length - 1];
             const sel = {
-                ant: () => pendL(anterior(meses[0])),
-                pend: () => pendL(ultimoMes),
-                aut: () => meses.flatMap(autL),
-                autMes: () => meses.flatMap((m) => autL(m).filter(([v]) => !delBacklog(v, m))),
-                autBk: () => meses.flatMap((m) => autL(m).filter(([v]) => delBacklog(v, m))),
-                sol: () => meses.flatMap(solL),
-                acum: () => (total ? [...pendL(anterior(meses[0])), ...meses.flatMap(solL)] : [...pendL(mes), ...autL(mes)])
+                ant: () => de(anterior(meses[0]), 'pend'),
+                pend: () => de(ultimoMes, 'pend'),
+                susp: () => meses.flatMap((m) => de(m, 'susp', 'pend')),
+                fuera: () => de(ultimoMes, 'fuera', 'pend'),
+                aut: () => meses.flatMap((m) => de(m, 'aut')),
+                autMes: () => meses.flatMap((m) => de(m, 'aut').filter(([id]) => ingresoEn(ver(id), m))),
+                autBk: () => meses.flatMap((m) => de(m, 'aut').filter(([id]) => !ingresoEn(ver(id), m))),
+                sol: () => meses.flatMap((m) => de(m, 'sol')),
+                otros: () => meses.flatMap(otrosDe),
+                acum: () => (total ? [...de(anterior(meses[0]), 'pend'), ...meses.flatMap((m) => de(m, 'sol')), ...meses.flatMap(otrosDe)] : [...de(mes, 'pend'), ...de(mes, 'aut')])
             }[k]();
-            det.filas = sel.map(([v, m, como]) => {
-                const r = v.fila;
-                return { planta: v.planta, mes: nombreMes(m), como, codigo: r.codigo, desc: r.descripcion, version: r.version, etapa: r.etapa, estado: estadoTxt(r.estado),
-                    fReg: r.fechaRegistro, fAut: r.fechaAutorizacion, codDef: r.codigoPorDefecto, obs: r.observacion };
+            det.filas = sel.map(([id, m, comoTxt]) => {
+                const v = ver(id);
+                return { planta: v.planta || pl, mes: nombreMes(m), como: comoTxt, codigo: v.codigo || (v.sol ? `Solicitud ${v.sol}` : id), desc: v.desc, version: v.version, etapa: v.etapa,
+                    estado: estadoTxt(v.estado), fSol: diaIso(v.fSol), fReg: diaIso(v.fReg), fIng: diaIso(v.fIng), fAut: diaIso(v.fAut), fSusp: diaIso(v.fSusp), prodEstado: v.prodEstado,
+                    fuera: MOTIVOS_FUERA[v.fuera] || '', codDef: v.codDef, obs: v.obs };
             });
-            if (Number.isFinite(det.numero) && det.filas.length !== det.numero) {
-                // Solicitados = Acumulado − Pendiente anterior: si una versión deja de estar pendiente sin contarse como autorizada
-                // (su código de RMD ya se contó en otra autorización), el número es menor que lo registrado.
-                det.aviso = (k === 'sol' || (k === 'acum' && total)) && det.filas.length > det.numero
-                    ? `La lista tiene ${det.filas.length}; el número del cuadro (${det.numero}) resta el pendiente anterior y por eso descuenta ${det.filas.length - det.numero} ${det.filas.length - det.numero === 1 ? 'versión que dejó' : 'versiones que dejaron'} de estar pendiente sin contarse como autorizada (su código de RMD ya se había contado en otra autorización).`
-                    : `El detalle sale de los datos de SAP guardados y da ${det.filas.length} en lugar de ${det.numero}: vuelve a «Enviar a Status RMD» desde el portal para que coincidan.`;
-            }
+            if (Number.isFinite(det.numero) && k !== 'otros' && k !== 'acum' && det.filas.length !== det.numero)
+                det.aviso = `El detalle da ${det.filas.length} en lugar de ${det.numero}: vuelve a «Enviar a Status RMD» desde el portal para que coincidan.`;
+            if (k === 'fuera' && f.fijo === false) det.aviso = 'Mes cerrado antes de guardar esta foto: se aproxima con el flujo de Producción y las Observaciones de hoy. Desde ahora, cada mes queda fijo con la última sincronización hecha en ese mes.';
             return det;
         }
 
@@ -12540,15 +12726,15 @@ async function maybeAutoStartTour() {
             const cuadro = [];
             let sinPlanta = false;
             ['P1', 'P2'].forEach((pl) => {
-                const meses = d.programa[pl].filas.filter((f) => f.sol !== null).map((f) => f.clave);
+                const meses = d.programa[pl].filas.filter((f) => f.acum !== null).map((f) => f.clave);
                 if (!meses.length) return;
                 const ant = detalleCuadro(d, pl, meses[0], 'ant');
                 if (ant.aviso && !ant.filas.length) { sinPlanta = true; return; }
                 cuadro.push(...ant.filas);
-                meses.forEach((m) => ['pend', 'aut', 'sol'].forEach((k) => cuadro.push(...detalleCuadro(d, pl, m, k).filas)));
+                meses.forEach((m) => ['pend', 'aut', 'sol', 'otros'].forEach((k) => cuadro.push(...detalleCuadro(d, pl, m, k).filas)));
             });
             hoja('Cuadro del mes', 'cuadro', cuadro, sinPlanta ? 'Sin detalle: aparece con el próximo «Enviar a Status RMD» desde el portal.'
-                : 'Cuadro del mes (lámina 2) por planta y mes. Filtra «Mes» y «Cuenta como»: pendientes al cierre, autorizados en el mes y registrados en el mes (los solicitados).');
+                : 'Cuadro del mes (lámina 2) por planta y mes. Filtra «Mes» y «Cuenta como»: pendientes al cierre (con los suspendidos por reeditar y los que no dependen del área), autorizados en el mes, ingresos reales del mes (los solicitados) y los otros movimientos del backlog. Trae la fecha de ingreso real, de autorización y de suspensión de cada RMD.');
             if (!d.r1.error) hoja('Ruta 1 programa', 'r1', detalleRuta(d, 'r1', 'ambas', 'todo').filas, 'Cada etapa pendiente de los productos programados (Ruta 1): estatus, responsable y el RMD que la deja pendiente. Sus autorizados son los del cuadro del mes.');
             if (d.acu && !d.acu.error) {
                 const acu = [];
@@ -12561,9 +12747,70 @@ async function maybeAutoStartTour() {
             XLSX.writeFile(wb, `Detalle_Indicadores_${d.per.hasta.format('YYYY-MM-DD')}.xlsx`, { compression: true });
         }
 
+        // ---------- Horas efectivas (se llenan a mano) ----------
+        // Horas efectivas de analistas y asistentes por planta y mes (descontando vacaciones, descansos médicos…), para mostrar
+        // cuánto se autorizó con las horas que hubo. Se guardan en ind_horas_efectivas: { 'AAAA-MM': { P1: { an, as }, P2: {…} } }.
+        function htmlHoras(d) {
+            const p = d.programa, meses = [];
+            for (let m = d.per.hasta.startOf('year'); !m.isAfter(d.per.hasta, 'month'); m = m.add(1, 'month')) meses.push(m.format('YYYY-MM'));
+            const num = (v) => (Number.isFinite(v) ? (Math.round(v * 10) / 10).toLocaleString('es-PE') : '');
+            const panel = (pl) => {
+                let tAn = 0, tAs = 0, tAut = 0, conHoras = false;
+                const filas = meses.map((mes) => {
+                    const h = (horasEf[mes] || {})[pl] || {}, f = p[pl].filas.find((y) => y.clave === mes) || {};
+                    const an = Number.isFinite(h.an) ? h.an : null, as = Number.isFinite(h.as) ? h.as : null, tot = (an || 0) + (as || 0), aut = Number.isFinite(f.aut) ? f.aut : null;
+                    if (an !== null || as !== null) { conHoras = true; tAn += an || 0; tAs += as || 0; if (aut !== null) tAut += aut; }
+                    const campo = (k, v) => `<input type="number" inputmode="decimal" min="0" step="0.5" class="sts-campo sts-horas" data-horas="${mes}|${pl}|${k}" value="${v === null ? '' : v}" aria-label="Horas de ${k === 'an' ? 'analistas' : 'asistentes'} · ${esc(nombreMes(mes))} · ${pl}">`;
+                    return `<tr${mes === d.per.hasta.format('YYYY-MM') ? ' class="actual"' : ''} data-horas-fila="${mes}|${pl}"><td class="periodo">${esc(MESES[dayjs(mes + '-01').month()])}</td>
+                        <td>${campo('an', an)}</td><td>${campo('as', as)}</td><td class="mono fuerte" data-k="tot">${tot ? num(tot) : '—'}</td>
+                        <td class="mono aut">${numOGuion(aut)}</td><td class="mono" data-k="x100">${tot && aut !== null ? num((aut / tot) * 100) : '—'}</td></tr>`;
+                }).join('');
+                const tTot = tAn + tAs;
+                return `<div class="sts-panel"><div class="sts-planta">${PLANTAS[pl]}</div>
+                    <div class="sts-tabla-wrap sts-meses"><table class="sts-tabla sts-tabla-horas">
+                        <thead><tr><th>Mes</th><th>Horas analistas</th><th>Horas asistentes</th><th>Total horas</th><th title="Autorizados del cuadro del mes (por fecha de autorización)">Autorizados</th><th title="Autorizados por cada 100 horas efectivas">Autorizados por 100 h</th></tr></thead>
+                        <tbody>${filas}<tr class="total"><td class="periodo">Total ${p.anio}</td><td class="mono">${conHoras ? num(tAn) : '—'}</td><td class="mono">${conHoras ? num(tAs) : '—'}</td>
+                        <td class="mono">${conHoras ? num(tTot) : '—'}</td><td class="mono">${conHoras ? tAut : '—'}</td><td class="mono">${tTot ? num((tAut / tTot) * 100) : '—'}</td></tr></tbody>
+                    </table></div></div>`;
+            };
+            return `<section class="sts-seccion" id="stsHoras">
+                <div class="sts-seccion-cab"><div>
+                    <div class="sts-seccion-titulo"><span class="sts-num">HORAS</span>Horas efectivas de analistas y asistentes</div>
+                    <div class="sts-seccion-sub">Se llenan a mano cada mes · se guardan solas al salir de la casilla</div>
+                </div></div>
+                <div class="sts-paneles">${panel('P1')}${panel('P2')}</div>
+                <p class="sts-nota">Horas efectivas: las trabajadas en RMD en el mes, sin vacaciones, descansos médicos ni otras ausencias. Con ellas se ve cuánto se autorizó con las horas que hubo: <b>autorizados por 100 h</b> = autorizados del mes / total de horas × 100 (los autorizados son los del cuadro del mes, por fecha de autorización). El total del año suma solo los meses con horas.</p>
+            </section>`;
+        }
+        // Vuelve a leer lo guardado justo antes de escribir, para no pisar lo que otra persona cambió.
+        async function guardarHoras(mes, pl, k, valor) {
+            const guardado = await storeGet(CLAVE_HORAS);
+            if (guardado && typeof guardado === 'object') horasEf = guardado;
+            const x = ((horasEf[mes] || (horasEf[mes] = {}))[pl] || (horasEf[mes][pl] = {}));
+            if (valor === null) delete x[k]; else x[k] = valor;
+            await storeSet(CLAVE_HORAS, horasEf);
+        }
+        function alCambiarHoras(e) {
+            const inp = e.target.closest('input[data-horas]');
+            if (!inp) return;
+            const [mes, pl, k] = inp.dataset.horas.split('|');
+            const t = String(inp.value).trim().replace(',', '.'), v = t === '' ? null : Number(t);
+            if (v !== null && (!Number.isFinite(v) || v < 0)) { inp.value = ''; return; }
+            guardarHoras(mes, pl, k, v).then(() => {
+                const cont = document.getElementById('stsHoras');
+                if (!ultimo || !cont) return;
+                // Solo se cambian los totales (las casillas quedan como están, por si se sigue escribiendo en otra).
+                const t = document.createElement('template');
+                t.innerHTML = htmlHoras(ultimo);
+                const nuevas = t.content.querySelectorAll('td.mono'), viejas = cont.querySelectorAll('td.mono');
+                if (nuevas.length === viejas.length) viejas.forEach((td, i) => { td.textContent = nuevas[i].textContent; });
+            })
+                .catch((err) => { console.error(err); Swal.fire({ icon: 'error', title: 'No se pudieron guardar las horas', text: err.message, background: '#0f172a' }); });
+        }
+
         function pintar() {
             const cont = document.getElementById('stsContenido');
-            cont.innerHTML = htmlMeta(ultimo) + htmlResumen(ultimo) + htmlPrograma(ultimo) + htmlRuta1(ultimo) + htmlRuta2(ultimo);
+            cont.innerHTML = htmlMeta(ultimo) + htmlResumen(ultimo) + htmlPrograma(ultimo) + htmlRuta1(ultimo) + htmlRuta2(ultimo) + htmlHoras(ultimo);
             // Las semanas, desde la más antigua: se deja a la vista la última.
             cont.querySelectorAll('.sts-meses.semanas').forEach((el) => { el.scrollTop = el.scrollHeight; });
             dibujarGraficos(ultimo);
@@ -12713,6 +12960,8 @@ async function maybeAutoStartTour() {
                 const cont = document.getElementById(id);
                 if (cont) cont.addEventListener('click', (e) => { const b = e.target.closest('[data-det]'); if (b && cont.contains(b)) abrirDetalle(b.dataset.det); });
             });
+            const sts = document.getElementById('stsContenido');
+            if (sts) sts.addEventListener('change', alCambiarHoras);
         }
         if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', iniciar); else iniciar();
 
