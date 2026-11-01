@@ -11573,8 +11573,17 @@ async function maybeAutoStartTour() {
         async function calcularRuta1() {
             if (!rmdPreciso || !rmdPreciso.totalEntradas) return { error: 'Faltan los RMD de SAP: usa «Enviar a Status RMD» en el portal o carga el Exportado RMD en Producción.' };
             await asegurarMotorArboles();
-            const [d1, d2] = await Promise.all([storeGet('prod_data_planta1'), storeGet('prod_data_planta2')]);
-            return { P1: ruta1DePlanta(d1, 'P1'), P2: ruta1DePlanta(d2, 'P2'), sinArbol: motorArboles.estado !== 'listo' };
+            const [d1, d2, a1, a2] = await Promise.all([storeGet('prod_data_planta1'), storeGet('prod_data_planta2'),
+                storeGet('prod_archivo_original_planta1'), storeGet('prod_archivo_original_planta2')]);
+            const r = { P1: ruta1DePlanta(d1, 'P1'), P2: ruta1DePlanta(d2, 'P2'), sinArbol: motorArboles.estado !== 'listo' };
+            // Horizonte del Programa de Producción: 2 semanas desde la semana en que se cargó (lunes de esa semana + 13 días).
+            [['P1', a1], ['P2', a2]].forEach(([pl, a]) => {
+                const f = a && a.fechaCarga ? dayjs(a.fechaCarga) : null;
+                if (!f || !f.isValid()) return;
+                const ini = f.startOf('day').subtract((f.day() + 6) % 7, 'day');
+                r[pl].horizonte = { ini, fin: ini.add(13, 'day'), carga: f };
+            });
+            return r;
         }
 
         // Ruta 2: autorizado = Autorizado o Suspendido en SAP; una Solicitud Rechazada no cuenta; el resto es pendiente con
@@ -11893,7 +11902,7 @@ async function maybeAutoStartTour() {
                 texto: desde.year() === hasta.year() ? `${desde.format('DD/MM')} – ${hasta.format('DD/MM/YYYY')}` : `${desde.format('DD/MM/YYYY')} – ${hasta.format('DD/MM/YYYY')}`,
                 mesNombre: MESES[hasta.month()], mesAnio: `${MESES[hasta.month()]} ${hasta.year()}`, rango,
                 mesAnterior: MESES[hasta.subtract(1, 'month').month()],
-                // El Programa de PLA dura 2 semanas desde el 1 del mes del status.
+                // Sin fecha de carga del Programa de Producción: 2 semanas desde el 1 del mes del status.
                 programa: `${hasta.startOf('month').format('DD/MM/YYYY')} – ${hasta.startOf('month').add(13, 'day').format('DD/MM/YYYY')}`
             };
         }
@@ -12055,6 +12064,20 @@ async function maybeAutoStartTour() {
         // → Autorizado, con el total (pendientes + autorizados) y el % de avance (autorizados / total).
         // ruta: 'r1' (programa) o 'r2' (caracterizaciones), para el detalle de cada número; autKey: el detalle del Autorizado
         // si no es el de la ruta (en la Ruta 1, los autorizados del mes del cuadro).
+        // Rango del Programa de PLA de la lámina: el horizonte de 2 semanas desde la semana de carga del Programa de Producción
+        // de cada planta (si las dos coinciden, uno solo); sin carga, 2 semanas desde el 1 del mes del status.
+        function textoHorizonte(d, pl) {
+            const h = d.r1 && !d.r1.error && d.r1[pl] && d.r1[pl].horizonte;
+            return h ? `${h.ini.format('DD/MM/YYYY')} – ${h.fin.format('DD/MM/YYYY')}` : '';
+        }
+        function rangoPrograma(d) {
+            const a = textoHorizonte(d, 'P1'), b = textoHorizonte(d, 'P2');
+            if (!a && !b) return d.per.programa;
+            if (a === b || !b) return a;
+            if (!a) return b;
+            const corto = (pl) => { const h = d.r1[pl].horizonte; return `${pl} ${h.ini.format('DD/MM')}–${h.fin.format('DD/MM')}`; };
+            return `${corto('P1')} · ${corto('P2')}`;
+        }
         // Backlog de la Ruta 1: pendientes del cuadro al cierre del mes anterior y cuántos de ellos se autorizaron en el mes
         // (autorizados del backlog); % de avance del backlog = autorizados del backlog / backlog.
         function backlogRuta1(d, pl) {
@@ -12103,7 +12126,7 @@ async function maybeAutoStartTour() {
         const leyenda = `<div class="sts-leyenda">${tagResp('PRO')}<span class="sts-chip">Producción</span>${tagResp('DOC')}<span class="sts-chip">QA · Documentación</span>${tagResp('ASC')}<span class="sts-chip">Asuntos regulatorios / CC</span></div>`;
         function htmlRuta1(d) {
             const r1 = d.r1, mes = d.per.hasta.format('YYYY-MM');
-            const extra = (pl) => (r1[pl].sinDatos ? ' <span class="sts-chip">sin Programa de Producción cargado</span>' : ` <span class="sts-chip">${plural(r1[pl].productos, 'producto programado', 'productos programados')}</span>`);
+            const extra = (pl) => (r1[pl].sinDatos ? ' <span class="sts-chip">sin Programa de Producción cargado</span>' : ` <span class="sts-chip">${plural(r1[pl].productos, 'producto programado', 'productos programados')}${r1[pl].horizonte ? ` · ${esc(r1[pl].horizonte.ini.format('DD/MM'))}–${esc(r1[pl].horizonte.fin.format('DD/MM'))}` : ''}</span>`);
             const cuerpo = r1.error ? `<div class="sts-aviso"><span>${esc(r1.error)}</span></div>`
                 : (r1.sinArbol ? '<div class="sts-aviso"><span>No se pudo cargar el árbol de materiales de SAP: solo se cuenta el RMD del propio código de cada producto.</span></div>' : '')
                   + ['P1', 'P2'].map((pl) => htmlRuta(r1[pl], pl, 'r1', { autKey: `cuadro|${pl}|${mes}|aut`, extra: extra(pl),
@@ -12111,10 +12134,10 @@ async function maybeAutoStartTour() {
             return `<section class="sts-seccion">
                 <div class="sts-seccion-cab"><div>
                     <div class="sts-seccion-titulo"><span class="sts-num">RUTA 1</span>Flujo de Programa – P1 y P2</div>
-                    <div class="sts-seccion-sub">RMD pendientes por etapa y responsable · ${esc(d.per.mesAnio)} · Programa PLA ${esc(d.per.programa)}</div>
+                    <div class="sts-seccion-sub">RMD pendientes por etapa y responsable · ${esc(d.per.mesAnio)} · Programa PLA ${esc(rangoPrograma(d))}</div>
                 </div>${leyenda}</div>
                 ${cuerpo}
-                <p class="sts-nota">Pendientes: las etapas del programa sin autorizar, contadas como en Producción (cada etapa una vez, aunque la compartan varias presentaciones) y repartidas según su Estatus. Autorizado: los autorizados del mes del cuadro (${esc(d.per.mesNombre.toLowerCase())}). El total del programa (pendientes + autorizados del mes) es el universo del mes; % de avance del programa = autorizados / total. Backlog: los pendientes del cuadro al cierre de ${esc(d.per.mesAnterior.toLowerCase())}; % de avance del backlog DOC = autorizados del backlog en el mes / backlog. El Programa de PLA dura 2 semanas desde el 1 del mes.</p>
+                <p class="sts-nota">Pendientes: las etapas del programa sin autorizar, contadas como en Producción (cada etapa una vez, aunque la compartan varias presentaciones) y repartidas según su Estatus. Autorizado: los autorizados del mes del cuadro (${esc(d.per.mesNombre.toLowerCase())}). El total del programa (pendientes + autorizados del mes) es el universo del mes; % de avance del programa = autorizados / total. Backlog: los pendientes del cuadro al cierre de ${esc(d.per.mesAnterior.toLowerCase())}; % de avance del backlog DOC = autorizados del backlog en el mes / backlog. Programa PLA: el horizonte de 2 semanas desde la semana en que se cargó el Programa de Producción de cada planta.</p>
             </section>`;
         }
         function htmlTablaCar(d) {
@@ -12954,7 +12977,7 @@ async function maybeAutoStartTour() {
             });
             ruta('R1', d.r1.error ? {} : d.r1); ruta('R2', d.r2);
             // Lámina 3: rango del Programa de PLA, backlog del mes anterior (cuadro) y % de avance del programa y del backlog DOC.
-            v.FECHA_PROGRAMA = d.per.programa; v.MES_ANTERIOR = d.per.mesAnterior.toLowerCase();
+            v.FECHA_PROGRAMA = rangoPrograma(d); v.MES_ANTERIOR = d.per.mesAnterior.toLowerCase();
             ['P1', 'P2'].forEach((pl) => { const b = backlogRuta1(d, pl); v[`R1_${pl}_BK`] = numOGuion(b.n); v[`R1_${pl}_AVANCE_BK`] = b.pctTxt; });
             return v;
         }
