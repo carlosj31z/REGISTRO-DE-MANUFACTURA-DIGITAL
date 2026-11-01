@@ -11427,6 +11427,25 @@ async function maybeAutoStartTour() {
                     }
                 });
             });
+            // Meses cerrados CONGELADOS (pedido del área): el indicador de un mes no varía en el tiempo. Queda con lo del primer
+            // cálculo guardado después de cerrarse el mes (previo generado en un mes posterior) y desde ahí se copia igual en cada
+            // sincronización (cong). Lo que cambie después entra al mes siguiente por «± Otros».
+            if (prev) Object.keys(prev.porMes).forEach((mes) => {
+                if (mes >= mesSap || !(mesPrev > mes)) return;
+                ['P1', 'P2'].forEach((pl) => {
+                    const p = (prev.porMes[mes] || {})[pl];
+                    if (!p || p.pend === null || p.pend === undefined) return;
+                    celda(mes, pl);
+                    porMes[mes][pl] = Object.assign({}, p, { cong: true, fijo: true });
+                    const pd = ((prev.det || {})[mes] || {})[pl];
+                    if (!det[mes]) lista(mes, pl, 'pend');
+                    det[mes][pl] = { pend: [], aut: [], sol: [], susp: [], fuera: [] };
+                    if (pd) Object.keys(det[mes][pl]).forEach((k) => {
+                        det[mes][pl][k] = Array.isArray(pd[k]) ? pd[k].slice() : [];
+                        det[mes][pl][k].forEach((id) => { if (!vers[id] && prev.vers && prev.vers[id]) vers[id] = { compacta: prev.vers[id] }; usadas.add(id); });
+                    });
+                });
+            });
             // Lo que muestra el detalle de cada versión usada (compacto).
             const dia = (d) => (d ? d.format('YYYY-MM-DD') : '');
             const versCompactas = {};
@@ -11891,7 +11910,7 @@ async function maybeAutoStartTour() {
                 const acum = ok ? pend + aut : null, autBk = ok ? dato(m, pl, 'autBk') : null, fuera = ok ? dato(m, pl, 'fuera') : null;
                 const x = (porMes[m.format('YYYY-MM')] || {})[pl] || {};
                 return { clave: m.format('YYYY-MM'), ini: m.valueOf(), ant: ok ? ant : null, sol: ok ? sol : null, otros: ok ? acum - ant - sol : null, acum, aut: ok ? aut : null,
-                    autMes: autBk === null ? null : aut - autBk, autBk, pend: ok ? pend : null, susp: ok ? dato(m, pl, 'susp') : null, fuera, fijo: !!x.fijo,
+                    autMes: autBk === null ? null : aut - autBk, autBk, pend: ok ? pend : null, susp: ok ? dato(m, pl, 'susp') : null, fuera, fijo: !!x.fijo, cong: !!x.cong,
                     pct: ok ? pctDe(aut, acum) : null, pctArea: ok && fuera !== null ? pctDe(aut, acum - fuera) : null, reg: dato(m, pl, 'reg') };
             };
             const meses = [];
@@ -11979,7 +11998,7 @@ async function maybeAutoStartTour() {
                 const otros = f.otros === null || f.otros === undefined ? '—' : (f.otros === 0 ? '0' : `<button type="button" class="sts-n" data-det="${esc(`cuadro|${pl}|${mes}|otros`)}" title="Ver el detalle y descargarlo en Excel">${conSigno(f.otros)}</button>`);
                 const partes = f.autBk === null || f.autBk === undefined ? '' : `<small class="sts-partes">${n('autMes')} · ${n('autBk')}</small>`;
                 const fueraTxt = f.fuera ? ` title="${esc(`${f.fuera} pendientes no dependen del área${f.fijo ? '' : ' (aproximado con lo de hoy)'}`)}"` : '';
-                return `<tr${clase ? ` class="${clase}"` : ''}><td class="periodo">${esc(nombre)}</td><td class="mono">${n('ant')}</td><td class="mono">${n('sol')}</td>`
+                return `<tr${clase ? ` class="${clase}"` : ''}><td class="periodo">${esc(nombre)}${f.cong ? ' <span class="sts-cong" title="Mes cerrado: el indicador quedó congelado y ya no varía">🔒</span>' : ''}</td><td class="mono">${n('ant')}</td><td class="mono">${n('sol')}</td>`
                     + `<td class="mono parte">${otros}</td><td class="mono fuerte">${n('acum')}</td><td class="mono aut">${n('aut')}${partes}</td>`
                     + `<td class="mono fuerte">${n('pend')}</td><td class="mono">${pctTxt(f.pct)}</td>`
                     + `<td class="mono"${fueraTxt}>${f.fuera ? nDet(f.fuera, `cuadro|${pl}|${mes}|fuera`, pctTxt(f.pctArea)) : pctTxt(f.pctArea)}</td></tr>`;
@@ -12016,7 +12035,7 @@ async function maybeAutoStartTour() {
                 </div></div>
                 ${avisos.map((t) => `<div class="sts-aviso"><span>${esc(t)}</span></div>`).join('')}
                 <div class="sts-paneles">${panel('P1')}${panel('P2')}</div>
-                <p class="sts-nota">Pendiente anterior + solicitados ± otros = acumulado; acumulado − autorizados = pendientes. <b>Solicitados</b>: RMD con fecha de ingreso real en el mes (AAAAMMDD al inicio de la Observación; sin ella, la Fecha Registro). <b>Autorizados</b>: por fecha de autorización, no por estado (versiones Autorizadas o Suspendidas con Fecha Autorización en el mes); <b>del mes</b> si su ingreso real es del mes y <b>del backlog</b> el resto. <b>Pendientes</b> (backlog del mes siguiente): RMD Ingresados, solicitudes abiertas y suspendidos por reeditar, de ese mes o antiguos, mientras el RMD no tenga otra versión Ingresada o Autorizada (no cuentan los que SAP suspende al autorizar otra versión). <b>Otros</b>: lo que entró o salió del backlog por otro camino, para que la suma cuadre. <b>% total</b> = autorizados / acumulado; <b>% del área</b> = autorizados / (acumulado − pendientes en el flujo de Producción sin aprobar o en control de cambio). Meta: no menos de ${META_AUTORIZADOS} %. Sin Cancelados ni solicitudes rechazadas. Haz clic en un número para ver sus RMD.</p>
+                <p class="sts-nota">Pendiente anterior + solicitados ± otros = acumulado; acumulado − autorizados = pendientes. <b>Solicitados</b>: RMD con fecha de ingreso real en el mes (AAAAMMDD al inicio de la Observación; sin ella, la Fecha Registro). <b>Autorizados</b>: por fecha de autorización, no por estado (versiones Autorizadas o Suspendidas con Fecha Autorización en el mes); <b>del mes</b> si su ingreso real es del mes y <b>del backlog</b> el resto. <b>Pendientes</b> (backlog del mes siguiente): RMD Ingresados, solicitudes abiertas y suspendidos por reeditar, de ese mes o antiguos, mientras el RMD no tenga otra versión Ingresada o Autorizada (no cuentan los que SAP suspende al autorizar otra versión). <b>Otros</b>: lo que entró o salió del backlog por otro camino, para que la suma cuadre. <b>% total</b> = autorizados / acumulado; <b>% del área</b> = autorizados / (acumulado − pendientes en el flujo de Producción sin aprobar o en control de cambio). Meta: no menos de ${META_AUTORIZADOS} %. Sin Cancelados ni solicitudes rechazadas. Los meses cerrados quedan <b>congelados</b> (🔒) con el primer cálculo hecho después de su cierre; lo que cambie después entra al mes siguiente por «± Otros». Haz clic en un número para ver sus RMD.</p>
             </section>`;
         }
         function anillo(pct) {
