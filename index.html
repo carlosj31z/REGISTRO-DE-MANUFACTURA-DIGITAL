@@ -11547,18 +11547,37 @@ async function maybeAutoStartTour() {
         // Ruta 1: las etapas pendientes del programa de la planta, contadas como en Producción (una vez cada etapa, aunque
         // la compartan varios productos), repartidas por su Estatus. Autorizado = los autorizados del mes del cuadro (lo que
         // se autorizó en el mes), y el total (pendientes + autorizados del mes) es el universo con que se trabaja el mes.
-        function ruta1DePlanta(guardado, pl) {
+        // retirados: [{ codigo, producto }] de productos que estuvieron en alguna carga del horizonte del programa y ya no están
+        // en la última: sus etapas aún pendientes van aparte (c.ret, cat 'ret'), sin sumar a los pendientes; lo que ya se
+        // autorizó sigue contando en el Autorizado (que es el del cuadro del mes).
+        function ruta1DePlanta(guardado, pl, retirados) {
             const c = contadorVacio();
             const data = guardado && Array.isArray(guardado.data) ? guardado.data : [];
-            c.productos = 0; c.autEtapas = 0;
+            c.productos = 0; c.autEtapas = 0; c.ret = 0; c.retProductos = 0;
             if (!data.length) { c.sinDatos = true; return c; }
-            const materiales = new Map();
-            data.forEach((p) => { const cod = normalizeMaterialCode(p.codigo); if (cod && !materiales.has(cod)) materiales.set(cod, p.producto || ''); });
-            const productos = Array.from(materiales, ([cod, desc]) => {
-                const r = evaluarMaterialPreciso(cod);
-                return { material: cod, descripcion: r.descripcion || desc, r, fechaDe: () => null, motivoRevisar: !r.conArbol ? (r.sinArbol || true) : '' };
-            });
+            const aProductos = (lista) => {
+                const materiales = new Map();
+                lista.forEach((p) => { const cod = normalizeMaterialCode(p.codigo); if (cod && !materiales.has(cod)) materiales.set(cod, p.producto || ''); });
+                return Array.from(materiales, ([cod, desc]) => {
+                    const r = evaluarMaterialPreciso(cod);
+                    return { material: cod, descripcion: r.descripcion || desc, r, fechaDe: () => null, motivoRevisar: !r.conArbol ? (r.sinArbol || true) : '' };
+                });
+            };
+            const productos = aProductos(data);
             c.productos = productos.length;
+            const enPrograma = new Set(productos.map((p) => p.material));
+            const fuera = aProductos((retirados || []).filter((p) => !enPrograma.has(normalizeMaterialCode(p.codigo))));
+            c.retProductos = fuera.length;
+            if (fuera.length) {
+                const etapasPrograma = new Set(etapasDeProductos(productos, manualAutorizados).filas.map((f) => `${f.codigo}|${f.fija}`));
+                etapasDeProductos(fuera, manualAutorizados).filas.forEach((f) => {
+                    // Una etapa compartida con un producto que sigue programado ya cuenta en el programa.
+                    if (f.estado !== 'pendiente' || etapasPrograma.has(`${f.codigo}|${f.fija}`)) return;
+                    c.ret++;
+                    c.items.push({ pl, m: f.codigo, producto: f.descripcion || '', etapa: f.fija || '', d: f.d, cat: 'ret', estatus: estatusDeFila(f), resp: '',
+                        productos: f.productos, revisar: f.fija ? undefined : (f.revisar || true) });
+                });
+            }
             const { filas } = etapasDeProductos(productos, manualAutorizados);
             guardarMigracionClaves();
             filas.forEach((f) => {
@@ -11573,15 +11592,21 @@ async function maybeAutoStartTour() {
         async function calcularRuta1() {
             if (!rmdPreciso || !rmdPreciso.totalEntradas) return { error: 'Faltan los RMD de SAP: usa «Enviar a Status RMD» en el portal o carga el Exportado RMD en Producción.' };
             await asegurarMotorArboles();
-            const [d1, d2, a1, a2] = await Promise.all([storeGet('prod_data_planta1'), storeGet('prod_data_planta2'),
-                storeGet('prod_archivo_original_planta1'), storeGet('prod_archivo_original_planta2')]);
-            const r = { P1: ruta1DePlanta(d1, 'P1'), P2: ruta1DePlanta(d2, 'P2'), sinArbol: motorArboles.estado !== 'listo' };
+            const [d1, d2, a1, a2, c1, c2] = await Promise.all([storeGet('prod_data_planta1'), storeGet('prod_data_planta2'),
+                storeGet('prod_archivo_original_planta1'), storeGet('prod_archivo_original_planta2'), storeGet('prod_acumulado_planta1'), storeGet('prod_acumulado_planta2')]);
+            const r = { sinArbol: motorArboles.estado !== 'listo' };
             // Horizonte del Programa de Producción: 2 semanas desde la semana en que se cargó (lunes de esa semana + 13 días).
-            [['P1', a1], ['P2', a2]].forEach(([pl, a]) => {
+            // El programa cambia entre cargas: los productos que estuvieron en alguna carga del horizonte y ya no están en la
+            // última (prod_acumulado: s = primera carga en que ya no estaba) se muestran aparte como retirados.
+            [['P1', d1, a1, c1], ['P2', d2, a2, c2]].forEach(([pl, d, a, acc]) => {
                 const f = a && a.fechaCarga ? dayjs(a.fechaCarga) : null;
-                if (!f || !f.isValid()) return;
-                const ini = f.startOf('day').subtract((f.day() + 6) % 7, 'day');
-                r[pl].horizonte = { ini, fin: ini.add(13, 'day'), carga: f };
+                const ini = f && f.isValid() ? f.startOf('day').subtract((f.day() + 6) % 7, 'day') : null;
+                const retirados = [];
+                if (ini && acc && acc.items) Object.entries(acc.items).forEach(([cod, it]) => {
+                    if (it && it.s && Date.parse(it.s) >= ini.valueOf() && Date.parse(it.e) <= ini.add(14, 'day').valueOf()) retirados.push({ codigo: cod, producto: it.p || '' });
+                });
+                r[pl] = ruta1DePlanta(d, pl, retirados);
+                if (ini) r[pl].horizonte = { ini, fin: ini.add(13, 'day'), carga: f };
             });
             return r;
         }
@@ -12126,7 +12151,7 @@ async function maybeAutoStartTour() {
         const leyenda = `<div class="sts-leyenda">${tagResp('PRO')}<span class="sts-chip">Producción</span>${tagResp('DOC')}<span class="sts-chip">QA · Documentación</span>${tagResp('ASC')}<span class="sts-chip">Asuntos regulatorios / CC</span></div>`;
         function htmlRuta1(d) {
             const r1 = d.r1, mes = d.per.hasta.format('YYYY-MM');
-            const extra = (pl) => (r1[pl].sinDatos ? ' <span class="sts-chip">sin Programa de Producción cargado</span>' : ` <span class="sts-chip">${plural(r1[pl].productos, 'producto programado', 'productos programados')}${r1[pl].horizonte ? ` · ${esc(r1[pl].horizonte.ini.format('DD/MM'))}–${esc(r1[pl].horizonte.fin.format('DD/MM'))}` : ''}</span>`);
+            const extra = (pl) => (r1[pl].sinDatos ? ' <span class="sts-chip">sin Programa de Producción cargado</span>' : ` <span class="sts-chip">${plural(r1[pl].productos, 'producto programado', 'productos programados')}${r1[pl].horizonte ? ` · ${esc(r1[pl].horizonte.ini.format('DD/MM'))}–${esc(r1[pl].horizonte.fin.format('DD/MM'))}` : ''}</span>${r1[pl].ret ? ` <span class="sts-chip" title="Productos que estuvieron en el programa de estas 2 semanas y ya no están en la última carga: sus etapas sin autorizar no suman a los pendientes">${nDet(r1[pl].ret, `r1|${pl}|ret`, plural(r1[pl].ret, 'etapa retirada del programa', 'etapas retiradas del programa'))}</span>` : ''}`);
             const cuerpo = r1.error ? `<div class="sts-aviso"><span>${esc(r1.error)}</span></div>`
                 : (r1.sinArbol ? '<div class="sts-aviso"><span>No se pudo cargar el árbol de materiales de SAP: solo se cuenta el RMD del propio código de cada producto.</span></div>' : '')
                   + ['P1', 'P2'].map((pl) => htmlRuta(r1[pl], pl, 'r1', { autKey: `cuadro|${pl}|${mes}|aut`, extra: extra(pl),
@@ -12137,7 +12162,7 @@ async function maybeAutoStartTour() {
                     <div class="sts-seccion-sub">RMD pendientes por etapa y responsable · ${esc(d.per.mesAnio)} · Programa PLA ${esc(rangoPrograma(d))}</div>
                 </div>${leyenda}</div>
                 ${cuerpo}
-                <p class="sts-nota">Pendientes: las etapas del programa sin autorizar, contadas como en Producción (cada etapa una vez, aunque la compartan varias presentaciones) y repartidas según su Estatus. Autorizado: los autorizados del mes del cuadro (${esc(d.per.mesNombre.toLowerCase())}). El total del programa (pendientes + autorizados del mes) es el universo del mes; % de avance del programa = autorizados / total. Backlog: los pendientes del cuadro al cierre de ${esc(d.per.mesAnterior.toLowerCase())}; % de avance del backlog DOC = autorizados del backlog en el mes / backlog. Programa PLA: el horizonte de 2 semanas desde la semana en que se cargó el Programa de Producción de cada planta.</p>
+                <p class="sts-nota">Pendientes: las etapas del programa sin autorizar, contadas como en Producción (cada etapa una vez, aunque la compartan varias presentaciones) y repartidas según su Estatus. Autorizado: los autorizados del mes del cuadro (${esc(d.per.mesNombre.toLowerCase())}). El total del programa (pendientes + autorizados del mes) es el universo del mes; % de avance del programa = autorizados / total. Backlog: los pendientes del cuadro al cierre de ${esc(d.per.mesAnterior.toLowerCase())}; % de avance del backlog DOC = autorizados del backlog en el mes / backlog. Programa PLA: el horizonte de 2 semanas desde la semana en que se cargó el Programa de Producción de cada planta. Si en ese horizonte se retiran productos del programa, sus etapas sin autorizar se muestran aparte («retiradas del programa») y no suman a los pendientes; lo ya autorizado sigue contando.</p>
             </section>`;
         }
         function htmlTablaCar(d) {
@@ -12620,9 +12645,10 @@ async function maybeAutoStartTour() {
 
         // Ruta 1 y 2: lo que cuenta cada casilla (Pendientes, Borrador, …, Autorizado), cada responsable y el total.
         const NOMBRES_RUTA = { pend: 'Pendientes', bor: 'Borrador', ing: 'Ingresar', flu: 'Flujo SAP', rev: 'Por revisión', aut: 'Autorizados', cc: 'Control de cambio',
-            ccPro: 'Control de cambio · PRO', ccAsc: 'Control de cambio · ASC', sinEst: 'Pendientes sin estatus', doc: 'Pendientes de DOC', pro: 'Pendientes de PRO', asc: 'Pendientes de ASC', todo: 'Todo' };
+            ccPro: 'Control de cambio · PRO', ccAsc: 'Control de cambio · ASC', sinEst: 'Pendientes sin estatus', ret: 'Retirados del programa sin autorizar', doc: 'Pendientes de DOC', pro: 'Pendientes de PRO', asc: 'Pendientes de ASC', todo: 'Todo' };
         function enCasilla(it, k) {
-            if (k === 'todo') return true;
+            if (k === 'ret') return it.cat === 'ret';
+            if (k === 'todo') return it.cat !== 'ret';
             if (k === 'aut') return it.cat === 'aut';
             if (it.cat !== 'pend') return false;
             const campo = CAMPO_ESTATUS[it.estatus] || '';
