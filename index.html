@@ -13111,6 +13111,9 @@ async function maybeAutoStartTour() {
         }
 
         // ---------- Horas efectivas (se llenan a mano) ----------
+        // Oculta por ahora (pedido de Carlos, 2026-11-02): no se muestra en Indicadores. El código y lo guardado
+        // en ind_horas_efectivas se mantienen; para volver a mostrarla, poner MOSTRAR_HORAS = true.
+        const MOSTRAR_HORAS = false;
         // Horas efectivas de analistas y asistentes por planta y mes (descontando vacaciones, descansos médicos…), para mostrar
         // cuánto se autorizó con las horas que hubo. Se guardan en ind_horas_efectivas: { 'AAAA-MM': { P1: { an, as }, P2: {…} } }.
         function htmlHoras(d) {
@@ -13175,7 +13178,7 @@ async function maybeAutoStartTour() {
 
         function pintar() {
             const cont = document.getElementById('stsContenido');
-            cont.innerHTML = htmlMeta(ultimo) + htmlLogica(ultimo) + htmlResumen(ultimo) + htmlPrograma(ultimo) + htmlRuta1(ultimo) + htmlRuta2(ultimo) + htmlHoras(ultimo);
+            cont.innerHTML = htmlMeta(ultimo) + htmlLogica(ultimo) + htmlResumen(ultimo) + htmlPrograma(ultimo) + htmlRuta1(ultimo) + htmlRuta2(ultimo) + (MOSTRAR_HORAS ? htmlHoras(ultimo) : '');
             // Las semanas, desde la más antigua: se deja a la vista la última.
             cont.querySelectorAll('.sts-meses.semanas').forEach((el) => { el.scrollTop = el.scrollHeight; });
             dibujarGraficos(ultimo);
