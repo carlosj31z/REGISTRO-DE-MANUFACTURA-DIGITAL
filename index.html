@@ -12028,6 +12028,17 @@ async function maybeAutoStartTour() {
         }
         // «¿Cómo se calculan estos números?»: la lógica de la pestaña en palabras simples, con los datos del status que se ve
         // (mes, periodo, backlog de cada planta, meses con cifra oficial, meta). Se abre y cierra; se recuerda por navegador.
+        // El recuadro «¿Cómo se calculan estos números?» se cierra con un clic fuera de él o con Escape (pedido de Carlos).
+        (function cerrarLogicaAlSalir() {
+            const cerrar = (det) => { det.open = false; try { localStorage.setItem('sts_logica_abierta', '0'); } catch (e) { /* sin almacenamiento */ } };
+            document.addEventListener('click', (ev) => {
+                document.querySelectorAll('#tab-status details.sts-logica[open]').forEach((det) => { if (!det.contains(ev.target)) cerrar(det); });
+            }, true);
+            document.addEventListener('keydown', (ev) => {
+                if (ev.key !== 'Escape') return;
+                document.querySelectorAll('#tab-status details.sts-logica[open]').forEach(cerrar);
+            });
+        })();
         function htmlLogica(d) {
             let abierto = false;
             try { abierto = localStorage.getItem('sts_logica_abierta') === '1'; } catch (e) { /* sin almacenamiento */ }
