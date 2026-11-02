@@ -11758,13 +11758,37 @@ async function maybeAutoStartTour() {
         const estadoSap = (it) => normalizeEstadoRmd(it.estado);
         const esAutorizadoSap = (it) => ['AUTORIZADO', 'SUSPENDIDO'].includes(estadoSap(it));
         const cuentaEnRuta2 = (it) => !!it.planta && estadoSap(it) !== 'SOLICITUD RECHAZADA';
+        // Estatus de una caracterización: el elegido aquí (val_estatus_caracterizacion) o, si no hay, el de su etapa en las pestañas
+        // CARACTERIZACIÓN / Producción (estatusEtapa con la clave material::ETAPA), que es donde se sigue el listado del área.
+        let matDeRmdRef = null, matDeRmd = null;
+        function materialDeCaract(it) {
+            const filas = (rmdPrecisoDatos && rmdPrecisoDatos.filas) || [];
+            if (matDeRmdRef !== filas || !matDeRmd) {
+                matDeRmd = new Map(); matDeRmdRef = filas;
+                filas.forEach(([rmd, , , , , , defecto, , recetas, , sol]) => {
+                    const mat = defecto || ((recetas || [])[0] || [])[0] || '';
+                    if (!mat) return;
+                    if (rmd && !matDeRmd.has('R' + rmd)) matDeRmd.set('R' + rmd, mat);
+                    if (sol && !matDeRmd.has('S' + sol)) matDeRmd.set('S' + sol, mat);
+                });
+            }
+            return (it.codigo && matDeRmd.get('R' + it.codigo)) || (it.sol && matDeRmd.get('S' + it.sol)) || '';
+        }
+        function estatusDeCaract(it) {
+            const e = estatusCar[it.id];
+            if (e && e.e) return { e: e.e, r: e.r || '', deEtapa: false };
+            const mat = materialDeCaract(it), fija = mapEtapaAFija(normalizeEtapa(it.etapa));
+            if (!mat || !fija) return { e: '', r: '', deEtapa: false };
+            const k = responsableKey(normalizeMaterialCode(mat), fija), est = estatusEtapa.get(k) || '';
+            return { e: est, r: est ? (responsablesEtapa.get(k) || '') : '', deEtapa: !!est };
+        }
         function ruta2(items) {
             const r = { P1: contadorVacio(), P2: contadorVacio() };
             (items || []).forEach((it) => {
                 if (!cuentaEnRuta2(it)) return;
                 const c = r[it.planta];
                 if (esAutorizadoSap(it)) { c.aut++; c.items.push({ pl: it.planta, car: it, cat: 'aut', estatus: '', resp: '' }); return; }
-                const e = estatusCar[it.id] || {};
+                const e = estatusDeCaract(it);
                 sumarPendiente(c, e.e || '', e.r || '');
                 c.items.push({ pl: it.planta, car: it, cat: 'pend', estatus: e.e || '', resp: clasePendiente(e.e || '', e.r || '').resp });
             });
@@ -12201,7 +12225,7 @@ async function maybeAutoStartTour() {
                         <li><b>% del área</b> = lo mismo sin lo que no depende de RMD (flujo de Producción sin aprobar o pendiente de CC). Meta: <b>${META_AUTORIZADOS} % o más</b>.</li>
                         <li><b>% Backlog DOC</b> = autorizados del backlog en ${esc(mes)} / backlog de ${esc(mes)}. Arranca en 0 cada mes.</li></ul></div>
                     <div><h4>6. Rutas</h4><ul><li><b>Ruta 1, Programa</b>: etapas pendientes del último Programa de Producción cargado de cada planta, por estatus y responsable. Programa PLA = el periodo elegido arriba (<b>${esc(d.per.texto)}</b>).</li>
-                        <li><b>Ruta 2, Caracterizaciones</b>: RMD con Motivo CARACTERIZACION. Autorizado = Autorizado o Suspendido; las solicitudes rechazadas no cuentan.</li>
+                        <li><b>Ruta 2, Caracterizaciones</b>: RMD con Motivo CARACTERIZACION. Autorizado = Autorizado o Suspendido; las solicitudes rechazadas no cuentan. El Estatus de cada pendiente es el elegido en la tabla de caracterizaciones de abajo o, si no tiene, el de su etapa en la pestaña CARACTERIZACIÓN (el mismo de Producción).</li>
                         <li>Responsables: <b>PRO</b> Producción · <b>DOC</b> QA Documentación · <b>ASC</b> Aseguramiento de la Calidad / CC. P1 = ATE, P2 = LIMA.</li></ul></div>
                 </div>
             </details>`;
@@ -12402,7 +12426,7 @@ async function maybeAutoStartTour() {
             const items = d.car.items.filter((it) => it.planta && (!vista.planta || it.planta === vista.planta) && (!vista.soloPendientes || (cuentaEnRuta2(it) && !esAutorizadoSap(it))));
             items.sort((a, b) => (a.planta || '').localeCompare(b.planta || '') || (a.fechaSolicitud || '').localeCompare(b.fechaSolicitud || '') || a.descripcion.localeCompare(b.descripcion));
             const filas = items.map((it) => {
-                const e = estatusCar[it.id] || {};
+                const e = estatusDeCaract(it);
                 const resuelto = esAutorizadoSap(it) || !cuentaEnRuta2(it);
                 const idAttr = esc(JSON.stringify(it.id));
                 const sel = resuelto ? `<span class="sts-estado ok">${esAutorizadoSap(it) ? 'AUTORIZADO' : 'No cuenta'}</span>`
