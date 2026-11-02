@@ -12153,7 +12153,7 @@ async function maybeAutoStartTour() {
                 </div>
             </div>`;
         }
-        const leyenda = `<div class="sts-leyenda">${tagResp('PRO')}<span class="sts-chip">Producción</span>${tagResp('DOC')}<span class="sts-chip">QA · Documentación</span>${tagResp('ASC')}<span class="sts-chip">Asuntos regulatorios / CC</span></div>`;
+        const leyenda = `<div class="sts-leyenda">${tagResp('PRO')}<span class="sts-chip">Producción</span>${tagResp('DOC')}<span class="sts-chip">QA · Documentación</span>${tagResp('ASC')}<span class="sts-chip">Aseguramiento de la Calidad / CC</span></div>`;
         function htmlRuta1(d) {
             const r1 = d.r1, mes = d.per.hasta.format('YYYY-MM');
             const extra = (pl) => (r1[pl].sinDatos ? ' <span class="sts-chip">sin Programa de Producción cargado</span>' : ` <span class="sts-chip">${plural(r1[pl].productos, 'producto programado', 'productos programados')}${r1[pl].horizonte ? ` · ${esc(r1[pl].horizonte.ini.format('DD/MM'))}–${esc(r1[pl].horizonte.fin.format('DD/MM'))}` : ''}</span>`);
