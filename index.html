@@ -11277,10 +11277,10 @@ async function maybeAutoStartTour() {
         //    mes (SAP suspende la versión anterior al autorizar la nueva; si en el mes se autorizan dos versiones, cuentan las dos).
         //    autBk: los que no tienen su ingreso real en el mes (venían del backlog); el resto son del mes.
         //  - pend (Pendientes al cierre del mes = backlog del mes siguiente): RMD Ingresados (desde su ingreso real o su registro),
-        //    solicitudes abiertas (Solicitado o Solicitud Aprobada, desde su Fecha Solicitud) y los Suspendidos por reeditar (masivos,
-        //    nueva edición) suspendidos desde 2026 (con fecha en la Trazabilidad de SAP), mientras el RMD no tenga otra versión Ingresada o Autorizada. No cuentan los que
-        //    SAP suspende al autorizar otra versión. La fecha de suspensión sale de la Trazabilidad de SAP (script v1.108.0+, desde
-        //    2026); un suspendido de antes (sin fecha en la Trazabilidad) no cuenta (CONTAR_SUSPENDIDOS_SIN_FECHA).
+        //    solicitudes abiertas (Solicitado o Solicitud Aprobada, desde su Fecha Solicitud) y los Suspendidos con «masivo» en
+        //    Observaciones (RX_MASIVO), de cualquier fecha, mientras el RMD no tenga otra versión Solicitada, Ingresada o Autorizada.
+        //    No cuentan los que SAP suspende al autorizar otra versión. La fecha de suspensión sale de la Trazabilidad de SAP
+        //    (script v1.108.0+, desde 2026); un masivo suspendido antes (sin fecha) cuenta desde antes del cuadro.
         //  - fuera: de los pendientes, los que no dependen del área: en el flujo de Producción sin aprobar (Producción Estado
         //    «Enviado», script v1.109.0+, u Observación «PEND JEFE/GER») o en control de cambio (Observación «PEND CC», o
         //    Ingresado con Fecha Autorización: se reabrió). Es una foto: el de cada mes cerrado queda fijo con la última
@@ -11320,16 +11320,21 @@ async function maybeAutoStartTour() {
         // opciones: { traz (val_rmd_trazabilidad), previo (el cuadro guardado antes, para los «fuera» fijos de los meses cerrados) }.
         // Versión de las reglas del cuadro: un mes cerrado solo se congela con un cálculo hecho con estas reglas (si cambian,
         // se vuelve a calcular y se congela con las nuevas).
-        const REGLAS_CUADRO = 3;
+        const REGLAS_CUADRO = 4;
         // Pedido del área (01/11/2026): el backlog vuelve a la lógica antigua, solo RMD Ingresados y solicitudes abiertas. Los
         // suspendidos (masivos) no salen de SAP: el área escribe a mano cuántos masivos quedan pendientes cada mes (columna
         // «Masivos pendientes» de la tabla de datos manuales), que se suman a los pendientes al mostrar el cuadro.
-        const CONTAR_SUSPENDIDOS = false;
+        // Pedido del área (02/11/2026, Noelia): el backlog son los Ingresados y las solicitudes abiertas (de meses anteriores y del
+        // actual) y los Suspendidos que tienen la palabra «masivo» en Observaciones (salen de SAP; ya no se escriben a mano).
+        const CONTAR_SUSPENDIDOS = true;
+        const RX_MASIVO = /MASIV/i;
+        // Los «Masivos pendientes» escritos a mano ya no se suman (los masivos salen de SAP); la columna queda solo de referencia.
+        const SUMAR_MASIVOS_A_MANO = false;
         // Como en la lógica antigua del área (backlog de octubre: 170 en Ate y 100 en Lima = los Ingresados), las solicitudes
         // abiertas (Solicitado / Solicitud Aprobada, sin RMD todavía) no son backlog.
-        const CONTAR_SOLICITUDES_ABIERTAS = false;
+        const CONTAR_SOLICITUDES_ABIERTAS = true;
         // Suspendidos sin fecha de suspensión en la Trazabilidad (suspendidos antes de 2026) y sin versión siguiente: no cuentan.
-        const CONTAR_SUSPENDIDOS_SIN_FECHA = false;
+        const CONTAR_SUSPENDIDOS_SIN_FECHA = true;   // solo masivos (RX_MASIVO)
         function cuadroDesdeVersiones(versiones, generado, opciones) {
             const { traz, previo } = opciones || {};
             const ahora = Date.parse(generado || '') || Date.now(), mesSap = dayjs(ahora).format('YYYY-MM');
@@ -11383,6 +11388,7 @@ async function maybeAutoStartTour() {
                 if (estado === 'INGRESADO' || (CONTAR_SOLICITUDES_ABIERTAS && ES_SOLICITUD_ABIERTA.has(estado))) tramos.push([v, tI, Infinity]);
                 else if ((estado === 'AUTORIZADO' || estado === 'SUSPENDIDO') && v.fAut) tramos.push([v, tI, Math.min(v.fAut.endOf('day').valueOf(), ahora)]);
                 if (estado === 'SUSPENDIDO') {
+                    if (!RX_MASIVO.test(v.obs || '')) return;   // solo los masivos son backlog
                     const t = fTraz(v), tX = t && t.susp;
                     if (tX) v.fSusp = dayjs(tX);
                     const otras = [...new Set((v.grupos || []).flatMap((g) => grupos.get(g) || []))]
@@ -11929,7 +11935,7 @@ async function maybeAutoStartTour() {
             const cuadro = ind && ind.v === 3 ? ind : (ind ? cuadroDesdeDetalle(ind.generado, traz) : null);
             const porMes = (cuadro && cuadro.porMes) || {};
             // Masivos pendientes escritos a mano por el área (ind_horas_efectivas[mes][planta].ma): se suman a los pendientes del mes.
-            const masivos = (m, pl) => { const h = ((horasEf || {})[m.format('YYYY-MM')] || {})[pl]; return h && Number.isFinite(h.ma) ? h.ma : 0; };
+            const masivos = (m, pl) => { if (!SUMAR_MASIVOS_A_MANO) return 0; const h = ((horasEf || {})[m.format('YYYY-MM')] || {})[pl]; return h && Number.isFinite(h.ma) ? h.ma : 0; };
             const datoSap = (m, pl, k) => { const x = (porMes[m.format('YYYY-MM')] || {})[pl]; return x && Number.isFinite(x[k]) ? x[k] : null; };
             const dato = (m, pl, k) => { const v = datoSap(m, pl, k); return v !== null && k === 'pend' ? v + masivos(m, pl) : v; };
             const fila = (m, pl) => {
@@ -12860,7 +12866,7 @@ async function maybeAutoStartTour() {
                 const tTot = tAn + tAs;
                 return `<div class="sts-panel"><div class="sts-planta">${PLANTAS[pl]}</div>
                     <div class="sts-tabla-wrap sts-meses"><table class="sts-tabla sts-tabla-horas">
-                        <thead><tr><th>Mes</th><th>Horas analistas</th><th>Horas asistentes</th><th>Total horas</th><th title="Autorizados del cuadro del mes (por fecha de autorización)">Autorizados</th><th title="Autorizados por cada 100 horas efectivas">Autorizados por 100 h</th><th title="Masivos (suspendidos para reeditar) que quedan pendientes al cierre del mes, escritos a mano: se suman a los Pendientes del cuadro del mes">Masivos pendientes</th></tr></thead>
+                        <thead><tr><th>Mes</th><th>Horas analistas</th><th>Horas asistentes</th><th>Total horas</th><th title="Autorizados del cuadro del mes (por fecha de autorización)">Autorizados</th><th title="Autorizados por cada 100 horas efectivas">Autorizados por 100 h</th><th title="Solo de referencia: los masivos ya salen de SAP (Suspendidos con «masivo» en Observaciones) y no se suman">Masivos pendientes (ref.)</th></tr></thead>
                         <tbody>${filas}<tr class="total"><td class="periodo">Total ${p.anio}</td><td class="mono">${conHoras ? num(tAn) : '—'}</td><td class="mono">${conHoras ? num(tAs) : '—'}</td>
                         <td class="mono">${conHoras ? num(tTot) : '—'}</td><td class="mono">${conHoras ? tAut : '—'}</td><td class="mono">${tTot ? num((tAut / tTot) * 100) : '—'}</td><td></td></tr></tbody>
                     </table></div></div>`;
@@ -12871,7 +12877,7 @@ async function maybeAutoStartTour() {
                     <div class="sts-seccion-sub">Se llenan a mano cada mes · se guardan solas al salir de la casilla</div>
                 </div></div>
                 <div class="sts-paneles">${panel('P1')}${panel('P2')}</div>
-                <p class="sts-nota">Horas efectivas: las trabajadas en RMD en el mes, sin vacaciones, descansos médicos ni otras ausencias. Con ellas se ve cuánto se autorizó con las horas que hubo: <b>autorizados por 100 h</b> = autorizados del mes / total de horas × 100 (los autorizados son los del cuadro del mes, por fecha de autorización). El total del año suma solo los meses con horas. <b>Masivos pendientes</b>: los masivos (suspendidos para reeditar) que quedan pendientes al cierre del mes; SAP no los distingue, así que se escriben a mano y se suman a los <b>Pendientes</b> del cuadro de ese mes (y al backlog del mes siguiente), aunque el mes esté congelado.</p>
+                <p class="sts-nota">Horas efectivas: las trabajadas en RMD en el mes, sin vacaciones, descansos médicos ni otras ausencias. Con ellas se ve cuánto se autorizó con las horas que hubo: <b>autorizados por 100 h</b> = autorizados del mes / total de horas × 100 (los autorizados son los del cuadro del mes, por fecha de autorización). El total del año suma solo los meses con horas. <b>Masivos pendientes</b>: solo de referencia. Los masivos ya salen de SAP (los Suspendidos con «masivo» en Observaciones cuentan en los <b>Pendientes</b> hasta que su siguiente versión se solicite o ingrese), así que lo escrito aquí no se suma.</p>
             </section>`;
         }
         // Vuelve a leer lo guardado justo antes de escribir, para no pisar lo que otra persona cambió.
