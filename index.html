@@ -11081,6 +11081,9 @@ async function maybeAutoStartTour() {
         :is(#tab-status, #prodAcumulado) .sts-rama .sts-caja { height:56px; font-size:24px; }
         :is(#tab-status, #prodAcumulado) .sts-pie { display:flex; justify-content:center; align-items:center; gap:5px; flex-wrap:wrap; font-size:11px; }
         :is(#tab-status, #prodAcumulado) .sts-kpis.cuatro { grid-template-columns:repeat(4, minmax(0, 1fr)); }
+        :is(#tab-status, #prodAcumulado) .sts-regla { border:1px dashed var(--field-border); border-radius:10px; padding:8px 12px; margin-top:10px; font-size:12px; line-height:1.55; color:var(--app-text); background:var(--surface-1-faint); }
+        :is(#tab-status, #prodAcumulado) .sts-regla b.n { font-variant-numeric:tabular-nums; color:rgb(var(--plum-rgb)); }
+        :is(#tab-status, #prodAcumulado) .sts-regla .sts-regla-f { display:block; color:var(--slate-400); font-size:11.5px; }
         :is(#tab-status, #prodAcumulado) .sts-grafico.baja { height:170px; }
         :is(#tab-status, #prodAcumulado) .sts-tabla td.parte, :is(#tab-status, #prodAcumulado) .sts-tabla th.parte { color:var(--slate-400); font-size:.92em; }
         :is(#tab-status, #prodAcumulado) .sts-paneles.uno { grid-template-columns:1fr; }
@@ -12023,15 +12026,15 @@ async function maybeAutoStartTour() {
             </div>`;
         }
         const TITULOS_CUADRO = {
-            ant: 'Backlog: pendientes al cierre del mes anterior (RMD Ingresados y los masivos pendientes escritos a mano)',
+            ant: 'Backlog: pendientes al cierre del mes anterior (RMD Ingresados, solicitudes abiertas y Suspendidos con «masivo» en Observaciones, de ese mes y de los anteriores)',
             sol: 'RMD con fecha de ingreso real en el mes (la fecha AAAAMMDD al inicio de la Observación; sin ella, la Fecha Registro)',
             otros: 'Lo que entró o salió del backlog sin ser un ingreso del mes ni una autorización: solicitudes nuevas, suspendidos por reeditar, cancelados, RMD que ya estaban en el backlog y se ingresaron en el mes. Así la suma cuadra',
             acum: 'Pendientes al cierre + autorizados del mes: todo lo que hubo que atender en el mes',
             aut: 'Por FECHA de autorización, no por estado: versiones Autorizadas o Suspendidas con Fecha Autorización en el mes (si en el mes se autorizan dos versiones del mismo RMD, cuentan las dos)',
             autMes: 'De los autorizados, los que tienen su ingreso real en el mes',
             autBk: 'De los autorizados, el resto: venían del backlog',
-            pend: 'Al cierre del mes (el mes en curso: a la fecha de los datos de SAP): RMD Ingresados, más los masivos pendientes escritos a mano en la tabla del final (SAP no los distingue)',
-            susp: 'Suspendidos por reeditar (suspendidos desde 2026, con fecha en la Trazabilidad de SAP) que al cierre no tienen otra versión Ingresada o Autorizada. No cuentan los que SAP suspende al autorizar otra versión',
+            pend: 'Al cierre del mes (el mes en curso: a la fecha de los datos de SAP): RMD Ingresados, solicitudes abiertas (Solicitado o Solicitud Aprobada) y Suspendidos con «masivo» en Observaciones, vengan del mes o de meses anteriores',
+            susp: 'Suspendidos masivos: con la palabra «masivo» en Observaciones y, al cierre, sin otra versión Solicitada, Ingresada o Autorizada. No cuentan los que SAP suspende al autorizar otra versión',
             fuera: 'Pendientes al cierre que no dependen del área: en el flujo de Producción sin aprobar (jefe / gerente) o en control de cambio',
             pct: `% total = Autorizados / Acumulado. Meta: no menos de ${META_AUTORIZADOS} %`,
             pctArea: `% del área = Autorizados / (Acumulado − pendientes que no dependen del área: flujo de Producción sin aprobar y control de cambio). Meta: no menos de ${META_AUTORIZADOS} %`
@@ -12057,12 +12060,39 @@ async function maybeAutoStartTour() {
                 <thead><tr><th>Mes</th>${th('ant', 'Pendiente anterior')}${th('sol', '+&nbsp;Solicitados')}${th('otros', '±&nbsp;Otros')}${th('acum', '=&nbsp;Acumulado')}${th('aut', '−&nbsp;Autorizados <small>del mes · backlog</small>')}${th('pend', '=&nbsp;Pendientes')}${th('pct', '% total')}${th('pctArea', '% del área')}</tr></thead>
                 <tbody>${x.filas.map((f) => fila(MESES[dayjs(f.ini).month()], f, f.clave === clave ? 'actual' : '', f.clave)).join('')}${fila(`Total ${anio}`, x.total || vacio, 'total', 'total')}</tbody></table></div>`;
         }
+        // Regla del Backlog a la vista, con sus números: los pendientes de un mes (det[mes][planta].pend) repartidos en Ingresados,
+        // solicitudes abiertas y Suspendidos masivos. Para que cualquiera entienda de dónde sale la tarjeta Backlog sin preguntar.
+        function partesBacklog(c, mes, pl) {
+            const x = ((c && c.det && c.det[mes]) || {})[pl];
+            if (!x || !Array.isArray(x.pend)) return null;
+            const susp = new Set(x.susp || []), r = { total: x.pend.length, ing: 0, sol: 0, mas: 0 };
+            x.pend.forEach((id) => {
+                const v = versionDe((c.vers || {})[id]) || {};
+                if (susp.has(id)) r.mas++;
+                else if (!v.codigo || ES_SOLICITUD_ABIERTA.has(v.estado)) r.sol++;
+                else r.ing++;
+            });
+            return r;
+        }
+        function htmlReglaBacklog(p, pl, clave) {
+            const m = dayjs(clave + '-01'), ant = m.subtract(1, 'month').format('YYYY-MM');
+            const mesSap = dayjs(Date.parse(p.generado || '') || Date.now()).format('YYYY-MM');
+            const formula = (r) => `<b class="n">${r.ing}</b> Ingresados + <b class="n">${r.sol}</b> solicitudes abiertas + <b class="n">${r.mas}</b> Suspendidos masivos = <b class="n">${r.total}</b>`;
+            const bk = partesBacklog(p.cuadro, ant, pl), of = (BACKLOG_OFICIAL[ant] || {})[pl], kpi = p[pl].ant[2];
+            let linea1;
+            if (Number.isFinite(of)) linea1 = `Backlog de ${esc(nombreMes(clave).toLowerCase())}: <b class="n">${of}</b>, cifra oficial del área al cierre de ${esc(nombreMes(ant).toLowerCase())}${bk ? `. Con SAP de hoy saldría: ${formula(bk)}` : ''}.`;
+            else if (bk) linea1 = `Backlog de ${esc(nombreMes(clave).toLowerCase())} (pendientes al cierre de ${esc(nombreMes(ant).toLowerCase())}): ${formula(bk)}.`;
+            else linea1 = `Backlog de ${esc(nombreMes(clave).toLowerCase())}: ${kpi === null || kpi === undefined ? '—' : `<b class="n">${kpi}</b>`}.`;
+            const hoy = clave === mesSap ? partesBacklog(p.cuadro, clave, pl) : null;
+            const linea2 = hoy ? `<br>Hoy en SAP siguen pendientes (backlog del mes siguiente, si no se autorizan): ${formula(hoy)}.` : '';
+            return `<div class="sts-regla"><span class="sts-regla-f"><b>¿Qué es el Backlog?</b> Lo que quedó pendiente al cierre del mes anterior: RMD <b>Ingresados</b> + <b>solicitudes abiertas</b> (Solicitado o Solicitud Aprobada) + <b>Suspendidos</b> con la palabra «masivo» en Observaciones, vengan de ese mes o de meses anteriores. No cuentan Autorizados, Cancelados, rechazados ni los que SAP suspende al autorizar otra versión.</span>${linea1}${linea2}</div>`;
+        }
         function htmlPrograma(d) {
             const p = d.programa, meses = d.per.meses.map((m) => MESES[m.month()]), clave = d.per.hasta.format('YYYY-MM');
             const avisos = [];
             if (p.sinDatos || p.anterior) avisos.push('El cuadro del mes se llena con los datos del portal RMD al pulsar «Enviar a Status RMD» en el portal. Todavía no hay datos calculados con esta versión de la página.');
             else if (p.recalculado) avisos.push('Calculado con los datos de SAP guardados; con el próximo «Enviar a Status RMD» queda guardado con esta versión de la página.');
-            if (!p.sinDatos && !p.anterior && !p.conTrazabilidad) avisos.push('Sin la Trazabilidad de SAP no se conoce la fecha de suspensión: de los suspendidos por reeditar solo cuentan los que no tienen otra versión. Llega con «Enviar a Status RMD» (script 1.108.0 o posterior).');
+            if (!p.sinDatos && !p.anterior && !p.conTrazabilidad) avisos.push('Sin la Trazabilidad de SAP no se conoce la fecha de suspensión de los Suspendidos masivos: cuentan desde antes del cuadro mientras no tengan otra versión. Llega con «Enviar a Status RMD» (script 1.108.0 o posterior).');
             const panel = (pl) => `<div class="sts-panel">
                 <div class="sts-planta">${PLANTAS[pl]}</div>
                 <div class="sts-kpis cuatro">
@@ -12071,6 +12101,7 @@ async function maybeAutoStartTour() {
                     <div class="sts-kpi naranja"><small>Autorizados</small><b>${nDet(p[pl].aut[2], `cuadro|${pl}|${clave}|aut`)}</b>${p[pl].autBk[2] !== null ? `<span class="meta">${nDet(p[pl].autMes[2], `cuadro|${pl}|${clave}|autMes`)} del mes · ${nDet(p[pl].autBk[2], `cuadro|${pl}|${clave}|autBk`)} del backlog</span>` : ''}</div>
                     <div class="sts-kpi"><small>% autorizados</small><b>${pctTxt(p[pl].pct[2])}</b><span class="meta">del área ${p[pl].fuera[2] ? nDet(p[pl].fuera[2], `cuadro|${pl}|${clave}|fuera`, pctTxt(p[pl].pctArea[2])) : pctTxt(p[pl].pctArea[2])} · meta ${META_AUTORIZADOS} %</span></div>
                 </div>
+                ${htmlReglaBacklog(p, pl, clave)}
                 <div class="sts-grafico-titulo">RMD: backlog, solicitados y autorizados, ${esc(d.per.rango)}</div>
                 <div class="sts-grafico"><canvas id="stsGrafico${pl}" role="img" aria-label="Backlog, solicitados y autorizados de ${esc(meses.join(', '))}"></canvas></div>
                 <div class="sts-grafico-titulo">Cuadro del mes, como el del área de RMD</div>
@@ -12083,7 +12114,7 @@ async function maybeAutoStartTour() {
                 </div></div>
                 ${avisos.map((t) => `<div class="sts-aviso"><span>${esc(t)}</span></div>`).join('')}
                 <div class="sts-paneles">${panel('P1')}${panel('P2')}</div>
-                <p class="sts-nota">Pendiente anterior + solicitados ± otros = acumulado; acumulado − autorizados = pendientes. <b>Solicitados</b>: RMD con fecha de ingreso real en el mes (AAAAMMDD al inicio de la Observación; sin ella, la Fecha Registro). <b>Autorizados</b>: por fecha de autorización, no por estado (versiones Autorizadas o Suspendidas con Fecha Autorización en el mes); <b>del mes</b> si su ingreso real es del mes y <b>del backlog</b> el resto. <b>Pendientes</b> (backlog del mes siguiente): RMD Ingresados, como en la lógica del área, más los <b>masivos pendientes</b> escritos a mano en la tabla del final. <b>Otros</b>: lo que entró o salió del backlog por otro camino, para que la suma cuadre. <b>% total</b> = autorizados / acumulado; <b>% del área</b> = autorizados / (acumulado − pendientes en el flujo de Producción sin aprobar o en control de cambio). Meta: no menos de ${META_AUTORIZADOS} %. Sin Cancelados ni solicitudes rechazadas. Los meses cerrados quedan <b>congelados</b> (🔒) con el primer cálculo hecho después de su cierre; lo que cambie después entra al mes siguiente por «± Otros». Haz clic en un número para ver sus RMD.</p>
+                <p class="sts-nota">Pendiente anterior + solicitados ± otros = acumulado; acumulado − autorizados = pendientes. <b>Solicitados</b>: RMD con fecha de ingreso real en el mes (AAAAMMDD al inicio de la Observación; sin ella, la Fecha Registro). <b>Autorizados</b>: por fecha de autorización, no por estado (versiones Autorizadas o Suspendidas con Fecha Autorización en el mes); <b>del mes</b> si su ingreso real es del mes y <b>del backlog</b> el resto. <b>Pendientes</b> (backlog del mes siguiente): RMD Ingresados, solicitudes abiertas (Solicitado o Solicitud Aprobada) y Suspendidos con «masivo» en Observaciones, del mes y de los meses anteriores. <b>Otros</b>: lo que entró o salió del backlog por otro camino, para que la suma cuadre. <b>% total</b> = autorizados / acumulado; <b>% del área</b> = autorizados / (acumulado − pendientes en el flujo de Producción sin aprobar o en control de cambio). Meta: no menos de ${META_AUTORIZADOS} %. Sin Cancelados ni solicitudes rechazadas. Los meses cerrados quedan <b>congelados</b> (🔒) con el primer cálculo hecho después de su cierre; lo que cambie después entra al mes siguiente por «± Otros». Haz clic en un número para ver sus RMD.</p>
             </section>`;
         }
         function anillo(pct) {
@@ -12589,7 +12620,7 @@ async function maybeAutoStartTour() {
 
         // Cuadro del mes: las versiones de RMD (y solicitudes) que cuenta cada número, guardadas con el cálculo (det / vers).
         const NOMBRES_CUADRO = { ant: 'Pendiente anterior', sol: 'Solicitados', otros: 'Otros', acum: 'Acumulado', aut: 'Autorizados', autMes: 'Autorizados del mes',
-            autBk: 'Autorizados del backlog', pend: 'Pendientes', susp: 'Suspendidos por reeditar', fuera: 'Pendientes que no dependen del área' };
+            autBk: 'Autorizados del backlog', pend: 'Pendientes', susp: 'Suspendidos masivos', fuera: 'Pendientes que no dependen del área' };
         const diaIso = (t) => { const m = /^(\d{4})-(\d{2})-(\d{2})(~?)$/.exec(t || ''); return m ? `${m[3]}/${m[2]}/${m[1]}${m[4] ? ' (aprox.)' : ''}` : ''; };
         function detalleCuadro(d, pl, mes, k) {
             const p = d.programa, x = p[pl], total = mes === 'total';
@@ -12608,7 +12639,7 @@ async function maybeAutoStartTour() {
             const ver = (id) => versionDe(c.vers[id]) || { codigo: id };
             const ingresoEn = (v, m) => !!(v.fIng ? v.fIng.slice(0, 7) === m : v.fReg && v.fReg.slice(0, 7) === m);
             const como = {
-                pend: (m, id) => { const v = ver(id); const s = ids(m, 'susp').includes(id) ? 'Suspendido por reeditar' : (ES_SOLICITUD_ABIERTA.has(v.estado) ? 'Solicitud abierta' : 'Ingresado sin autorizar');
+                pend: (m, id) => { const v = ver(id); const s = ids(m, 'susp').includes(id) ? 'Suspendido masivo' : (ES_SOLICITUD_ABIERTA.has(v.estado) ? 'Solicitud abierta' : 'Ingresado sin autorizar');
                     return `${s}${m === mesSap ? ' · a la fecha de SAP' : ' · al cierre'}${ids(m, 'fuera').includes(id) ? ' · no depende del área' : ''}`; },
                 aut: (m, id) => `Autorizado en el mes · ${ingresoEn(ver(id), m) ? 'ingreso real del mes' : 'del backlog'}`,
                 sol: (m, id) => `Ingreso real en el mes${ver(id).conIngreso ? '' : ' (por Fecha Registro: la Observación no trae la fecha)'}`
