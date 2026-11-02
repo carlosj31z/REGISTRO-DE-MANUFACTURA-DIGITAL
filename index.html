@@ -11045,6 +11045,16 @@ async function maybeAutoStartTour() {
         :is(#tab-status, #prodAcumulado) .sts-aviso { display:flex; gap:8px; align-items:flex-start; font-size:12px; line-height:1.5; color:var(--app-text); background:rgba(var(--copper-rgb) / .1); border:1px solid rgba(var(--copper-rgb) / .35); border-radius:10px; padding:9px 12px; margin-bottom:12px; }
         :is(#tab-status, #prodAcumulado) .sts-aviso::before { content:'!'; flex-shrink:0; display:grid; place-items:center; width:17px; height:17px; border-radius:50%; font-size:11px; font-weight:800; background:rgb(var(--copper-rgb)); color:var(--app-bg); }
         :is(#tab-status, #prodAcumulado) .sts-nota { font-size:11.5px; color:var(--slate-400); margin-top:8px; line-height:1.55; }
+        #tab-status .sts-logica { margin:0 0 18px; background:var(--surface-1-soft); border:1px solid var(--card-border-highlight); border-radius:14px; padding:0 16px; }
+        #tab-status .sts-logica > summary { cursor:pointer; list-style:none; display:flex; align-items:center; gap:8px; padding:12px 0; font-size:13px; font-weight:700; color:var(--app-text); }
+        #tab-status .sts-logica > summary::-webkit-details-marker { display:none; }
+        #tab-status .sts-logica > summary::before { content:'?'; display:grid; place-items:center; width:20px; height:20px; border-radius:50%; font-size:12px; font-weight:800; background:rgba(var(--plum-rgb) / .16); color:rgb(var(--plum-rgb)); }
+        #tab-status .sts-logica > summary .sts-logica-pista { font-weight:400; font-size:11.5px; color:var(--slate-400); }
+        #tab-status .sts-logica-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(260px, 1fr)); gap:12px 20px; padding:2px 0 16px; }
+        #tab-status .sts-logica-grid h4 { font-size:12.5px; font-weight:700; color:var(--app-text); margin:0 0 4px; }
+        #tab-status .sts-logica-grid p, #tab-status .sts-logica-grid li { font-size:12px; line-height:1.55; color:var(--slate-300); }
+        #tab-status .sts-logica-grid ul { margin:2px 0 0; padding-left:16px; list-style:disc; }
+        #tab-status .sts-logica-grid b { color:var(--app-text); }
 
         :is(#tab-status, #prodAcumulado) .sts-paneles { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:14px; }
         :is(#tab-status, #prodAcumulado) .sts-panel { background:var(--surface-1-soft); border:1px solid var(--card-border-highlight); border-radius:16px; padding:16px 18px; min-width:0; }
@@ -12009,6 +12019,38 @@ async function maybeAutoStartTour() {
                 <span class="sts-chip sts-pista">Haz clic en un número para ver sus RMD y descargarlos en Excel</span>
             </div>`;
         }
+        // «¿Cómo se calculan estos números?»: la lógica de la pestaña en palabras simples, con los datos del status que se ve
+        // (mes, periodo, backlog de cada planta, meses con cifra oficial, meta). Se abre y cierra; se recuerda por navegador.
+        function htmlLogica(d) {
+            let abierto = false;
+            try { abierto = localStorage.getItem('sts_logica_abierta') === '1'; } catch (e) { /* sin almacenamiento */ }
+            const mesAnt = d.per.mesAnterior.toLowerCase(), mes = d.per.mesNombre.toLowerCase();
+            const bk = (pl) => { const n = d.programa && d.programa[pl] ? d.programa[pl].ant[2] : null; return Number.isFinite(n) ? n : '—'; };
+            const oficiales = Object.keys(BACKLOG_OFICIAL).sort();
+            const txtOf = oficiales.map((k) => `${esc(nombreMes(k).split(' ')[0].toLowerCase())} (P1 ${BACKLOG_OFICIAL[k].P1} · P2 ${BACKLOG_OFICIAL[k].P2})`).join(', ');
+            const ultimoOf = oficiales.length ? oficiales[oficiales.length - 1] : '';
+            const desdeSap = ultimoOf ? nombreMes(dayjs(ultimoOf + '-01').add(1, 'month').format('YYYY-MM')).toLowerCase() : '';
+            const sap = d.programa.generado || d.car.generado;
+            return `<details class="sts-logica"${abierto ? ' open' : ''} ontoggle="try{localStorage.setItem('sts_logica_abierta',this.open?'1':'0')}catch(e){}">
+                <summary>¿Cómo se calculan estos números? <span class="sts-logica-pista">· clic para abrir o cerrar</span></summary>
+                <div class="sts-logica-grid">
+                    <div><h4>1. De dónde salen</h4><p>De SAP. Se actualizan cada vez que alguien usa <b>«Enviar a Status RMD»</b> en el portal. Últimos datos: <b>${sap ? esc(dayjs(sap).format('DD/MM/YYYY HH:mm')) : 'sin datos'}</b>.</p></div>
+                    <div><h4>2. Backlog de ${esc(mes)}</h4><p>Lo que quedó pendiente al cierre de ${esc(mesAnt)}: <b>P1 ${bk('P1')} · P2 ${bk('P2')}</b>. Cuenta como pendiente:</p>
+                        <ul><li>RMD <b>Ingresados</b>, hasta que se autorizan.</li><li><b>Solicitudes abiertas</b> (Solicitado o Solicitud Aprobada).</li>
+                        <li><b>Suspendidos con «masivo»</b> en Observaciones, hasta que su siguiente versión se solicite o ingrese (desde ahí cuenta la nueva, no los dos).</li></ul>
+                        <p>No cuentan los demás suspendidos, los que SAP suspende al autorizar otra versión, los rechazados ni los cancelados.</p></div>
+                    <div><h4>3. Meses cerrados</h4><p>${oficiales.length ? `Con la cifra oficial del área al cierre: ${txtOf}. Desde ${esc(desdeSap)} se calcula con SAP.` : 'Se calculan con SAP.'} Al cerrar un mes queda <b>congelado</b>; lo que cambie después en SAP entra al mes siguiente como <b>«± Otros»</b>.</p></div>
+                    <div><h4>4. Solicitados y autorizados</h4><ul><li><b>Solicitados del mes</b>: RMD ingresados en el mes (fecha de ingreso de la Observación o Fecha Registro).</li>
+                        <li><b>Autorizados</b>: por Fecha de Autorización. <b>Del backlog</b> = ya estaban pendientes antes del mes; <b>del mes</b> = ingresados y autorizados en el mismo mes.</li></ul></div>
+                    <div><h4>5. Porcentajes</h4><ul><li><b>% total</b> = autorizados / (backlog + solicitados ± otros).</li>
+                        <li><b>% del área</b> = lo mismo sin lo que no depende de RMD (flujo de Producción sin aprobar o pendiente de CC). Meta: <b>${META_AUTORIZADOS} % o más</b>.</li>
+                        <li><b>% Backlog DOC</b> = autorizados del backlog en ${esc(mes)} / backlog de ${esc(mes)}. Arranca en 0 cada mes.</li></ul></div>
+                    <div><h4>6. Rutas</h4><ul><li><b>Ruta 1, Programa</b>: etapas pendientes del último Programa de Producción cargado de cada planta, por estatus y responsable. Programa PLA = el periodo elegido arriba (<b>${esc(d.per.texto)}</b>).</li>
+                        <li><b>Ruta 2, Caracterizaciones</b>: RMD con Motivo CARACTERIZACION. Autorizado = Autorizado o Suspendido; las solicitudes rechazadas no cuentan.</li>
+                        <li>Responsables: <b>PRO</b> Producción · <b>DOC</b> QA Documentación · <b>ASC</b> Aseguramiento de la Calidad / CC. P1 = ATE, P2 = LIMA.</li></ul></div>
+                </div>
+            </details>`;
+        }
         function htmlResumen(d) {
             const r1 = d.r1.error ? null : d.r1;
             const pend1 = r1 ? r1.P1.pend + r1.P2.pend : 0, aut1 = r1 ? r1.P1.aut + r1.P2.aut : 0;
@@ -12926,7 +12968,7 @@ async function maybeAutoStartTour() {
 
         function pintar() {
             const cont = document.getElementById('stsContenido');
-            cont.innerHTML = htmlMeta(ultimo) + htmlResumen(ultimo) + htmlPrograma(ultimo) + htmlRuta1(ultimo) + htmlRuta2(ultimo) + htmlHoras(ultimo);
+            cont.innerHTML = htmlMeta(ultimo) + htmlLogica(ultimo) + htmlResumen(ultimo) + htmlPrograma(ultimo) + htmlRuta1(ultimo) + htmlRuta2(ultimo) + htmlHoras(ultimo);
             // Las semanas, desde la más antigua: se deja a la vista la última.
             cont.querySelectorAll('.sts-meses.semanas').forEach((el) => { el.scrollTop = el.scrollHeight; });
             dibujarGraficos(ultimo);
