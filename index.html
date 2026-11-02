@@ -11929,6 +11929,14 @@ async function maybeAutoStartTour() {
         // control de cambio), con la meta de no menos de 80 %. Por planta: los meses del año del status hasta su mes (filas), el
         // total del año (desde los pendientes del cierre del año anterior) y los 3 meses del gráfico (tres). null = sin dato.
         const META_AUTORIZADOS = 80;
+        // Pendientes al cierre de los meses ya reportados por el área (decisión de Carlos, 02/11/2026): reemplazan al cálculo con
+        // SAP, que reconstruye el pasado con los datos de hoy y sale más alto que lo presentado. Backlog del mes siguiente = este
+        // número. Desde noviembre de 2026 se calcula con SAP (regla de Noelia). Al cerrar un mes reportado, se puede agregar aquí.
+        const BACKLOG_OFICIAL = {
+            '2026-08': { P1: 136, P2: 96 },
+            '2026-09': { P1: 170, P2: 121 },
+            '2026-10': { P1: 170, P2: 100 }
+        };
         const pctDe = (aut, base) => (base > 0 ? Math.round((aut / base) * 100) : null);
         function cuadroPrograma(ind, per, traz) {
             // Indicadores guardados por una versión anterior de la página: se recalculan con el detalle de RMD guardado, si trae la planta.
@@ -11937,7 +11945,13 @@ async function maybeAutoStartTour() {
             // Masivos pendientes escritos a mano por el área (ind_horas_efectivas[mes][planta].ma): se suman a los pendientes del mes.
             const masivos = (m, pl) => { if (!SUMAR_MASIVOS_A_MANO) return 0; const h = ((horasEf || {})[m.format('YYYY-MM')] || {})[pl]; return h && Number.isFinite(h.ma) ? h.ma : 0; };
             const datoSap = (m, pl, k) => { const x = (porMes[m.format('YYYY-MM')] || {})[pl]; return x && Number.isFinite(x[k]) ? x[k] : null; };
-            const dato = (m, pl, k) => { const v = datoSap(m, pl, k); return v !== null && k === 'pend' ? v + masivos(m, pl) : v; };
+            const dato = (m, pl, k) => {
+                const v = datoSap(m, pl, k);
+                if (k !== 'pend') return v;
+                const of = (BACKLOG_OFICIAL[m.format('YYYY-MM')] || {})[pl];
+                if (Number.isFinite(of)) return of;
+                return v !== null ? v + masivos(m, pl) : v;
+            };
             const fila = (m, pl) => {
                 const pend = dato(m, pl, 'pend'), ant = dato(m.subtract(1, 'month'), pl, 'pend'), aut = dato(m, pl, 'aut'), sol = dato(m, pl, 'sol');
                 const ok = pend !== null && aut !== null && ant !== null && sol !== null;
