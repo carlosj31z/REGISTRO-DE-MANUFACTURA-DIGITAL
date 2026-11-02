@@ -836,6 +836,8 @@
         .car-tag--programa, .car-tag--ok { color: rgb(var(--ok-rgb, 81 181 127)); background: rgb(var(--ok-rgb, 81 181 127) / 0.12); border-color: rgb(var(--ok-rgb, 81 181 127) / 0.4); }
         .car-tag--rev { color: rgb(var(--semaforo-ambar-rgb)); background: rgb(var(--semaforo-ambar-rgb) / 0.12); border-color: rgb(var(--semaforo-ambar-rgb) / 0.4); }
         .car-tag--sin { color: rgb(var(--danger-rgb, 236 94 68)); background: rgb(var(--danger-rgb, 236 94 68) / 0.12); border-color: rgb(var(--danger-rgb, 236 94 68) / 0.4); }
+        .car-tip { font-size: 11.5px; color: var(--slate-300); margin: -0.35rem 0 0.75rem; line-height: 1.5; padding: 0.45rem 0.65rem; border-left: 3px solid rgb(var(--semaforo-ambar-rgb) / 0.7); background: rgb(var(--semaforo-ambar-rgb) / 0.07); border-radius: 0 6px 6px 0; }
+        .car-tip b { color: var(--slate-200); }
         .car-aviso { font-size: 11.5px; color: var(--slate-400); margin: -0.25rem 0 0.75rem; line-height: 1.5; }
         .car-aviso b { color: var(--slate-200); }
         .car-nota { font-size: 11px; color: var(--slate-400); margin: -0.5rem 0 0.75rem; }
@@ -2526,6 +2528,7 @@
             </div>
 
             <p class="car-aviso" id="carAviso"></p>
+            <p class="car-tip"><b>Tip:</b> si el borrador de Producción aún no llega, no hace falta generar una versión nueva: escribe en las <b>Observaciones</b> de la versión vigente (en el portal, al final, sin borrar lo que ya hay) <b>«PENDIENTE BORRADOR CARACTERIZACION»</b>, o <b>«PENDIENTE MASIVO»</b> si es un masivo. Con «Enviar a Status RMD» el primero queda como caracterización pendiente y el masivo cuenta en el Backlog de INDICADORES, hasta que salga la versión nueva.</p>
 
             <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mb-4">
                 <div class="val-kpi">
@@ -2572,7 +2575,7 @@
                         <option value="">Estatus: todos</option><option value="BORRADOR">BORRADOR</option><option value="INGRESAR">INGRESAR</option><option value="FLUJO SAP">FLUJO SAP</option><option value="CONTROL DE CAMBIO">CONTROL DE CAMBIO</option><option value="POR REVISIÓN">POR REVISIÓN</option><option value="SIN ESTATUS">Sin estatus</option>
                     </select>
                     <select id="carFiltro_origen" onchange="Caracterizacion.filtrar('origen',this.value)" class="field-input filtro-etapa-select" title="De dónde sale la caracterización" aria-label="Filtrar por origen">
-                        <option value="">Origen: todos</option><option value="listado">En el listado</option><option value="motivo">Con Motivo CARACTERIZACION en SAP</option><option value="sin-motivo">En el listado, sin el Motivo en SAP</option>
+                        <option value="">Origen: todos</option><option value="listado">En el listado</option><option value="motivo">Con Motivo CARACTERIZACION o «PENDIENTE BORRADOR» en SAP</option><option value="sin-motivo">En el listado, sin el Motivo en SAP</option>
                     </select>
                     <select id="carFiltro_programa" onchange="Caracterizacion.filtrar('programa',this.value)" class="field-input filtro-etapa-select" title="Si la etapa también está en el Programa de Producción" aria-label="Filtrar por Programa de Producción">
                         <option value="">Programa: todos</option><option value="si">También en el programa</option><option value="no">Solo caracterización</option>
@@ -7322,7 +7325,7 @@ async function downloadPlanProduccionFromCloud() {
                     // RMD con Motivo CARACTERIZACION (Ruta 2 de la pestaña Status RMD).
                     const caracterizaciones = StatusRmd.caracterizacionesDesdeFilas(rows, { motivo: findCol('motivo'), estado: estadoCol, planta: plantaCol,
                         codigo: codigoRmdCol, solicitud: solicitudCol, version: versionCol, descripcion: descCol, etapa: etapaCol,
-                        fechaSolicitud: fechaSolicitudCol, fechaAutorizacion: fechaAutorizacionCol }, generado);
+                        fechaSolicitud: fechaSolicitudCol, fechaAutorizacion: fechaAutorizacionCol, observacion: observacionCol }, generado);
                     if (caracterizaciones) await storeSet('val_rmd_caracterizaciones', caracterizaciones);
                     // Maestro de RMD para la validación por árbol de producción (con recetas, o sumado / sin recetas).
                     rmdPrecisoDatos = datosPrecisos;
@@ -11482,6 +11485,10 @@ async function maybeAutoStartTour() {
         // actual) y los Suspendidos que tienen la palabra «masivo» en Observaciones (salen de SAP; ya no se escriben a mano).
         const CONTAR_SUSPENDIDOS = true;
         const RX_MASIVO = /MASIV/i;
+        // Pedido de Carlos (02/11/2026): un masivo sin versión nueva se marca escribiendo «PENDIENTE MASIVO» en las Observaciones
+        // de la versión vigente (Autorizada). Cuenta en el backlog desde el mes en curso (los meses cerrados ya están congelados)
+        // hasta que se solicite, ingrese o autorice otra versión del RMD.
+        const RX_PEND_MASIVO = /PEND(?:IENTE|\.)?\s*(?:DE\s+)?MASIV/i;
         // Los «Masivos pendientes» escritos a mano ya no se suman (los masivos salen de SAP); la columna queda solo de referencia.
         const SUMAR_MASIVOS_A_MANO = false;
         // Como en la lógica antigua del área (backlog de octubre: 170 en Ate y 100 en Lima = los Ingresados), las solicitudes
@@ -11495,7 +11502,7 @@ async function maybeAutoStartTour() {
             let inicio = dayjs(ahora).startOf('year').subtract(1, 'month');
             const tresAntes = dayjs(ahora).startOf('month').subtract(3, 'month');
             if (tresAntes.isBefore(inicio)) inicio = tresAntes;
-            const desdeMes = inicio.format('YYYY-MM'), porMes = {}, det = {}, vers = {}, usadas = new Set(), vistosAut = new Set(), tramos = [], suspensiones = [];
+            const desdeMes = inicio.format('YYYY-MM'), porMes = {}, det = {}, vers = {}, usadas = new Set(), vistosAut = new Set(), tramos = [], suspensiones = [], pendMasivos = [];
             const celda = (mes, pl) => (porMes[mes] || (porMes[mes] = { P1: { aut: 0, autBk: 0, sol: 0, susp: 0, pend: null, fuera: null, reg: 0 }, P2: { aut: 0, autBk: 0, sol: 0, susp: 0, pend: null, fuera: null, reg: 0 } }))[pl];
             const lista = (mes, pl, k) => ((det[mes] || (det[mes] = { P1: { pend: [], aut: [], sol: [], susp: [], fuera: [] }, P2: { pend: [], aut: [], sol: [], susp: [], fuera: [] } }))[pl][k]);
             const anotar = (mes, pl, k, v) => { lista(mes, pl, k).push(v.id); usadas.add(v.id); };
@@ -11537,6 +11544,11 @@ async function maybeAutoStartTour() {
                 }
                 // Pendiente desde su solicitud o su ingreso real (o registro) hasta el día de su autorización; hasta hoy si sigue
                 // Ingresado o como solicitud abierta. Lo autorizado hoy ya no está pendiente al leer SAP.
+                if (estado === 'AUTORIZADO' && RX_PEND_MASIVO.test(v.obs || '')) {
+                    const otras = [...new Set((v.grupos || []).flatMap((g) => grupos.get(g) || []))]
+                        .filter((w) => w !== v && (ES_SOLICITUD_ABIERTA.has(w.estado) ? (!w.version || w.version > v.version) : w.version > v.version));
+                    if (!otras.some((w) => w.estado === 'AUTORIZADO')) { v.pendMasivo = true; pendMasivos.push([v, dayjs(ahora).startOf('month').valueOf(), otras]); }
+                }
                 const tI = v.inicio ? v.inicio.valueOf() : null;
                 if (tI === null) return;
                 if (estado === 'INGRESADO' || (CONTAR_SOLICITUDES_ABIERTAS && ES_SOLICITUD_ABIERTA.has(estado))) tramos.push([v, tI, Infinity]);
@@ -11585,6 +11597,12 @@ async function maybeAutoStartTour() {
                     if (tX > t) return;
                     if (otras.some((w) => w.inicio && w.inicio.valueOf() <= t)) return;
                     celda(mes, v.planta).susp++; anotar(mes, v.planta, 'susp', v);
+                    pendiente(v);
+                });
+                // Vigentes con «PENDIENTE MASIVO» en Observaciones (desde el mes en curso), sin otra versión ya iniciada.
+                pendMasivos.forEach(([v, tX, otras]) => {
+                    if (tX > t) return;
+                    if (otras.some((w) => w.inicio && w.inicio.valueOf() <= t)) return;
                     pendiente(v);
                 });
             }
@@ -11674,21 +11692,27 @@ async function maybeAutoStartTour() {
             return res;
         }
         // Los RMD (y solicitudes) de SAP con Motivo CARACTERIZACION, sin Cancelados. null si los datos no traen Motivo
-        // (así no se borra la lista guardada con un archivo que no la tiene).
+        // (así no se borra la lista guardada con un archivo que no la tiene). También los Autorizados (la versión vigente) con
+        // «PENDIENTE BORRADOR CARACTERIZACION» en Observaciones: productos en caracterización que aún no mandan el borrador y a
+        // los que no se les crea versión nueva (regla de Carlos, 02/11/2026). Van con pendBorrador: cuentan como pendientes.
+        const ES_PEND_BORRADOR_CARACT = (obs) => /PENDIENTE\s*BORRADOR\s*(DE\s*)?CARACTERIZ/.test(normalizeEstadoRmd(obs));
         function caracterizacionesDesdeFilas(rows, c, generado) {
             if (!Array.isArray(rows) || rows.length < 2 || c.motivo < 0 || c.estado < 0) return null;
             const items = [], vistos = new Set();
             const txt = (r, i) => (i >= 0 && r[i] !== null && r[i] !== undefined ? String(r[i]).trim() : '');
             rows.slice(1).forEach((r) => {
-                if (!r || !r.length || !ES_CARACTERIZACION(r[c.motivo])) return;
+                if (!r || !r.length) return;
                 const estado = txt(r, c.estado);
+                const pendBorrador = !ES_CARACTERIZACION(r[c.motivo]) && c.observacion >= 0 && normalizeEstadoRmd(estado) === 'AUTORIZADO' && ES_PEND_BORRADOR_CARACT(r[c.observacion]);
+                if (!ES_CARACTERIZACION(r[c.motivo]) && !pendBorrador) return;
                 if (normalizeEstadoRmd(estado) === 'CANCELADO') return;
                 const codigo = txt(r, c.codigo), sol = txt(r, c.solicitud);
                 const id = sol || codigo;
                 if (!id || vistos.has(id)) return;
                 vistos.add(id);
                 items.push({ id, codigo, sol, version: Number(txt(r, c.version)) || 0, estado, descripcion: txt(r, c.descripcion), etapa: txt(r, c.etapa),
-                    planta: plantaDe(r[c.planta]), fechaSolicitud: c.fechaSolicitud >= 0 ? diaDe(r[c.fechaSolicitud]) : '', fechaAutorizacion: c.fechaAutorizacion >= 0 ? diaDe(r[c.fechaAutorizacion]) : '' });
+                    planta: plantaDe(r[c.planta]), fechaSolicitud: c.fechaSolicitud >= 0 ? diaDe(r[c.fechaSolicitud]) : '', fechaAutorizacion: c.fechaAutorizacion >= 0 ? diaDe(r[c.fechaAutorizacion]) : '',
+                    ...(pendBorrador ? { pendBorrador: true } : {}) });
             });
             return { v: 1, generado: generado || new Date().toISOString(), items };
         }
@@ -11756,7 +11780,7 @@ async function maybeAutoStartTour() {
         // Ruta 2: autorizado = Autorizado o Suspendido en SAP; una Solicitud Rechazada no cuenta; el resto es pendiente con
         // el Estatus elegido en la tabla de caracterizaciones.
         const estadoSap = (it) => normalizeEstadoRmd(it.estado);
-        const esAutorizadoSap = (it) => ['AUTORIZADO', 'SUSPENDIDO'].includes(estadoSap(it));
+        const esAutorizadoSap = (it) => !it.pendBorrador && ['AUTORIZADO', 'SUSPENDIDO'].includes(estadoSap(it));
         const cuentaEnRuta2 = (it) => !!it.planta && estadoSap(it) !== 'SOLICITUD RECHAZADA';
         // Estatus de una caracterización: el elegido aquí (val_estatus_caracterizacion) o, si no hay, el de su etapa en las pestañas
         // CARACTERIZACIÓN / Producción (estatusEtapa con la clave material::ETAPA), que es donde se sigue el listado del área.
@@ -11778,8 +11802,9 @@ async function maybeAutoStartTour() {
             const e = estatusCar[it.id];
             if (e && e.e) return { e: e.e, r: e.r || '', deEtapa: false };
             const mat = materialDeCaract(it), fija = mapEtapaAFija(normalizeEtapa(it.etapa));
-            if (!mat || !fija) return { e: '', r: '', deEtapa: false };
-            const k = responsableKey(normalizeMaterialCode(mat), fija), est = estatusEtapa.get(k) || '';
+            const k = mat && fija ? responsableKey(normalizeMaterialCode(mat), fija) : '', est = (k && estatusEtapa.get(k)) || '';
+            // Sin estatus elegido, un «PENDIENTE BORRADOR CARACTERIZACION» está en BORRADOR (falta el borrador de Producción).
+            if (!est && it.pendBorrador) return { e: 'BORRADOR', r: '', deEtapa: false };
             return { e: est, r: est ? (responsablesEtapa.get(k) || '') : '', deEtapa: !!est };
         }
         function ruta2(items) {
@@ -12216,7 +12241,8 @@ async function maybeAutoStartTour() {
                     <div><h4>1. De dónde salen</h4><p>De SAP. Se actualizan cada vez que alguien usa <b>«Enviar a Status RMD»</b> en el portal. Últimos datos: <b>${sap ? esc(dayjs(sap).format('DD/MM/YYYY HH:mm')) : 'sin datos'}</b>.</p></div>
                     <div><h4>2. Backlog de ${esc(mes)}</h4><p>Lo que quedó pendiente al cierre de ${esc(mesAnt)}: <b>P1 ${bk('P1')} · P2 ${bk('P2')}</b>. Cuenta como pendiente:</p>
                         <ul><li>RMD <b>Ingresados</b>, hasta que se autorizan.</li><li><b>Solicitudes abiertas</b> (Solicitado o Solicitud Aprobada).</li>
-                        <li><b>Suspendidos con «masivo»</b> en Observaciones, hasta que su siguiente versión se solicite o ingrese (desde ahí cuenta la nueva, no los dos).</li></ul>
+                        <li><b>Suspendidos con «masivo»</b> en Observaciones, hasta que su siguiente versión se solicite o ingrese (desde ahí cuenta la nueva, no los dos).</li>
+                        <li><b>Versiones vigentes (Autorizadas) con «PENDIENTE MASIVO»</b> en Observaciones: un masivo sin versión nueva. Cuentan desde el mes en curso (noviembre de 2026 en adelante) hasta que se solicite, ingrese o autorice otra versión.</li></ul>
                         <p>No cuentan los demás suspendidos, los que SAP suspende al autorizar otra versión, los rechazados ni los cancelados.</p></div>
                     <div><h4>3. Meses cerrados</h4><p>${oficiales.length ? `Con la cifra oficial del área al cierre: ${txtOf}. Desde ${esc(desdeSap)} se calcula con SAP.` : 'Se calculan con SAP.'} Al cerrar un mes queda <b>congelado</b>; lo que cambie después en SAP entra al mes siguiente como <b>«± Otros»</b>.</p></div>
                     <div><h4>4. Solicitados y autorizados</h4><ul><li><b>Solicitados del mes</b>: RMD ingresados en el mes (fecha de ingreso de la Observación o Fecha Registro).</li>
@@ -12225,7 +12251,7 @@ async function maybeAutoStartTour() {
                         <li><b>% del área</b> = lo mismo sin lo que no depende de RMD (flujo de Producción sin aprobar o pendiente de CC). Meta: <b>${META_AUTORIZADOS} % o más</b>.</li>
                         <li><b>% Backlog DOC</b> = autorizados del backlog en ${esc(mes)} / backlog de ${esc(mes)}. Arranca en 0 cada mes.</li></ul></div>
                     <div><h4>6. Rutas</h4><ul><li><b>Ruta 1, Programa</b>: etapas pendientes del último Programa de Producción cargado de cada planta, por estatus y responsable. Programa PLA = el periodo elegido arriba (<b>${esc(d.per.texto)}</b>).</li>
-                        <li><b>Ruta 2, Caracterizaciones</b>: RMD con Motivo CARACTERIZACION. Autorizado = Autorizado o Suspendido; las solicitudes rechazadas no cuentan. El Estatus de cada pendiente es el elegido en la tabla de caracterizaciones de abajo o, si no tiene, el de su etapa en la pestaña CARACTERIZACIÓN (el mismo de Producción).</li>
+                        <li><b>Ruta 2, Caracterizaciones</b>: RMD con Motivo CARACTERIZACION. Autorizado = Autorizado o Suspendido; las solicitudes rechazadas no cuentan. También cuentan, como pendientes, las versiones vigentes (Autorizadas) con «PENDIENTE BORRADOR CARACTERIZACION» en Observaciones: productos cuyo borrador aún no llega y a los que no se crea versión nueva. El Estatus de cada pendiente es el elegido en la tabla de caracterizaciones de abajo o, si no tiene, el de su etapa en la pestaña CARACTERIZACIÓN (el mismo de Producción); los «PENDIENTE BORRADOR» sin estatus van en Borrador.</li>
                         <li>Responsables: <b>PRO</b> Producción · <b>DOC</b> QA Documentación · <b>ASC</b> Aseguramiento de la Calidad / CC. P1 = ATE, P2 = LIMA.</li></ul></div>
                 </div>
             </details>`;
@@ -12251,7 +12277,7 @@ async function maybeAutoStartTour() {
             aut: 'Por FECHA de autorización, no por estado: versiones Autorizadas o Suspendidas con Fecha Autorización en el mes (si en el mes se autorizan dos versiones del mismo RMD, cuentan las dos)',
             autMes: 'De los autorizados, los que tienen su ingreso real en el mes',
             autBk: 'De los autorizados, el resto: venían del backlog',
-            pend: 'Al cierre del mes (el mes en curso: a la fecha de los datos de SAP): RMD Ingresados, solicitudes abiertas (Solicitado o Solicitud Aprobada) y Suspendidos con «masivo» en Observaciones, vengan del mes o de meses anteriores',
+            pend: 'Al cierre del mes (el mes en curso: a la fecha de los datos de SAP): RMD Ingresados, solicitudes abiertas (Solicitado o Solicitud Aprobada), Suspendidos con «masivo» en Observaciones y vigentes con «PENDIENTE MASIVO», vengan del mes o de meses anteriores',
             susp: 'Suspendidos masivos: con la palabra «masivo» en Observaciones y, al cierre, sin otra versión Solicitada, Ingresada o Autorizada. No cuentan los que SAP suspende al autorizar otra versión',
             fuera: 'Pendientes al cierre que no dependen del área: en el flujo de Producción sin aprobar (jefe / gerente) o en control de cambio',
             pct: `% total = Autorizados / Acumulado. Meta: no menos de ${META_AUTORIZADOS} %`,
@@ -12286,7 +12312,7 @@ async function maybeAutoStartTour() {
             const susp = new Set(x.susp || []), r = { total: x.pend.length, ing: 0, sol: 0, mas: 0 };
             x.pend.forEach((id) => {
                 const v = versionDe((c.vers || {})[id]) || {};
-                if (susp.has(id)) r.mas++;
+                if (susp.has(id) || v.estado === 'AUTORIZADO') r.mas++;
                 else if (!v.codigo || ES_SOLICITUD_ABIERTA.has(v.estado)) r.sol++;
                 else r.ing++;
             });
@@ -12295,7 +12321,7 @@ async function maybeAutoStartTour() {
         function htmlReglaBacklog(p, pl, clave) {
             const m = dayjs(clave + '-01'), ant = m.subtract(1, 'month').format('YYYY-MM');
             const mesSap = dayjs(Date.parse(p.generado || '') || Date.now()).format('YYYY-MM');
-            const formula = (r) => `<b class="n">${r.ing}</b> Ingresados + <b class="n">${r.sol}</b> solicitudes abiertas + <b class="n">${r.mas}</b> Suspendidos masivos = <b class="n">${r.total}</b>`;
+            const formula = (r) => `<b class="n">${r.ing}</b> Ingresados + <b class="n">${r.sol}</b> solicitudes abiertas + <b class="n">${r.mas}</b> masivos (Suspendidos o «PENDIENTE MASIVO») = <b class="n">${r.total}</b>`;
             const bk = partesBacklog(p.cuadro, ant, pl), of = (BACKLOG_OFICIAL[ant] || {})[pl], kpi = p[pl].ant[2];
             let linea1;
             if (Number.isFinite(of)) linea1 = `Backlog de ${esc(nombreMes(clave).toLowerCase())}: <b class="n">${of}</b>, cifra oficial del área al cierre de ${esc(nombreMes(ant).toLowerCase())}${bk ? `. Con SAP de hoy saldría: ${formula(bk)}` : ''}.`;
@@ -12303,7 +12329,7 @@ async function maybeAutoStartTour() {
             else linea1 = `Backlog de ${esc(nombreMes(clave).toLowerCase())}: ${kpi === null || kpi === undefined ? '—' : `<b class="n">${kpi}</b>`}.`;
             const hoy = clave === mesSap ? partesBacklog(p.cuadro, clave, pl) : null;
             const linea2 = hoy ? `<br>Hoy en SAP siguen pendientes (backlog del mes siguiente, si no se autorizan): ${formula(hoy)}.` : '';
-            return `<div class="sts-regla"><span class="sts-regla-f"><b>¿Qué es el Backlog?</b> Lo que quedó pendiente al cierre del mes anterior: RMD <b>Ingresados</b> + <b>solicitudes abiertas</b> (Solicitado o Solicitud Aprobada) + <b>Suspendidos</b> con la palabra «masivo» en Observaciones, vengan de ese mes o de meses anteriores. No cuentan Autorizados, Cancelados, rechazados ni los que SAP suspende al autorizar otra versión.</span>${linea1}${linea2}</div>`;
+            return `<div class="sts-regla"><span class="sts-regla-f"><b>¿Qué es el Backlog?</b> Lo que quedó pendiente al cierre del mes anterior: RMD <b>Ingresados</b> + <b>solicitudes abiertas</b> (Solicitado o Solicitud Aprobada) + <b>Suspendidos</b> con la palabra «masivo» en Observaciones + versiones vigentes con <b>«PENDIENTE MASIVO»</b> en Observaciones, vengan de ese mes o de meses anteriores. No cuentan Autorizados, Cancelados, rechazados ni los que SAP suspende al autorizar otra versión.</span>${linea1}${linea2}</div>`;
         }
         function htmlPrograma(d) {
             const p = d.programa, meses = d.per.meses.map((m) => MESES[m.month()]), clave = d.per.hasta.format('YYYY-MM');
@@ -12483,7 +12509,8 @@ async function maybeAutoStartTour() {
                 ${aviso}
                 ${htmlRuta(d.r2.P1, 'P1', 'r2', { debajo: tendencia('P1') })}${htmlRuta(d.r2.P2, 'P2', 'r2', { debajo: tendencia('P2') })}
                 ${d.car.items.length ? htmlTablaCar(d) : ''}
-                <p class="sts-nota">RMD de SAP con Motivo CARACTERIZACION. Autorizado o Suspendido en SAP cuenta como autorizado; el resto, como pendiente, según el Estatus elegido en la tabla. % de avance = autorizados / total.</p>
+                <p class="car-tip"><b>Tip:</b> si el borrador de Producción aún no llega, no hace falta generar una versión nueva: escribe en las <b>Observaciones</b> de la versión vigente (en el portal, al final, sin borrar lo que ya hay) <b>«PENDIENTE BORRADOR CARACTERIZACION»</b>, o <b>«PENDIENTE MASIVO»</b> si es un masivo. Con «Enviar a Status RMD» el primero queda como caracterización pendiente y el masivo cuenta en el Backlog de INDICADORES, hasta que salga la versión nueva.</p>
+                <p class="sts-nota">RMD de SAP con Motivo CARACTERIZACION y versiones vigentes con «PENDIENTE BORRADOR CARACTERIZACION» en Observaciones. Autorizado o Suspendido en SAP cuenta como autorizado (salvo los «PENDIENTE BORRADOR», que son pendientes); el resto, como pendiente, según el Estatus elegido en la tabla o el de su etapa en CARACTERIZACIÓN. % de avance = autorizados / total.</p>
             </section>`;
         }
         // ---------- Programa acumulado (vista) ----------
@@ -12857,7 +12884,7 @@ async function maybeAutoStartTour() {
             const ver = (id) => versionDe(c.vers[id]) || { codigo: id };
             const ingresoEn = (v, m) => !!(v.fIng ? v.fIng.slice(0, 7) === m : v.fReg && v.fReg.slice(0, 7) === m);
             const como = {
-                pend: (m, id) => { const v = ver(id); const s = ids(m, 'susp').includes(id) ? 'Suspendido masivo' : (ES_SOLICITUD_ABIERTA.has(v.estado) ? 'Solicitud abierta' : 'Ingresado sin autorizar');
+                pend: (m, id) => { const v = ver(id); const s = ids(m, 'susp').includes(id) ? 'Suspendido masivo' : (v.estado === 'AUTORIZADO' ? 'Vigente con «PENDIENTE MASIVO»' : (ES_SOLICITUD_ABIERTA.has(v.estado) ? 'Solicitud abierta' : 'Ingresado sin autorizar'));
                     return `${s}${m === mesSap ? ' · a la fecha de SAP' : ' · al cierre'}${ids(m, 'fuera').includes(id) ? ' · no depende del área' : ''}`; },
                 aut: (m, id) => `Autorizado en el mes · ${ingresoEn(ver(id), m) ? 'ingreso real del mes' : 'del backlog'}`,
                 sol: (m, id) => `Ingreso real en el mes${ver(id).conIngreso ? '' : ' (por Fecha Registro: la Observación no trae la fecha)'}`
@@ -13414,6 +13441,7 @@ async function maybeAutoStartTour() {
             return s;
         }
         const motivoCuenta = (it) => {
+            if (it.pendBorrador) return true;
             const est = normalizeEstadoRmd(it.estado);
             if (est === 'SOLICITUD RECHAZADA' || est === 'CANCELADO') return false;
             const resuelto = est === 'AUTORIZADO' || est === 'SUSPENDIDO';
@@ -13474,6 +13502,8 @@ async function maybeAutoStartTour() {
                 f.enPrograma = !!(f.d && f.d.candidatos.some((c) => enPrograma.has(`${c.material}::${f.fija}`)));
                 // Del listado y aún sin versión nueva: SAP la da por autorizada, pero esa autorización es anterior a la caracterización
                 // (no llegó el borrador). Se sigue como pendiente hasta que se autorice una versión desde la fecha de caracterización.
+                // Versión vigente con «PENDIENTE BORRADOR CARACTERIZACION» en Observaciones: pendiente aunque esté Autorizada.
+                if (f.estado === 'sap' && f.motivo.some((it) => it.pendBorrador)) { f.pendBorrador = true; f.estado = manualAutorizados.has(f.clave) ? 'autorizado' : 'pendiente'; }
                 if (f.estado === 'sap' && f.listado.length && !f.motivo.length) {
                     const desde = f.listado.map((it) => it.fechaCaract).filter(Boolean).sort()[0] || CARACT_DESDE;
                     const c = f.d && f.d.candidatos[0], det = c && !c.sinRmd ? filaDetalleDeEntrada(c) : null;
@@ -13503,7 +13533,9 @@ async function maybeAutoStartTour() {
         function origenHtml(f) {
             const tags = [];
             if (f.listado.length) tags.push(`<span class="car-tag car-tag--listado" title="${esc(f.listado.map((it) => `Listado ${PL_TXT[it.pl] || it.pl}: ${it.nombre} (${it.etapa.slice(0, 3)})${it.estatusListado ? ' · ' + it.estatusListado : ''}${it.obs ? ' · ' + it.obs : ''}`).join('\n'))}">Listado</span>`);
-            if (f.motivo.length) tags.push(`<span class="car-tag car-tag--motivo" title="${esc(f.motivo.map((it) => `${it.codigo ? 'RMD ' + it.codigo : 'Solicitud ' + it.sol} v${it.version} · ${it.estado} · Motivo CARACTERIZACION`).join('\n'))}">Motivo SAP</span>`);
+            const conMotivo = f.motivo.filter((it) => !it.pendBorrador), conObs = f.motivo.filter((it) => it.pendBorrador);
+            if (conMotivo.length) tags.push(`<span class="car-tag car-tag--motivo" title="${esc(conMotivo.map((it) => `${it.codigo ? 'RMD ' + it.codigo : 'Solicitud ' + it.sol} v${it.version} · ${it.estado} · Motivo CARACTERIZACION`).join('\n'))}">Motivo SAP</span>`);
+            if (conObs.length) tags.push(`<span class="car-tag car-tag--rev" title="${esc(conObs.map((it) => `RMD ${it.codigo} v${it.version} · ${it.estado} · Observaciones: PENDIENTE BORRADOR CARACTERIZACION`).join('\n'))}">Pendiente borrador</span>`);
             if (f.sinVersionNueva) tags.push('<span class="car-tag car-tag--rev" title="Su última versión se autorizó antes de la caracterización: falta la versión nueva (no llegó el borrador de Producción). Se sigue como pendiente.">Sin versión nueva</span>');
             if (f.enPrograma) tags.push('<span class="car-tag car-tag--programa" title="Esta etapa también está en el Programa de Producción: comparte el Estatus, el responsable y la autorización a mano con la pestaña Producción.">En programa</span>');
             return tags.join('');
@@ -13558,8 +13590,9 @@ async function maybeAutoStartTour() {
             const items = ((lista && lista.items) || []).filter((it) => it.materiales && it.materiales.length);
             const partes = [];
             if (items.length) partes.push(`Listado del área identificado en el portal (${dayjs(lista.generado).format('DD/MM/YYYY HH:mm')}): ${plural(items.length, 'fila', 'filas')}`);
-            const nMot = ((motivoSap && motivoSap.items) || []).filter(motivoCuenta).length;
-            partes.push(`${plural(nMot, 'RMD o solicitud', 'RMD o solicitudes')} de SAP con Motivo CARACTERIZACION (desde 2026 o pendientes)`);
+            const its = ((motivoSap && motivoSap.items) || []).filter(motivoCuenta), nObs = its.filter((it) => it.pendBorrador).length;
+            partes.push(`${plural(its.length - nObs, 'RMD o solicitud', 'RMD o solicitudes')} de SAP con Motivo CARACTERIZACION (desde 2026 o pendientes)`);
+            if (nObs) partes.push(`${plural(nObs, 'versión vigente', 'versiones vigentes')} con «PENDIENTE BORRADOR CARACTERIZACION» en Observaciones`);
             $('carAviso').innerHTML = partes.join(' · ');
         }
         async function actualizar(recargar = true) {
