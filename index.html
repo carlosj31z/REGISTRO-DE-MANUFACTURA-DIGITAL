@@ -1349,6 +1349,10 @@
         #tablaPendientesBody > tr > td:first-child { box-shadow: inset 3px 0 0 rgb(var(--danger-rgb) / 0.75); }
         #tablaPendientesBody > tr.fila-autorizada-manual > td:first-child { box-shadow: inset 3px 0 0 rgb(var(--ok-rgb) / 0.8); }
         #tablaPendientesBody > tr > td[colspan] { box-shadow: none; }
+        .mat-grupo-rmd { display: flex; flex-direction: column; gap: 0.1rem; align-items: flex-start; }
+        .mat-grupo-otro { font-family: ui-monospace, 'SFMono-Regular', 'JetBrains Mono', Menlo, Consolas, monospace; font-size: 0.72rem; font-weight: 600;
+            font-variant-numeric: tabular-nums; color: var(--app-text); }
+        .mat-grupo-nota { font-size: 0.62rem; color: var(--slate-400); white-space: nowrap; }
         .mat-code {
             font-family: ui-monospace, 'SFMono-Regular', 'JetBrains Mono', Menlo, Consolas, monospace;
             font-size: 0.72rem; font-weight: 600; letter-spacing: 0.01em;
@@ -6491,7 +6495,7 @@ async function downloadPlanProduccionFromCloud() {
                     material: x.material, rutas: x.rutas || [], rmd: u ? u.rmd : null, sol: u ? u.sol : '', version: u ? u.version : null,
                     estado: u ? u.estado : 'Sin RMD', estadoNorm: u ? u.estadoNorm : 'SIN RMD', sinRmd: !cadena, pendiente: cadena ? cadena.pendiente : true,
                     versiones: cadena ? cadena.versiones : 0, apartadas: cadena ? cadena.suspendidasApartadas : 0, masNuevo: cadena ? cadena.masNuevo : false,
-                    reaApartadas: cadena ? cadena.reaApartadas : 0, soloRea: !!(cadena && cadena.soloRea),
+                    reaApartadas: cadena ? cadena.reaApartadas : 0, soloRea: !!(cadena && cadena.soloRea), defecto: u && u.defecto ? String(u.defecto).trim() : '',
                     fecha: u && Number.isFinite(u.fecha) ? u.fecha : null // Fecha Registro del RMD que decide (antigüedad del pendiente)
                 };
             }).sort((a, b) => (Number(b.pendiente) - Number(a.pendiente)) || ((b.version || 0) - (a.version || 0)));
@@ -7701,8 +7705,8 @@ async function downloadPlanProduccionFromCloud() {
         let migracionClavesPendiente = false;
         // Orden del flujo de la plantilla: Borrador → Ingresar → Flujo SAP / Control de cambio → Por revisión.
         const avanceEstatus = (e) => ({ 'BORRADOR': 1, 'INGRESAR': 2, 'FLUJO SAP': 3, [ESTATUS_CC]: 3, 'POR REVISIÓN': 4 }[ESTATUS_RENOMBRADOS[e] || e] || 0);
-        function migrarClaveDeEtapa(producto, fija, d) {
-            const nueva = claveDeEtapa(producto, fija, d), vieja = responsableKey(producto, fija);
+        function migrarClaveDeEtapa(producto, fija, d) { pasarClaveEtapa(responsableKey(producto, fija), claveDeEtapa(producto, fija, d)); }
+        function pasarClaveEtapa(vieja, nueva) {
             if (nueva === vieja) return;
             // Si la etapa ya tiene estatus (otra presentación que comparte el granel, o uno puesto con la clave nueva), queda el
             // más avanzado del flujo, con su responsable.
@@ -7720,12 +7724,48 @@ async function downloadPlanProduccionFromCloud() {
             Promise.all([saveEstatusEtapa(), saveResponsablesEtapa(), saveManualAutorizados(), saveManualAutorizadosForecast()])
                 .catch(err => console.error('No se pudieron guardar las claves por etapa:', err));
         }
+        // ---- Un RMD que cubre varios materiales cuenta como UN pendiente ----
+        // Un mismo RMD (máster con varias recetas) puede ser el de la etapa de varios materiales del programa: p. ej. el RMD
+        // 2202609142 (NITROFURANTOINA 100 mg, Acondicionado) cubre 6000003412, 6000005827 y 6000006138. Si esa etapa está
+        // pendiente por ese RMD, es UN solo pendiente: una fila con los materiales que cubre, que cuenta una vez. Su Estatus,
+        // responsable y autorización a mano se guardan con el código del RMD (su Código por defecto si está entre ellos; si
+        // no, el menor), y lo que tuvieran los demás códigos pasa a ese (queda el estatus más avanzado).
+        // refsRmdPendientes: los RMD (o solicitudes) que dejan pendiente la etapa; null si alguno no tiene número (sin RMD).
+        function refsRmdPendientes(d) {
+            if (!d || !d.pendiente || !d.candidatos) return null;
+            const pend = d.candidatos.filter(c => c.pendiente);
+            if (!pend.length || pend.some(c => c.sinRmd || (!c.rmd && !c.sol))) return null;
+            return Array.from(new Set(pend.map(c => (c.rmd ? `RMD ${c.rmd}` : `solicitud ${c.sol}`)))).sort().join(' + ');
+        }
+        // Grupos de una lista de productos: "refs::ETAPA" -> { codigos (ordenados), canon }. Solo los de 2 códigos o más.
+        function gruposRmdPendientes(productos) {
+            const tmp = new Map();
+            productos.forEach(pr => (pr.r.etapas || []).forEach(e => {
+                const d = pr.r.detalle[e], refs = refsRmdPendientes(d);
+                if (!refs) return;
+                const k = `${refs}::${mapEtapaAFija(e) || e}`;
+                let g = tmp.get(k);
+                if (!g) { g = { codigos: new Set(), defectos: new Set() }; tmp.set(k, g); }
+                g.codigos.add(codigoDeEtapa(pr.material, d));
+                d.candidatos.forEach(c => { if (c.pendiente && c.defecto) g.defectos.add(c.defecto); });
+            }));
+            const grupos = new Map();
+            tmp.forEach((g, k) => {
+                if (g.codigos.size < 2) return;
+                const codigos = Array.from(g.codigos).sort();
+                grupos.set(k, { codigos, canon: codigos.find(c => g.defectos.has(c)) || codigos[0], refs: k.split('::')[0] });
+            });
+            return grupos;
+        }
         // productos: [{ material, descripcion, r (evaluarMaterialPreciso), areas, plantas, meses, fechaDe(fija), motivoRevisar }];
         // manual: las autorizaciones a mano (Producción o Forecast). Devuelve una fila por etapa con estado 'pendiente',
         // 'autorizado' (a mano) o 'sap' (autorizada en SAP), y cuántas etapas le quedan pendientes a cada producto.
-        function etapasDeProductos(productos, manual) {
+        // opciones.agruparRmd (por defecto sí): una sola fila para los materiales cuya etapa está pendiente por el mismo RMD.
+        function etapasDeProductos(productos, manual, opciones) {
             const porId = new Map(), pendientesPorProducto = new Map();
             const P = rmdPreciso;
+            // Sin agrupar (Caracterización sigue cada producto): filas aparte, pero con el Estatus del código del RMD.
+            const unir = !(opciones && opciones.agruparRmd === false), grupos = gruposRmdPendientes(productos);
             productos.forEach(pr => {
                 const r = pr.r;
                 let pend = 0;
@@ -7749,10 +7789,19 @@ async function downloadPlanProduccionFromCloud() {
                     r.etapas.forEach(e => {
                         const d = r.detalle[e], fija = mapEtapaAFija(e) || e;
                         migrarClaveDeEtapa(pr.material, fija, d);
-                        const codigo = codigoDeEtapa(pr.material, d), clave = claveDeEtapa(pr.material, fija, d);
+                        let codigo = codigoDeEtapa(pr.material, d), clave = claveDeEtapa(pr.material, fija, d), id = idEtapaPrograma(pr.material, fija, d);
+                        const refs = refsRmdPendientes(d), g = refs ? grupos.get(`${refs}::${fija}`) : null;
+                        const codigoVisible = codigo;
+                        if (g) {
+                            pasarClaveEtapa(clave, responsableKey(g.canon, fija));
+                            codigo = g.canon; clave = responsableKey(g.canon, fija);
+                            if (unir) id = `${refs}::${fija}`;
+                        }
                         const estado = !d.pendiente ? 'sap' : (manual.has(clave) ? 'autorizado' : 'pendiente');
-                        const f = agregar(idEtapaPrograma(pr.material, fija, d), { fija, codigo, clave, d, estado, producto: pr.material,
-                            descripcion: (P && P.descDeMaterial.get(codigo)) || (codigo === pr.material ? pr.descripcion : ''), sinArbol: r.conArbol ? '' : (r.sinArbol || '') }, pr.fechaDe(fija));
+                        const f = agregar(id, { fija, codigo, clave, d, estado, producto: pr.material, codigosRmd: g && unir ? g.codigos : null, rmdGrupo: g ? g.refs : '', codigoVisible: g && !unir ? codigoVisible : null,
+                            descripcion: (P && P.descDeMaterial.get(unir ? codigo : codigoVisible)) || ((unir ? codigo : codigoVisible) === pr.material || (g && unir) ? pr.descripcion : ''), sinArbol: r.conArbol ? '' : (r.sinArbol || '') }, pr.fechaDe(fija));
+                        // La ventana de detalle se abre con el producto del código del RMD, si está en el grupo.
+                        if (g && unir && pr.material === g.canon && f.producto !== pr.material) { f.producto = pr.material; f.d = d; }
                         if (f.estado === 'pendiente') pend++;
                     });
                 }
@@ -7837,6 +7886,7 @@ async function downloadPlanProduccionFromCloud() {
             const q = String(busqueda || '').trim().toLowerCase();
             if (q) {
                 v = v.filter(f => String(f.material).toLowerCase().includes(q) || (f.descripcion || '').toLowerCase().includes(q)
+                    || (f.codigosRmd || []).some(m => m.includes(q))
                     || (f.productos || []).some(p => p.material.includes(q) || (p.descripcion || '').toLowerCase().includes(q))
                     || (f.opsSinRmd || []).some(o => o.orden.includes(q) || o.material.includes(q)));
             }
@@ -7896,10 +7946,19 @@ async function downloadPlanProduccionFromCloud() {
         }
         // Productos del programa que usan la etapa (cuando no es el propio producto, o son varios).
         function htmlProductosDeEtapa(f) {
-            const otros = (f.productos || []).filter(p => p.material !== f.codigo);
+            const otros = (f.productos || []).filter(p => p.material !== f.codigo && !(f.codigosRmd || []).includes(p.material));
             if (!otros.length) return '';
             const esc = escapeHtmlRmdConfig;
             return `<span class="etapa-para" title="${esc(otros.map(p => `${p.material} ${p.descripcion || ''}`).join('\n'))}">Para ${otros.length === 1 ? esc(otros[0].material) : `${otros.length} productos: ${esc(otros.slice(0, 3).map(p => p.material).join(', '))}${otros.length > 3 ? '…' : ''}`}</span>`;
+        }
+        // Material de la fila; si un mismo RMD cubre varios materiales, todos (cuentan como un solo pendiente).
+        function htmlMaterialEtapa(f, clase) {
+            const esc = escapeHtmlRmdConfig;
+            const base = clase ? `<span class="${clase}">${esc(f.codigo)}</span>` : esc(f.codigo);
+            const otros = (f.codigosRmd || []).filter(m => m !== f.codigo);
+            if (!otros.length) return base;
+            const tit = `Un solo pendiente: el ${f.rmdGrupo} es el mismo para los ${f.codigosRmd.length} materiales (${f.codigosRmd.join(', ')}).`;
+            return `<div class="mat-grupo-rmd" title="${esc(tit)}">${base}${otros.map(m => `<span class="mat-grupo-otro">${esc(m)}</span>`).join('')}<span class="mat-grupo-nota">1 RMD · ${f.codigosRmd.length} materiales</span></div>`;
         }
         const plantaCelda = (f) => escapeHtmlRmdConfig(f.plantas || (currentPlanta === 'planta1' ? 'ATE' : currentPlanta === 'planta2' ? 'LIMA' : '') || '—');
 
@@ -7941,7 +8000,7 @@ async function downloadPlanProduccionFromCloud() {
                 const fechaTxt = f.fechaProxima ? dayjs(f.fechaProxima).format('YYYY-MM-DD') : '-';
                 return `<tr class="${rowCls}">
                     <td class="whitespace-nowrap py-2 text-slate-300">${plantaCelda(f)}</td>
-                    <td class="whitespace-nowrap py-2"><span class="mat-code">${esc(f.codigo)}</span></td>
+                    <td class="whitespace-nowrap py-2">${htmlMaterialEtapa(f, 'mat-code')}</td>
                     <td class="text-slate-200 py-2">${esc(f.descripcion || '-')}${htmlProductosDeEtapa(f)}${typeof Caracterizacion !== 'undefined' ? Caracterizacion.chipProduccion(f) : ''}</td>
                     <td class="text-slate-400 py-2">${esc(f.areas || '')}</td>
                     <td class="whitespace-nowrap py-2"><div class="fecha-inicio"><span class="fecha-inicio-valor">${fechaTxt}</span>${f.estado === 'pendiente' ? urgenciaInicioHtml(f.fechaProxima) : ''}</div></td>
@@ -8487,8 +8546,8 @@ async function downloadPlanProduccionFromCloud() {
             const c = f.d ? candidatoDelChip(f.d) : null, fila = c && !c.sinRmd ? filaDetalleDeEntrada(c) : null;
             const fc = origen === 'forecast';
             const base = fc
-                ? { 'Planta': f.centros || '', 'Material': f.codigo, 'Descripción': f.descripcion || '', 'Mes(es)': (f.meses || []).join(', ') }
-                : { 'Planta': f.plantas || (currentPlanta === 'planta1' ? 'ATE' : currentPlanta === 'planta2' ? 'LIMA' : ''), 'Material': f.codigo, 'Descripción': f.descripcion || '', 'Área': f.areas || '',
+                ? { 'Planta': f.centros || '', 'Material': (f.codigosRmd || [f.codigo]).join(', '), 'Descripción': f.descripcion || '', 'Mes(es)': (f.meses || []).join(', ') }
+                : { 'Planta': f.plantas || (currentPlanta === 'planta1' ? 'ATE' : currentPlanta === 'planta2' ? 'LIMA' : ''), 'Material': (f.codigosRmd || [f.codigo]).join(', '), 'Descripción': f.descripcion || '', 'Área': f.areas || '',
                     'Inicio de producción': f.fechaProxima ? dayjs(f.fechaProxima).format('YYYY-MM-DD') : '' };
             const situacion = f.estado === 'sap' ? 'AUTORIZADO' : (f.estado === 'autorizado' ? 'AUTORIZADO A MANO' : '');
             return Object.assign(base, {
@@ -9198,7 +9257,7 @@ function updateForecastActiveFiltersBadge() {
                     : 'border-b border-slate-800/60 last:border-0 fila-autorizada-manual transition-colors';
                 return `<tr class="${rowCls}">
                     <td class="text-slate-400 py-2">${esc(f.centros || '-')}</td>
-                    <td class="font-medium text-slate-200 whitespace-nowrap py-2">${esc(f.codigo)}</td>
+                    <td class="font-medium text-slate-200 whitespace-nowrap py-2">${htmlMaterialEtapa(f, '')}</td>
                     <td class="text-slate-300 py-2">${esc(f.descripcion || '-')}${htmlProductosDeEtapa(f)}</td>
                     <td class="py-2">${(f.meses || []).map(m => `<span class="mes-chip">${esc(m)}</span>`).join('')}</td>
                     <td class="py-2">${c.etapa}</td>
@@ -12018,7 +12077,8 @@ async function maybeAutoStartTour() {
             const enPrograma = new Set(((prod && prod.data) || []).map((p) => normalizeMaterialCode(p.codigo)).filter(Boolean));
             // Una etapa compartida por varios productos (la Fabricación del mismo granel en dos presentaciones) cuenta una vez,
             // desde que entró el primero de ellos.
-            const etapasUnicas = new Map();
+            // Igual que en Producción, los materiales pendientes por el mismo RMD cuentan una vez.
+            const etapasUnicas = new Map(), evaluados = [];
             Object.entries(acc.items).forEach(([m, it]) => {
                 const desde = Date.parse(it.e);
                 if (!Number.isFinite(desde)) return;
@@ -12031,16 +12091,21 @@ async function maybeAutoStartTour() {
                 if (!item.actual) r.fuera++;
                 if (!ev.conArbol && !ev.verificable) r.sinArbol++;
                 r.porMaterial.set(m, item);
+                evaluados.push({ m, ev, desde });
+            });
+            const grupos = gruposRmdPendientes(evaluados.map(({ m, ev }) => ({ material: m, r: ev })));
+            evaluados.forEach(({ m, ev, desde }) => {
                 ev.etapas.forEach((etapa) => {
-                    const det = ev.detalle[etapa], fija = mapEtapaAFija(etapa) || etapa, id = idEtapaPrograma(m, fija, det);
+                    const det = ev.detalle[etapa], fija = mapEtapaAFija(etapa) || etapa, refs = refsRmdPendientes(det);
+                    const g = refs ? grupos.get(`${refs}::${fija}`) : null, id = g ? `${refs}::${fija}` : idEtapaPrograma(m, fija, det);
                     const ya = etapasUnicas.get(id);
                     if (ya && ya.desde <= desde) return;
-                    etapasUnicas.set(id, { m, etapa, det, fija: mapEtapaAFija(etapa), desde });
+                    etapasUnicas.set(id, { m, etapa, det, fija: mapEtapaAFija(etapa), desde, canon: g ? g.canon : null });
                 });
             });
-            etapasUnicas.forEach(({ m, etapa, det, fija, desde }) => {
+            etapasUnicas.forEach(({ m, etapa, det, fija, desde, canon }) => {
                 const mats = det.candidatos.map((c) => c.material);
-                const key = fija ? [claveDeEtapa(m, fija, det), responsableKey(m, fija)].find((k) => manualAutorizados.has(k)) : null;
+                const key = fija ? [canon && responsableKey(canon, fija), claveDeEtapa(m, fija, det), responsableKey(m, fija)].find((k) => k && manualAutorizados.has(k)) : null;
                 let manualDesde = null;
                 if (key) { const f = Date.parse(((manualAutorizadosMeta.get(key) || {}).f) || ''); manualDesde = Number.isFinite(f) ? f : 0; }
                 periodosPendientes(H, mats, etapa, desde, manualDesde, Math.max(H.ahora, Date.now())).forEach((p) => r.periodos.push(Object.assign(p, { m, etapa })));
@@ -12250,7 +12315,7 @@ async function maybeAutoStartTour() {
                     <div><h4>5. Porcentajes</h4><ul><li><b>% total</b> = autorizados / (backlog + solicitados ± otros).</li>
                         <li><b>% del área</b> = lo mismo sin lo que no depende de RMD (flujo de Producción sin aprobar o pendiente de CC). Meta: <b>${META_AUTORIZADOS} % o más</b>.</li>
                         <li><b>% Backlog DOC</b> = autorizados del backlog en ${esc(mes)} / backlog de ${esc(mes)}. Arranca en 0 cada mes.</li></ul></div>
-                    <div><h4>6. Rutas</h4><ul><li><b>Ruta 1, Programa</b>: etapas pendientes del último Programa de Producción cargado de cada planta, por estatus y responsable. Programa PLA = el periodo elegido arriba (<b>${esc(d.per.texto)}</b>).</li>
+                    <div><h4>6. Rutas</h4><ul><li><b>Ruta 1, Programa</b>: etapas pendientes del último Programa de Producción cargado de cada planta, por estatus y responsable; varios materiales pendientes por el mismo RMD (un máster con varias recetas) cuentan como un solo pendiente. Programa PLA = el periodo elegido arriba (<b>${esc(d.per.texto)}</b>).</li>
                         <li><b>Ruta 2, Caracterizaciones</b>: RMD con Motivo CARACTERIZACION. Autorizado = Autorizado o Suspendido; las solicitudes rechazadas no cuentan. También cuentan, como pendientes, las versiones vigentes (Autorizadas) con «PENDIENTE BORRADOR CARACTERIZACION» en Observaciones: productos cuyo borrador aún no llega y a los que no se crea versión nueva. El Estatus de cada pendiente es el elegido en la tabla de caracterizaciones de abajo o, si no tiene, el de su etapa en la pestaña CARACTERIZACIÓN (el mismo de Producción); los «PENDIENTE BORRADOR» sin estatus van en Borrador.</li>
                         <li>Responsables: <b>PRO</b> Producción · <b>DOC</b> QA Documentación · <b>ASC</b> Aseguramiento de la Calidad / CC. P1 = ATE, P2 = LIMA.</li></ul></div>
                 </div>
@@ -13493,11 +13558,11 @@ async function maybeAutoStartTour() {
                 });
             });
             revisarAutorizacionesManuales();
-            const { filas } = etapasDeProductos(productos, manualAutorizados);
+            const { filas } = etapasDeProductos(productos, manualAutorizados, { agruparRmd: false });
             guardarMigracionClaves();
             enPrograma = calcularEnPrograma();
             filas.forEach((f) => {
-                const e = seguidas.get(`${f.codigo}::${f.fija}`) || seguidas.get(`${f.producto}::${f.fija}`);
+                const e = seguidas.get(`${f.codigoVisible || f.codigo}::${f.fija}`) || seguidas.get(`${f.codigo}::${f.fija}`) || seguidas.get(`${f.producto}::${f.fija}`);
                 f.listado = e ? e.listado : []; f.motivo = e ? e.motivo : []; f.pl = e ? Array.from(e.pl) : [];
                 f.enPrograma = !!(f.d && f.d.candidatos.some((c) => enPrograma.has(`${c.material}::${f.fija}`)));
                 // Del listado y aún sin versión nueva: SAP la da por autorizada, pero esa autorización es anterior a la caracterización
@@ -13558,7 +13623,7 @@ async function maybeAutoStartTour() {
                 const rowCls = f.estado === 'pendiente' ? 'border-b border-slate-800/60 last:border-0 hover:bg-slate-800/40 transition-colors' : 'border-b border-slate-800/60 last:border-0 fila-autorizada-manual transition-colors';
                 return `<tr class="${rowCls}">
                     <td class="whitespace-nowrap py-2 text-slate-300">${esc(f.plantas || '—')}</td>
-                    <td class="whitespace-nowrap py-2"><span class="mat-code">${esc(f.codigo)}</span></td>
+                    <td class="whitespace-nowrap py-2"><span class="mat-code">${esc(f.codigoVisible || f.codigo)}</span></td>
                     <td class="text-slate-200 py-2">${esc(f.descripcion || '-')}${nombres.length ? `<span class="etapa-para" title="Nombre en el listado de caracterización">Listado: ${esc(nombres.join(' · '))}</span>` : ''}<span class="car-tags">${origenHtml(f)}</span></td>
                     <td class="text-slate-400 py-2">${esc(f.areas || '')}</td>
                     <td class="whitespace-nowrap py-2 text-slate-300">${f.fechaProxima ? esc(dayjs(f.fechaProxima).format('YYYY-MM-DD')) : '-'}</td>
