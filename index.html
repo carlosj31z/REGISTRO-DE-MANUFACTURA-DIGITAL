@@ -826,6 +826,20 @@
         .edad-pend--vieja { color: rgb(var(--danger-rgb)); }
         /* OP sin RMD: órdenes de producción de SAP cuya versión de fabricación no tiene RMD autorizado */
         .op-sin-rmd { display: flex; flex-wrap: wrap; align-items: center; gap: 0.3rem; font-size: 10.5px; line-height: 1.35; color: var(--slate-300); cursor: help; }
+        /* Caracterización: marcas de origen (Listado / Motivo SAP / En programa) y la ventana para revisar el listado */
+        .car-tags { display: flex; flex-wrap: wrap; gap: 0.25rem; margin-top: 0.2rem; }
+        .car-tag { display: inline-block; font-size: 9.5px; font-weight: 700; padding: 0 0.35rem; border-radius: 0.3rem; white-space: nowrap; border: 1px solid; vertical-align: middle; }
+        td .car-tag + .car-tag, .etapa-para + .car-tag { margin-left: 0; }
+        td > .car-tag { margin-left: 0.35rem; }
+        .car-tag--listado { color: rgb(var(--plum-rgb)); background: rgb(var(--plum-rgb) / 0.12); border-color: rgb(var(--plum-rgb) / 0.4); }
+        .car-tag--motivo { color: rgb(var(--copper-rgb)); background: rgb(var(--copper-rgb) / 0.12); border-color: rgb(var(--copper-rgb) / 0.4); }
+        .car-tag--programa, .car-tag--ok { color: rgb(var(--ok-rgb, 81 181 127)); background: rgb(var(--ok-rgb, 81 181 127) / 0.12); border-color: rgb(var(--ok-rgb, 81 181 127) / 0.4); }
+        .car-tag--rev { color: rgb(var(--semaforo-ambar-rgb)); background: rgb(var(--semaforo-ambar-rgb) / 0.12); border-color: rgb(var(--semaforo-ambar-rgb) / 0.4); }
+        .car-tag--sin { color: rgb(var(--danger-rgb, 236 94 68)); background: rgb(var(--danger-rgb, 236 94 68) / 0.12); border-color: rgb(var(--danger-rgb, 236 94 68) / 0.4); }
+        .car-aviso { font-size: 11.5px; color: var(--slate-400); margin: -0.25rem 0 0.75rem; line-height: 1.5; }
+        .car-aviso b { color: var(--slate-200); }
+        .car-nota { font-size: 11px; color: var(--slate-400); margin: -0.5rem 0 0.75rem; }
+        .car-nota:empty { display: none; }
         .op-sin-rmd-tag { font-size: 9.5px; font-weight: 700; padding: 0 0.3rem; border-radius: 0.3rem; color: rgb(var(--semaforo-ambar-rgb)); background: rgb(var(--semaforo-ambar-rgb) / 0.12); border: 1px solid rgb(var(--semaforo-ambar-rgb) / 0.4); white-space: nowrap; }
         .op-sin-rmd-num { font-weight: 700; color: var(--slate-100); font-variant-numeric: tabular-nums; }
         .op-sin-rmd .chip-sap { max-width: 10rem; }
@@ -1745,6 +1759,12 @@
                             <span class="gooey-nav-label">INDICADORES</span>
                         </a>
                     </li>
+                    <li data-tab="caract" title="Caracterización">
+                        <a href="#" onclick="return false;">
+                            <svg class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 3.5h6"/><path d="M10 3.5v5.2L4.8 17.6A2 2 0 0 0 6.5 20.5h11a2 2 0 0 0 1.7-2.9L14 8.7V3.5"/><path d="M7.2 14.5h9.6"/></svg>
+                            <span class="gooey-nav-label">CARACTERIZACIÓN</span>
+                        </a>
+                    </li>
                     <li class="tab-mini" data-tab="forecast" title="Forecast">
                         <a href="#" onclick="return false;">
                             <svg class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 19.5h18"/><path d="M4 16.5c2.6-.6 5-3.6 8-5.5"/><path d="M12 11c2.6-1.6 4.8-3.8 7.5-5.8" stroke-dasharray="1.2 2.4"/><circle cx="12" cy="11" r="1.5" fill="currentColor" stroke="none"/><path d="M19.5 5.2h-2.6M19.5 5.2v2.6"/></svg>
@@ -2483,6 +2503,103 @@
          «CAMBIOS DE CALIDAD DE OPERACIONES»). Cada acuerdo se guarda en Supabase
          (rmd_dashboard_kv, una key «acuerdo:<id>» por acuerdo) para que todos vean
          lo mismo; el script del portal SAP los lee de ahí. -->
+    <!-- Caracterización: las etapas de los productos en caracterización (listado del área + RMD con Motivo CARACTERIZACION), con la
+         misma tabla que Producción. Código en el bloque Caracterizacion al final. -->
+    <div class="tab-content" id="tab-caract">
+        <div class="card card-rmd-highlight p-4 md:p-5 opacity-0 section-spacing" id="cardCaracterizacion">
+            <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-4">
+                <h2 class="flex items-center gap-2.5 flex-wrap">
+                    <span class="rmd-icon-badge">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 3.5h6"/><path d="M10 3.5v5.2L4.8 17.6A2 2 0 0 0 6.5 20.5h11a2 2 0 0 0 1.7-2.9L14 8.7V3.5"/><path d="M7.2 14.5h9.6"/></svg>
+                    </span>
+                    <span class="rmd-panel-title">Caracterizaciones Pendientes de Autorización</span>
+                </h2>
+                <div class="flex items-center gap-2 flex-wrap">
+                    <button type="button" onclick="Caracterizacion.exportar()" class="rmd-action-btn" title="Exportar la tabla a Excel (con las filas del listado sin código de SAP en otra hoja)">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="3.5" width="17" height="17" rx="2"/><path d="M8.5 8.5l7 7M15.5 8.5l-7 7"/></svg>
+                        Exportar Excel
+                    </button>
+                    <button type="button" onclick="Caracterizacion.actualizar()" class="rmd-action-btn" title="Volver a leer los RMD y el listado guardados" aria-label="Actualizar">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 11a8 8 0 0 0-14.6-4.5L4 8"/><path d="M4 3.5V8h4.5"/><path d="M4 13a8 8 0 0 0 14.6 4.5L20 16"/><path d="M20 20.5V16h-4.5"/></svg>
+                    </button>
+                </div>
+            </div>
+
+            <p class="car-aviso" id="carAviso"></p>
+
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mb-4">
+                <div class="val-kpi">
+                    <p class="val-kpi-label">Códigos en caracterización</p>
+                    <p id="carKpiProductos" class="val-kpi-num" style="color: var(--app-text);">0</p>
+                </div>
+                <div class="val-kpi val-kpi--ok">
+                    <p class="val-kpi-label">Códigos Autorizados</p>
+                    <p id="carKpiAutorizados" class="val-kpi-num">0</p>
+                </div>
+                <div class="val-kpi val-kpi--pend">
+                    <p class="val-kpi-label">Códigos Pendientes</p>
+                    <p id="carKpiPendientes" class="val-kpi-num">0</p>
+                </div>
+                <div class="rmd-pendientes-highlight rounded-lg px-3 py-1.5 text-center relative">
+                    <p class="val-kpi-label" style="color: var(--accent);">RMD Pendientes</p>
+                    <p id="carKpiRmd" class="text-3xl font-bold mt-0.5" style="color: var(--accent-strong); font-variant-numeric: tabular-nums;">0</p>
+                </div>
+            </div>
+            <p class="car-nota" id="carKpiPrograma"></p>
+
+            <div id="carEmpty" class="text-xs text-slate-400 text-center py-8 rounded-lg border border-dashed border-slate-700/60">Cargando…</div>
+
+            <div id="carToolbar" class="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-2.5 mb-3" style="display:none;">
+                <div class="relative flex-1 min-w-[160px]">
+                    <input type="text" placeholder="Buscar por código, descripción o nombre del listado..." oninput="clearTimeout(window.__carBuscar); window.__carBuscar = setTimeout(() => Caracterizacion.buscar(this.value), 150);" class="field-input w-full rounded-lg px-3 py-1.5 text-xs transition-colors" aria-label="Buscar">
+                </div>
+                <div class="flex items-center gap-1.5 flex-wrap">
+                    <button onclick="Caracterizacion.filtrar('estado','todos')" id="carFiltroTodos" class="filter-pill active px-3 py-1.5 rounded-lg text-[11px] font-medium">Todos<span class="pill-count" id="carPillTodos"></span></button>
+                    <button onclick="Caracterizacion.filtrar('estado','pendientes')" id="carFiltroPendientes" class="filter-pill px-3 py-1.5 rounded-lg text-[11px] font-medium">Pendientes<span class="pill-count" id="carPillPendientes"></span></button>
+                    <button onclick="Caracterizacion.filtrar('estado','autorizados')" id="carFiltroAutorizados" class="filter-pill px-3 py-1.5 rounded-lg text-[11px] font-medium" title="Etapas autorizadas en SAP o a mano">Autorizados<span class="pill-count" id="carPillAutorizados"></span></button>
+                </div>
+                <div class="flex items-center gap-1.5 flex-wrap">
+                    <select id="carFiltro_planta" onchange="Caracterizacion.filtrar('planta',this.value)" class="field-input filtro-etapa-select" aria-label="Filtrar por planta">
+                        <option value="">Planta: todas</option><option value="P1">Planta 1 ATE</option><option value="P2">Planta 2 LIMA</option>
+                    </select>
+                    <select id="carFiltro_etapa" onchange="Caracterizacion.filtrar('etapa',this.value)" class="field-input filtro-etapa-select" aria-label="Filtrar por etapa">
+                        <option value="">Etapa: todas</option><option value="FABRICACION">Fabricación</option><option value="RECUBRIMIENTO">Recubrimiento</option><option value="ENVASE">Envase</option><option value="INSPECCION">Inspección</option><option value="ACONDICIONADO">Acondicionado</option>
+                    </select>
+                    <select id="carFiltro_sap" onchange="Caracterizacion.filtrar('sap',this.value)" class="field-input filtro-etapa-select" title="Estado en SAP del RMD que decide la etapa" aria-label="Filtrar por estado en SAP">
+                        <option value="">Estado SAP: todos</option><option value="INGRESADO">Ingresado</option><option value="SUSPENDIDO">Suspendido</option><option value="SOLICITADO">Solicitado</option><option value="SIN RMD">Sin RMD</option><option value="OTRO">Otro estado</option>
+                    </select>
+                    <select id="carFiltro_estatus" onchange="Caracterizacion.filtrar('estatus',this.value)" class="field-input filtro-etapa-select" aria-label="Filtrar por estatus de la etapa">
+                        <option value="">Estatus: todos</option><option value="BORRADOR">BORRADOR</option><option value="INGRESAR">INGRESAR</option><option value="FLUJO SAP">FLUJO SAP</option><option value="CONTROL DE CAMBIO">CONTROL DE CAMBIO</option><option value="POR REVISIÓN">POR REVISIÓN</option><option value="SIN ESTATUS">Sin estatus</option>
+                    </select>
+                    <select id="carFiltro_origen" onchange="Caracterizacion.filtrar('origen',this.value)" class="field-input filtro-etapa-select" title="De dónde sale la caracterización" aria-label="Filtrar por origen">
+                        <option value="">Origen: todos</option><option value="listado">En el listado</option><option value="motivo">Con Motivo CARACTERIZACION en SAP</option><option value="sin-motivo">En el listado, sin el Motivo en SAP</option>
+                    </select>
+                    <select id="carFiltro_programa" onchange="Caracterizacion.filtrar('programa',this.value)" class="field-input filtro-etapa-select" title="Si la etapa también está en el Programa de Producción" aria-label="Filtrar por Programa de Producción">
+                        <option value="">Programa: todos</option><option value="si">También en el programa</option><option value="no">Solo caracterización</option>
+                    </select>
+                    <button type="button" onclick="Caracterizacion.limpiar()" class="filtro-etapa-limpiar">Quitar filtros</button>
+                </div>
+                <span id="carContador" class="text-[11px] text-slate-500 whitespace-nowrap sm:ml-auto"></span>
+            </div>
+
+            <div class="overflow-x-auto overflow-y-auto rounded-lg border border-slate-700/50 custom-scrollbar" id="carTablaWrapper" style="display:none; max-height:70vh;">
+                <table class="w-full text-xs table-fixed" id="carTabla">
+                    <colgroup>
+                        <col style="width:6%"><col style="width:10%"><col style="width:25%"><col style="width:8%"><col style="width:10%"><col style="width:16%"><col style="width:11%"><col style="width:8%"><col style="width:6%">
+                    </colgroup>
+                    <thead class="sticky top-0 z-10">
+                        <tr class="text-left uppercase text-[10px] tracking-wider">
+                            <th class="py-2">Planta</th><th class="py-2">Material</th><th class="py-2">Descripción</th><th class="py-2">Sección</th>
+                            <th class="py-2" title="Fecha del correo de caracterización (listado) o de la solicitud en SAP">Fecha caract.</th>
+                            <th class="py-2">Etapa pendiente</th><th class="py-2">Estatus</th><th class="py-2">Responsable</th><th class="py-2">Estado</th>
+                        </tr>
+                    </thead>
+                    <tbody id="carTablaBody"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
     <div class="tab-content" id="tab-acuerdos">
         <div class="card acu-card p-4 md:p-5 opacity-0">
             <div class="acu-cabecera">
@@ -3174,6 +3291,7 @@ alter publication supabase_realtime add table public.rmd_dashboard_kv;`;
                     updateFuentesStatusUI();
                     if (currentTab === 'produccion') runValidacionMateriales();
                     if (currentTab === 'forecast') runValidacionForecast();
+                    if (currentTab === 'caract' && typeof Caracterizacion !== 'undefined') Caracterizacion.refrescar();
                 }, 1500);
             } else if (CLAVES_MANUALES.has(key)) {
                 clearTimeout(recargaManualesTimer);
@@ -3185,6 +3303,7 @@ alter publication supabase_realtime add table public.rmd_dashboard_kv;`;
                     manualAutorizadosForecastMeta = metaManualDesdeGuardado(mmf);
                     if (currentTab === 'produccion') runValidacionMateriales();
                     if (currentTab === 'forecast') runValidacionForecast();
+                    if (currentTab === 'caract' && typeof Caracterizacion !== 'undefined') Caracterizacion.refrescar();
                 }, 800);
             } else if (key === 'val_cambios_sap') {
                 ultimosCambiosSap = await storeGet('val_cambios_sap');
@@ -3203,6 +3322,9 @@ alter publication supabase_realtime add table public.rmd_dashboard_kv;`;
                 }
                 if (currentTab === 'produccion') runValidacionMateriales();
                 if (currentTab === 'forecast') runValidacionForecast();
+                if (currentTab === 'caract' && typeof Caracterizacion !== 'undefined') {
+                    if (key === 'val_caracterizacion_lista' || key === 'val_rmd_caracterizaciones') Caracterizacion.actualizar(); else Caracterizacion.refrescar();
+                }
                 if (key === 'historial_trazabilidad') actualizarBadgeHistorial();
             }
         }
@@ -3778,9 +3900,9 @@ alter publication supabase_realtime add table public.rmd_dashboard_kv;`;
         // ==================== TAB SWITCHING ====================
         let tabSwitchTimeline = null;
         const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-        const TAB_ORDER = ['produccion', 'status', 'forecast', 'rmd', 'acuerdos'];
+        const TAB_ORDER = ['produccion', 'status', 'caract', 'forecast', 'rmd', 'acuerdos'];
 // índice de cada pestaña dentro de la lista visual del gooey nav (mismo orden que los <li> de #gooeyNavList)
-const TAB_TO_GOOEY_INDEX = { produccion: 0, status: 1, forecast: 2, rmd: 3, acuerdos: 4 };
+const TAB_TO_GOOEY_INDEX = { produccion: 0, status: 1, caract: 2, forecast: 3, rmd: 4, acuerdos: 5 };
 let gooeyActiveIndex = 0; // arranca en "produccion" (pestaña activa por defecto), el primer <li> del nav
 
         function switchTab(tab) {
@@ -3801,7 +3923,8 @@ let gooeyActiveIndex = 0; // arranca en "produccion" (pestaña activa por defect
                 produccion: 'radial-gradient(circle, rgba(16, 185, 129, 0.15) 0%, rgba(59, 130, 246, 0.1) 40%, rgba(0, 0, 0, 0) 70%)',
                 forecast: 'radial-gradient(circle, rgba(244, 63, 94, 0.15) 0%, rgba(249, 115, 22, 0.1) 40%, rgba(0, 0, 0, 0) 70%)',
                 acuerdos: 'radial-gradient(circle, rgba(160, 123, 187, 0.15) 0%, rgba(224, 168, 156, 0.1) 40%, rgba(0, 0, 0, 0) 70%)',
-                status: 'radial-gradient(circle, rgba(106, 92, 188, 0.16) 0%, rgba(224, 136, 58, 0.1) 40%, rgba(0, 0, 0, 0) 70%)'
+                status: 'radial-gradient(circle, rgba(106, 92, 188, 0.16) 0%, rgba(224, 136, 58, 0.1) 40%, rgba(0, 0, 0, 0) 70%)',
+                caract: 'radial-gradient(circle, rgba(160, 123, 187, 0.16) 0%, rgba(16, 185, 129, 0.1) 40%, rgba(0, 0, 0, 0) 70%)'
             };
             const targetGlow = glowByTab[tab] || glowByTab.produccion;
 
@@ -3821,6 +3944,8 @@ let gooeyActiveIndex = 0; // arranca en "produccion" (pestaña activa por defect
                     Acuerdos.alEntrar();
                 } else if (tab === 'status') {
                     StatusRmd.alEntrar();
+                } else if (tab === 'caract') {
+                    Caracterizacion.alEntrar();
                 }
             };
 
@@ -5660,6 +5785,7 @@ function buildDateColumnMapPlanta1(headerRow, weekLabelRow, hiddenCols) {
             }
             if (currentTab === 'produccion' && typeof refiltrarTablaPendientes === 'function') refiltrarTablaPendientes();
             if (currentTab === 'forecast' && typeof refiltrarTablaPendientesForecast === 'function') refiltrarTablaPendientesForecast();
+            if (currentTab === 'caract' && typeof Caracterizacion !== 'undefined') Caracterizacion.refrescar();
         };
 
         function escapeHtmlRmdConfig(s) {
@@ -7026,6 +7152,10 @@ async function downloadPlanProduccionFromCloud() {
                         if (traz) await storeSet('val_rmd_trazabilidad', traz);
                     } catch (err) { console.error('Trazabilidad de SAP:', err); }
                 }
+                // Script v1.110.0+: el listado de caracterización del área ya identificado en el portal (pestaña CARACTERIZACIÓN).
+                if (msg.caracterizacion) {
+                    try { await Caracterizacion.recibir(msg.caracterizacion); } catch (err) { console.error('Listado de caracterización:', err); }
+                }
                 const r = await procesarFilasRmd(rows, { fileName: `SAP_${String(msg.generado || '').slice(0, 10) || 'portal'}.xlsx`, origen: 'sap', generado: msg.generado,
                     usuarioTxt: identidadSap ? identidadSap.usuarioTxt : null });
                 responder(r && r.ok ? { ok: true, resumen: r.resumen } : { ok: false, motivo: (r && r.motivo) || 'no se pudo procesar' });
@@ -7288,6 +7418,7 @@ async function downloadPlanProduccionFromCloud() {
             // usuario ya eligió ASC o PRO, sin esperar a la próxima acción.
             if (currentTab === 'produccion' && typeof refiltrarTablaPendientes === 'function') refiltrarTablaPendientes();
             if (currentTab === 'forecast' && typeof refiltrarTablaPendientesForecast === 'function') refiltrarTablaPendientesForecast();
+            if (currentTab === 'caract' && typeof Caracterizacion !== 'undefined') Caracterizacion.refrescar();
         };
         // Los responsables de etapa ahora tienen exactamente la misma garantía
         // de persistencia que "Autorizados manual": NUNCA se borran de forma
@@ -7367,6 +7498,7 @@ async function downloadPlanProduccionFromCloud() {
             else { manualAutorizados.add(key); manualAutorizadosMeta.set(key, metaNuevaManual(material, etapaFija)); }
             await saveManualAutorizados();
             runValidacionMateriales();
+            if (currentTab === 'caract' && typeof Caracterizacion !== 'undefined') Caracterizacion.refrescar();
         }
 
         function runValidacionMateriales() {
@@ -7807,7 +7939,7 @@ async function downloadPlanProduccionFromCloud() {
                 return `<tr class="${rowCls}">
                     <td class="whitespace-nowrap py-2 text-slate-300">${plantaCelda(f)}</td>
                     <td class="whitespace-nowrap py-2"><span class="mat-code">${esc(f.codigo)}</span></td>
-                    <td class="text-slate-200 py-2">${esc(f.descripcion || '-')}${htmlProductosDeEtapa(f)}</td>
+                    <td class="text-slate-200 py-2">${esc(f.descripcion || '-')}${htmlProductosDeEtapa(f)}${typeof Caracterizacion !== 'undefined' ? Caracterizacion.chipProduccion(f) : ''}</td>
                     <td class="text-slate-400 py-2">${esc(f.areas || '')}</td>
                     <td class="whitespace-nowrap py-2"><div class="fecha-inicio"><span class="fecha-inicio-valor">${fechaTxt}</span>${f.estado === 'pendiente' ? urgenciaInicioHtml(f.fechaProxima) : ''}</div></td>
                     <td class="py-2">${c.etapa}</td>
@@ -9404,7 +9536,7 @@ function updateForecastActiveFiltersBadge() {
             'val_flags', 'val_rmd_autorizados_detalle', 'val_rmd_preciso', 'val_cambios_sap', 'val_op_sap',
             'val_manual_autorizados', 'val_manual_autorizados_meta', 'val_manual_autorizados_forecast', 'val_manual_autorizados_forecast_meta',
             'val_responsables_etapa', 'val_estatus_etapa',
-            'val_rmd_indicadores_mes', 'val_rmd_caracterizaciones', 'val_estatus_caracterizacion', 'val_rmd_trazabilidad',
+            'val_rmd_indicadores_mes', 'val_rmd_caracterizaciones', 'val_estatus_caracterizacion', 'val_rmd_trazabilidad', 'val_caracterizacion_lista',
             'ind_horas_efectivas', 'historial_trazabilidad', 'tour_completed'
         ];
 
@@ -9653,7 +9785,8 @@ if (activeLi && container && pillEl) {
         produccion: 'radial-gradient(circle, rgba(16, 185, 129, 0.15) 0%, rgba(59, 130, 246, 0.1) 40%, rgba(0, 0, 0, 0) 70%)',
         forecast: 'radial-gradient(circle, rgba(244, 63, 94, 0.15) 0%, rgba(249, 115, 22, 0.1) 40%, rgba(0, 0, 0, 0) 70%)',
         acuerdos: 'radial-gradient(circle, rgba(160, 123, 187, 0.15) 0%, rgba(224, 168, 156, 0.1) 40%, rgba(0, 0, 0, 0) 70%)',
-                status: 'radial-gradient(circle, rgba(106, 92, 188, 0.16) 0%, rgba(224, 136, 58, 0.1) 40%, rgba(0, 0, 0, 0) 70%)'
+                status: 'radial-gradient(circle, rgba(106, 92, 188, 0.16) 0%, rgba(224, 136, 58, 0.1) 40%, rgba(0, 0, 0, 0) 70%)',
+                caract: 'radial-gradient(circle, rgba(160, 123, 187, 0.16) 0%, rgba(16, 185, 129, 0.1) 40%, rgba(0, 0, 0, 0) 70%)'
     };
     if (glowOrb) glowOrb.style.background = glowByTab[tab] || glowByTab.produccion;
 
@@ -9669,6 +9802,8 @@ if (activeLi && container && pillEl) {
         Acuerdos.alEntrar();
     } else if (tab === 'status') {
         StatusRmd.alEntrar();
+    } else if (tab === 'caract') {
+        Caracterizacion.alEntrar();
     }
     animateCurrentTabCards();
 }
@@ -13185,6 +13320,308 @@ async function maybeAutoStartTour() {
             _detalleAcumulado: (abierto) => { vista.acuAbierto = abierto; },
             trazabilidadDesdePuente, lineaDeTiempo, motivoObservacion,
             _ultimo: () => ultimo, _valoresPpt: valoresPpt
+        };
+    })();
+    </script>
+    <script>
+    // ================= Caracterización =================
+    // Pestaña CARACTERIZACIÓN: las etapas de los productos en caracterización, con la misma tabla que Producción (estado en SAP,
+    // Estatus, responsable, ✓ a mano). Qué se sigue (todo llega del portal RMD con «Enviar a Status RMD», sin cargar ningún Excel):
+    //  - los RMD y solicitudes de SAP con Motivo CARACTERIZACION (val_rmd_caracterizaciones, los mismos de la Ruta 2 de
+    //    INDICADORES) registrados desde 2026 o aún pendientes;
+    //  - el listado de caracterización del área ya identificado en el portal (msg.caracterizacion del script v1.110.0+, guardado en
+    //    val_caracterizacion_lista): cada fila con sus códigos de SAP. Sirve sobre todo para los productos que aún no tienen
+    //    versión nueva (no llegó el borrador de Producción), que todavía no pueden llevar el Motivo.
+    // Cada fila es una etapa (código de la etapa + etapa), con la MISMA clave que en Producción: si el producto también está en el
+    // Programa de Producción, aparece en las dos pestañas con el mismo Estatus, responsable y autorización a mano, y cada pestaña lo
+    // marca («En programa» aquí, «Caracterización» en Producción).
+    const Caracterizacion = (() => {
+        const CLAVE_LISTA = 'val_caracterizacion_lista';
+        const MOTIVO_DESDE = '2026-01-01';
+        const CARACT_DESDE = '2026-05-18'; // correo de caracterización: una versión autorizada antes no es la caracterizada
+        const esc = (s) => escapeHtmlRmdConfig(s == null ? '' : s);
+        const PL_TXT = { P1: 'ATE', P2: 'LIMA' };
+
+        const sinTildes = (s) => String(s == null ? '' : s).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase();
+        // Material de un RMD o solicitud de SAP (para los de Motivo CARACTERIZACION).
+        function materialesDeRmd() {
+            const m = new Map();
+            ((rmdPrecisoDatos && rmdPrecisoDatos.filas) || []).forEach(([rmd, , , , , , defecto, , recetas, , sol]) => {
+                const mat = defecto || ((recetas || [])[0] || [])[0] || '';
+                if (!mat) return;
+                if (rmd && !m.has('R' + rmd)) m.set('R' + rmd, mat);
+                if (sol && !m.has('S' + sol)) m.set('S' + sol, mat);
+            });
+            return m;
+        }
+
+        // ---- Estado ----
+        let lista = null;            // val_caracterizacion_lista: { v, origen: 'portal', generado, items: [{ ...item, materiales: [] }] }
+        let motivoSap = null;        // val_rmd_caracterizaciones
+        let enPrograma = new Set();  // material::ETAPA de las etapas del Programa de Producción (P1 y P2)
+        let clavesCaract = null;     // material::ETAPA de las caracterizaciones (para la marca de Producción)
+        let filasUltimas = [];
+        const vista = { estado: 'todos', busqueda: '', planta: '', origen: '', programa: '' };
+        const fx = { etapa: '', sap: '', edad: '', estatus: '' };
+        let cargando = null;
+        let programaGuardado = [null, null]; // prod_data_planta1 / prod_data_planta2
+
+        async function cargar() {
+            const [l, m, d1, d2] = await Promise.all([storeGet(CLAVE_LISTA), storeGet('val_rmd_caracterizaciones'), storeGet('prod_data_planta1'), storeGet('prod_data_planta2')]);
+            lista = l && Array.isArray(l.items) ? l : { v: 1, items: [] };
+            motivoSap = m && Array.isArray(m.items) ? m : { items: [] };
+            programaGuardado = [d1, d2];
+            clavesCaract = null;
+        }
+        function calcularEnPrograma() {
+            const s = new Set();
+            if (!rmdPreciso) return s;
+            const vistos = new Set();
+            programaGuardado.forEach((g) => ((g && g.data) || []).forEach((p) => {
+                const cod = normalizeMaterialCode(p.codigo);
+                if (!cod || vistos.has(cod)) return;
+                vistos.add(cod);
+                const r = evaluarMaterialPreciso(cod);
+                r.etapas.forEach((e) => (r.detalle[e].candidatos || []).forEach((c) => s.add(`${c.material}::${e}`)));
+            }));
+            return s;
+        }
+        const motivoCuenta = (it) => {
+            const est = normalizeEstadoRmd(it.estado);
+            if (est === 'SOLICITUD RECHAZADA' || est === 'CANCELADO') return false;
+            const resuelto = est === 'AUTORIZADO' || est === 'SUSPENDIDO';
+            return !resuelto || (it.fechaSolicitud || '') >= MOTIVO_DESDE || (it.fechaAutorizacion || '') >= MOTIVO_DESDE;
+        };
+        // Las etapas a seguir: material + etapa, con lo que dicen el listado y el Motivo de SAP.
+        function etapasSeguidas() {
+            const m = new Map();
+            const ent = (material, etapa) => {
+                const k = `${material}::${etapa}`;
+                if (!m.has(k)) m.set(k, { material, etapa, listado: [], motivo: [], pl: new Set(), secciones: new Set(), fechas: [] });
+                return m.get(k);
+            };
+            ((lista && lista.items) || []).forEach((it) => (it.materiales || []).forEach((mat) => {
+                const e = ent(mat, it.etapa);
+                e.listado.push(it); e.pl.add(it.pl); if (it.seccion) e.secciones.add(it.seccion); if (it.fechaCaract) e.fechas.push(it.fechaCaract);
+            }));
+            const matDe = materialesDeRmd();
+            ((motivoSap && motivoSap.items) || []).filter(motivoCuenta).forEach((it) => {
+                const etapa = mapEtapaAFija(normalizeEtapa(it.etapa));
+                const mat = matDe.get('R' + it.codigo) || matDe.get('S' + it.sol);
+                if (!etapa || !mat) return;
+                const e = ent(mat, etapa);
+                e.motivo.push(it); if (it.planta) e.pl.add(it.planta); if (it.fechaSolicitud) e.fechas.push(it.fechaSolicitud);
+            });
+            return m;
+        }
+        function clavesCaracterizacion() {
+            if (!clavesCaract) clavesCaract = new Set(Array.from(etapasSeguidas().keys()));
+            return clavesCaract;
+        }
+
+        // Filas con la misma lógica que Producción (etapasDeProductos): una por etapa, con el estado en SAP del RMD de ese código.
+        function construirFilas() {
+            const seguidas = etapasSeguidas();
+            clavesCaract = new Set(seguidas.keys());
+            const porMaterial = new Map();
+            seguidas.forEach((e) => { if (!porMaterial.has(e.material)) porMaterial.set(e.material, []); porMaterial.get(e.material).push(e); });
+            const productos = [];
+            porMaterial.forEach((ents, material) => {
+                const detalle = {};
+                ents.forEach((e) => { detalle[e.etapa] = evaluarEtapaArbol(material, e.etapa, [{ material, rutas: [] }]); });
+                const fechaDe = (fija) => { const e = ents.find((x) => x.etapa === fija); return e && e.fechas.length ? e.fechas.slice().sort()[0] : null; };
+                productos.push({
+                    material, descripcion: (rmdPreciso && rmdPreciso.descDeMaterial.get(material)) || (ents[0].listado[0] || ents[0].motivo[0] || {}).nombre || (ents[0].motivo[0] || {}).descripcion || '',
+                    r: { etapas: ETAPAS_FIJAS.filter((x) => detalle[x]), detalle, conArbol: true, verificable: true },
+                    areas: Array.from(new Set(ents.flatMap((e) => Array.from(e.secciones)))), plantas: Array.from(new Set(ents.flatMap((e) => Array.from(e.pl)))).map((p) => PL_TXT[p] || p),
+                    fechaDe, motivoRevisar: ''
+                });
+            });
+            revisarAutorizacionesManuales();
+            const { filas } = etapasDeProductos(productos, manualAutorizados);
+            guardarMigracionClaves();
+            enPrograma = calcularEnPrograma();
+            filas.forEach((f) => {
+                const e = seguidas.get(`${f.codigo}::${f.fija}`) || seguidas.get(`${f.producto}::${f.fija}`);
+                f.listado = e ? e.listado : []; f.motivo = e ? e.motivo : []; f.pl = e ? Array.from(e.pl) : [];
+                f.enPrograma = !!(f.d && f.d.candidatos.some((c) => enPrograma.has(`${c.material}::${f.fija}`)));
+                // Del listado y aún sin versión nueva: SAP la da por autorizada, pero esa autorización es anterior a la caracterización
+                // (no llegó el borrador). Se sigue como pendiente hasta que se autorice una versión desde la fecha de caracterización.
+                if (f.estado === 'sap' && f.listado.length && !f.motivo.length) {
+                    const desde = f.listado.map((it) => it.fechaCaract).filter(Boolean).sort()[0] || CARACT_DESDE;
+                    const c = f.d && f.d.candidatos[0], det = c && !c.sinRmd ? filaDetalleDeEntrada(c) : null;
+                    const m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(String((det && det.fechaAutorizacion) || '').trim());
+                    const fAut = m ? `${m[3]}-${m[2]}-${m[1]}` : '';
+                    if (!fAut || fAut < desde) { f.sinVersionNueva = true; f.estado = manualAutorizados.has(f.clave) ? 'autorizado' : 'pendiente'; }
+                }
+            });
+            return ordenarFilasEtapa(filas);
+        }
+        function visibles() {
+            let v = filasVisiblesEtapa(filasUltimas, vista.estado, vista.busqueda, fx);
+            const q = vista.busqueda.trim().toLowerCase();
+            if (q) v = v.concat(filasUltimas.filter((f) => !v.includes(f) && f.listado.some((it) => it.nombre.toLowerCase().includes(q)) && filaPasaFiltros(f, fx)
+                && (vista.estado === 'todos' || (vista.estado === 'pendientes') === (f.estado === 'pendiente'))));
+            if (vista.planta) v = v.filter((f) => f.pl.includes(vista.planta));
+            if (vista.origen === 'listado') v = v.filter((f) => f.listado.length);
+            if (vista.origen === 'motivo') v = v.filter((f) => f.motivo.length);
+            if (vista.origen === 'sin-motivo') v = v.filter((f) => f.listado.length && !f.motivo.length);
+            if (vista.programa === 'si') v = v.filter((f) => f.enPrograma);
+            if (vista.programa === 'no') v = v.filter((f) => !f.enPrograma);
+            return v;
+        }
+
+        // ---- Pintar ----
+        const $ = (id) => document.getElementById(id);
+        function origenHtml(f) {
+            const tags = [];
+            if (f.listado.length) tags.push(`<span class="car-tag car-tag--listado" title="${esc(f.listado.map((it) => `Listado ${PL_TXT[it.pl] || it.pl}: ${it.nombre} (${it.etapa.slice(0, 3)})${it.estatusListado ? ' · ' + it.estatusListado : ''}${it.obs ? ' · ' + it.obs : ''}`).join('\n'))}">Listado</span>`);
+            if (f.motivo.length) tags.push(`<span class="car-tag car-tag--motivo" title="${esc(f.motivo.map((it) => `${it.codigo ? 'RMD ' + it.codigo : 'Solicitud ' + it.sol} v${it.version} · ${it.estado} · Motivo CARACTERIZACION`).join('\n'))}">Motivo SAP</span>`);
+            if (f.sinVersionNueva) tags.push('<span class="car-tag car-tag--rev" title="Su última versión se autorizó antes de la caracterización: falta la versión nueva (no llegó el borrador de Producción). Se sigue como pendiente.">Sin versión nueva</span>');
+            if (f.enPrograma) tags.push('<span class="car-tag car-tag--programa" title="Esta etapa también está en el Programa de Producción: comparte el Estatus, el responsable y la autorización a mano con la pestaña Producción.">En programa</span>');
+            return tags.join('');
+        }
+        function pintar() {
+            const body = $('carTablaBody');
+            if (!body) return;
+            const todas = filasUltimas;
+            actualizarContadoresPendientes(todas, ['carPillTodos', 'carPillPendientes', 'carPillAutorizados']);
+            const v = visibles();
+            $('carContador').textContent = textoContadorFilas(v, todas);
+            ['etapa', 'sap', 'estatus'].forEach((k) => { const el = $('carFiltro_' + k); if (el) { el.value = fx[k]; el.classList.toggle('is-activo', !!fx[k]); } });
+            ['planta', 'origen', 'programa'].forEach((k) => { const el = $('carFiltro_' + k); if (el) { el.value = vista[k]; el.classList.toggle('is-activo', !!vista[k]); } });
+            [['todos', 'carFiltroTodos'], ['pendientes', 'carFiltroPendientes'], ['autorizados', 'carFiltroAutorizados']].forEach(([e, id]) => $(id).classList.toggle('active', vista.estado === e));
+            if (!v.length) { body.innerHTML = '<tr><td colspan="9" class="text-center text-slate-500 py-6 text-xs">Ninguna etapa coincide con el filtro/búsqueda actual.</td></tr>'; return; }
+            body.innerHTML = v.map((f) => {
+                const c = celdasDeEtapa(f, 'caract');
+                const estatus = c.estatus.replace('id="estatus_', 'id="estatuscar_'), resp = c.resp.replace('id="resppendcc_', 'id="respcarpendcc_');
+                const nombres = Array.from(new Set(f.listado.map((it) => it.nombre))).filter((n) => sinTildes(n) !== sinTildes(f.descripcion));
+                const rowCls = f.estado === 'pendiente' ? 'border-b border-slate-800/60 last:border-0 hover:bg-slate-800/40 transition-colors' : 'border-b border-slate-800/60 last:border-0 fila-autorizada-manual transition-colors';
+                return `<tr class="${rowCls}">
+                    <td class="whitespace-nowrap py-2 text-slate-300">${esc(f.plantas || '—')}</td>
+                    <td class="whitespace-nowrap py-2"><span class="mat-code">${esc(f.codigo)}</span></td>
+                    <td class="text-slate-200 py-2">${esc(f.descripcion || '-')}${nombres.length ? `<span class="etapa-para" title="Nombre en el listado de caracterización">Listado: ${esc(nombres.join(' · '))}</span>` : ''}<span class="car-tags">${origenHtml(f)}</span></td>
+                    <td class="text-slate-400 py-2">${esc(f.areas || '')}</td>
+                    <td class="whitespace-nowrap py-2 text-slate-300">${f.fechaProxima ? esc(dayjs(f.fechaProxima).format('YYYY-MM-DD')) : '-'}</td>
+                    <td class="py-2">${c.etapa}</td>
+                    <td class="py-2">${estatus}</td>
+                    <td class="py-2">${resp}</td>
+                    <td class="py-2">${c.accion}</td>
+                </tr>`;
+            }).join('');
+            body.querySelectorAll('select[id^="estatuscar_"]').forEach((sel) => {
+                const parts = sel.id.split('_');
+                const valorGuardado = estatusEtapa.get(responsableKey(parts[1], parts.slice(2).join('_'))) || '';
+                if (sel.value !== valorGuardado) sel.value = valorGuardado;
+            });
+        }
+        function pintarKpis() {
+            const etapas = filasUltimas.filter((f) => f.fija);
+            const pend = etapas.filter((f) => f.estado === 'pendiente');
+            const productos = new Set(etapas.map((f) => f.codigo));
+            const prodPend = new Set(pend.map((f) => f.codigo));
+            animateCounter('carKpiProductos', productos.size, 1);
+            animateCounter('carKpiAutorizados', productos.size - prodPend.size, 1);
+            animateCounter('carKpiPendientes', prodPend.size, 1);
+            animateCounter('carKpiRmd', pend.length, 1);
+            const enProg = etapas.filter((f) => f.enPrograma).length;
+            $('carKpiPrograma').textContent = enProg ? `${plural(enProg, 'etapa', 'etapas')} también en el Programa de Producción` : '';
+        }
+        function pintarAvisos() {
+            const items = ((lista && lista.items) || []).filter((it) => it.materiales && it.materiales.length);
+            const partes = [];
+            if (items.length) partes.push(`Listado del área identificado en el portal (${dayjs(lista.generado).format('DD/MM/YYYY HH:mm')}): ${plural(items.length, 'fila', 'filas')}`);
+            const nMot = ((motivoSap && motivoSap.items) || []).filter(motivoCuenta).length;
+            partes.push(`${plural(nMot, 'RMD o solicitud', 'RMD o solicitudes')} de SAP con Motivo CARACTERIZACION (desde 2026 o pendientes)`);
+            $('carAviso').innerHTML = partes.join(' · ');
+        }
+        async function actualizar(recargar = true) {
+            const empty = $('carEmpty'), wrap = $('carTablaWrapper'), toolbar = $('carToolbar');
+            if (!empty) return;
+            if (recargar || !lista) { cargando = cargando || cargar().finally(() => { cargando = null; }); await cargando; }
+            if (!rmdPreciso || !rmdPreciso.totalEntradas) {
+                empty.style.display = 'block'; wrap.style.display = 'none'; toolbar.style.display = 'none';
+                empty.textContent = 'Faltan los RMD de SAP: usa «Enviar a Status RMD» en el portal (o carga el Exportado RMD en Producción).';
+                return;
+            }
+            filasUltimas = construirFilas();
+            pintarAvisos(); pintarKpis();
+            if (!filasUltimas.length) {
+                empty.style.display = 'block'; wrap.style.display = 'none'; toolbar.style.display = 'none';
+                empty.innerHTML = 'Aún no hay caracterizaciones: ponles el Motivo CARACTERIZACION en el portal RMD y usa <b>«Enviar a Status RMD»</b>.';
+                return;
+            }
+            empty.style.display = 'none'; wrap.style.display = 'block'; toolbar.style.display = 'flex';
+            pintar();
+            if (currentTab === 'produccion' && typeof refiltrarTablaPendientes === 'function') refiltrarTablaPendientes();
+        }
+
+        // ---- Listado identificado que manda el portal (msg.caracterizacion) ----
+        // c: { v, generado, items: [{ id, pl, seccion, nombre, etapa, estatusListado, estatus, respCC, fechaCaract, obs, materiales: [] }] }.
+        // Se guarda tal cual y el Estatus del listado pasa a las etapas que aún no tienen uno (lo elegido aquí o en Producción manda).
+        async function recibir(c) {
+            if (!c || !Array.isArray(c.items)) return false;
+            const etapas = new Set(ETAPAS_FIJAS);
+            const items = c.items.filter((it) => it && it.nombre && etapas.has(it.etapa)).map((it) => ({ ...it, materiales: (it.materiales || []).map(normalizeMaterialCode).filter(Boolean) }));
+            const nuevo = { v: 2, origen: 'portal', generado: c.generado || new Date().toISOString(), recibido: new Date().toISOString(), items };
+            if (!(await storeSet(CLAVE_LISTA, nuevo))) return false;
+            lista = nuevo; clavesCaract = null;
+            let cambios = 0;
+            items.forEach((it) => it.materiales.forEach((m) => {
+                if (!it.estatus || !ESTATUS_ETAPA_OPCIONES.includes(it.estatus)) return;
+                const k = responsableKey(m, it.etapa);
+                if (estatusEtapa.get(k)) return;
+                estatusEtapa.set(k, it.estatus);
+                responsablesEtapa.set(k, it.estatus === ESTATUS_CC ? (it.respCC || '') : (ESTATUS_ETAPA_RESPONSABLE_DEFECTO[it.estatus] || ''));
+                cambios++;
+            }));
+            if (cambios) await Promise.all([saveEstatusEtapa(), saveResponsablesEtapa()]);
+            return true;
+        }
+
+        // ---- Excel ----
+        function exportar() {
+            const v = visibles().filter((f) => f.fija);
+            if (!v.length) { Swal.fire({ icon: 'info', title: 'Nada que exportar', background: '#0f172a', timer: 1800, showConfirmButton: false }); return; }
+            const filas = v.map((f) => {
+                const cand = f.d && f.d.candidatos[0];
+                return {
+                    'Planta': f.plantas || '', 'Material': f.codigo, 'Descripción': f.descripcion || '', 'Nombre en el listado': Array.from(new Set(f.listado.map((it) => it.nombre))).join(' · '),
+                    'Sección': f.areas || '', 'Fecha caracterización': f.fechaProxima ? dayjs(f.fechaProxima).format('YYYY-MM-DD') : '', 'Etapa': ETAPAS_FIJAS_LABEL[f.fija] || f.fija,
+                    'Estado en SAP': cand ? (cand.sinRmd ? 'Sin RMD' : `${cand.estado} v${cand.version}`) : '', 'RMD': cand ? (cand.rmd || cand.sol || '') : '',
+                    'Situación': f.estado === 'pendiente' ? 'Pendiente' : (f.estado === 'autorizado' ? 'Autorizado a mano' : 'Autorizado en SAP'),
+                    'Estatus': f.estado === 'pendiente' ? estatusDeFila(f) : '', 'Responsable': f.estado === 'pendiente' ? responsableDeFila(f) : '',
+                    'En listado': f.listado.length ? 'Sí' : 'No', 'Motivo CARACTERIZACION en SAP': f.motivo.length ? 'Sí' : 'No', 'En el Programa de Producción': f.enPrograma ? 'Sí' : 'No'
+                };
+            });
+            const sinCodigo = ((lista && lista.items) || []).filter((it) => !(it.materiales || []).length)
+                .map((it) => ({ 'Planta': PL_TXT[it.pl] || it.pl, 'Sección': it.seccion, 'Nombre': it.nombre, 'Etapa': ETAPAS_FIJAS_LABEL[it.etapa] || it.etapa, 'Estatus del listado': it.estatusListado || '', 'Observación': it.obs || '' }));
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(filas), 'Caracterizacion');
+            if (sinCodigo.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(sinCodigo), 'Sin codigo');
+            XLSX.writeFile(wb, `Caracterizacion_Etapas_${dayjs().format('YYYYMMDD_HHmm')}.xlsx`, { compression: true });
+        }
+
+        // Marca de la pestaña Producción: la etapa también está en caracterización.
+        function chipProduccion(f) {
+            if (!f || !f.fija || !lista) return '';
+            const s = clavesCaracterizacion();
+            if (!s.size || !(f.d && f.d.candidatos.some((c) => s.has(`${c.material}::${f.fija}`)))) return '';
+            return '<span class="car-tag car-tag--listado" title="Esta etapa también está en caracterización (pestaña CARACTERIZACIÓN): comparten el Estatus, el responsable y la autorización a mano.">Caracterización</span>';
+        }
+        // Al arrancar: se lee el listado para poder marcar las etapas de Producción.
+        function iniciar() {
+            setTimeout(() => { cargar().then(() => { if (currentTab === 'produccion' && typeof refiltrarTablaPendientes === 'function') refiltrarTablaPendientes(); }).catch((e) => console.error('Caracterización:', e)); }, 1500);
+        }
+        if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', iniciar); else iniciar();
+
+        return {
+            alEntrar: () => actualizar(true), actualizar: () => actualizar(true), refrescar: () => { if (lista) actualizar(false); },
+            recibir, exportar, chipProduccion,
+            filtrar: (k, v) => { if (k in fx) fx[k] = v || ''; else vista[k] = v || ''; pintar(); },
+            buscar: (q) => { vista.busqueda = q || ''; pintar(); },
+            limpiar: () => { Object.assign(fx, { etapa: '', sap: '', edad: '', estatus: '' }); Object.assign(vista, { planta: '', origen: '', programa: '' }); pintar(); },
+            _filas: () => filasUltimas
         };
     })();
     </script>
