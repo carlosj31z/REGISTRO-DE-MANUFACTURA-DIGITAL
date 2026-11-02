@@ -1129,7 +1129,14 @@
         ::-webkit-scrollbar-thumb { background: var(--scroll-thumb); border-radius: 10px; }
         ::-webkit-scrollbar-thumb:hover { background: var(--scroll-thumb-hover); }
 
-        .tab-content { display: none; will-change: transform, opacity, filter; }
+        /* Sin will-change permanente: dejaba cada pestaña (Producción,
+           INDICADORES…) como capa de GPU todo el tiempo, y Chrome pinta el
+           texto de esas capas sin suavizado subpíxel y re-escalado, por eso
+           la tabla de pendientes se veía borrosa / con "bloom" frente a los
+           selectores del encabezado. Ahora la pista solo se da durante el
+           cambio de pestaña (body.is-tab-switching) y luego se suelta. */
+        .tab-content { display: none; }
+        body.is-tab-switching .tab-content { will-change: transform, opacity, filter; }
         .tab-content.active { display: block; }
 
         body.is-tab-switching #tab-rmd,
@@ -1290,7 +1297,7 @@
             box-shadow: 0 8px 20px -8px rgb(var(--ok-rgb) / 0.6);
         }
 
-        .tilt-card { transform-style: preserve-3d; will-change: transform; }
+        .tilt-card { transform-style: preserve-3d; }
         .spotlight {
             position: absolute; inset: 0; border-radius: inherit;
             background: radial-gradient(500px circle at var(--x, 50%) var(--y, 50%), rgba(255,255,255,0.06), transparent 40%);
@@ -3764,7 +3771,7 @@ alter publication supabase_realtime add table public.rmd_dashboard_kv;`;
                     const ry = ((x / rect.width) - 0.5) * 6;
                     gsap.to(card, { rotateX: rx, rotateY: ry, duration: 0.4, ease: "power2.out", transformPerspective: 600 });
                 });
-                card.addEventListener('mouseleave', () => { gsap.to(card, { rotateX: 0, rotateY: 0, duration: 0.6, ease: "power3.out" }); });
+                card.addEventListener('mouseleave', () => { gsap.to(card, { rotateX: 0, rotateY: 0, duration: 0.6, ease: "power3.out", clearProps: "transform" }); });
             });
         }
 
