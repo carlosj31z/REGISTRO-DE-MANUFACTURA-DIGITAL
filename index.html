@@ -12100,7 +12100,10 @@ async function maybeAutoStartTour() {
             const h = d.r1 && !d.r1.error && d.r1[pl] && d.r1[pl].horizonte;
             return h ? `${h.ini.format('DD/MM/YYYY')} – ${h.fin.format('DD/MM/YYYY')}` : '';
         }
+        // Pedido de Carlos (02/11/2026): el Programa PLA de la lámina es el periodo del status que se elige arriba (Desde – Hasta),
+        // no el horizonte de la semana de carga. El horizonte queda solo si no hay periodo.
         function rangoPrograma(d) {
+            if (d.per && d.per.texto) return d.per.texto;
             const a = textoHorizonte(d, 'P1'), b = textoHorizonte(d, 'P2');
             if (!a && !b) return d.per.programa;
             if (a === b || !b) return a;
@@ -12156,7 +12159,7 @@ async function maybeAutoStartTour() {
         const leyenda = `<div class="sts-leyenda">${tagResp('PRO')}<span class="sts-chip">Producción</span>${tagResp('DOC')}<span class="sts-chip">QA · Documentación</span>${tagResp('ASC')}<span class="sts-chip">Aseguramiento de la Calidad / CC</span></div>`;
         function htmlRuta1(d) {
             const r1 = d.r1, mes = d.per.hasta.format('YYYY-MM');
-            const extra = (pl) => (r1[pl].sinDatos ? ' <span class="sts-chip">sin Programa de Producción cargado</span>' : ` <span class="sts-chip">${plural(r1[pl].productos, 'producto programado', 'productos programados')}${r1[pl].horizonte ? ` · ${esc(r1[pl].horizonte.ini.format('DD/MM'))}–${esc(r1[pl].horizonte.fin.format('DD/MM'))}` : ''}</span>`);
+            const extra = (pl) => (r1[pl].sinDatos ? ' <span class="sts-chip">sin Programa de Producción cargado</span>' : ` <span class="sts-chip">${plural(r1[pl].productos, 'producto programado', 'productos programados')}${r1[pl].horizonte ? ` · cargado el ${esc(r1[pl].horizonte.carga.format('DD/MM'))}` : ''}</span>`);
             const cuerpo = r1.error ? `<div class="sts-aviso"><span>${esc(r1.error)}</span></div>`
                 : (r1.sinArbol ? '<div class="sts-aviso"><span>No se pudo cargar el árbol de materiales de SAP: solo se cuenta el RMD del propio código de cada producto.</span></div>' : '')
                   + ['P1', 'P2'].map((pl) => htmlRuta(r1[pl], pl, 'r1', { autKey: `cuadro|${pl}|${mes}|aut`, extra: extra(pl),
@@ -12167,7 +12170,7 @@ async function maybeAutoStartTour() {
                     <div class="sts-seccion-sub">RMD pendientes por etapa y responsable · ${esc(d.per.mesAnio)} · Programa PLA ${esc(rangoPrograma(d))}</div>
                 </div>${leyenda}</div>
                 ${cuerpo}
-                <p class="sts-nota">Pendientes: las etapas del programa sin autorizar, contadas como en Producción (cada etapa una vez, aunque la compartan varias presentaciones) y repartidas según su Estatus. Autorizado: los autorizados del mes del cuadro (${esc(d.per.mesNombre.toLowerCase())}). El total del programa (pendientes + autorizados del mes) es el universo del mes; % de avance del programa = autorizados / total. Backlog: los pendientes del cuadro al cierre de ${esc(d.per.mesAnterior.toLowerCase())}; % de avance del backlog DOC = autorizados del backlog en el mes / backlog. Programa PLA: el horizonte de 2 semanas desde la semana en que se cargó el Programa de Producción de cada planta.</p>
+                <p class="sts-nota">Pendientes: las etapas del programa sin autorizar, contadas como en Producción (cada etapa una vez, aunque la compartan varias presentaciones) y repartidas según su Estatus. Autorizado: los autorizados del mes del cuadro (${esc(d.per.mesNombre.toLowerCase())}). El total del programa (pendientes + autorizados del mes) es el universo del mes; % de avance del programa = autorizados / total. Backlog: los pendientes del cuadro al cierre de ${esc(d.per.mesAnterior.toLowerCase())}; % de avance del backlog DOC = autorizados del backlog en el mes / backlog. Programa PLA: el periodo del status elegido arriba (Desde – Hasta).</p>
             </section>`;
         }
         function htmlTablaCar(d) {
