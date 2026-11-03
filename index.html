@@ -5765,28 +5765,37 @@ function buildDateColumnMapPlanta1(headerRow, weekLabelRow, hiddenCols) {
         };
         // Map<"material::etapaFija", estatus>, misma clave que responsablesEtapa.
         let estatusEtapa = new Map();
+        // Claves "material::ETAPA" de los materiales cuya etapa está pendiente por el MISMO RMD (ver gruposRmdPendientes):
+        // clave -> Set con todas las claves del grupo. Lo que se elige en una (Estatus, responsable, autorización a mano) se
+        // escribe en todas, así se ve igual en Producción, Forecast, INDICADORES y Caracterización aunque en una vista estén
+        // juntos y en otra no (antes se movía todo al código del RMD y la vista que no los juntaba lo perdía al recargar).
+        let hermanasClave = new Map();
+        const clavesDelGrupo = (key) => Array.from(hermanasClave.get(key) || [key]);
         async function saveEstatusEtapa() { return await storeSet('val_estatus_etapa', Array.from(estatusEtapa.entries())); }
         window.setEstatusEtapa = async function (material, etapaFija, valor) {
-            const key = responsableKey(material, etapaFija);
-            const anteriorEstatus = estatusEtapa.get(key);
-            const anteriorResp = responsablesEtapa.get(key);
-            if (!valor) {
-                // Al volver a "Estatus..." (vacío), el responsable también
-                // se limpia — queda en "-", tal como se pidió.
-                estatusEtapa.delete(key);
-                responsablesEtapa.delete(key);
-            } else {
-                estatusEtapa.set(key, valor);
-                // El responsable SIEMPRE se deriva del estatus elegido — ya
-                // no es editable a mano, así que no hay elección manual que
-                // respetar aquí.
-                responsablesEtapa.set(key, ESTATUS_ETAPA_RESPONSABLE_DEFECTO[valor] || '');
-            }
+            const claves = clavesDelGrupo(responsableKey(material, etapaFija));
+            const anteriores = claves.map(k => [k, estatusEtapa.get(k), responsablesEtapa.get(k)]);
+            claves.forEach(key => {
+                if (!valor) {
+                    // Al volver a "Estatus..." (vacío), el responsable también
+                    // se limpia — queda en "-", tal como se pidió.
+                    estatusEtapa.delete(key);
+                    responsablesEtapa.delete(key);
+                } else {
+                    estatusEtapa.set(key, valor);
+                    // El responsable SIEMPRE se deriva del estatus elegido — ya
+                    // no es editable a mano, así que no hay elección manual que
+                    // respetar aquí.
+                    responsablesEtapa.set(key, ESTATUS_ETAPA_RESPONSABLE_DEFECTO[valor] || '');
+                }
+            });
             const ok1 = await saveEstatusEtapa();
             const ok2 = await saveResponsablesEtapa();
             if (!ok1 || !ok2) {
-                if (anteriorEstatus === undefined) estatusEtapa.delete(key); else estatusEtapa.set(key, anteriorEstatus);
-                if (anteriorResp === undefined) responsablesEtapa.delete(key); else responsablesEtapa.set(key, anteriorResp);
+                anteriores.forEach(([key, anteriorEstatus, anteriorResp]) => {
+                    if (anteriorEstatus === undefined) estatusEtapa.delete(key); else estatusEtapa.set(key, anteriorEstatus);
+                    if (anteriorResp === undefined) responsablesEtapa.delete(key); else responsablesEtapa.set(key, anteriorResp);
+                });
                 Swal.fire({ icon: 'error', title: 'No se pudo guardar', text: 'El estatus no se guardó. Intenta de nuevo.', background: '#0f172a', timer: 2500, showConfirmButton: false });
                 return;
             }
@@ -7403,12 +7412,12 @@ async function downloadPlanProduccionFromCloud() {
 
         async function saveResponsablesEtapa() { return await storeSet('val_responsables_etapa', Array.from(responsablesEtapa.entries())); }
         window.setResponsableEtapa = async function (material, etapaFija, valor) {
-            const key = responsableKey(material, etapaFija);
-            const anterior = responsablesEtapa.get(key);
-            if (!valor) responsablesEtapa.delete(key);
-            else responsablesEtapa.set(key, valor);
+            const key = responsableKey(material, etapaFija), claves = clavesDelGrupo(key);
+            const anterior = responsablesEtapa.get(key), anteriores = claves.map(k => [k, responsablesEtapa.get(k)]);
+            claves.forEach(k => { if (!valor) responsablesEtapa.delete(k); else responsablesEtapa.set(k, valor); });
             const ok = await saveResponsablesEtapa();
             if (!ok) {
+                anteriores.forEach(([k, a]) => { if (a === undefined) responsablesEtapa.delete(k); else responsablesEtapa.set(k, a); });
                 // El guardado en IndexedDB falló: revertimos el cambio en memoria
                 // y avisamos, para no dejar al usuario creyendo que quedó
                 // guardado cuando en realidad se perdería al recargar o volver.
@@ -7501,8 +7510,8 @@ async function downloadPlanProduccionFromCloud() {
                 return;
             }
             // Sin DNI: queda con su fecha y la huella de lo pendiente en SAP, y caduca sola (ver motivoCaducidadManual).
-            if (manualAutorizados.has(key)) { manualAutorizados.delete(key); manualAutorizadosMeta.delete(key); }
-            else { manualAutorizados.add(key); manualAutorizadosMeta.set(key, metaNuevaManual(material, etapaFija)); }
+            if (manualAutorizados.has(key)) clavesDelGrupo(key).forEach(k => { manualAutorizados.delete(k); manualAutorizadosMeta.delete(k); });
+            else { const meta = metaNuevaManual(material, etapaFija); clavesDelGrupo(key).forEach(k => { manualAutorizados.add(k); manualAutorizadosMeta.set(k, meta); }); }
             await saveManualAutorizados();
             runValidacionMateriales();
             if (currentTab === 'caract' && typeof Caracterizacion !== 'undefined') Caracterizacion.refrescar();
@@ -7718,6 +7727,28 @@ async function downloadPlanProduccionFromCloud() {
             [estatusEtapa, responsablesEtapa, manualAutorizadosMeta, manualAutorizadosForecastMeta].forEach(pasar);
             [manualAutorizados, manualAutorizadosForecast].forEach(set => { if (set.has(vieja)) { set.delete(vieja); set.add(nueva); migracionClavesPendiente = true; } });
         }
+        // Las claves de un grupo (un RMD para varios materiales) quedan como hermanas y se completan entre sí, SIN borrar
+        // ninguna: la que no tenga Estatus toma el más avanzado del grupo (con su responsable), y la autorización a mano de
+        // una pasa a las demás. Así también vuelve lo que la versión anterior había movido al código del RMD.
+        function registrarGrupoClaves(claves) {
+            const todas = new Set();
+            claves.forEach(k => (hermanasClave.get(k) || [k]).forEach(x => todas.add(x)));
+            todas.forEach(k => hermanasClave.set(k, todas));
+            const lista = Array.from(todas);
+            let mejor = null;
+            lista.forEach(k => { if (estatusEtapa.has(k) && (!mejor || avanceEstatus(estatusEtapa.get(k)) > avanceEstatus(estatusEtapa.get(mejor)))) mejor = k; });
+            if (mejor) lista.forEach(k => {
+                if (estatusEtapa.has(k)) return;
+                estatusEtapa.set(k, estatusEtapa.get(mejor));
+                if (responsablesEtapa.has(mejor)) responsablesEtapa.set(k, responsablesEtapa.get(mejor));
+                migracionClavesPendiente = true;
+            });
+            [[manualAutorizados, manualAutorizadosMeta], [manualAutorizadosForecast, manualAutorizadosForecastMeta]].forEach(([set, meta]) => {
+                const con = lista.find(k => set.has(k));
+                if (!con) return;
+                lista.forEach(k => { if (set.has(k)) return; set.add(k); if (meta.has(con)) meta.set(k, meta.get(con)); migracionClavesPendiente = true; });
+            });
+        }
         function guardarMigracionClaves() {
             if (!migracionClavesPendiente) return;
             migracionClavesPendiente = false;
@@ -7793,7 +7824,7 @@ async function downloadPlanProduccionFromCloud() {
                         const refs = refsRmdPendientes(d), g = refs ? grupos.get(`${refs}::${fija}`) : null;
                         const codigoVisible = codigo;
                         if (g) {
-                            pasarClaveEtapa(clave, responsableKey(g.canon, fija));
+                            registrarGrupoClaves(g.codigos.map(c => responsableKey(c, fija)));
                             codigo = g.canon; clave = responsableKey(g.canon, fija);
                             if (unir) id = `${refs}::${fija}`;
                         }
@@ -9130,8 +9161,8 @@ function updateForecastActiveFiltersBadge() {
                 Swal.fire({ icon: 'warning', title: 'Falta elegir responsable', text: 'Esta etapa está en CONTROL DE CAMBIO: elige primero si el responsable es ASC o PRO antes de autorizarla.', background: '#0f172a', timer: 3000, showConfirmButton: false });
                 return;
             }
-            if (manualAutorizadosForecast.has(key)) { manualAutorizadosForecast.delete(key); manualAutorizadosForecastMeta.delete(key); }
-            else { manualAutorizadosForecast.add(key); manualAutorizadosForecastMeta.set(key, metaNuevaManual(material, etapaFija)); }
+            if (manualAutorizadosForecast.has(key)) clavesDelGrupo(key).forEach(k => { manualAutorizadosForecast.delete(k); manualAutorizadosForecastMeta.delete(k); });
+            else { const meta = metaNuevaManual(material, etapaFija); clavesDelGrupo(key).forEach(k => { manualAutorizadosForecast.add(k); manualAutorizadosForecastMeta.set(k, meta); }); }
             await saveManualAutorizadosForecast();
             runValidacionForecast();
         }
