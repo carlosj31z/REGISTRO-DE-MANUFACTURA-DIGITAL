@@ -11696,21 +11696,52 @@ async function maybeAutoStartTour() {
         :is(#tab-status, #prodAcumulado) .flx .sts-rama { border:0; padding:0; gap:30px; }
         :is(#tab-status, #prodAcumulado) .flx .sts-caja { position:relative; transition:transform .25s ease, box-shadow .25s ease; }
         :is(#tab-status, #prodAcumulado) .flx button.sts-caja:hover { transform:translateY(-2px); }
-        :is(#tab-status, #prodAcumulado) .flx-svg .flx-linea { fill:none; stroke:rgba(var(--plum-rgb) / .55); stroke-width:2; }
+        :is(#tab-status, #prodAcumulado) .flx-svg .flx-linea { fill:none; stroke:rgba(var(--plum-rgb) / .38); stroke-width:1.5; }
         :is(#tab-status, #prodAcumulado) .flx-svg .flx-linea.vacia { stroke:rgba(var(--plum-rgb) / .22); stroke-dasharray:4 4; }
         :is(#tab-status, #prodAcumulado) .flx-svg .flx-flecha { fill:rgba(var(--plum-rgb) / .7); }
         :is(#tab-status, #prodAcumulado) .flx-svg .flx-punto { fill:rgb(var(--plum-rgb)); }
         :is(#tab-status, #prodAcumulado) .flx-svg .flx-punto.pro { fill:rgb(var(--copper-rgb)); }
         :is(#tab-status, #prodAcumulado) .flx-svg .flx-punto.ok { fill:rgb(var(--ok-rgb)); }
-        :is(#tab-status, #prodAcumulado) .flx .sts-caja.ok.flx-latido { animation:flxLatido 2.4s ease-in-out infinite; }
-        @keyframes flxLatido { 0%, 100% { box-shadow:inset 0 3px 0 rgb(var(--ok-rgb)), 0 0 0 0 rgba(var(--ok-rgb) / .35); } 50% { box-shadow:inset 0 3px 0 rgb(var(--ok-rgb)), 0 0 0 7px rgba(var(--ok-rgb) / 0); } }
+        /* Tarjetas finas (pedido de CINTIA, 04/11/2026): superficie con degradado suave, borde de 1 px, franja de color arriba
+           con brillo, número grande y ligero, y sombra difusa del color de la etapa. */
+        :is(#tab-status, #prodAcumulado) .flx .sts-caja { --c:var(--plum-rgb); height:70px; border-radius:14px; border:1px solid rgba(var(--c) / .28);
+            background:linear-gradient(160deg, rgba(var(--c) / .12) 0%, rgba(var(--c) / .03) 45%, var(--surface-1-faint) 100%);
+            box-shadow:0 1px 0 rgba(255,255,255,.04) inset, 0 6px 18px -10px rgba(var(--c) / .55); color:rgb(var(--c));
+            font-size:30px; font-weight:600; letter-spacing:-.02em; overflow:hidden; }
+        :is(#tab-status, #prodAcumulado) .flx .sts-caja::before { content:''; position:absolute; left:0; right:0; top:0; height:3px;
+            background:linear-gradient(90deg, rgba(var(--c) / 0), rgb(var(--c)) 30%, rgb(var(--c)) 70%, rgba(var(--c) / 0)); opacity:.9; }
+        :is(#tab-status, #prodAcumulado) .flx .sts-caja::after { content:''; position:absolute; inset:0; border-radius:inherit; pointer-events:none;
+            background:radial-gradient(120% 70% at 50% -20%, rgba(var(--c) / .22), rgba(var(--c) / 0) 60%); }
+        :is(#tab-status, #prodAcumulado) .flx .sts-caja > span { position:relative; z-index:1; }
+        :is(#tab-status, #prodAcumulado) .flx .sts-caja.pro, :is(#tab-status, #prodAcumulado) .flx .sts-caja.cc { --c:var(--copper-rgb); }
+        :is(#tab-status, #prodAcumulado) .flx .sts-caja.doc { --c:var(--plum-rgb); }
+        :is(#tab-status, #prodAcumulado) .flx .sts-caja.ok { --c:var(--ok-rgb); }
+        :is(#tab-status, #prodAcumulado) .flx .sts-caja.cero { --c:var(--slate-500-rgb, 120 128 140); color:var(--slate-500); box-shadow:none; }
+        :is(#tab-status, #prodAcumulado) .flx .sts-caja.cero::before { opacity:.25; }
+        :is(#tab-status, #prodAcumulado) .flx .sts-rama .sts-caja { height:60px; font-size:26px; }
+        :is(#tab-status, #prodAcumulado) .flx button.sts-caja { cursor:pointer; transition:transform .25s cubic-bezier(.2,.8,.2,1), box-shadow .25s ease, border-color .25s ease; }
+        :is(#tab-status, #prodAcumulado) .flx button.sts-caja:hover { transform:translateY(-2px); border-color:rgba(var(--c) / .6); box-shadow:0 1px 0 rgba(255,255,255,.06) inset, 0 10px 26px -10px rgba(var(--c) / .8); }
+        :is(#tab-status, #prodAcumulado) .flx .sts-etapa-nombre { font-size:10px; letter-spacing:.09em; margin-bottom:6px; }
+        /* Destello cuando llega un haz de luz a la tarjeta. */
+        :is(#tab-status, #prodAcumulado) .flx .sts-caja.flx-llega::after { animation:flxLlega var(--llega, 2.6s) ease-out infinite; animation-delay:var(--llegaDelay, 0s); }
+        @keyframes flxLlega { 0%, 70% { opacity:.55; } 82% { opacity:1; background:radial-gradient(120% 90% at 0% 50%, rgba(var(--c) / .45), rgba(var(--c) / 0) 65%); } 100% { opacity:.55; } }
+        :is(#tab-status, #prodAcumulado) .flx .sts-caja.ok.flx-latido { animation:flxLatido 2.6s ease-in-out infinite; }
+        @keyframes flxLatido { 0%, 100% { box-shadow:0 1px 0 rgba(255,255,255,.04) inset, 0 6px 18px -10px rgba(var(--ok-rgb) / .55), 0 0 0 0 rgba(var(--ok-rgb) / .3); } 50% { box-shadow:0 1px 0 rgba(255,255,255,.04) inset, 0 8px 26px -8px rgba(var(--ok-rgb) / .8), 0 0 0 6px rgba(var(--ok-rgb) / 0); } }
+        /* Haces de luz (estilo condensador de flujo): un trazo corto y brillante recorre cada flecha, en cascada hacia Autorizado. */
+        :is(#tab-status, #prodAcumulado) .flx-svg .flx-haz { fill:none; stroke-width:3; stroke-linecap:round; stroke-dasharray:9 91; stroke-dashoffset:100;
+            animation:flxHaz var(--dur, 2.6s) cubic-bezier(.45,.05,.55,.95) infinite; animation-delay:var(--delay, 0s); stroke:rgb(var(--plum-rgb)); }
+        :is(#tab-status, #prodAcumulado) .flx-svg .flx-haz.pro { stroke:rgb(var(--copper-rgb)); }
+        :is(#tab-status, #prodAcumulado) .flx-svg .flx-haz.ok { stroke:rgb(var(--ok-rgb)); }
+        :is(#tab-status, #prodAcumulado) .flx-svg .flx-haz.ancho { stroke-width:7; opacity:.28; }
+        @keyframes flxHaz { 0% { stroke-dashoffset:100; opacity:0; } 8% { opacity:1; } 88% { opacity:1; } 100% { stroke-dashoffset:-9; opacity:0; } }
         :is(#tab-status, #prodAcumulado) .flx-delta { display:inline-block; margin-left:4px; font-size:11px; font-weight:700; vertical-align:super; }
         :is(#tab-status, #prodAcumulado) .flx-delta.sube { color:rgb(var(--danger-rgb)); }
         :is(#tab-status, #prodAcumulado) .flx-delta.baja { color:rgb(var(--ok-rgb)); }
         :is(#tab-status, #prodAcumulado) .flx-delta.aut.sube { color:rgb(var(--ok-rgb)); }
         @media (prefers-reduced-motion: reduce) {
             :is(#tab-status, #prodAcumulado) .flx .sts-caja.ok.flx-latido { animation:none; }
-            :is(#tab-status, #prodAcumulado) .flx-svg .flx-punto { display:none; }
+            :is(#tab-status, #prodAcumulado) .flx-svg .flx-punto, :is(#tab-status, #prodAcumulado) .flx-svg .flx-haz { display:none; }
+            :is(#tab-status, #prodAcumulado) .flx .sts-caja.flx-llega::after { animation:none; }
         }
         /* Foto diaria del flujo: cómo estaba un día o un rango de días. */
         #tab-status .fto-cab { display:flex; flex-direction:column; align-items:flex-end; gap:8px; }
@@ -11845,6 +11876,7 @@ async function maybeAutoStartTour() {
         const CONTAR_SOLICITUDES_ABIERTAS = true;
         // Suspendidos sin fecha de suspensión en la Trazabilidad (suspendidos antes de 2026) y sin versión siguiente: no cuentan.
         const CONTAR_SUSPENDIDOS_SIN_FECHA = true;   // solo masivos (RX_MASIVO)
+        const RX_DESCONTINUADO = /DESCONTINU|DISCONTINU/i;
         function cuadroDesdeVersiones(versiones, generado, opciones) {
             const { traz, previo } = opciones || {};
             const ahora = Date.parse(generado || '') || Date.now(), mesSap = dayjs(ahora).format('YYYY-MM');
@@ -11987,6 +12019,40 @@ async function maybeAutoStartTour() {
                         det[mes][pl][k] = Array.isArray(pd[k]) ? pd[k].slice() : [];
                         det[mes][pl][k].forEach((id) => { if (!vers[id] && prev.vers && prev.vers[id]) vers[id] = { compacta: prev.vers[id] }; usadas.add(id); });
                     });
+                });
+            });
+            // Backlog como el PowerPoint del status (CINTIA, 04/11/2026): los RMD vigentes al empezar el mes, es decir la última
+            // versión Autorizada de cada RMD, sin los códigos que no empiezan por 2 (migrados antes de SAP, nunca actualizados) ni
+            // los que dicen «descontinuado» en Observaciones. Un Suspendido cuenta si al empezar el mes aún era el vigente (la
+            // versión que lo reemplazó se autorizó en ese mes o después). Su detalle se guarda para los 3 últimos meses.
+            const vigentes = Object.values(vers).filter((v) => v.codigo && /^2/.test(v.codigo) && !RX_DESCONTINUADO.test(v.obs || '') && v.fAut
+                && (v.estado === 'AUTORIZADO' || v.estado === 'SUSPENDIDO'));
+            const reemplazo = (v) => {
+                if (v.reempl !== undefined) return v.reempl;
+                const sig = [...new Set((v.grupos || []).flatMap((g) => grupos.get(g) || []))].filter((w) => w !== v && w.fAut && w.version > v.version)
+                    .sort((a, b) => a.fAut - b.fAut)[0];
+                return (v.reempl = sig ? sig.fAut.valueOf() : null);
+            };
+            const mesDetBkv = dayjs(ahora).startOf('month').subtract(2, 'month').format('YYYY-MM');
+            Object.keys(porMes).forEach((mes) => {
+                const t0 = dayjs(mes + '-01').startOf('month').valueOf();
+                const cuenta = { P1: [], P2: [] };
+                const vistos = new Set();
+                vigentes.forEach((v) => {
+                    if (!cuenta[v.planta] || v.fAut.valueOf() >= t0 || vistos.has(v.codigo)) return;
+                    if (v.estado === 'SUSPENDIDO') { const r = reemplazo(v); if (r === null || r < t0) return; }
+                    vistos.add(v.codigo); cuenta[v.planta].push(v);
+                });
+                ['P1', 'P2'].forEach((pl) => {
+                    const x = celda(mes, pl), pp = prev && prev.reglas === REGLAS_CUADRO && x.cong ? (prev.porMes[mes] || {})[pl] : null;
+                    if (pp && Number.isFinite(pp.bkv)) {   // mes congelado: se queda como estaba
+                        x.bkv = pp.bkv;
+                        const pd = ((prev.det || {})[mes] || {})[pl];
+                        if (pd && Array.isArray(pd.bkv)) { lista(mes, pl, 'pend'); det[mes][pl].bkv = pd.bkv.slice(); pd.bkv.forEach((id) => { if (!vers[id] && prev.vers && prev.vers[id]) vers[id] = { compacta: prev.vers[id] }; usadas.add(id); }); }
+                        return;
+                    }
+                    x.bkv = cuenta[pl].length;
+                    if (mes >= mesDetBkv) { const l = lista(mes, pl, 'pend'); det[mes][pl].bkv = []; cuenta[pl].forEach((v) => { det[mes][pl].bkv.push(v.id); usadas.add(v.id); }); void l; }
                 });
             });
             // Lo que muestra el detalle de cada versión usada (compacto).
@@ -12500,6 +12566,10 @@ async function maybeAutoStartTour() {
             '2026-10': { P1: 170, P2: 100 }
         };
         const pctDe = (aut, base) => (base > 0 ? Math.round((aut / base) * 100) : null);
+        // Backlog que se muestra (lámina 2, Ruta 1 y % Backlog DOC): el del PowerPoint (vigentes al empezar el mes, ver
+        // cuadroDesdeVersiones) si ya está calculado; si no (datos guardados antes de este cambio), los pendientes del mes anterior.
+        const backlogDe = (x) => (x && Number.isFinite(x.bkv && x.bkv[2]) ? x.bkv[2] : (x ? x.ant[2] : null));
+        const claveBacklog = (x) => (x && Number.isFinite(x.bkv && x.bkv[2]) ? 'bkv' : 'ant');
         function cuadroPrograma(ind, per, traz) {
             // Indicadores guardados por una versión anterior de la página: se recalculan con el detalle de RMD guardado, si trae la planta.
             const cuadro = ind && ind.v === 3 ? ind : (ind ? cuadroDesdeDetalle(ind.generado, traz) : null);
@@ -12521,7 +12591,7 @@ async function maybeAutoStartTour() {
                 const x = (porMes[m.format('YYYY-MM')] || {})[pl] || {};
                 return { clave: m.format('YYYY-MM'), ini: m.valueOf(), ant: ok ? ant : null, sol: ok ? sol : null, otros: ok ? acum - ant - sol : null, acum, aut: ok ? aut : null,
                     autMes: autBk === null ? null : aut - autBk, autBk, pend: ok ? pend : null, susp: ok ? dato(m, pl, 'susp') : null, fuera, fijo: !!x.fijo, cong: !!x.cong, masivos: masivos(m, pl),
-                    pct: ok ? pctDe(aut, acum) : null, pctArea: ok && fuera !== null ? pctDe(aut, acum - fuera) : null, reg: dato(m, pl, 'reg') };
+                    pct: ok ? pctDe(aut, acum) : null, pctArea: ok && fuera !== null ? pctDe(aut, acum - fuera) : null, reg: dato(m, pl, 'reg'), bkv: datoSap(m, pl, 'bkv') };
             };
             const meses = [];
             for (let m = per.hasta.startOf('year'); !m.isAfter(per.hasta, 'month'); m = m.add(1, 'month')) meses.push(m);
@@ -12539,7 +12609,7 @@ async function maybeAutoStartTour() {
                 const tres = per.meses.map((m) => fila(m, pl));
                 res[pl] = { filas, total, tres, sol: tres.map((f) => f.sol), aut: tres.map((f) => f.aut), ant: tres.map((f) => f.ant),
                     autMes: tres.map((f) => f.autMes), autBk: tres.map((f) => f.autBk), pct: tres.map((f) => f.pct), pctArea: tres.map((f) => f.pctArea),
-                    fuera: tres.map((f) => f.fuera), pend: tres.map((f) => f.pend) };
+                    fuera: tres.map((f) => f.fuera), pend: tres.map((f) => f.pend), bkv: tres.map((f) => f.bkv) };
             });
             return res;
         }
@@ -12698,7 +12768,7 @@ async function maybeAutoStartTour() {
             let abierto = false;
             try { abierto = localStorage.getItem('sts_logica_abierta') === '1'; } catch (e) { /* sin almacenamiento */ }
             const mesAnt = d.per.mesAnterior.toLowerCase(), mes = d.per.mesNombre.toLowerCase();
-            const bk = (pl) => { const n = d.programa && d.programa[pl] ? d.programa[pl].ant[2] : null; return Number.isFinite(n) ? n : '—'; };
+            const bk = (pl) => { const n = d.programa && d.programa[pl] ? backlogDe(d.programa[pl]) : null; return Number.isFinite(n) ? n : '—'; };
             const oficiales = Object.keys(BACKLOG_OFICIAL).sort();
             const txtOf = oficiales.map((k) => `${esc(nombreMes(k).split(' ')[0].toLowerCase())} (P1 ${BACKLOG_OFICIAL[k].P1} · P2 ${BACKLOG_OFICIAL[k].P2})`).join(', ');
             const ultimoOf = oficiales.length ? oficiales[oficiales.length - 1] : '';
@@ -12739,6 +12809,7 @@ async function maybeAutoStartTour() {
             </div>`;
         }
         const TITULOS_CUADRO = {
+            bkv: 'Backlog como el PowerPoint del status: la última versión Autorizada (vigente) de cada RMD al empezar el mes, sin los códigos que no empiezan por 2 (migrados antes de SAP) ni los que dicen «descontinuado» en Observaciones',
             ant: 'Backlog: pendientes al cierre del mes anterior (RMD Ingresados, solicitudes abiertas y Suspendidos con «masivo» en Observaciones, de ese mes y de los anteriores)',
             sol: 'RMD con fecha de ingreso real en el mes (la fecha AAAAMMDD al inicio de la Observación; sin ella, la Fecha Registro)',
             otros: 'Lo que entró o salió del backlog sin ser un ingreso del mes ni una autorización: solicitudes nuevas, suspendidos por reeditar, cancelados, RMD que ya estaban en el backlog y se ingresaron en el mes. Así la suma cuadra',
@@ -12798,6 +12869,7 @@ async function maybeAutoStartTour() {
             else linea1 = `Backlog de ${esc(nombreMes(clave).toLowerCase())}: ${kpi === null || kpi === undefined ? '—' : `<b class="n">${kpi}</b>`}.`;
             const hoy = clave === mesSap ? partesBacklog(p.cuadro, clave, pl) : null;
             const linea2 = hoy ? `<br>Hoy en SAP siguen pendientes (backlog del mes siguiente, si no se autorizan): ${formula(hoy)}.` : '';
+            if (claveBacklog(p[pl]) === 'bkv') return `<div class="sts-regla"><span class="sts-regla-f"><b>¿Qué es el Backlog?</b> Como en el PowerPoint del status: los RMD <b>vigentes</b> al empezar el mes (la última versión Autorizada de cada RMD), sin los códigos que <b>no empiezan por 2</b> (se migraron antes de SAP y no se actualizaron) ni los que dicen <b>«descontinuado»</b> en Observaciones. % Backlog DOC = autorizados del backlog en el mes / backlog.</span>Backlog de ${esc(nombreMes(clave).toLowerCase())}: <b class="n">${backlogDe(p[pl])}</b> RMD vigentes. Pendientes al cierre de ${esc(nombreMes(ant).toLowerCase())} (cuadro del área): <b class="n">${kpi === null || kpi === undefined ? '—' : kpi}</b>.</div>`;
             return `<div class="sts-regla"><span class="sts-regla-f"><b>¿Qué es el Backlog?</b> Lo que quedó pendiente al cierre del mes anterior: RMD <b>Ingresados</b> + <b>solicitudes abiertas</b> (Solicitado o Solicitud Aprobada) + <b>Suspendidos</b> con la palabra «masivo» en Observaciones + versiones vigentes con <b>«PENDIENTE MASIVO»</b> en Observaciones, vengan de ese mes o de meses anteriores. No cuentan Autorizados, Cancelados, rechazados ni los que SAP suspende al autorizar otra versión.</span>${linea1}${linea2}</div>`;
         }
         function htmlPrograma(d) {
@@ -12810,7 +12882,7 @@ async function maybeAutoStartTour() {
                 <div class="sts-planta">${PLANTAS[pl]}</div>
                 <div class="sts-kpis cuatro">
                     <div class="sts-kpi"><small>Solicitados</small><b>${nDet(p[pl].sol[2], `cuadro|${pl}|${clave}|sol`)}</b><span class="meta">por fecha de ingreso real</span></div>
-                    <div class="sts-kpi"><small>Backlog</small><b>${nDet(p[pl].ant[2], `cuadro|${pl}|${clave}|ant`)}</b><span class="meta">pendiente al empezar el mes</span></div>
+                    <div class="sts-kpi"><small>Backlog</small><b>${nDet(backlogDe(p[pl]), `cuadro|${pl}|${clave}|${claveBacklog(p[pl])}`)}</b><span class="meta">${claveBacklog(p[pl]) === 'bkv' ? 'RMD vigentes al empezar el mes' : 'pendiente al empezar el mes'}</span></div>
                     <div class="sts-kpi naranja"><small>Autorizados</small><b>${nDet(p[pl].aut[2], `cuadro|${pl}|${clave}|aut`)}</b>${p[pl].autBk[2] !== null ? `<span class="meta">${nDet(p[pl].autMes[2], `cuadro|${pl}|${clave}|autMes`)} del mes · ${nDet(p[pl].autBk[2], `cuadro|${pl}|${clave}|autBk`)} del backlog</span>` : ''}</div>
                     <div class="sts-kpi"><small>% autorizados</small><b>${pctTxt(p[pl].pct[2])}</b><span class="meta">del área ${p[pl].fuera[2] ? nDet(p[pl].fuera[2], `cuadro|${pl}|${clave}|fuera`, pctTxt(p[pl].pctArea[2])) : pctTxt(p[pl].pctArea[2])} · meta ${META_AUTORIZADOS} %</span></div>
                 </div>
@@ -12858,7 +12930,7 @@ async function maybeAutoStartTour() {
         // Backlog de la Ruta 1: pendientes del cuadro al cierre del mes anterior y cuántos de ellos se autorizaron en el mes
         // (autorizados del backlog); % de avance del backlog = autorizados del backlog / backlog.
         function backlogRuta1(d, pl) {
-            const p = d.programa && d.programa[pl], n = p ? p.ant[2] : null, aut = p ? p.autBk[2] : null;
+            const p = d.programa && d.programa[pl], n = p ? backlogDe(p) : null, aut = p ? p.autBk[2] : null;
             const ok = Number.isFinite(n) && n > 0 && Number.isFinite(aut);
             return { n, aut, pctTxt: ok ? `${(Math.round((aut / n) * 1000) / 10).toFixed(1)}%` : '—', pct: ok ? Math.round((aut / n) * 100) : 0 };
         }
@@ -13040,17 +13112,25 @@ async function maybeAutoStartTour() {
                         const r = e.getBoundingClientRect();
                         return { l: r.left - b.left, r: r.right - b.left, y: r.top - b.top + r.height / 2, n: Number(e.dataset.n) || 0 };
                     };
-                    let h = `<defs><marker id="${id}" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L8,4 L0,8 z" class="flx-flecha"/></marker></defs>`;
+                    let h = `<defs><marker id="${id}" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,0 L8,4 L0,8 z" class="flx-flecha"/></marker>
+                        <filter id="${id}g" x="-20%" y="-50%" width="140%" height="200%"><feGaussianBlur stdDeviation="2.2" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>`;
+                    // Cascada: cada tramo se enciende un poco después del anterior, como una carga que empuja hacia Autorizado.
+                    const PASO = { bor: 0, ing: 1, flu: 2, cc: 2, rev: 3 };
                     ARISTAS.forEach(([a, z, cl]) => {
                         const A = pos(a), Z = pos(z);
                         if (!A || !Z) return;
                         const x1 = A.r + 2, y1 = A.y, x2 = Z.l - 3, y2 = Z.y, dx = (x2 - x1) / 2;
                         const d = `M${x1.toFixed(1)},${y1.toFixed(1)} C${(x1 + dx).toFixed(1)},${y1.toFixed(1)} ${(x2 - dx).toFixed(1)},${y2.toFixed(1)} ${x2.toFixed(1)},${y2.toFixed(1)}`;
                         h += `<path d="${d}" class="flx-linea${A.n > 0 ? '' : ' vacia'}" marker-end="url(#${id})"/>`;
-                        // Empuje: más puntos donde hay más pendientes (1 a 4), siempre hacia Autorizado.
+                        // Empuje: haces de luz con halo; más haces donde hay más pendientes (1 a 3), siempre hacia Autorizado.
                         if (A.n > 0 && !reducir) {
-                            const k = Math.min(4, Math.max(1, Math.ceil(A.n / 8))), dur = 2.2;
-                            for (let i = 0; i < k; i++) h += `<circle r="3.2" class="flx-punto ${cl}"><animateMotion dur="${dur}s" begin="${(-(i * dur) / k).toFixed(2)}s" repeatCount="indefinite" path="${d}"/></circle>`;
+                            const k = Math.min(3, Math.max(1, Math.ceil(A.n / 10))), dur = 2.6, base = (PASO[a] || 0) * 0.42;
+                            for (let i = 0; i < k; i++) {
+                                const st = `--dur:${dur}s;--delay:${(base + (i * dur) / k).toFixed(2)}s`;
+                                h += `<path d="${d}" pathLength="100" class="flx-haz ancho ${cl}" style="${st}" filter="url(#${id}g)"/><path d="${d}" pathLength="100" class="flx-haz ${cl}" style="${st}"/>`;
+                            }
+                            const dest = fl.querySelector(`[data-nodo="${z}"]`);
+                            if (dest) { dest.classList.add('flx-llega'); dest.style.setProperty('--llega', `${dur / k}s`); dest.style.setProperty('--llegaDelay', `${(base + dur * 0.55).toFixed(2)}s`); }
                         }
                     });
                     svg.setAttribute('viewBox', `0 0 ${b.width.toFixed(1)} ${b.height.toFixed(1)}`);
@@ -13111,7 +13191,7 @@ async function maybeAutoStartTour() {
             const cuerpo = r1.error ? `<div class="sts-aviso"><span>${esc(r1.error)}</span></div>`
                 : (r1.sinArbol ? '<div class="sts-aviso"><span>No se pudo cargar el árbol de materiales de SAP: solo se cuenta el RMD del propio código de cada producto.</span></div>' : '')
                   + ['P1', 'P2'].map((pl) => htmlRuta(r1[pl], pl, 'r1', { autKey: `cuadro|${pl}|${mes}|aut`, extra: extra(pl),
-                      backlog: Object.assign(backlogRuta1(d, pl), { mes: d.per.mesAnterior.toLowerCase(), key: `cuadro|${pl}|${mes}|ant` }) })).join('');
+                      backlog: Object.assign(backlogRuta1(d, pl), { mes: d.per.mesAnterior.toLowerCase(), key: `cuadro|${pl}|${mes}|${claveBacklog(d.programa && d.programa[pl])}` }) })).join('');
             return `<section class="sts-seccion">
                 <div class="sts-seccion-cab"><div>
                     <div class="sts-seccion-titulo"><span class="sts-num">RUTA 1</span>Flujo de Programa – P1 y P2</div>
@@ -13540,7 +13620,7 @@ async function maybeAutoStartTour() {
         const estadoTxt = (e) => { const t = String(e || '').trim(); return t && t === t.toUpperCase() ? (t.charAt(0) + t.slice(1).toLowerCase()).replace(/\brmd\b/g, 'RMD') : t; };
 
         // Cuadro del mes: las versiones de RMD (y solicitudes) que cuenta cada número, guardadas con el cálculo (det / vers).
-        const NOMBRES_CUADRO = { ant: 'Pendiente anterior', sol: 'Solicitados', otros: 'Otros', acum: 'Acumulado', aut: 'Autorizados', autMes: 'Autorizados del mes',
+        const NOMBRES_CUADRO = { bkv: 'Backlog (RMD vigentes)', ant: 'Pendiente anterior', sol: 'Solicitados', otros: 'Otros', acum: 'Acumulado', aut: 'Autorizados', autMes: 'Autorizados del mes',
             autBk: 'Autorizados del backlog', pend: 'Pendientes', susp: 'Suspendidos masivos', fuera: 'Pendientes que no dependen del área' };
         const diaIso = (t) => { const m = /^(\d{4})-(\d{2})-(\d{2})(~?)$/.exec(t || ''); return m ? `${m[3]}/${m[2]}/${m[1]}${m[4] ? ' (aprox.)' : ''}` : ''; };
         function detalleCuadro(d, pl, mes, k) {
@@ -13563,6 +13643,7 @@ async function maybeAutoStartTour() {
                 pend: (m, id) => { const v = ver(id); const s = ids(m, 'susp').includes(id) ? 'Suspendido masivo' : (v.estado === 'AUTORIZADO' ? 'Vigente con «PENDIENTE MASIVO»' : (ES_SOLICITUD_ABIERTA.has(v.estado) ? 'Solicitud abierta' : 'Ingresado sin autorizar'));
                     return `${s}${m === mesSap ? ' · a la fecha de SAP' : ' · al cierre'}${ids(m, 'fuera').includes(id) ? ' · no depende del área' : ''}`; },
                 aut: (m, id) => `Autorizado en el mes · ${ingresoEn(ver(id), m) ? 'ingreso real del mes' : 'del backlog'}`,
+                bkv: (m, id) => `Vigente al empezar el mes (${ver(id).estado === 'SUSPENDIDO' ? 'luego reemplazado por otra versión' : 'última versión Autorizada'})`,
                 sol: (m, id) => `Ingreso real en el mes${ver(id).conIngreso ? '' : ' (por Fecha Registro: la Observación no trae la fecha)'}`
             };
             const de = (m, kk, comoK) => ids(m, kk).map((id) => [id, m, (como[comoK || kk] || (() => ''))(m, id)]);
@@ -13581,6 +13662,7 @@ async function maybeAutoStartTour() {
             const ultimoMes = meses[meses.length - 1];
             const sel = {
                 ant: () => de(anterior(meses[0]), 'pend'),
+                bkv: () => de(meses[0], 'bkv'),
                 pend: () => de(ultimoMes, 'pend'),
                 susp: () => meses.flatMap((m) => de(m, 'susp', 'pend')),
                 fuera: () => de(ultimoMes, 'fuera', 'pend'),
@@ -13959,7 +14041,7 @@ async function maybeAutoStartTour() {
             const f = d.per.hasta;
             const v = { MES_NOMBRE: d.per.mesNombre, MES_ANIO: d.per.mesAnio, RANGO_GRAFICO: d.per.rango, FECHA_STATUS: f.format('DD/MM/YYYY'),
                 FECHA_LARGA: `${f.date()} ${MESES[f.month()]} ${f.year()}` };
-            ['P1', 'P2'].forEach((pl) => { const p = d.programa[pl]; Object.assign(v, { [`S2_${pl}_SOL`]: numOGuion(p.sol[2]), [`S2_${pl}_BK`]: numOGuion(p.ant[2]), [`S2_${pl}_AUT`]: numOGuion(p.aut[2]) }); });
+            ['P1', 'P2'].forEach((pl) => { const p = d.programa[pl]; Object.assign(v, { [`S2_${pl}_SOL`]: numOGuion(p.sol[2]), [`S2_${pl}_BK`]: numOGuion(backlogDe(p)), [`S2_${pl}_AUT`]: numOGuion(p.aut[2]) }); });
             const ruta = (R, r) => ['P1', 'P2'].forEach((pl) => {
                 const c = r[pl] || contadorVacio(), k = `${R}_${pl}_`;
                 Object.assign(v, {
