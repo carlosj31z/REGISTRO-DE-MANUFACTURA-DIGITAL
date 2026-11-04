@@ -7030,11 +7030,11 @@ async function downloadPlanProduccionFromCloud() {
         // ---- Quién autorizó (pedido de CINTIA, 04/11/2026) ----
         // En las etapas autorizadas el Estatus dice AUTORIZADO y el Responsable es quien la autorizó en SAP («Usuario
         // Autorización» del RMD), con el nombre corto que usa el área: inicial del nombre y primer apellido (CJESUSZ → CJESUS).
-        // Karla Vanessa Moreno se cuenta por su segundo nombre, Vanessa: su usuario KMORENOM se muestra como VM (su abreviatura).
+        // Karla Vanessa Moreno se cuenta por su segundo nombre, Vanessa: su usuario KMORENOM se muestra como VMORENO (su abreviatura).
         // Un usuario que no está en la lista se muestra tal cual viene de SAP.
         const AUTORIZADORES_SAP = {
             CJESUSZ: { corto: 'CJESUS', nombre: 'Carlos Jesús' },
-            KMORENOM: { corto: 'VM', nombre: 'Vanessa Moreno' },
+            KMORENOM: { corto: 'VMORENO', nombre: 'Vanessa Moreno' },
             NCUELLARL: { corto: 'NCUELLAR', nombre: 'Noelia Cuellar' },
             JQUISPEP: { corto: 'JQUISPE', nombre: 'Jimena Quispe' }
         };
@@ -11735,6 +11735,7 @@ async function maybeAutoStartTour() {
             animation:flxTramo var(--flx-ciclo) linear infinite; animation-delay:var(--t, 0s); stroke:rgb(var(--plum-rgb)); }
         :is(#tab-status, #prodAcumulado) .flx-svg .flx-tramo.pro { stroke:rgb(var(--copper-rgb)); }
         :is(#tab-status, #prodAcumulado) .flx-svg .flx-tramo.ok { stroke:rgb(var(--ok-rgb)); }
+        :is(#tab-status, #prodAcumulado) .flx.flx-pausa .sts-caja.flx-paso, :is(#tab-status, #prodAcumulado) .flx.flx-pausa .flx-n, :is(#tab-status, #prodAcumulado) .flx.flx-pausa .flx-tramo { animation-play-state:paused; }
         @keyframes flxTramo { 0% { stroke-dashoffset:100; opacity:0; } 1% { opacity:.85; } 10% { stroke-dashoffset:-16; opacity:.85; } 11%, 100% { stroke-dashoffset:-16; opacity:0; } }
         :is(#tab-status, #prodAcumulado) .flx-delta { display:inline-block; margin-left:4px; font-size:11px; font-weight:700; vertical-align:super; }
         :is(#tab-status, #prodAcumulado) .flx-delta.sube { color:rgb(var(--danger-rgb)); }
@@ -13099,8 +13100,16 @@ async function maybeAutoStartTour() {
         // Tiempo de cada etapa en el ciclo del recorrido (10 tiempos de 0,6 s = --flx-ciclo 6 s): etapas en los pares, flechas en los impares.
         const TIEMPO_FLX = { bor: 0, ing: 2, flu: 4, cc: 4, rev: 6, aut: 8 };
         const tFlx = (t) => `${((t || 0) * 0.6).toFixed(1)}s`;
-        function dibujarFlujos(root) {
+        // Observadores de la última pintura de cada contenedor: se sueltan al volver a pintar (antes se acumulaban).
+        const flxObs = new WeakMap();
+        function dibujarFlujos(root, { contar = true } = {}) {
             if (!root) return;
+            (flxObs.get(root) || []).forEach((o) => o.disconnect());
+            const obs = [];
+            flxObs.set(root, obs);
+            // Las animaciones del recorrido (infinitas) se pausan mientras el flujo no está a la vista: menos repintado.
+            const io = window.IntersectionObserver ? new IntersectionObserver((ents) => ents.forEach((en) => en.target.classList.toggle('flx-pausa', !en.isIntersecting))) : null;
+            if (io) obs.push(io);
             const reducir = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
             const ARISTAS = [['bor', 'ing', 'pro'], ['ing', 'flu', 'doc'], ['ing', 'cc', 'doc'], ['flu', 'rev', 'pro'], ['cc', 'rev', 'pro'], ['rev', 'aut', 'ok']];
             root.querySelectorAll('[data-flujo]').forEach((fl) => {
@@ -13130,7 +13139,18 @@ async function maybeAutoStartTour() {
                     svg.innerHTML = h;
                 };
                 pintarSvg();
-                if (window.ResizeObserver && !fl.__flxRo) { fl.__flxRo = new ResizeObserver(() => pintarSvg()); fl.__flxRo.observe(fl); }
+                if (window.ResizeObserver) {
+                    // Un solo repintado del SVG por cuadro aunque lleguen varios avisos de tamaño seguidos.
+                    let rafSvg = 0, ancho = fl.getBoundingClientRect().width;
+                    const ro = new ResizeObserver((ents) => {
+                        const w = ents[0] && ents[0].contentRect ? ents[0].contentRect.width : 0;
+                        if (Math.abs(w - ancho) < 0.5 && w) return;
+                        ancho = w;
+                        cancelAnimationFrame(rafSvg); rafSvg = requestAnimationFrame(pintarSvg);
+                    });
+                    ro.observe(fl); obs.push(ro);
+                }
+                if (io && !reducir) io.observe(fl);
                 if (!reducir) fl.querySelectorAll('.sts-caja[data-nodo]').forEach((e) => {
                     const t = tFlx(TIEMPO_FLX[e.dataset.nodo]), et = e.closest('.sts-etapa');
                     e.classList.add('flx-paso'); e.style.setProperty('--t', t);
@@ -13138,15 +13158,24 @@ async function maybeAutoStartTour() {
                 });
             });
             // Los números suben de 0 a su valor (solo con la pestaña a la vista; si no, quedan con su valor).
-            if (reducir || document.visibilityState !== 'visible') return;
+            if (!contar || reducir || document.visibilityState !== 'visible') return;
             root.querySelectorAll('[data-flujo] [data-cuenta]').forEach((el) => {
                 const n = Number(el.dataset.cuenta);
                 if (!(n > 1)) return;
-                const t0 = performance.now(), dur = 800;
-                const paso = (t) => { const p = Math.min(1, (t - t0) / dur); el.textContent = String(Math.round(n * (1 - Math.pow(1 - p, 3)))); if (p < 1) requestAnimationFrame(paso); };
+                // El tiempo que da requestAnimationFrame es el del inicio del cuadro y puede ser ANTERIOR a t0: sin acotar
+                // p a [0, 1], (1 − p)³ pasaba de 1 y el número salía negativo al empezar (pedido de Carlos, 04/11/2026).
+                let t0 = null;
+                const dur = 800;
+                const paso = (t) => {
+                    if (!el.isConnected) return;
+                    if (t0 === null) t0 = t;
+                    const p = Math.max(0, Math.min(1, (t - t0) / dur));
+                    el.textContent = String(Math.max(0, Math.min(n, Math.round(n * (1 - Math.pow(1 - p, 3))))));
+                    if (p < 1) requestAnimationFrame(paso); else el.textContent = String(n);
+                };
                 el.textContent = '0';
                 requestAnimationFrame(paso);
-                setTimeout(() => { el.textContent = String(n); }, dur + 400);
+                setTimeout(() => { if (el.isConnected) el.textContent = String(n); }, dur + 400);
             });
         }
         // Filtro de fecha en la cabecera de la Ruta 1 y la Ruta 2 (pedido de CINTIA, 04/11/2026): «Ver el flujo del» un día
@@ -13959,14 +13988,34 @@ async function maybeAutoStartTour() {
                 .catch((err) => { console.error(err); Swal.fire({ icon: 'error', title: 'No se pudieron guardar las horas', text: err.message, background: '#0f172a' }); });
         }
 
+        // Optimización (pedido de Carlos, 04/11/2026): la pestaña se recalcula al entrar, al llegar datos de otro dispositivo
+        // y al guardar la foto del día, y casi siempre sale lo mismo. Si el HTML y los datos de los gráficos no cambiaron, no se
+        // vuelve a armar la página ni a crear los gráficos (y los números no vuelven a animarse): queda lo que ya se ve.
+        // Los cálculos y reglas no cambian; solo se evita repintar lo idéntico.
+        let pintado = { html: null, graf: null }, pintadoAcu = { html: null, graf: null };
+        const colorTextoGraf = () => getComputedStyle(document.documentElement).getPropertyValue('--slate-400').trim();
+        function claveGraficos(d) {
+            try {
+                return JSON.stringify([colorTextoGraf(), ['P1', 'P2'].map((pl) => [document.getElementById('stsGrafico' + pl) ? configCuadro(d, pl, {}).data : null,
+                    document.getElementById('stsTend' + pl) ? tendenciaRuta2(d, pl) : null])]);
+            } catch (e) { return Math.random(); }
+        }
         function pintar() {
             const cont = document.getElementById('stsContenido');
-            cont.innerHTML = htmlMeta(ultimo) + htmlLogica(ultimo) + htmlResumen(ultimo) + htmlPrograma(ultimo) + htmlRuta1(ultimo) + htmlRuta2(ultimo) + (MOSTRAR_HORAS ? htmlHoras(ultimo) : '');
-            // Las semanas, desde la más antigua: se deja a la vista la última.
-            cont.querySelectorAll('.sts-meses.semanas').forEach((el) => { el.scrollTop = el.scrollHeight; });
-            plegarNotas(cont);
-            dibujarGraficos(ultimo);
-            dibujarFlujos(cont);
+            const html = htmlMeta(ultimo) + htmlLogica(ultimo) + htmlResumen(ultimo) + htmlPrograma(ultimo) + htmlRuta1(ultimo) + htmlRuta2(ultimo) + (MOSTRAR_HORAS ? htmlHoras(ultimo) : '');
+            const igual = html === pintado.html && cont.dataset.stsPintado === '1';
+            if (!igual) {
+                cont.innerHTML = html;
+                cont.dataset.stsPintado = '1';
+                // Las semanas, desde la más antigua: se deja a la vista la última.
+                cont.querySelectorAll('.sts-meses.semanas').forEach((el) => { el.scrollTop = el.scrollHeight; });
+                plegarNotas(cont);
+                // Los números suben de 0 solo cuando la página se arma de nuevo (primera vez o algo cambió).
+                dibujarFlujos(cont);
+            }
+            const graf = claveGraficos(ultimo);
+            if (!igual || graf !== pintado.graf || !graficos.length) dibujarGraficos(ultimo);
+            pintado = { html, graf };
             pintarAcumuladoEn();
         }
         // ---------- Programa acumulado en Producción ----------
@@ -13976,7 +14025,12 @@ async function maybeAutoStartTour() {
             const cont = document.getElementById('prodAcumulado');
             if (!cont || !ultimo || !ultimo.acu) return;
             cont.style.display = '';
-            cont.innerHTML = htmlAcumulado(ultimo, plantasDeProduccion());
+            const html = htmlAcumulado(ultimo, plantasDeProduccion());
+            const graf = JSON.stringify([colorTextoGraf(), vista.acuCorte, ultimo.acu]);
+            if (html === pintadoAcu.html && graf === pintadoAcu.graf && cont.dataset.stsPintado === '1' && graficosAcu.length) return;
+            cont.innerHTML = html;
+            cont.dataset.stsPintado = '1';
+            pintadoAcu = { html, graf };
             cont.querySelectorAll('.sts-meses.semanas').forEach((el) => { el.scrollTop = el.scrollHeight; });
             plegarNotas(cont);
             dibujarGraficosAcumulado(ultimo, cont);
@@ -13993,13 +14047,14 @@ async function maybeAutoStartTour() {
             const cont = document.getElementById('stsContenido');
             calculando = (async () => {
                 try {
-                    if (!ultimo) cont.innerHTML = `<div class="sts-esqueleto" aria-label="Cargando"><div></div><div></div><div></div><div></div></div>
-                        <p class="sts-vacio">${motorArbolesResuelto() ? 'Calculando el status…' : 'Cargando el árbol de materiales de SAP (Listas de materiales)… la primera vez del día puede tardar unos segundos.'}</p>`;
+                    if (!ultimo) { cont.dataset.stsPintado = ''; cont.innerHTML = `<div class="sts-esqueleto" aria-label="Cargando"><div></div><div></div><div></div><div></div></div>
+                        <p class="sts-vacio">${motorArbolesResuelto() ? 'Calculando el status…' : 'Cargando el árbol de materiales de SAP (Listas de materiales)… la primera vez del día puede tardar unos segundos.'}</p>`; }
                     ultimo = await calcular();
                     pintar();
                     guardarFoto(ultimo).then((ok) => { if (ok && vista.foto) pintar(); }).catch((err) => console.error('Foto diaria del flujo:', err));
                 } catch (err) {
                     console.error(err);
+                    cont.dataset.stsPintado = '';
                     cont.innerHTML = `<p class="sts-vacio">No se pudo calcular el status: ${esc(err.message)}</p>`;
                 } finally { calculando = null; }
             })();
