@@ -968,6 +968,25 @@
            en cada tema. */
         .fila-autorizada-manual { background: rgb(var(--ok-rgb) / 0.08); }
         .fila-autorizada-manual:hover { background: rgb(var(--ok-rgb) / 0.13); }
+        /* Autorizadas HOY (en SAP o a mano): otro color para ubicar de un vistazo lo que se acaba de autorizar. */
+        tr.fila-autorizada-manual.fila-autorizada-hoy, #tablaPendientesBody > tr.fila-autorizada-manual.fila-autorizada-hoy:nth-child(even) { background: rgb(var(--info-rgb) / 0.22); }
+        tr.fila-autorizada-manual.fila-autorizada-hoy:hover, #tablaPendientesBody > tr.fila-autorizada-manual.fila-autorizada-hoy:nth-child(even):hover { background: rgb(var(--info-rgb) / 0.3); }
+        tr.fila-autorizada-manual.fila-autorizada-hoy > td:first-child, #tablaPendientesBody > tr.fila-autorizada-manual.fila-autorizada-hoy > td:first-child { box-shadow: inset 4px 0 0 rgb(var(--info-rgb)); }
+        .fecha-aut-fila { display: block; margin-top: 3px; font-size: 10px; line-height: 1.2; color: var(--slate-400, #94a3b8); white-space: nowrap; }
+        .btn-filtro-fecha-aut { cursor: pointer; text-align: left; white-space: nowrap; }
+        .popup-fecha-aut { position: fixed; z-index: 200; width: 290px; padding: 12px; display: flex; flex-direction: column; gap: 10px;
+            background: var(--app-bg); border: 1px solid rgb(var(--info-rgb) / 0.35); border-radius: 10px; box-shadow: 0 12px 32px -8px rgba(0,0,0,0.5); font-size: 12px; color: var(--slate-200, #e2e8f0); }
+        .popup-fecha-aut-tit { font-size: 11px; font-weight: 650; text-transform: uppercase; letter-spacing: 0.03em; color: var(--slate-400, #94a3b8); }
+        .popup-fecha-aut-atajos { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+        .popup-fecha-aut button { padding: 6px 8px; border-radius: 6px; font-size: 11.5px; font-weight: 600; border: 1px solid rgb(var(--info-rgb) / 0.3); background: transparent; color: inherit; cursor: pointer; }
+        .popup-fecha-aut button:hover { background: rgb(var(--info-rgb) / 0.12); }
+        .popup-fecha-aut button.is-activo, .popup-fecha-aut button.is-principal { background: rgb(var(--info-rgb) / 0.85); border-color: rgb(var(--info-rgb)); color: #fff; }
+        .popup-fecha-aut-rango { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+        .popup-fecha-aut-rango label { display: flex; flex-direction: column; gap: 3px; font-size: 11px; color: var(--slate-400, #94a3b8); }
+        .popup-fecha-aut-rango input { padding: 5px 6px; border-radius: 6px; border: 1px solid rgb(var(--info-rgb) / 0.3); background: var(--field-bg); color: var(--field-text); font-size: 12px; }
+        .popup-fecha-aut-nota { font-size: 10.5px; color: var(--slate-500, #64748b); }
+        .popup-fecha-aut-botones { display: flex; gap: 8px; } .popup-fecha-aut-botones button { flex: 1; }
+        .fecha-aut-fila--hoy { display: inline-block; padding: 1px 6px; border-radius: 999px; font-weight: 650; color: rgb(var(--info-rgb)); background: rgb(var(--info-rgb) / 0.16); border: 1px solid rgb(var(--info-rgb) / 0.45); }
         .etapa-autorizada-manual { color: rgb(var(--c-sage-300) / 0.8); }
         .badge-autorizado-manual {
             display: inline-flex; align-items: center; gap: 0.25rem;
@@ -2080,6 +2099,7 @@
                     <select id="filtroEstatusProd" onchange="setFiltroEtapa('produccion','estatus',this.value)" class="field-input filtro-etapa-select" title="Estatus elegido en la etapa pendiente (BORRADOR, INGRESAR…); &quot;Sin estatus&quot;: etapas pendientes a las que aún no se les asignó" aria-label="Filtrar por estatus de la etapa">
                         <option value="">Estatus: todos</option><option value="BORRADOR">BORRADOR</option><option value="INGRESAR">INGRESAR</option><option value="FLUJO SAP">FLUJO SAP</option><option value="CONTROL DE CAMBIO">CONTROL DE CAMBIO</option><option value="POR REVISIÓN">POR REVISIÓN</option><option value="SIN ESTATUS">Sin estatus</option>
                     </select>
+                    <button type="button" id="filtroAutProd" onclick="abrirFiltroFechaAut('produccion', this, event)" class="field-input filtro-etapa-select btn-filtro-fecha-aut" title="Ver solo lo autorizado (en SAP o a mano) un día o en un rango de días" aria-haspopup="dialog">F. autorización: todas</button>
                     <button type="button" id="filtrosEtapaLimpiarProd" onclick="limpiarFiltrosEtapa('produccion')" class="filtro-etapa-limpiar" style="display:none;">Quitar filtros</button>
                 </div>
                 <span id="validacionContadorFilas" class="text-[11px] text-slate-500 whitespace-nowrap sm:ml-auto"></span>
@@ -2584,6 +2604,7 @@
                     <select id="carFiltro_programa" onchange="Caracterizacion.filtrar('programa',this.value)" class="field-input filtro-etapa-select" title="Si la etapa también está en el Programa de Producción" aria-label="Filtrar por Programa de Producción">
                         <option value="">Programa: todos</option><option value="si">También en el programa</option><option value="no">Solo caracterización</option>
                     </select>
+                    <button type="button" id="carFiltro_aut" onclick="abrirFiltroFechaAut('caract', this, event)" class="field-input filtro-etapa-select btn-filtro-fecha-aut" title="Ver solo lo autorizado (en SAP o a mano) un día o en un rango de días" aria-haspopup="dialog">F. autorización: todas</button>
                     <button type="button" onclick="Caracterizacion.limpiar()" class="filtro-etapa-limpiar">Quitar filtros</button>
                 </div>
                 <span id="carContador" class="text-[11px] text-slate-500 whitespace-nowrap sm:ml-auto"></span>
@@ -7842,12 +7863,149 @@ async function downloadPlanProduccionFromCloud() {
                 plantas: Array.from(plantasSet).sort().join(' + '), meses: Array.from(mesesSet), material: f.codigo }));
             return { filas, pendientesPorProducto };
         }
-        // Pendientes primero (por fecha de inicio), luego las autorizadas a mano y al final las autorizadas en SAP.
-        const ORDEN_ESTADO_FILA = { pendiente: 0, opsap: 0, autorizado: 1, sap: 2 };
-        function ordenarFilasEtapa(filas) {
+        // ---- Fecha de autorización de una etapa autorizada ----
+        // A mano: cuándo se marcó en la página (con hora). En SAP: la Fecha Autorización (día de Lima, sin hora) del RMD
+        // que resuelve la etapa; con varias rutas, la más reciente. null si no se conoce (p. ej. datos de antes de la
+        // sincronización que trae el detalle).
+        const fechaSapDiaMs = (txt) => { const m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(String(txt || '').trim()); return m ? new Date(+m[3], +m[2] - 1, +m[1]).getTime() : null; };
+        function fechaAutorizacionDeFila(f, origen) {
+            if (!f) return null;
+            if (f.estado === 'autorizado') {
+                const meta = origen === 'forecast' ? manualAutorizadosForecastMeta : manualAutorizadosMeta;
+                const m = meta && meta.get(f.clave);
+                return m && m.f ? { ms: dayjs(m.f).valueOf(), conHora: true, manual: true } : null;
+            }
+            if (f.estado !== 'sap' || !f.d || !Array.isArray(f.d.candidatos)) return null;
+            let ms = null;
+            f.d.candidatos.forEach(c => {
+                if (c.sinRmd || c.pendiente) return;
+                const t = fechaSapDiaMs((filaDetalleDeEntrada(c) || {}).fechaAutorizacion);
+                if (t !== null && (ms === null || t > ms)) ms = t;
+            });
+            return ms === null ? null : { ms, conHora: false, manual: false };
+        }
+        const autorizadaHoy = (fa) => !!(fa && dayjs(fa.ms).isSame(dayjs(), 'day'));
+        // Filtro «F. autorización»: un día o un rango de días, guardado como 'AAAA-MM-DD..AAAA-MM-DD' (ambos incluidos).
+        function rangoFechaAut(filtro) {
+            const m = /^(\d{4}-\d{2}-\d{2})\.\.(\d{4}-\d{2}-\d{2})$/.exec(String(filtro || ''));
+            if (!m) return null;
+            return m[1] <= m[2] ? { desde: m[1], hasta: m[2] } : { desde: m[2], hasta: m[1] };
+        }
+        function fechaAutPasaFiltro(fa, filtro) {
+            const r = rangoFechaAut(filtro);
+            if (!r) return true;
+            if (!fa) return false;
+            const dia = dayjs(fa.ms).format('YYYY-MM-DD');
+            return dia >= r.desde && dia <= r.hasta;
+        }
+        function textoFiltroFechaAut(filtro) {
+            const r = rangoFechaAut(filtro);
+            if (!r) return 'F. autorización: todas';
+            const hoy = dayjs().format('YYYY-MM-DD'), f = (x) => dayjs(x).format('DD/MM/YY');
+            if (r.desde === r.hasta) return r.desde === hoy ? 'Autorizadas hoy' : `Autorizadas el ${f(r.desde)}`;
+            return `Autorizadas del ${f(r.desde)} al ${f(r.hasta)}`;
+        }
+        // Ventana del filtro: atajos (Hoy, Ayer, Últimos 7 días, Esta semana, Este mes, Mes anterior) o un día / rango a mano.
+        // origen: 'produccion' o 'caract'.
+        function cerrarFiltroFechaAut() {
+            const p = document.getElementById('popupFiltroFechaAut');
+            if (p) p.remove();
+            document.removeEventListener('click', onDocClickFiltroFechaAut, true);
+            document.removeEventListener('keydown', onKeyFiltroFechaAut, true);
+        }
+        function onDocClickFiltroFechaAut(e) {
+            const p = document.getElementById('popupFiltroFechaAut');
+            if (p && !p.contains(e.target) && !(e.target.closest && e.target.closest('.btn-filtro-fecha-aut'))) cerrarFiltroFechaAut();
+        }
+        function onKeyFiltroFechaAut(e) { if (e.key === 'Escape') cerrarFiltroFechaAut(); }
+        function aplicarFiltroFechaAut(origen, valor) {
+            cerrarFiltroFechaAut();
+            if (origen === 'caract') Caracterizacion.filtrar('aut', valor); else setFiltroEtapa(origen, 'aut', valor);
+        }
+        window.abrirFiltroFechaAut = function (origen, btn, ev) {
+            if (ev) ev.stopPropagation();
+            if (document.getElementById('popupFiltroFechaAut')) { cerrarFiltroFechaAut(); return; }
+            const actual = origen === 'caract' ? Caracterizacion.filtroAut() : filtrosEtapaDe(origen).aut;
+            const r = rangoFechaAut(actual), hoy = dayjs(), F = (d) => d.format('YYYY-MM-DD');
+            const atajos = [
+                ['Hoy', F(hoy), F(hoy)],
+                ['Ayer', F(hoy.subtract(1, 'day')), F(hoy.subtract(1, 'day'))],
+                ['Últimos 7 días', F(hoy.subtract(6, 'day')), F(hoy)],
+                ['Esta semana', F(hoy.subtract((hoy.day() + 6) % 7, 'day')), F(hoy)],
+                ['Este mes', F(hoy.startOf('month')), F(hoy)],
+                ['Mes anterior', F(hoy.subtract(1, 'month').startOf('month')), F(hoy.subtract(1, 'month').endOf('month'))]
+            ];
+            const popup = document.createElement('div');
+            popup.id = 'popupFiltroFechaAut';
+            popup.className = 'popup-fecha-aut';
+            popup.innerHTML = `
+                <div class="popup-fecha-aut-tit">Fecha de autorización</div>
+                <div class="popup-fecha-aut-atajos">${atajos.map(([t, d, h]) => `<button type="button" data-desde="${d}" data-hasta="${h}" class="${r && r.desde === d && r.hasta === h ? 'is-activo' : ''}">${t}</button>`).join('')}</div>
+                <div class="popup-fecha-aut-rango">
+                    <label>Desde<input type="date" id="fechaAutDesde" value="${r ? r.desde : ''}" max="${F(hoy)}"></label>
+                    <label>Hasta<input type="date" id="fechaAutHasta" value="${r ? r.hasta : ''}" max="${F(hoy)}"></label>
+                </div>
+                <div class="popup-fecha-aut-nota">Elige el día en «Desde»; para un rango de días, cambia «Hasta».</div>
+                <div class="popup-fecha-aut-botones">
+                    <button type="button" id="fechaAutBorrar">Borrar filtro</button>
+                    <button type="button" id="fechaAutAplicar" class="is-principal">Aplicar</button>
+                </div>`;
+            document.body.appendChild(popup);
+            const rect = btn.getBoundingClientRect(), w = popup.offsetWidth || 280, h = popup.offsetHeight || 260;
+            popup.style.left = Math.max(8, Math.min(rect.left, window.innerWidth - w - 8)) + 'px';
+            popup.style.top = (rect.bottom + 6 + h > window.innerHeight ? Math.max(8, rect.top - h - 6) : rect.bottom + 6) + 'px';
+            popup.querySelectorAll('.popup-fecha-aut-atajos button').forEach(b => b.addEventListener('click', () => aplicarFiltroFechaAut(origen, `${b.dataset.desde}..${b.dataset.hasta}`)));
+            popup.querySelector('#fechaAutBorrar').addEventListener('click', () => aplicarFiltroFechaAut(origen, ''));
+            const aplicar = () => {
+                const d = popup.querySelector('#fechaAutDesde').value, h = popup.querySelector('#fechaAutHasta').value;
+                if (!d && !h) { aplicarFiltroFechaAut(origen, ''); return; }
+                aplicarFiltroFechaAut(origen, `${d || h}..${h || d}`);
+            };
+            popup.querySelector('#fechaAutAplicar').addEventListener('click', aplicar);
+            // Al elegir «Desde», «Hasta» lo sigue (un solo día) salvo que ya marque un día posterior.
+            popup.querySelector('#fechaAutDesde').addEventListener('change', (e) => {
+                const hasta = popup.querySelector('#fechaAutHasta');
+                if (e.target.value && (!hasta.value || hasta.value < e.target.value)) hasta.value = e.target.value;
+            });
+            popup.querySelectorAll('input[type="date"]').forEach(i => i.addEventListener('keydown', (e) => { if (e.key === 'Enter') aplicar(); }));
+            setTimeout(() => {
+                document.addEventListener('click', onDocClickFiltroFechaAut, true);
+                document.addEventListener('keydown', onKeyFiltroFechaAut, true);
+            }, 0);
+        };
+        // Texto y resaltado del botón del filtro.
+        function pintarBotonFiltroFechaAut(id, filtro) {
+            const b = document.getElementById(id);
+            if (!b) return;
+            b.textContent = textoFiltroFechaAut(filtro);
+            b.classList.toggle('is-activo', !!rangoFechaAut(filtro));
+        }
+        // Pendientes primero (por fecha de inicio); luego las autorizadas (a mano o en SAP), de la autorización más
+        // reciente a la más antigua, para no perder de vista lo que se acaba de autorizar. Sin fecha conocida, al final.
+        const ORDEN_ESTADO_FILA = { pendiente: 0, opsap: 0, autorizado: 1, sap: 1 };
+        function ordenarFilasEtapa(filas, origen) {
             const idx = (f) => (f.fija ? ETAPAS_FIJAS.indexOf(f.fija) : -1);
-            return filas.sort((a, b) => (ORDEN_ESTADO_FILA[a.estado] - ORDEN_ESTADO_FILA[b.estado]) || (a.fechaProxima || '9999').localeCompare(b.fechaProxima || '9999')
+            const fa = new Map();
+            filas.forEach(f => { if (ORDEN_ESTADO_FILA[f.estado] === 1) fa.set(f, fechaAutorizacionDeFila(f, origen)); });
+            const dia = (f) => { const x = fa.get(f); return x ? dayjs(x.ms).format('YYYY-MM-DD') : ''; };
+            const ms = (f) => { const x = fa.get(f); return x ? x.ms : 0; };
+            return filas.sort((a, b) => (ORDEN_ESTADO_FILA[a.estado] - ORDEN_ESTADO_FILA[b.estado])
+                || (ORDEN_ESTADO_FILA[a.estado] === 1 ? (dia(b).localeCompare(dia(a)) || ms(b) - ms(a)) : 0)
+                || (a.fechaProxima || '9999').localeCompare(b.fechaProxima || '9999')
                 || idx(a) - idx(b) || String(a.material).localeCompare(String(b.material)));
+        }
+        // Clase de la fila: pendiente, autorizada, o autorizada HOY (se pinta de otro color).
+        function claseFilaEtapa(f, origen) {
+            if (f.estado === 'pendiente') return 'border-b border-slate-800/60 last:border-0 hover:bg-slate-800/40 transition-colors';
+            return 'border-b border-slate-800/60 last:border-0 fila-autorizada-manual transition-colors' + (autorizadaHoy(fechaAutorizacionDeFila(f, origen)) ? ' fila-autorizada-hoy' : '');
+        }
+        // Fecha de autorización bajo el botón de la etapa autorizada; «Hoy» si fue hoy.
+        function fechaAutorizacionHtml(f, origen) {
+            const fa = fechaAutorizacionDeFila(f, origen);
+            if (!fa) return f.estado === 'sap' ? '<span class="fecha-aut-fila" title="Sin la Fecha Autorización de SAP: aparece tras el próximo «Enviar a Status RMD»">Aut. —</span>' : '';
+            const d = dayjs(fa.ms), tit = `${fa.manual ? 'Autorizada a mano' : 'Fecha Autorización en SAP'}: ${d.format(fa.conHora ? 'DD/MM/YYYY HH:mm' : 'DD/MM/YYYY')}`;
+            return autorizadaHoy(fa) ? `<span class="fecha-aut-fila fecha-aut-fila--hoy" title="${tit}">Hoy${fa.conHora ? ' ' + d.format('HH:mm') : ''}</span>`
+                : `<span class="fecha-aut-fila" title="${tit}">Aut. ${d.format('DD/MM')}</span>`;
         }
         // Estatus y responsable de una fila pendiente.
         const estatusDeFila = (f) => (f.clave && estatusEtapa.get(f.clave)) || '';
@@ -7855,12 +8013,12 @@ async function downloadPlanProduccionFromCloud() {
 
         // ---- Filtros de las tablas: Etapa, Estado en SAP, Antigüedad del pendiente y Estatus ----
         // Se aplican a cada fila (etapa) con su estado real en SAP. Los KPI no cambian.
-        const filtrosEtapaProd = { etapa: '', sap: '', edad: '', estatus: '' };
-        const filtrosEtapaForecast = { etapa: '', sap: '', edad: '', estatus: '' };
+        const filtrosEtapaProd = { etapa: '', sap: '', edad: '', estatus: '', aut: '' };
+        const filtrosEtapaForecast = { etapa: '', sap: '', edad: '', estatus: '', aut: '' };
         const ESTADOS_SAP_FILTRO = ['INGRESADO', 'SUSPENDIDO', 'SOLICITADO'];
         const RANGOS_EDAD_FILTRO = { le7: [0, 7], gt7: [8, Infinity], gt30: [31, Infinity], gt90: [91, Infinity] };
         const filtrosEtapaDe = (origen) => (origen === 'forecast' ? filtrosEtapaForecast : filtrosEtapaProd);
-        const filtrosEtapaActivos = (fx) => !!(fx.etapa || fx.sap || fx.edad || fx.estatus);
+        const filtrosEtapaActivos = (fx) => !!(fx.etapa || fx.sap || fx.edad || fx.estatus || fx.aut);
         function candidatoPasaFiltros(c, fx) {
             if (!c.pendiente) return false;
             if (fx.sap === 'SIN RMD' && !c.sinRmd) return false;
@@ -7872,10 +8030,12 @@ async function downloadPlanProduccionFromCloud() {
             }
             return true;
         }
-        function filaPasaFiltros(f, fx) {
+        function filaPasaFiltros(f, fx, origen) {
             if (!filtrosEtapaActivos(fx)) return true;
             if (f.estado === 'opsap') return false;
             if (fx.etapa && f.fija !== fx.etapa) return false;
+            // F. autorización: solo etapas autorizadas en ese rango.
+            if (fx.aut && ((f.estado !== 'autorizado' && f.estado !== 'sap') || !fechaAutPasaFiltro(fechaAutorizacionDeFila(f, origen), fx.aut))) return false;
             // Estatus de la etapa pendiente; "SIN ESTATUS": pendientes sin estatus asignado
             if (fx.estatus) {
                 if (f.estado !== 'pendiente') return false;
@@ -7886,16 +8046,17 @@ async function downloadPlanProduccionFromCloud() {
             return !!(f.d && f.d.candidatos.some(c => candidatoPasaFiltros(c, fx)));
         }
         const aplicarFiltrosEtapa = (filas, fx) => filas.filter(f => filaPasaFiltros(f, fx));
-        function textoContadorFilas(visibles, filas) {
+        function textoContadorFilas(visibles, filas, origen) {
             const n = (l) => l.filter(f => f.estado !== 'opsap').length;
-            return `${n(visibles)} de ${plural(n(filas), 'etapa', 'etapas')}`;
+            const hoy = filas.filter(f => (f.estado === 'autorizado' || f.estado === 'sap') && autorizadaHoy(fechaAutorizacionDeFila(f, origen))).length;
+            return `${n(visibles)} de ${plural(n(filas), 'etapa', 'etapas')}${hoy ? ` · ${plural(hoy, 'autorizada hoy', 'autorizadas hoy')}` : ''}`;
         }
         window.setFiltroEtapa = function (origen, campo, valor) {
             filtrosEtapaDe(origen)[campo] = valor || '';
             if (origen === 'forecast') refiltrarTablaPendientesForecast(); else refiltrarTablaPendientes();
         };
         window.limpiarFiltrosEtapa = function (origen) {
-            Object.assign(filtrosEtapaDe(origen), { etapa: '', sap: '', edad: '', estatus: '' });
+            Object.assign(filtrosEtapaDe(origen), { etapa: '', sap: '', edad: '', estatus: '', aut: '' });
             if (origen === 'forecast') refiltrarTablaPendientesForecast(); else refiltrarTablaPendientes();
         };
         function actualizarControlesFiltrosEtapa(origen) {
@@ -7906,6 +8067,7 @@ async function downloadPlanProduccionFromCloud() {
                 if (el.value !== fx[campo]) el.value = fx[campo];
                 el.classList.toggle('is-activo', !!fx[campo]);
             });
+            pintarBotonFiltroFechaAut('filtroAut' + suf, fx.aut);
             const limpiar = document.getElementById('filtrosEtapaLimpiar' + suf);
             if (limpiar) limpiar.style.display = filtrosEtapaActivos(fx) ? '' : 'none';
         }
@@ -7949,7 +8111,7 @@ async function downloadPlanProduccionFromCloud() {
                 return {
                     etapa: `<span class="etapa-label-celda"><span class="text-emerald-300 cursor-pointer hover:underline" onclick="${verDetalle}" title="Ver el código y el RMD de esta etapa">${label}</span><span class="chip-sap-fila">${chip}</span></span>`,
                     estatus: '<span class="text-slate-500">—</span>', resp: '<span class="text-slate-500">—</span>',
-                    accion: `<span class="badge-autorizado-sap" title="${esc(c && !c.sinRmd ? `Autorizado en SAP: ${textoCandidato(c)}` : 'Resuelta en SAP')}">Autorizado</span>`
+                    accion: `<span class="badge-autorizado-sap" title="${esc(c && !c.sinRmd ? `Autorizado en SAP: ${textoCandidato(c)}` : 'Resuelta en SAP')}">Autorizado</span>${fechaAutorizacionHtml(f, origen)}`
                 };
             }
             if (f.estado === 'autorizado') {
@@ -7957,7 +8119,7 @@ async function downloadPlanProduccionFromCloud() {
                 return {
                     etapa: `<span class="etapa-label-celda"><span class="etapa-autorizada-manual line-through cursor-pointer" onclick="${verDetalle}" title="Ver el código y el RMD de esta etapa">${label}</span><span class="chip-sap-fila">${chip}<span class="nota-manual" title="Autorizada a mano${m && m.f ? ' el ' + dayjs(m.f).format('DD/MM/YYYY HH:mm') : ''}. Caduca sola cuando SAP la autorice o registre una versión nueva.">a mano${m && m.f ? ' · ' + dayjs(m.f).format('DD/MM') : ''}</span></span></span>`,
                     estatus: '<span class="text-slate-500">—</span>', resp: '<span class="text-slate-500">—</span>',
-                    accion: `<button onclick="${toggle}('${mat}','${fija}')" class="text-[10px] font-medium text-slate-400 hover:text-slate-200 border border-slate-600 hover:border-slate-400 px-1.5 py-0.5 rounded transition-colors" title="Revertir la autorización manual de esta etapa">Revertir</button>`
+                    accion: `<button onclick="${toggle}('${mat}','${fija}')" class="text-[10px] font-medium text-slate-400 hover:text-slate-200 border border-slate-600 hover:border-slate-400 px-1.5 py-0.5 rounded transition-colors" title="Revertir la autorización manual de esta etapa">Revertir</button>${fechaAutorizacionHtml(f, origen)}`
                 };
             }
             const estatusActual = estatusDeFila(f), valorActual = responsableDeFila(f);
@@ -8026,8 +8188,7 @@ async function downloadPlanProduccionFromCloud() {
             const esc = escapeHtmlRmdConfig;
             body.innerHTML = etapas.map(f => {
                 const c = celdasDeEtapa(f, 'produccion');
-                const rowCls = f.estado === 'pendiente' ? 'border-b border-slate-800/60 last:border-0 hover:bg-slate-800/40 transition-colors'
-                    : 'border-b border-slate-800/60 last:border-0 fila-autorizada-manual transition-colors';
+                const rowCls = claseFilaEtapa(f, 'produccion');
                 const fechaTxt = f.fechaProxima ? dayjs(f.fechaProxima).format('YYYY-MM-DD') : '-';
                 return `<tr class="${rowCls}">
                     <td class="whitespace-nowrap py-2 text-slate-300">${plantaCelda(f)}</td>
@@ -9241,7 +9402,7 @@ function updateForecastActiveFiltersBadge() {
             animateCounter('kpi-val-pendientes-forecast', productosPendientes.length, 1.2);
             animateCounter('kpi-val-rmd-forecast', rmdPendientesTotal, 1.2);
 
-            const todasLasFilas = ordenarFilasEtapa(etapas.slice());
+            const todasLasFilas = ordenarFilasEtapa(etapas.slice(), 'forecast');
             const hayFiltrosActivos = currentForecastPlantFilter !== 'TODAS' || forecastMonthFilterMode !== 'todos';
 
             if (todasLasFilas.length === 0) {
@@ -9275,7 +9436,7 @@ function updateForecastActiveFiltersBadge() {
 
             const body = document.getElementById('tablaPendientesForecastBody');
             const contador = document.getElementById('validacionForecastContadorFilas');
-            if (contador) contador.textContent = textoContadorFilas(visibles, filas);
+            if (contador) contador.textContent = textoContadorFilas(visibles, filas, 'forecast');
 
             if (visibles.length === 0) {
                 body.innerHTML = `<tr><td colspan="8" class="text-center text-slate-500 py-6 text-xs">Ninguna etapa coincide con el filtro/búsqueda actual.</td></tr>`;
@@ -9284,8 +9445,7 @@ function updateForecastActiveFiltersBadge() {
             const esc = escapeHtmlRmdConfig;
             body.innerHTML = visibles.map(f => {
                 const c = celdasDeEtapa(f, 'forecast');
-                const rowCls = f.estado === 'pendiente' ? 'border-b border-slate-800/60 last:border-0 hover:bg-slate-800/40 transition-colors'
-                    : 'border-b border-slate-800/60 last:border-0 fila-autorizada-manual transition-colors';
+                const rowCls = claseFilaEtapa(f, 'forecast');
                 return `<tr class="${rowCls}">
                     <td class="text-slate-400 py-2">${esc(f.centros || '-')}</td>
                     <td class="font-medium text-slate-200 whitespace-nowrap py-2">${htmlMaterialEtapa(f, '')}</td>
@@ -13512,7 +13672,7 @@ async function maybeAutoStartTour() {
         let clavesCaract = null;     // material::ETAPA de las caracterizaciones (para la marca de Producción)
         let filasUltimas = [];
         const vista = { estado: 'todos', busqueda: '', planta: '', origen: '', programa: '' };
-        const fx = { etapa: '', sap: '', edad: '', estatus: '' };
+        const fx = { etapa: '', sap: '', edad: '', estatus: '', aut: '' };
         let cargando = null;
         let programaGuardado = [null, null]; // prod_data_planta1 / prod_data_planta2
 
@@ -13642,7 +13802,8 @@ async function maybeAutoStartTour() {
             const todas = filasUltimas;
             actualizarContadoresPendientes(todas, ['carPillTodos', 'carPillPendientes', 'carPillAutorizados']);
             const v = visibles();
-            $('carContador').textContent = textoContadorFilas(v, todas);
+            $('carContador').textContent = textoContadorFilas(v, todas, 'caract');
+            pintarBotonFiltroFechaAut('carFiltro_aut', fx.aut);
             ['etapa', 'sap', 'estatus'].forEach((k) => { const el = $('carFiltro_' + k); if (el) { el.value = fx[k]; el.classList.toggle('is-activo', !!fx[k]); } });
             ['planta', 'origen', 'programa'].forEach((k) => { const el = $('carFiltro_' + k); if (el) { el.value = vista[k]; el.classList.toggle('is-activo', !!vista[k]); } });
             [['todos', 'carFiltroTodos'], ['pendientes', 'carFiltroPendientes'], ['autorizados', 'carFiltroAutorizados']].forEach(([e, id]) => $(id).classList.toggle('active', vista.estado === e));
@@ -13651,7 +13812,7 @@ async function maybeAutoStartTour() {
                 const c = celdasDeEtapa(f, 'caract');
                 const estatus = c.estatus.replace('id="estatus_', 'id="estatuscar_'), resp = c.resp.replace('id="resppendcc_', 'id="respcarpendcc_');
                 const nombres = Array.from(new Set(f.listado.map((it) => it.nombre))).filter((n) => sinTildes(n) !== sinTildes(f.descripcion));
-                const rowCls = f.estado === 'pendiente' ? 'border-b border-slate-800/60 last:border-0 hover:bg-slate-800/40 transition-colors' : 'border-b border-slate-800/60 last:border-0 fila-autorizada-manual transition-colors';
+                const rowCls = claseFilaEtapa(f, 'caract');
                 return `<tr class="${rowCls}">
                     <td class="whitespace-nowrap py-2 text-slate-300">${esc(f.plantas || '—')}</td>
                     <td class="whitespace-nowrap py-2"><span class="mat-code">${esc(f.codigoVisible || f.codigo)}</span></td>
@@ -13775,8 +13936,9 @@ async function maybeAutoStartTour() {
             alEntrar: () => actualizar(true), actualizar: () => actualizar(true), refrescar: () => { if (lista) actualizar(false); },
             recibir, exportar, chipProduccion,
             filtrar: (k, v) => { if (k in fx) fx[k] = v || ''; else vista[k] = v || ''; pintar(); },
+            filtroAut: () => fx.aut,
             buscar: (q) => { vista.busqueda = q || ''; pintar(); },
-            limpiar: () => { Object.assign(fx, { etapa: '', sap: '', edad: '', estatus: '' }); Object.assign(vista, { planta: '', origen: '', programa: '' }); pintar(); },
+            limpiar: () => { Object.assign(fx, { etapa: '', sap: '', edad: '', estatus: '', aut: '' }); Object.assign(vista, { planta: '', origen: '', programa: '' }); pintar(); },
             _filas: () => filasUltimas
         };
     })();
