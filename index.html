@@ -7030,11 +7030,11 @@ async function downloadPlanProduccionFromCloud() {
         // ---- Quién autorizó (pedido de CINTIA, 04/11/2026) ----
         // En las etapas autorizadas el Estatus dice AUTORIZADO y el Responsable es quien la autorizó en SAP («Usuario
         // Autorización» del RMD), con el nombre corto que usa el área: inicial del nombre y primer apellido (CJESUSZ → CJESUS).
-        // Karla Vanessa Moreno se cuenta por su segundo nombre, Vanessa: su usuario KMORENOM se muestra como VMORENO.
+        // Karla Vanessa Moreno se cuenta por su segundo nombre, Vanessa: su usuario KMORENOM se muestra como VM (su abreviatura).
         // Un usuario que no está en la lista se muestra tal cual viene de SAP.
         const AUTORIZADORES_SAP = {
             CJESUSZ: { corto: 'CJESUS', nombre: 'Carlos Jesús' },
-            KMORENOM: { corto: 'VMORENO', nombre: 'Vanessa Moreno' },
+            KMORENOM: { corto: 'VM', nombre: 'Vanessa Moreno' },
             NCUELLARL: { corto: 'NCUELLAR', nombre: 'Noelia Cuellar' },
             JQUISPEP: { corto: 'JQUISPE', nombre: 'Jimena Quispe' }
         };
