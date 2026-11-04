@@ -11713,6 +11713,12 @@ async function maybeAutoStartTour() {
             :is(#tab-status, #prodAcumulado) .flx-svg .flx-punto { display:none; }
         }
         /* Foto diaria del flujo: cómo estaba un día o un rango de días. */
+        #tab-status .fto-cab { display:flex; flex-direction:column; align-items:flex-end; gap:8px; }
+        :is(#tab-status, #prodAcumulado) .sts-plegable { margin-top:8px; }
+        :is(#tab-status, #prodAcumulado) .sts-plegable > summary { cursor:pointer; display:inline-flex; align-items:center; gap:8px; font-size:12px; font-weight:600; color:var(--slate-400); padding:4px 0; }
+        :is(#tab-status, #prodAcumulado) .sts-plegable > summary:hover { color:var(--app-text); }
+        :is(#tab-status, #prodAcumulado) .sts-plegable-n { font-size:10.5px; font-weight:700; padding:1px 8px; border-radius:999px; color:rgb(var(--copper-rgb)); background:rgba(var(--copper-rgb) / .14); }
+        :is(#tab-status, #prodAcumulado) .sts-plegable-cuerpo { padding-top:6px; }
         #tab-status .fto-barra { display:flex; flex-wrap:wrap; align-items:center; gap:10px; }
         #tab-status .fto-barra label { display:inline-flex; align-items:center; gap:6px; font-size:12px; color:var(--slate-400); }
         #tab-status .fto-barra input[type="date"] { font:inherit; font-size:12px; height:30px; padding:0 8px; border-radius:8px; border:1px solid var(--field-border); background:var(--field-bg); color:var(--field-text); }
@@ -12990,12 +12996,15 @@ async function maybeAutoStartTour() {
         function htmlRutaFoto(fv, ruta) {
             const [num, titulo] = RUTAS_FOTO[ruta];
             const f = fv.fin && fv.fin.f[ruta], fi = fv.ini && fv.ini.f[ruta];
-            const sub = fv.fin ? `Foto del ${fmtDiaCorto(fv.fin.dia)}${fv.fin.f.origen ? '' : ` · guardada a las ${horaFoto(fv.fin.f)}`}${origenFoto(fv.fin.f)}${fv.ini ? ` · cambio desde el ${fmtDiaCorto(fv.ini.dia)}` : ''}` : 'Sin foto';
+            const sinFotoEseDia = fv.fin && fv.fin.dia !== fv.r.hasta ? ` (no hay foto del ${fmtDiaCorto(fv.r.hasta)}: se muestra la última de antes)` : '';
+            const sub = fv.fin ? `Así estaba el ${fmtDiaCorto(fv.fin.dia)}${sinFotoEseDia}${fv.fin.f.origen ? '' : ` · foto guardada a las ${horaFoto(fv.fin.f)}`}${origenFoto(fv.fin.f)}${fv.ini ? ` · junto a cada número, el cambio desde el ${fmtDiaCorto(fv.ini.dia)}` : ''}` : 'No hay ninguna foto guardada hasta ese día';
+            const tablaRango = ruta === 'r1' && fv.r.desde !== fv.r.hasta ? `<details class="sts-detalle" open><summary>Fotos día por día del ${fmtDiaCorto(fv.r.desde)} al ${fmtDiaCorto(fv.r.hasta)} (programa y caracterización)</summary>
+                <div class="sts-detalle-cuerpo"><div class="sts-filtros"><button type="button" class="sts-btn" onclick="StatusRmd.exportarFotos()">Descargar Excel</button></div>${htmlTablaFotos(fv.r)}</div></details>` : '';
             const deltas = (pl) => (fi && fi[pl] && f[pl] ? Object.fromEntries(['bor', 'ing', 'flu', 'cc', 'rev', 'aut'].map((k) => [k, (f[pl][k] || 0) - (fi[pl][k] || 0)])) : null);
             const mesAnt = fv.fin ? MESES[dayjs(fv.fin.dia).subtract(1, 'month').month()].toLowerCase() : '';
-            const cuerpo = !f ? '<div class="sts-aviso"><span>No hay foto de esta ruta para ese día.</span></div>'
+            const cuerpo = !f ? '<p class="sts-vacio">No hay foto de esta ruta para ese día.</p>'
                 : ['P1', 'P2'].map((pl) => {
-                    if (!f[pl]) return `<div class="sts-aviso"><span>${PLANTAS[pl]}: ese día no había Programa de Producción cargado.</span></div>`;
+                    if (!f[pl]) return `<p class="sts-vacio">${PLANTAS[pl]}: ese día no había Programa de Producción cargado.</p>`;
                     const c = completarFoto(f[pl]);
                     const bk = ruta === 'r1' && f[pl] && f[pl].bkN !== null && f[pl].bkN !== undefined
                         ? { n: f[pl].bkN, aut: f[pl].bkAut, mes: mesAnt, key: '', pctTxt: f[pl].bkN > 0 && Number.isFinite(f[pl].bkAut) ? `${(Math.round((f[pl].bkAut / f[pl].bkN) * 1000) / 10).toFixed(1)}%` : '—' } : null;
@@ -13006,9 +13015,10 @@ async function maybeAutoStartTour() {
                 <div class="sts-seccion-cab"><div>
                     <div class="sts-seccion-titulo"><span class="sts-num">${num}</span>${titulo}<span class="fto-aviso-foto">FOTO</span></div>
                     <div class="sts-seccion-sub">RMD pendientes por etapa y responsable · ${sub}</div>
-                </div>${leyenda}</div>
+                </div><div class="fto-cab">${htmlFiltroFecha()}${leyenda}</div></div>
                 ${cuerpo}
-                <p class="sts-nota">Foto guardada por la página: los números son los de ese día y no se abren (el detalle de cada número es el de hoy). Para volver a lo de hoy, elige «Hoy (en vivo)» en Foto diaria.</p>
+                ${tablaRango}
+                <p class="sts-nota">Foto guardada por la página: los números son los de ese día y no se abren (el detalle de cada número es el de hoy). Cada día la página guarda cómo quedó el flujo de programa y caracterización (la última foto del día). Para volver a lo de hoy, pulsa «Hoy».</p>
             </section>`;
         }
         // Flechas del flujo (SVG encima de las casillas) con puntos que avanzan hacia Autorizado, y números que suben al pintar.
@@ -13062,6 +13072,37 @@ async function maybeAutoStartTour() {
                 setTimeout(() => { el.textContent = String(n); }, dur + 400);
             });
         }
+        // Filtro de fecha en la cabecera de la Ruta 1 y la Ruta 2 (pedido de CINTIA, 04/11/2026): «Ver el flujo del» un día
+        // (p. ej. ayer) y, si se quiere, «al» otro día para un rango. Vacío o hoy = en vivo.
+        function htmlFiltroFecha() {
+            const claves = Object.keys(todasLasFotos()).sort(), hoy = diaLocal(new Date()), r = rangoFoto();
+            const ayer = dayjs().subtract(1, 'day').format('YYYY-MM-DD'), min = claves[0] || hoy;
+            const desde = r ? r.desde : hoy, hasta = r && r.hasta !== r.desde ? r.hasta : '';
+            return `<div class="fto-barra" role="group" aria-label="Ver cómo estaba el flujo un día o un rango de días">
+                <label>Ver el flujo del<input type="date" data-fto="desde" value="${desde}" min="${min}" max="${hoy}" onchange="StatusRmd.verFotoCampos(this)"></label>
+                <label>al<input type="date" data-fto="hasta" value="${hasta}" min="${min}" max="${hoy}" onchange="StatusRmd.verFotoCampos(this)" title="Opcional: para ver un rango de días"></label>
+                <div class="sts-seg">
+                    <button type="button" class="${r && r.desde === ayer && r.hasta === ayer ? 'activo' : ''}" onclick='StatusRmd.verFoto(${JSON.stringify(`${ayer}..${ayer}`)})'>Ayer</button>
+                    <button type="button" class="${r ? '' : 'activo'}" onclick="StatusRmd.verFoto('')">Hoy</button>
+                </div>
+            </div>`;
+        }
+        // Explicaciones y avisos de cada sección, minimizados por defecto (ocupan mucho espacio): «Explicación y avisos».
+        function plegarNotas(cont) {
+            cont.querySelectorAll('.sts-seccion').forEach((sec) => {
+                const els = [...sec.querySelectorAll(':scope > .sts-nota, :scope > .car-tip, :scope > .sts-aviso')];
+                if (!els.length) return;
+                const avisos = els.filter((e) => e.classList.contains('sts-aviso')).length;
+                const det = document.createElement('details');
+                det.className = 'sts-plegable';
+                det.innerHTML = `<summary>${avisos ? `Explicación y avisos <span class="sts-plegable-n">${avisos} ${avisos === 1 ? 'aviso' : 'avisos'}</span>` : 'Ver explicación'}</summary>`;
+                const cuerpo = document.createElement('div');
+                cuerpo.className = 'sts-plegable-cuerpo';
+                els.forEach((e) => cuerpo.appendChild(e));
+                det.appendChild(cuerpo);
+                sec.appendChild(det);
+            });
+        }
         function htmlRuta1(d) {
             const fv = fotoEnVista();
             if (fv) return htmlRutaFoto(fv, 'r1');
@@ -13075,7 +13116,7 @@ async function maybeAutoStartTour() {
                 <div class="sts-seccion-cab"><div>
                     <div class="sts-seccion-titulo"><span class="sts-num">RUTA 1</span>Flujo de Programa – P1 y P2</div>
                     <div class="sts-seccion-sub">RMD pendientes por etapa y responsable · ${esc(d.per.mesAnio)} · Programa PLA ${esc(rangoPrograma(d))}</div>
-                </div>${leyenda}</div>
+                </div><div class="fto-cab">${htmlFiltroFecha()}${leyenda}</div></div>
                 ${cuerpo}
                 <p class="sts-nota">Pendientes: las etapas del programa sin autorizar, contadas como en Producción (cada etapa una vez, aunque la compartan varias presentaciones) y repartidas según su Estatus. Autorizado: los autorizados del mes del cuadro (${esc(d.per.mesNombre.toLowerCase())}). El total del programa (pendientes + autorizados del mes) es el universo del mes; % de avance del programa = autorizados / total. Backlog: los pendientes del cuadro al cierre de ${esc(d.per.mesAnterior.toLowerCase())}; % de avance del backlog DOC = autorizados del backlog en el mes / backlog. Programa PLA: el periodo del status elegido arriba (Desde – Hasta).</p>
             </section>`;
@@ -13140,7 +13181,7 @@ async function maybeAutoStartTour() {
                 <div class="sts-seccion-cab"><div>
                     <div class="sts-seccion-titulo"><span class="sts-num">RUTA 2</span>Flujo de Caracterizaciones – P1 y P2</div>
                     <div class="sts-seccion-sub">RMD pendientes por etapa y responsable · ${esc(d.per.hasta.format('D'))} ${esc(d.per.mesAnio)}</div>
-                </div>${leyenda}</div>
+                </div><div class="fto-cab">${htmlFiltroFecha()}${leyenda}</div></div>
                 ${aviso}
                 ${htmlRuta(d.r2.P1, 'P1', 'r2', { debajo: tendencia('P1') })}${htmlRuta(d.r2.P2, 'P2', 'r2', { debajo: tendencia('P2') })}
                 ${d.car.items.length ? htmlTablaCar(d) : ''}
@@ -13840,9 +13881,10 @@ async function maybeAutoStartTour() {
 
         function pintar() {
             const cont = document.getElementById('stsContenido');
-            cont.innerHTML = htmlMeta(ultimo) + htmlLogica(ultimo) + htmlResumen(ultimo) + htmlPrograma(ultimo) + htmlFotos() + htmlRuta1(ultimo) + htmlRuta2(ultimo) + (MOSTRAR_HORAS ? htmlHoras(ultimo) : '');
+            cont.innerHTML = htmlMeta(ultimo) + htmlLogica(ultimo) + htmlResumen(ultimo) + htmlPrograma(ultimo) + htmlRuta1(ultimo) + htmlRuta2(ultimo) + (MOSTRAR_HORAS ? htmlHoras(ultimo) : '');
             // Las semanas, desde la más antigua: se deja a la vista la última.
             cont.querySelectorAll('.sts-meses.semanas').forEach((el) => { el.scrollTop = el.scrollHeight; });
+            plegarNotas(cont);
             dibujarGraficos(ultimo);
             dibujarFlujos(cont);
             pintarAcumuladoEn();
@@ -14007,10 +14049,10 @@ async function maybeAutoStartTour() {
             setResponsable: (id, valor) => guardarEstatus(id, { r: valor }),
             filtrar: (campo, valor) => { vista[campo] = valor; if (ultimo) pintar(); },
             verFoto: (valor) => { vista.foto = valor || ''; if (ultimo) pintar(); },
-            verFotoDesdeCampos: () => {
-                const d = document.getElementById('ftoDesde'), h = document.getElementById('ftoHasta');
-                if (!d || !d.value) return;
-                vista.foto = `${d.value}..${h && h.value ? h.value : d.value}`;
+            verFotoCampos: (el) => {
+                const barra = el.closest('.fto-barra'), d = barra.querySelector('[data-fto="desde"]').value, h = barra.querySelector('[data-fto="hasta"]').value;
+                const hoy = diaLocal(new Date()), ini = d || h;
+                vista.foto = !ini || (ini === hoy && (!h || h === hoy)) ? '' : `${ini}..${h || ini}`;
                 if (ultimo) pintar();
             },
             exportarFotos, fotoPronto, _fotos: () => todasLasFotos(), _guardarFoto: () => guardarFoto(ultimo),
