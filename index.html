@@ -11706,12 +11706,12 @@ async function maybeAutoStartTour() {
            con brillo, número grande y ligero, y sombra difusa del color de la etapa. */
         :is(#tab-status, #prodAcumulado) .flx .sts-caja { --c:var(--plum-rgb); height:70px; border-radius:14px; border:1px solid rgba(var(--c) / .28);
             background:linear-gradient(160deg, rgba(var(--c) / .12) 0%, rgba(var(--c) / .03) 45%, var(--surface-1-faint) 100%);
-            box-shadow:0 1px 0 rgba(255,255,255,.04) inset, 0 6px 18px -10px rgba(var(--c) / .55); color:rgb(var(--c));
+            box-shadow:0 1px 0 rgba(255,255,255,.03) inset, 0 4px 12px -10px rgba(var(--c) / .4); color:rgb(var(--c));
             font-size:30px; font-weight:600; letter-spacing:-.02em; overflow:hidden; }
         :is(#tab-status, #prodAcumulado) .flx .sts-caja::before { content:''; position:absolute; left:0; right:0; top:0; height:3px;
-            background:linear-gradient(90deg, rgba(var(--c) / 0), rgb(var(--c)) 30%, rgb(var(--c)) 70%, rgba(var(--c) / 0)); opacity:.9; }
+            background:linear-gradient(90deg, rgba(var(--c) / 0), rgb(var(--c)) 30%, rgb(var(--c)) 70%, rgba(var(--c) / 0)); opacity:.55; }
         :is(#tab-status, #prodAcumulado) .flx .sts-caja::after { content:''; position:absolute; inset:0; border-radius:inherit; pointer-events:none;
-            background:radial-gradient(120% 70% at 50% -20%, rgba(var(--c) / .22), rgba(var(--c) / 0) 60%); }
+            background:radial-gradient(120% 70% at 50% -20%, rgba(var(--c) / .1), rgba(var(--c) / 0) 60%); }
         :is(#tab-status, #prodAcumulado) .flx .sts-caja > span { position:relative; z-index:1; }
         :is(#tab-status, #prodAcumulado) .flx .sts-caja.pro, :is(#tab-status, #prodAcumulado) .flx .sts-caja.cc { --c:var(--copper-rgb); }
         :is(#tab-status, #prodAcumulado) .flx .sts-caja.doc { --c:var(--plum-rgb); }
@@ -11720,28 +11720,29 @@ async function maybeAutoStartTour() {
         :is(#tab-status, #prodAcumulado) .flx .sts-caja.cero::before { opacity:.25; }
         :is(#tab-status, #prodAcumulado) .flx .sts-rama .sts-caja { height:60px; font-size:26px; }
         :is(#tab-status, #prodAcumulado) .flx button.sts-caja { cursor:pointer; transition:transform .25s cubic-bezier(.2,.8,.2,1), box-shadow .25s ease, border-color .25s ease; }
-        :is(#tab-status, #prodAcumulado) .flx button.sts-caja:hover { transform:translateY(-2px); border-color:rgba(var(--c) / .6); box-shadow:0 1px 0 rgba(255,255,255,.06) inset, 0 10px 26px -10px rgba(var(--c) / .8); }
-        :is(#tab-status, #prodAcumulado) .flx .sts-etapa-nombre { font-size:10px; letter-spacing:.09em; margin-bottom:6px; }
-        /* Destello cuando llega un haz de luz a la tarjeta. */
-        :is(#tab-status, #prodAcumulado) .flx .sts-caja.flx-llega::after { animation:flxLlega var(--llega, 2.6s) ease-out infinite; animation-delay:var(--llegaDelay, 0s); }
-        @keyframes flxLlega { 0%, 70% { opacity:.55; } 82% { opacity:1; background:radial-gradient(120% 90% at 0% 50%, rgba(var(--c) / .45), rgba(var(--c) / 0) 65%); } 100% { opacity:.55; } }
-        :is(#tab-status, #prodAcumulado) .flx .sts-caja.ok.flx-latido { animation:flxLatido 2.6s ease-in-out infinite; }
-        @keyframes flxLatido { 0%, 100% { box-shadow:0 1px 0 rgba(255,255,255,.04) inset, 0 6px 18px -10px rgba(var(--ok-rgb) / .55), 0 0 0 0 rgba(var(--ok-rgb) / .3); } 50% { box-shadow:0 1px 0 rgba(255,255,255,.04) inset, 0 8px 26px -8px rgba(var(--ok-rgb) / .8), 0 0 0 6px rgba(var(--ok-rgb) / 0); } }
-        /* Haces de luz (estilo condensador de flujo): un trazo corto y brillante recorre cada flecha, en cascada hacia Autorizado. */
-        :is(#tab-status, #prodAcumulado) .flx-svg .flx-haz { fill:none; stroke-width:3; stroke-linecap:round; stroke-dasharray:9 91; stroke-dashoffset:100;
-            animation:flxHaz var(--dur, 2.6s) cubic-bezier(.45,.05,.55,.95) infinite; animation-delay:var(--delay, 0s); stroke:rgb(var(--plum-rgb)); }
-        :is(#tab-status, #prodAcumulado) .flx-svg .flx-haz.pro { stroke:rgb(var(--copper-rgb)); }
-        :is(#tab-status, #prodAcumulado) .flx-svg .flx-haz.ok { stroke:rgb(var(--ok-rgb)); }
-        :is(#tab-status, #prodAcumulado) .flx-svg .flx-haz.ancho { stroke-width:7; opacity:.28; }
-        @keyframes flxHaz { 0% { stroke-dashoffset:100; opacity:0; } 8% { opacity:1; } 88% { opacity:1; } 100% { stroke-dashoffset:-9; opacity:0; } }
+        :is(#tab-status, #prodAcumulado) .flx button.sts-caja:hover { transform:translateY(-2px); border-color:rgba(var(--c) / .6); box-shadow:0 1px 0 rgba(255,255,255,.04) inset, 0 6px 16px -10px rgba(var(--c) / .5); }
+        :is(#tab-status, #prodAcumulado) .flx .sts-etapa-nombre { font-size:10px; letter-spacing:.09em; margin-bottom:6px; height:16px; line-height:16px; }
+        /* Recorrido en secuencia (pedido de CINTIA, 04/11/2026): sin destellos ni halos. Un ciclo de 10 tiempos: cada etapa se
+           enciende por turno (1 Borrador → 2 Ingresar → 3 Flujo SAP / CC → 4 Por revisión → 5 Autorizado) y entre una y otra
+           un trazo fino recorre la flecha; el último tiempo es una pausa. Todas las piezas comparten el ciclo (--flx-ciclo). */
+        :is(#tab-status, #prodAcumulado) .flx { --flx-ciclo:6s; }
+        :is(#tab-status, #prodAcumulado) .flx-n { display:inline-grid; place-items:center; width:15px; height:15px; margin-right:5px; border-radius:50%; font-size:9px; font-style:normal; font-weight:700; letter-spacing:0; vertical-align:1px; color:var(--slate-300); border:1px solid var(--field-border); }
+        :is(#tab-status, #prodAcumulado) .flx .sts-caja.flx-paso { animation:flxPaso var(--flx-ciclo) ease-in-out infinite; animation-delay:var(--t, 0s); }
+        @keyframes flxPaso { 0%, 24%, 100% { border-color:rgba(var(--c) / .28); } 5%, 12% { border-color:rgba(var(--c) / .8); background-color:rgba(var(--c) / .1); } }
+        :is(#tab-status, #prodAcumulado) .flx .sts-etapa.flx-paso-lbl .flx-n { animation:flxPasoN var(--flx-ciclo) ease-in-out infinite; animation-delay:var(--t, 0s); }
+        @keyframes flxPasoN { 0%, 24%, 100% { color:var(--slate-300); border-color:var(--field-border); } 5%, 12% { color:#fff; background:rgb(var(--plum-rgb)); border-color:rgb(var(--plum-rgb)); } }
+        :is(#tab-status, #prodAcumulado) .flx-svg .flx-tramo { fill:none; stroke-width:2; stroke-linecap:round; stroke-dasharray:16 84; stroke-dashoffset:100; opacity:0;
+            animation:flxTramo var(--flx-ciclo) linear infinite; animation-delay:var(--t, 0s); stroke:rgb(var(--plum-rgb)); }
+        :is(#tab-status, #prodAcumulado) .flx-svg .flx-tramo.pro { stroke:rgb(var(--copper-rgb)); }
+        :is(#tab-status, #prodAcumulado) .flx-svg .flx-tramo.ok { stroke:rgb(var(--ok-rgb)); }
+        @keyframes flxTramo { 0% { stroke-dashoffset:100; opacity:0; } 1% { opacity:.85; } 10% { stroke-dashoffset:-16; opacity:.85; } 11%, 100% { stroke-dashoffset:-16; opacity:0; } }
         :is(#tab-status, #prodAcumulado) .flx-delta { display:inline-block; margin-left:4px; font-size:11px; font-weight:700; vertical-align:super; }
         :is(#tab-status, #prodAcumulado) .flx-delta.sube { color:rgb(var(--danger-rgb)); }
         :is(#tab-status, #prodAcumulado) .flx-delta.baja { color:rgb(var(--ok-rgb)); }
         :is(#tab-status, #prodAcumulado) .flx-delta.aut.sube { color:rgb(var(--ok-rgb)); }
         @media (prefers-reduced-motion: reduce) {
-            :is(#tab-status, #prodAcumulado) .flx .sts-caja.ok.flx-latido { animation:none; }
-            :is(#tab-status, #prodAcumulado) .flx-svg .flx-punto, :is(#tab-status, #prodAcumulado) .flx-svg .flx-haz { display:none; }
-            :is(#tab-status, #prodAcumulado) .flx .sts-caja.flx-llega::after { animation:none; }
+            :is(#tab-status, #prodAcumulado) .flx .sts-caja.flx-paso, :is(#tab-status, #prodAcumulado) .flx .sts-etapa .flx-n { animation:none; }
+            :is(#tab-status, #prodAcumulado) .flx-svg .flx-tramo { display:none; }
         }
         /* Foto diaria del flujo: cómo estaba un día o un rango de días. */
         #tab-status .fto-cab { display:flex; flex-direction:column; align-items:flex-end; gap:8px; }
@@ -12765,8 +12766,7 @@ async function maybeAutoStartTour() {
             });
         })();
         function htmlLogica(d) {
-            let abierto = false;
-            try { abierto = localStorage.getItem('sts_logica_abierta') === '1'; } catch (e) { /* sin almacenamiento */ }
+            const abierto = false;   // Siempre cerrado al entrar (pedido de CINTIA: el texto explicativo, minimizado).
             const mesAnt = d.per.mesAnterior.toLowerCase(), mes = d.per.mesNombre.toLowerCase();
             const bk = (pl) => { const n = d.programa && d.programa[pl] ? backlogDe(d.programa[pl]) : null; return Number.isFinite(n) ? n : '—'; };
             const oficiales = Object.keys(BACKLOG_OFICIAL).sort();
@@ -12774,15 +12774,15 @@ async function maybeAutoStartTour() {
             const ultimoOf = oficiales.length ? oficiales[oficiales.length - 1] : '';
             const desdeSap = ultimoOf ? nombreMes(dayjs(ultimoOf + '-01').add(1, 'month').format('YYYY-MM')).toLowerCase() : '';
             const sap = d.programa.generado || d.car.generado;
-            return `<details class="sts-logica"${abierto ? ' open' : ''} ontoggle="try{localStorage.setItem('sts_logica_abierta',this.open?'1':'0')}catch(e){}">
-                <summary>¿Cómo se calculan estos números? <span class="sts-logica-pista">· clic para abrir o cerrar</span></summary>
+            return `<details class="sts-logica"${abierto ? ' open' : ''}>
+                <summary>¿Cómo se calculan estos números?</summary>
                 <div class="sts-logica-grid">
                     <div><h4>1. De dónde salen</h4><p>De SAP. Se actualizan cada vez que alguien usa <b>«Enviar a Status RMD»</b> en el portal. Últimos datos: <b>${sap ? esc(dayjs(sap).format('DD/MM/YYYY HH:mm')) : 'sin datos'}</b>.</p></div>
-                    <div><h4>2. Backlog de ${esc(mes)}</h4><p>Lo que quedó pendiente al cierre de ${esc(mesAnt)}: <b>P1 ${bk('P1')} · P2 ${bk('P2')}</b>. Cuenta como pendiente:</p>
+                    ${d.programa && ['P1', 'P2'].some((pl) => d.programa[pl] && claveBacklog(d.programa[pl]) === 'bkv') ? `<div><h4>2. Backlog de ${esc(mes)}</h4><p>Como en el PowerPoint del status: los RMD <b>vigentes</b> al empezar ${esc(mes)} (última versión Autorizada de cada RMD): <b>P1 ${bk('P1')} · P2 ${bk('P2')}</b>. No cuentan los códigos que <b>no empiezan por 2</b> (migrados antes de SAP) ni los que dicen <b>«descontinuado»</b> en Observaciones.</p></div>` : `<div><h4>2. Backlog de ${esc(mes)}</h4><p>Lo que quedó pendiente al cierre de ${esc(mesAnt)}: <b>P1 ${bk('P1')} · P2 ${bk('P2')}</b>. Cuenta como pendiente:</p>
                         <ul><li>RMD <b>Ingresados</b>, hasta que se autorizan.</li><li><b>Solicitudes abiertas</b> (Solicitado o Solicitud Aprobada).</li>
                         <li><b>Suspendidos con «masivo»</b> en Observaciones, hasta que su siguiente versión se solicite o ingrese (desde ahí cuenta la nueva, no los dos).</li>
                         <li><b>Versiones vigentes (Autorizadas) con «PENDIENTE MASIVO»</b> en Observaciones: un masivo sin versión nueva. Cuentan desde el mes en curso (noviembre de 2026 en adelante) hasta que se solicite, ingrese o autorice otra versión.</li></ul>
-                        <p>No cuentan los demás suspendidos, los que SAP suspende al autorizar otra versión, los rechazados ni los cancelados.</p></div>
+                        <p>No cuentan los demás suspendidos, los que SAP suspende al autorizar otra versión, los rechazados ni los cancelados.</p></div>`}
                     <div><h4>3. Meses cerrados</h4><p>${oficiales.length ? `Con la cifra oficial del área al cierre: ${txtOf}. Desde ${esc(desdeSap)} se calcula con SAP.` : 'Se calculan con SAP.'} Al cerrar un mes queda <b>congelado</b>; lo que cambie después en SAP entra al mes siguiente como <b>«± Otros»</b>.</p></div>
                     <div><h4>4. Solicitados y autorizados</h4><ul><li><b>Solicitados del mes</b>: RMD ingresados en el mes (fecha de ingreso de la Observación o Fecha Registro).</li>
                         <li><b>Autorizados</b>: por Fecha de Autorización. <b>Del backlog</b> = ya estaban pendientes antes del mes; <b>del mes</b> = ingresados y autorizados en el mismo mes.</li></ul></div>
@@ -12946,7 +12946,8 @@ async function maybeAutoStartTour() {
             const caja = (n, clase, k, lbl, nodo) => (n > 0 && !foto
                 ? `<button type="button" class="sts-caja ${clase || ''}" data-nodo="${nodo}" data-n="${n}" data-det="${esc(k.includes('|') ? k : det(k))}" title="Ver el detalle y descargarlo en Excel" aria-label="${esc(`${lbl}: ${n}. Ver el detalle`)}"><span data-cuenta="${n}">${n}</span>${delta(nodo)}</button>`
                 : `<div class="sts-caja ${clase || ''}${n > 0 ? '' : ' cero'}" data-nodo="${nodo}" data-n="${n || 0}"><span data-cuenta="${n || 0}">${numOGuion(n)}</span>${delta(nodo)}</div>`);
-            const etapa = (lbl, n, clase, pie, k, nodo) => `<div class="sts-etapa"><div class="sts-etapa-nombre">${lbl}</div>${caja(n, clase, k, lbl, nodo)}<div class="sts-pie">${pie || ''}</div></div>`;
+            const PASO_N = { bor: 1, ing: 2, flu: 3, cc: 3, rev: 4, aut: 5 };
+            const etapa = (lbl, n, clase, pie, k, nodo) => `<div class="sts-etapa"><div class="sts-etapa-nombre"><i class="flx-n">${PASO_N[nodo]}</i>${lbl}</div>${caja(n, clase, k, lbl, nodo)}<div class="sts-pie">${pie || ''}</div></div>`;
             const max = Math.max(c.doc, c.pro, c.asc, 1);
             const barra = (k, lbl, n) => `<div class="sts-barra ${k}"><span class="lbl">${lbl}</span><span class="pista"><i style="width:${Math.round((n / max) * 100)}%"></i></span><span class="n">${nD(n, det(k))}</span></div>`;
             const total = c.aut + c.pend, pct = total ? Math.round((c.aut / total) * 100) : 0;
@@ -13095,6 +13096,9 @@ async function maybeAutoStartTour() {
         }
         // Flechas del flujo (SVG encima de las casillas) con puntos que avanzan hacia Autorizado, y números que suben al pintar.
         let idFlecha = 0;
+        // Tiempo de cada etapa en el ciclo del recorrido (10 tiempos de 0,6 s = --flx-ciclo 6 s): etapas en los pares, flechas en los impares.
+        const TIEMPO_FLX = { bor: 0, ing: 2, flu: 4, cc: 4, rev: 6, aut: 8 };
+        const tFlx = (t) => `${((t || 0) * 0.6).toFixed(1)}s`;
         function dibujarFlujos(root) {
             if (!root) return;
             const reducir = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
@@ -13112,33 +13116,26 @@ async function maybeAutoStartTour() {
                         const r = e.getBoundingClientRect();
                         return { l: r.left - b.left, r: r.right - b.left, y: r.top - b.top + r.height / 2, n: Number(e.dataset.n) || 0 };
                     };
-                    let h = `<defs><marker id="${id}" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,0 L8,4 L0,8 z" class="flx-flecha"/></marker>
-                        <filter id="${id}g" x="-20%" y="-50%" width="140%" height="200%"><feGaussianBlur stdDeviation="2.2" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>`;
-                    // Cascada: cada tramo se enciende un poco después del anterior, como una carga que empuja hacia Autorizado.
-                    const PASO = { bor: 0, ing: 1, flu: 2, cc: 2, rev: 3 };
+                    let h = `<defs><marker id="${id}" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,0 L8,4 L0,8 z" class="flx-flecha"/></marker></defs>`;
+                    // Secuencia: el tramo que sale de la etapa del tiempo t se recorre en el tiempo t + 1 (ver TIEMPO_FLX).
                     ARISTAS.forEach(([a, z, cl]) => {
                         const A = pos(a), Z = pos(z);
                         if (!A || !Z) return;
                         const x1 = A.r + 2, y1 = A.y, x2 = Z.l - 3, y2 = Z.y, dx = (x2 - x1) / 2;
                         const d = `M${x1.toFixed(1)},${y1.toFixed(1)} C${(x1 + dx).toFixed(1)},${y1.toFixed(1)} ${(x2 - dx).toFixed(1)},${y2.toFixed(1)} ${x2.toFixed(1)},${y2.toFixed(1)}`;
                         h += `<path d="${d}" class="flx-linea${A.n > 0 ? '' : ' vacia'}" marker-end="url(#${id})"/>`;
-                        // Empuje: haces de luz con halo; más haces donde hay más pendientes (1 a 3), siempre hacia Autorizado.
-                        if (A.n > 0 && !reducir) {
-                            const k = Math.min(3, Math.max(1, Math.ceil(A.n / 10))), dur = 2.6, base = (PASO[a] || 0) * 0.42;
-                            for (let i = 0; i < k; i++) {
-                                const st = `--dur:${dur}s;--delay:${(base + (i * dur) / k).toFixed(2)}s`;
-                                h += `<path d="${d}" pathLength="100" class="flx-haz ancho ${cl}" style="${st}" filter="url(#${id}g)"/><path d="${d}" pathLength="100" class="flx-haz ${cl}" style="${st}"/>`;
-                            }
-                            const dest = fl.querySelector(`[data-nodo="${z}"]`);
-                            if (dest) { dest.classList.add('flx-llega'); dest.style.setProperty('--llega', `${dur / k}s`); dest.style.setProperty('--llegaDelay', `${(base + dur * 0.55).toFixed(2)}s`); }
-                        }
+                        if (!reducir) h += `<path d="${d}" pathLength="100" class="flx-tramo ${cl}" style="--t:${tFlx(TIEMPO_FLX[a] + 1)}"/>`;
                     });
                     svg.setAttribute('viewBox', `0 0 ${b.width.toFixed(1)} ${b.height.toFixed(1)}`);
                     svg.innerHTML = h;
                 };
                 pintarSvg();
                 if (window.ResizeObserver && !fl.__flxRo) { fl.__flxRo = new ResizeObserver(() => pintarSvg()); fl.__flxRo.observe(fl); }
-                if (!reducir) fl.querySelectorAll('.sts-caja.ok').forEach((e) => { if (Number(e.dataset.n) > 0) e.classList.add('flx-latido'); });
+                if (!reducir) fl.querySelectorAll('.sts-caja[data-nodo]').forEach((e) => {
+                    const t = tFlx(TIEMPO_FLX[e.dataset.nodo]), et = e.closest('.sts-etapa');
+                    e.classList.add('flx-paso'); e.style.setProperty('--t', t);
+                    if (et) { et.classList.add('flx-paso-lbl'); et.style.setProperty('--t', t); }
+                });
             });
             // Los números suben de 0 a su valor (solo con la pestaña a la vista; si no, quedan con su valor).
             if (reducir || document.visibilityState !== 'visible') return;
@@ -13170,7 +13167,8 @@ async function maybeAutoStartTour() {
         // Explicaciones y avisos de cada sección, minimizados por defecto (ocupan mucho espacio): «Explicación y avisos».
         function plegarNotas(cont) {
             cont.querySelectorAll('.sts-seccion').forEach((sec) => {
-                const els = [...sec.querySelectorAll(':scope > .sts-nota, :scope > .car-tip, :scope > .sts-aviso')];
+                // Todo el texto explicativo de la sección (también el anidado, p. ej. «¿Qué es el Backlog?»), salvo lo que ya está plegado o va en tablas.
+                const els = [...sec.querySelectorAll('.sts-nota, .car-tip, .sts-aviso, .sts-regla')].filter((e) => e.closest('.sts-seccion') === sec && !e.closest('details, table, .sts-plegable'));
                 if (!els.length) return;
                 const avisos = els.filter((e) => e.classList.contains('sts-aviso')).length;
                 const det = document.createElement('details');
@@ -13292,7 +13290,7 @@ async function maybeAutoStartTour() {
             const corte = a.error ? '' : `<div class="sts-seg" role="group" aria-label="Agrupar el backlog">${[['mes', 'Por mes'], ['semana', 'Por semana']].map(([v, l]) => `<button type="button" class="${(semanal ? 'semana' : 'mes') === v ? 'activo' : ''}" onclick='StatusRmd.filtrar("acuCorte", ${JSON.stringify(v)})'>${l}</button>`).join('')}</div>`;
             const cab = `<div class="sts-seccion-cab"><div>
                     <div class="sts-seccion-titulo"><span class="sts-num">ACUMULADO</span>Programa acumulado – backlog de pendientes y autorizados</div>
-                    <div class="sts-seccion-sub">Todo lo que llegó a Producción y lo que se autorizó: cada etapa (RMD) de los productos que entraron al Programa de Producción, ${semanal ? 'semana a semana' : 'mes a mes'}. Lo autorizado no desaparece.</div>
+                    <div class="sts-seccion-sub">Lo que llegó al programa y lo que se autorizó, ${semanal ? 'semana a semana' : 'mes a mes'}</div>
                 </div>${corte}</div>`;
             if (a.error) return `<section class="sts-seccion">${cab}<div class="sts-aviso"><span>${esc(a.error)}</span></div></section>`;
             const avisos = [];
@@ -13980,6 +13978,7 @@ async function maybeAutoStartTour() {
             cont.style.display = '';
             cont.innerHTML = htmlAcumulado(ultimo, plantasDeProduccion());
             cont.querySelectorAll('.sts-meses.semanas').forEach((el) => { el.scrollTop = el.scrollHeight; });
+            plegarNotas(cont);
             dibujarGraficosAcumulado(ultimo, cont);
         }
         // Tras validar el programa (o cambiar de planta): se recalcula con lo guardado y se pinta.
