@@ -7887,12 +7887,17 @@ async function downloadPlanProduccionFromCloud() {
         // responsable y autorización a mano se guardan con el código del RMD (su Código por defecto si está entre ellos; si
         // no, el menor), y lo que tuvieran los demás códigos pasa a ese (queda el estatus más avanzado).
         // refsRmdPendientes: los RMD (o solicitudes) que dejan pendiente la etapa; null si alguno no tiene número (sin RMD).
+        // Lo mismo con las etapas YA autorizadas (pedido de Carlos, 04/11/2026): los materiales que resuelve el mismo RMD
+        // autorizado son UN autorizado (antes salía una fila por material y se duplicaban los autorizados). Su clave lleva
+        // «aut:» delante para no mezclarse nunca con un pendiente, y no comparte Estatus entre los códigos.
+        const candidatoDelGrupo = (d, c) => (d.pendiente ? c.pendiente : (!c.pendiente && !c.sinRmd && !!(c.rmd || c.sol)));
         function refsRmdPendientes(d) {
-            if (!d || !d.pendiente || !d.candidatos) return null;
-            const pend = d.candidatos.filter(c => c.pendiente);
-            if (!pend.length || pend.some(c => c.sinRmd || (!c.rmd && !c.sol))) return null;
-            return Array.from(new Set(pend.map(c => (c.rmd ? `RMD ${c.rmd}` : `solicitud ${c.sol}`)))).sort().join(' + ');
+            if (!d || !d.candidatos) return null;
+            const pend = d.candidatos.filter(c => candidatoDelGrupo(d, c));
+            if (!pend.length || (d.pendiente && pend.some(c => c.sinRmd || (!c.rmd && !c.sol)))) return null;
+            return (d.pendiente ? '' : 'aut:') + Array.from(new Set(pend.map(c => (c.rmd ? `RMD ${c.rmd}` : `solicitud ${c.sol}`)))).sort().join(' + ');
         }
+        const esGrupoAutorizado = (g) => !!(g && g.autorizado);
         // Grupos de una lista de productos: "refs::ETAPA" -> { codigos (ordenados), canon }. Solo los de 2 códigos o más.
         function gruposRmdPendientes(productos) {
             const tmp = new Map();
@@ -7903,13 +7908,14 @@ async function downloadPlanProduccionFromCloud() {
                 let g = tmp.get(k);
                 if (!g) { g = { codigos: new Set(), defectos: new Set() }; tmp.set(k, g); }
                 g.codigos.add(codigoDeEtapa(pr.material, d));
-                d.candidatos.forEach(c => { if (c.pendiente && c.defecto) g.defectos.add(c.defecto); });
+                d.candidatos.forEach(c => { if (candidatoDelGrupo(d, c) && c.defecto) g.defectos.add(c.defecto); });
             }));
             const grupos = new Map();
             tmp.forEach((g, k) => {
                 if (g.codigos.size < 2) return;
                 const codigos = Array.from(g.codigos).sort();
-                grupos.set(k, { codigos, canon: codigos.find(c => g.defectos.has(c)) || codigos[0], refs: k.split('::')[0] });
+                const refs = k.split('::')[0];
+                grupos.set(k, { codigos, canon: codigos.find(c => g.defectos.has(c)) || codigos[0], refs: refs.replace(/^aut:/, ''), autorizado: refs.startsWith('aut:') });
             });
             return grupos;
         }
@@ -7949,8 +7955,8 @@ async function downloadPlanProduccionFromCloud() {
                         const refs = refsRmdPendientes(d), g = refs ? grupos.get(`${refs}::${fija}`) : null;
                         const codigoVisible = codigo;
                         if (g) {
-                            registrarGrupoClaves(g.codigos.map(c => responsableKey(c, fija)));
-                            codigo = g.canon; clave = responsableKey(g.canon, fija);
+                            if (!esGrupoAutorizado(g)) { registrarGrupoClaves(g.codigos.map(c => responsableKey(c, fija))); clave = responsableKey(g.canon, fija); }
+                            codigo = g.canon;
                             if (unir) id = `${refs}::${fija}`;
                         }
                         const estado = !d.pendiente ? 'sap' : (manual.has(clave) ? 'autorizado' : 'pendiente');
@@ -8493,7 +8499,7 @@ async function downloadPlanProduccionFromCloud() {
             const base = clase ? `<span class="${clase}">${esc(f.codigo)}</span>` : esc(f.codigo);
             const otros = (f.codigosRmd || []).filter(m => m !== f.codigo);
             if (!otros.length) return base;
-            const tit = `Un solo pendiente: el ${f.rmdGrupo} es el mismo para los ${f.codigosRmd.length} materiales (${f.codigosRmd.join(', ')}).`;
+            const tit = `${f.estado === 'sap' ? 'Un solo autorizado' : 'Un solo pendiente'}: el ${f.rmdGrupo} es el mismo para los ${f.codigosRmd.length} materiales (${f.codigosRmd.join(', ')}).`;
             return `<div class="mat-grupo-rmd" title="${esc(tit)}">${base}${otros.map(m => `<span class="mat-grupo-otro">${esc(m)}</span>`).join('')}<span class="mat-grupo-nota">1 RMD · ${f.codigosRmd.length} materiales</span></div>`;
         }
         const plantaCelda = (f) => escapeHtmlRmdConfig(f.plantas || (currentPlanta === 'planta1' ? 'ATE' : currentPlanta === 'planta2' ? 'LIMA' : '') || '—');
