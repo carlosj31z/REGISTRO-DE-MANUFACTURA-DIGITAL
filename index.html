@@ -7179,7 +7179,7 @@ async function downloadPlanProduccionFromCloud() {
         // (nombre y correo de SAP): la sincronización queda registrada con él, en un solo clic y sin DNI. Con versiones
         // anteriores del script se sigue pidiendo el DNI. No hay credenciales de por medio.
         let recibiendoMaestroSap = false;
-        function filasDesdePuenteSap(msg) {
+        function filasDesdePuenteSap(msg, traz) {
             const cols = msg.columnas; const i = (n) => cols.indexOf(n);
             const orden = ['codigo', 'codigoSolicitud', 'version', 'estado', 'codDefecto', 'codAgrupador', 'descripcion', 'etapa', 'fechaRegistro', 'usuarioRegistro',
                 'fechaAut', 'usuarioAutorizacion', 'af', 'fechaSolicitud', 'planta', 'seccion', 'motivo', 'observacion'].map(i);
@@ -7196,6 +7196,7 @@ async function downloadPlanProduccionFromCloud() {
                 const base = orden.map(x => (f[x] === null || f[x] === undefined ? '' : f[x]));
                 if (iRegH >= 0 && f[iRegH]) base[8] = f[iRegH];
                 if (iSolH >= 0 && f[iSolH]) base[13] = f[iSolH];
+                if (traz) base[10] = corregirFechaAutPuente(traz, { codigo: String(base[0]).trim(), solicitud: String(base[1]).trim(), version: base[2], etapa: base[7] }, base[10]);
                 base.push(iProd >= 0 && f[iProd] !== null && f[iProd] !== undefined ? f[iProd] : '');
                 const recetas = Array.isArray(f[iRec]) ? f[iRec] : [];
                 // receta = [Matnr, Verid, Etapa receta, Descripción, Puesto, Hoja ruta, Contador]
@@ -7221,7 +7222,6 @@ async function downloadPlanProduccionFromCloud() {
                 }
                 Swal.fire({ title: 'Procesando datos de SAP...', html: identidadSap ? `Enviado por <b>${escapeHtmlRmdConfig(identidadSap.usuarioSap.nombre || identidadSap.usuarioSap.email)}</b> desde el portal SAP.` : undefined,
                     allowOutsideClick: false, didOpen: () => Swal.showLoading(), background: '#0f172a' });
-                const rows = filasDesdePuenteSap(msg);
                 // Script v1.95+: las órdenes de producción de ATE y LIMA (OP sin RMD en Producción). Con un script anterior no
                 // llegan y se conservan las de la última sincronización.
                 const ops = msg.opSap ? normalizarOpsSap(msg.opSap) : null;
@@ -7231,9 +7231,12 @@ async function downloadPlanProduccionFromCloud() {
                 if (msg.trazabilidad) {
                     try {
                         const traz = StatusRmd.trazabilidadDesdePuente(msg.trazabilidad, await storeGet('val_rmd_trazabilidad'));
-                        if (traz) await storeSet('val_rmd_trazabilidad', traz);
+                        if (traz) { await storeSet('val_rmd_trazabilidad', traz); trazabilidadSap = traz; }
                     } catch (err) { console.error('Trazabilidad de SAP:', err); }
                 }
+                // Con la Trazabilidad ya sumada: la Fecha Autorización de cada RMD con su día y hora de Lima.
+                if (!trazabilidadSap) { try { trazabilidadSap = await storeGet('val_rmd_trazabilidad'); } catch (err) { /* sin Trazabilidad */ } }
+                const rows = filasDesdePuenteSap(msg, trazabilidadSap);
                 // Script v1.110.0+: el listado de caracterización del área ya identificado en el portal (pestaña CARACTERIZACIÓN).
                 if (msg.caracterizacion) {
                     try { await Caracterizacion.recibir(msg.caracterizacion); } catch (err) { console.error('Listado de caracterización:', err); }
@@ -7389,6 +7392,8 @@ async function downloadPlanProduccionFromCloud() {
                     }
 
                     const indiceAnterior = rmdPreciso; // para comparar qué cambió con esta carga
+                    if (!trazabilidadSap) { try { trazabilidadSap = await storeGet('val_rmd_trazabilidad'); } catch (err) { /* sin Trazabilidad */ } }
+                    corregirFechasAutDetalle(detalle, trazabilidadSap);
                     rmdAutorizadosDetalle = detalle;
                     rmdAutorizadosLoaded = true;
                     // Pendientes al cierre y autorizados de cada mes por planta, con las fechas de SAP: el cuadro del área de RMD en la
@@ -7526,7 +7531,7 @@ async function downloadPlanProduccionFromCloud() {
             // en paralelo: con Supabase de por medio (llamadas de red reales),
             // hacerlas una tras otra sumaría varios round-trips innecesarios al
             // tiempo de carga inicial de la página.
-            const [ma, mm, re, flags, rd, es, rp, cs, ops] = await Promise.all([
+            const [ma, mm, re, flags, rd, es, rp, cs, ops, traz] = await Promise.all([
                 storeGet('val_manual_autorizados'),
                 storeGet('val_manual_autorizados_meta'),
                 storeGet('val_responsables_etapa'),
@@ -7535,8 +7540,10 @@ async function downloadPlanProduccionFromCloud() {
                 storeGet('val_estatus_etapa'),
                 storeGet('val_rmd_preciso'),
                 storeGet('val_cambios_sap'),
-                storeGet('val_op_sap')
+                storeGet('val_op_sap'),
+                storeGet('val_rmd_trazabilidad')
             ]);
+            if (traz) trazabilidadSap = traz;
             opsSap = normalizarOpsSap(ops);
             if (ma) manualAutorizados = new Set(ma);
             manualAutorizadosMeta = metaManualDesdeGuardado(mm);
@@ -7546,7 +7553,7 @@ async function downloadPlanProduccionFromCloud() {
 
             if (!flags) return;
 
-            if (rd) rmdAutorizadosDetalle = rd;
+            if (rd) { rmdAutorizadosDetalle = rd; corregirFechasAutDetalle(rmdAutorizadosDetalle, trazabilidadSap); }
             rmdPrecisoDatos = (rp && Array.isArray(rp.filas) && rp.filas.length > 0) ? rp : null;
             // Sin maestro guardado (datos de antes de esta versión) pero con un Exportado clásico: la validación por árbol
             // funciona igual con él (cada RMD por su Código por Defecto) hasta la próxima sincronización con SAP.
@@ -7913,6 +7920,47 @@ async function downloadPlanProduccionFromCloud() {
         // que resuelve la etapa; con varias rutas, la más reciente. null si no se conoce (p. ej. datos de antes de la
         // sincronización que trae el detalle).
         const fechaSapDiaMs = (txt) => { const m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(String(txt || '').trim()); return m ? new Date(+m[3], +m[2] - 1, +m[1]).getTime() : null; };
+        // ---- Fecha Autorización con su hora real (hora de Lima) ----
+        // El script del portal manda la Fecha Autorización como el día en UTC: lo autorizado entre las 19:00 y las 23:59 de Lima
+        // llegaba con el día siguiente (RMD 2202609378 v8: autorizado en SAP el 03/11/2026 a las 19:11, aquí salía 04/11 «Hoy»).
+        // La Trazabilidad de SAP (val_rmd_trazabilidad) trae el momento exacto de cada autorización: si su última autorización cae
+        // en ese día (UTC o de Lima), se usa su fecha y hora de Lima. Sin Trazabilidad para ese RMD, queda el día que llegó.
+        let trazabilidadSap = null;
+        function ultimaAutorizacionTraz(traz, r) {
+            if (!traz || !traz.items || !r) return null;
+            const etapa = mapEtapaAFija(r.etapaNorm || normalizeEtapa(String(r.etapa || '')));
+            if (!etapa) return null;
+            const t = traz.items[`${r.codigo || ''}|${r.solicitud || ''}|${Number(r.version) || 0}|${etapa}`];
+            if (!Array.isArray(t)) return null;
+            let ms = null;
+            t.forEach(x => { if (x && x[1] === 'U' && Number.isFinite(x[0])) ms = x[0] * 1000; });
+            return ms;
+        }
+        // Corrige (en el mismo arreglo) la fecha de cada RMD del detalle y le agrega fechaAutorizacionHora (ISO). Devuelve cuántas cambió.
+        function corregirFechasAutDetalle(detalle, traz) {
+            if (!Array.isArray(detalle) || !traz) return 0;
+            let n = 0;
+            detalle.forEach(r => {
+                const m = r && /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(String(r.fechaAutorizacion || '').trim());
+                if (!m) return;
+                const ms = ultimaAutorizacionTraz(traz, r);
+                if (ms === null) return;
+                const dia = `${m[3]}-${m[2]}-${m[1]}`, iso = new Date(ms).toISOString();
+                if (iso.slice(0, 10) !== dia && dayjs(ms).format('YYYY-MM-DD') !== dia) return;
+                const local = dayjs(ms).format('DD/MM/YYYY');
+                if (r.fechaAutorizacion !== local || r.fechaAutorizacionHora !== iso) n++;
+                r.fechaAutorizacion = local; r.fechaAutorizacionHora = iso;
+            });
+            return n;
+        }
+        // Lo que manda el script (filas del puente): la Fecha Autorización (AAAA-MM-DD en UTC) pasa a ser la fecha y hora de la
+        // Trazabilidad, para que el detalle y los Indicadores tomen el día de Lima.
+        function corregirFechaAutPuente(traz, r, fechaAut) {
+            const dia = String(fechaAut || '').trim();
+            if (!/^\d{4}-\d{2}-\d{2}$/.test(dia)) return fechaAut;
+            const ms = ultimaAutorizacionTraz(traz, r);
+            return ms !== null && new Date(ms).toISOString().slice(0, 10) === dia ? new Date(ms).toISOString() : fechaAut;
+        }
         function fechaAutorizacionDeFila(f, origen) {
             if (!f) return null;
             if (f.estado === 'autorizado') {
@@ -7921,15 +7969,24 @@ async function downloadPlanProduccionFromCloud() {
                 return m && m.f ? { ms: dayjs(m.f).valueOf(), conHora: true, manual: true } : null;
             }
             if (f.estado !== 'sap' || !f.d || !Array.isArray(f.d.candidatos)) return null;
-            let ms = null;
+            let ms = null, conHora = false;
             f.d.candidatos.forEach(c => {
                 if (c.sinRmd || c.pendiente) return;
-                const t = fechaSapDiaMs((filaDetalleDeEntrada(c) || {}).fechaAutorizacion);
-                if (t !== null && (ms === null || t > ms)) ms = t;
+                const fila = filaDetalleDeEntrada(c) || {};
+                const h = fila.fechaAutorizacionHora ? Date.parse(fila.fechaAutorizacionHora) : NaN;
+                const t = Number.isFinite(h) ? h : fechaSapDiaMs(fila.fechaAutorizacion);
+                if (t !== null && (ms === null || t > ms)) { ms = t; conHora = Number.isFinite(h); }
             });
-            return ms === null ? null : { ms, conHora: false, manual: false };
+            return ms === null ? null : { ms, conHora, manual: false };
         }
         const autorizadaHoy = (fa) => !!(fa && dayjs(fa.ms).isSame(dayjs(), 'day'));
+        // «Nuevo»: autorizada en SAP después de los datos de la sincronización anterior (lo que trajo el último «Enviar a Status RMD»).
+        function autorizadaNueva(fa) {
+            if (!fa || fa.manual) return false;
+            const antes = ultimosCambiosSap && ultimosCambiosSap.datosAntes ? Date.parse(ultimosCambiosSap.datosAntes) : NaN;
+            if (!Number.isFinite(antes)) return false;
+            return fa.conHora ? fa.ms > antes : dayjs(fa.ms).isAfter(dayjs(antes), 'day');
+        }
         // Filtro «F. autorización»: un día o un rango de días, guardado como 'AAAA-MM-DD..AAAA-MM-DD' (ambos incluidos).
         function rangoFechaAut(filtro) {
             const m = /^(\d{4}-\d{2}-\d{2})\.\.(\d{4}-\d{2}-\d{2})$/.exec(String(filtro || ''));
@@ -8042,15 +8099,22 @@ async function downloadPlanProduccionFromCloud() {
         // Clase de la fila: pendiente, autorizada, o autorizada HOY (se pinta de otro color).
         function claseFilaEtapa(f, origen) {
             if (f.estado === 'pendiente') return 'border-b border-slate-800/60 last:border-0 hover:bg-slate-800/40 transition-colors';
-            return 'border-b border-slate-800/60 last:border-0 fila-autorizada-manual transition-colors' + (autorizadaHoy(fechaAutorizacionDeFila(f, origen)) ? ' fila-autorizada-hoy' : '');
+            return 'border-b border-slate-800/60 last:border-0 fila-autorizada-manual transition-colors' + (((fa) => autorizadaHoy(fa) || autorizadaNueva(fa))(fechaAutorizacionDeFila(f, origen)) ? ' fila-autorizada-hoy' : '');
         }
-        // Fecha de autorización bajo el botón de la etapa autorizada; «Hoy» si fue hoy.
+        // Fecha de autorización bajo el botón de la etapa autorizada (la del portal SAP, hora de Lima). «Nuevo» si llegó con
+        // la última sincronización; «Hoy» si fue hoy.
         function fechaAutorizacionHtml(f, origen) {
             const fa = fechaAutorizacionDeFila(f, origen);
             if (!fa) return f.estado === 'sap' ? '<span class="fecha-aut-fila" title="Sin la Fecha Autorización de SAP: aparece tras el próximo «Enviar a Status RMD»">Aut. —</span>' : '';
-            const d = dayjs(fa.ms), tit = `${fa.manual ? 'Autorizada a mano' : 'Fecha Autorización en SAP'}: ${d.format(fa.conHora ? 'DD/MM/YYYY HH:mm' : 'DD/MM/YYYY')}`;
+            const d = dayjs(fa.ms), cuando = d.format(fa.conHora ? 'DD/MM/YYYY HH:mm' : 'DD/MM/YYYY');
+            const corta = d.format(fa.conHora ? 'DD/MM HH:mm' : 'DD/MM');
+            if (autorizadaNueva(fa)) {
+                const tit = `Nuevo: autorizado en SAP después de la sincronización anterior. Fecha Autorización en SAP: ${cuando}${fa.conHora ? ' (hora de Lima)' : ''}`;
+                return `<span class="fecha-aut-fila fecha-aut-fila--hoy" title="${tit}">Nuevo · ${corta}</span>`;
+            }
+            const tit = `${fa.manual ? 'Autorizada a mano' : 'Fecha Autorización en SAP'}: ${cuando}${fa.conHora && !fa.manual ? ' (hora de Lima)' : ''}`;
             return autorizadaHoy(fa) ? `<span class="fecha-aut-fila fecha-aut-fila--hoy" title="${tit}">Hoy${fa.conHora ? ' ' + d.format('HH:mm') : ''}</span>`
-                : `<span class="fecha-aut-fila" title="${tit}">Aut. ${d.format('DD/MM')}</span>`;
+                : `<span class="fecha-aut-fila" title="${tit}">Aut. ${corta}</span>`;
         }
         // Estatus y responsable de una fila pendiente.
         const estatusDeFila = (f) => (f.clave && estatusEtapa.get(f.clave)) || '';
