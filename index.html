@@ -956,6 +956,10 @@
             letter-spacing: 0.02em;
         }
 
+        /* Etapa autorizada: Estatus AUTORIZADO y, de responsable, quien la autorizó en SAP. */
+        .etapa-estatus-autorizado { display: inline-flex; align-items: center; font-size: 11px; font-weight: 700; letter-spacing: 0.03em; padding: 0.2rem 0.55rem; border-radius: 0.4rem; color: rgb(var(--ok-rgb)); background: rgb(var(--ok-rgb) / 0.12); border: 1px solid rgb(var(--ok-rgb) / 0.35); white-space: nowrap; }
+        .etapa-autorizador { display: inline-flex; align-items: center; justify-content: center; min-width: 1.8rem; font-size: 11px; font-weight: 700; letter-spacing: 0.02em; padding: 0.15rem 0.45rem; border-radius: 0.35rem; color: rgb(var(--ok-rgb)); background: rgb(var(--ok-rgb) / 0.08); border: 1px solid rgb(var(--ok-rgb) / 0.3); white-space: nowrap; cursor: help; }
+
         /* Fila con al menos una etapa YA AUTORIZADA manualmente (todas sus
            etapas pendientes ya autorizadas), el texto tachado de esa etapa,
            y el badge "Autorizado manual". Antes usaban directamente las
@@ -3158,10 +3162,14 @@ alter publication supabase_realtime add table public.rmd_dashboard_kv;`;
             const flujo = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'));
             return JSON.parse(await new Response(flujo).text());
         }
+        const CLAVES_FOTO_FLUJO = new Set(['val_rmd_autorizados_detalle', 'val_rmd_preciso', 'val_rmd_caracterizaciones', 'val_rmd_indicadores_mes',
+            'val_estatus_etapa', 'val_responsables_etapa', 'val_estatus_caracterizacion', 'val_manual_autorizados', 'prod_data_planta1', 'prod_data_planta2']);
         async function storeSet(key, value, _retried) {
             // Caché local siempre, sin importar cómo salga lo de Supabase.
             try { await dbStore.setItem(key, value); } catch (err) { console.error('Caché local set error:', key, err); }
             ultimoGuardadoPropio.set(key, Date.now());
+            // Foto diaria del flujo de INDICADORES: un cambio de datos de SAP, de estatus o de autorizaciones la actualiza.
+            if (CLAVES_FOTO_FLUJO.has(key)) { try { StatusRmd.fotoPronto(); } catch (e) { /* la página aún no termina de cargar */ } }
 
             try {
                 const valor = CLAVES_COMPRIMIDAS.has(key) ? await comprimirValor(value) : value;
@@ -3293,7 +3301,8 @@ alter publication supabase_realtime add table public.rmd_dashboard_kv;`;
         let recargaManualesTimer = null;
         let recargaDatosValidacionTimer = null;
         async function onRemoteKeyChanged(key) {
-            if (!key.startsWith('acuerdo:')) StatusRmd.recargarPronto();
+            // La foto diaria la guarda otra persona: no hace falta recalcular aquí.
+            if (!key.startsWith('acuerdo:') && key !== 'ind_fotos_flujo') StatusRmd.recargarPronto();
             if (key.startsWith('acuerdo:')) {
                 Acuerdos.recargarPronto();
             } else if (key === 'dashboard_products_rmd') {
@@ -7018,6 +7027,42 @@ async function downloadPlanProduccionFromCloud() {
             }
             return (e.rmd && detallePorRmd.get('R' + e.rmd)) || (!e.rmd && e.sol && detallePorRmd.get('S' + e.sol)) || null;
         }
+        // ---- Quién autorizó (pedido de CINTIA, 04/11/2026) ----
+        // En las etapas autorizadas el Estatus dice AUTORIZADO y el Responsable es quien la autorizó en SAP («Usuario
+        // Autorización» del RMD), con el nombre corto que usa el área: inicial del nombre y primer apellido (CJESUSZ → CJESUS).
+        // Karla Vanessa Moreno se cuenta por su segundo nombre, Vanessa: su usuario KMORENOM se muestra como VMORENO.
+        // Un usuario que no está en la lista se muestra tal cual viene de SAP.
+        const AUTORIZADORES_SAP = {
+            CJESUSZ: { corto: 'CJESUS', nombre: 'Carlos Jesús' },
+            KMORENOM: { corto: 'VMORENO', nombre: 'Vanessa Moreno' },
+            NCUELLARL: { corto: 'NCUELLAR', nombre: 'Noelia Cuellar' },
+            JQUISPEP: { corto: 'JQUISPE', nombre: 'Jimena Quispe' }
+        };
+        function autorizadorCorto(usuario) {
+            const sap = String(usuario || '').replace(/\s+/g, ' ').trim();
+            if (!sap) return null;
+            const u = sap.toUpperCase(), k = AUTORIZADORES_SAP[u];
+            if (k) return { corto: k.corto, nombre: k.nombre, sap: u };
+            // Si llega el nombre completo (Exportado RMD), sin «Karla»: Vanessa Moreno.
+            const nombre = sap.replace(/^moreno\s+karla\s+vanessa\b/i, 'Vanessa Moreno').replace(/\bkarla\s+(?=vanessa\b)/i, '');
+            return { corto: nombre.includes(' ') ? nombre : u, nombre, sap: u };
+        }
+        // Quién autorizó la etapa en SAP: el usuario del RMD con la Fecha Autorización más reciente entre los que la resuelven.
+        function autorizadorDeFila(f) {
+            if (!f || f.estado !== 'sap' || !f.d || !Array.isArray(f.d.candidatos)) return null;
+            let mejor = null, ms = -Infinity;
+            f.d.candidatos.forEach(c => {
+                if (c.sinRmd || c.pendiente) return;
+                const fila = filaDetalleDeEntrada(c);
+                if (!fila || !fila.usuarioAutorizacion) return;
+                const t = fechaSapDiaMs(fila.fechaAutorizacion);
+                const v = t === null ? -1 : t;
+                if (!mejor || v > ms) { mejor = fila.usuarioAutorizacion; ms = v; }
+            });
+            return autorizadorCorto(mejor);
+        }
+        // Quién autorizó un RMD por su código (o su solicitud).
+        const autorizadorDeRmd = (codigo, sol) => autorizadorCorto((filaDetalleDeEntrada({ rmd: codigo || '', sol: sol || '' }) || {}).usuarioAutorizacion);
         function explicarCadenaPrecisa(cadena, codigo, lbl) {
             if (!cadena) return `SAP no tiene ningún RMD para el código ${codigo} en ${lbl} (sin contar los cancelados).`;
             const u = cadena.ultima, n = u.estadoNorm, ref = u.rmd ? `RMD ${u.rmd}` : (u.sol ? `solicitud ${u.sol}` : 'sin número');
@@ -8094,6 +8139,12 @@ async function downloadPlanProduccionFromCloud() {
 
         // Celdas de una etapa (Producción y Forecast): la etapa con su estado en SAP y la antigüedad del pendiente; el Estatus;
         // el responsable; y la acción (✓ autorizar a mano, Revertir, o «Autorizado» si SAP ya la autorizó).
+        const ESTATUS_AUTORIZADO_HTML = '<span class="etapa-estatus-autorizado">AUTORIZADO</span>';
+        function htmlAutorizador(a) {
+            const esc = escapeHtmlRmdConfig;
+            if (!a) return '<span class="text-slate-500" title="Sin el usuario que autorizó: aparece tras el próximo «Enviar a Status RMD»">—</span>';
+            return `<span class="etapa-autorizador" title="${esc(`Autorizó en SAP: ${a.nombre}${a.sap !== a.corto ? ` (usuario ${a.sap})` : ''}`)}">${esc(a.corto)}</span>`;
+        }
         function celdasDeEtapa(f, origen) {
             const esc = escapeHtmlRmdConfig, fc = origen === 'forecast';
             const toggle = fc ? 'toggleManualAutorizadoEtapaForecast' : 'toggleManualAutorizadoEtapa';
@@ -8110,7 +8161,7 @@ async function downloadPlanProduccionFromCloud() {
                 const c = f.d.candidatos[0];
                 return {
                     etapa: `<span class="etapa-label-celda"><span class="text-emerald-300 cursor-pointer hover:underline" onclick="${verDetalle}" title="Ver el código y el RMD de esta etapa">${label}</span><span class="chip-sap-fila">${chip}</span></span>`,
-                    estatus: '<span class="text-slate-500">—</span>', resp: '<span class="text-slate-500">—</span>',
+                    estatus: ESTATUS_AUTORIZADO_HTML, resp: htmlAutorizador(autorizadorDeFila(f)),
                     accion: `<span class="badge-autorizado-sap" title="${esc(c && !c.sinRmd ? `Autorizado en SAP: ${textoCandidato(c)}` : 'Resuelta en SAP')}">Autorizado</span>${fechaAutorizacionHtml(f, origen)}`
                 };
             }
@@ -8118,7 +8169,7 @@ async function downloadPlanProduccionFromCloud() {
                 const m = (fc ? manualAutorizadosForecastMeta : manualAutorizadosMeta).get(f.clave);
                 return {
                     etapa: `<span class="etapa-label-celda"><span class="etapa-autorizada-manual line-through cursor-pointer" onclick="${verDetalle}" title="Ver el código y el RMD de esta etapa">${label}</span><span class="chip-sap-fila">${chip}<span class="nota-manual" title="Autorizada a mano${m && m.f ? ' el ' + dayjs(m.f).format('DD/MM/YYYY HH:mm') : ''}. Caduca sola cuando SAP la autorice o registre una versión nueva.">a mano${m && m.f ? ' · ' + dayjs(m.f).format('DD/MM') : ''}</span></span></span>`,
-                    estatus: '<span class="text-slate-500">—</span>', resp: '<span class="text-slate-500">—</span>',
+                    estatus: ESTATUS_AUTORIZADO_HTML, resp: '<span class="text-slate-500" title="Autorizada a mano en esta página: SAP aún no registra quién la autorizó">—</span>',
                     accion: `<button onclick="${toggle}('${mat}','${fija}')" class="text-[10px] font-medium text-slate-400 hover:text-slate-200 border border-slate-600 hover:border-slate-400 px-1.5 py-0.5 rounded transition-colors" title="Revertir la autorización manual de esta etapa">Revertir</button>${fechaAutorizacionHtml(f, origen)}`
                 };
             }
@@ -8745,7 +8796,7 @@ async function downloadPlanProduccionFromCloud() {
             return Object.assign(base, {
                 'Etapa pendiente': f.fija ? (ETAPAS_FIJAS_LABEL[f.fija] || f.fija) : 'REVISAR',
                 'Estatus': f.estado === 'pendiente' ? estatusDeFila(f) : situacion,
-                'Responsable': f.estado === 'pendiente' ? responsableDeFila(f) : '',
+                'Responsable': f.estado === 'pendiente' ? responsableDeFila(f) : (f.estado === 'sap' ? ((autorizadorDeFila(f) || {}).corto || '') : ''),
                 'Estado en SAP': !f.d ? (f.revisar || '') : (c && !c.sinRmd ? c.estado : 'Sin RMD'),
                 'RMD': c && !c.sinRmd ? (c.rmd || (c.sol ? 'Solicitud ' + c.sol : '')) : '',
                 'Versión': c && !c.sinRmd ? c.version : '',
@@ -9790,7 +9841,7 @@ function updateForecastActiveFiltersBadge() {
             'val_manual_autorizados', 'val_manual_autorizados_meta', 'val_manual_autorizados_forecast', 'val_manual_autorizados_forecast_meta',
             'val_responsables_etapa', 'val_estatus_etapa',
             'val_rmd_indicadores_mes', 'val_rmd_caracterizaciones', 'val_estatus_caracterizacion', 'val_rmd_trazabilidad', 'val_caracterizacion_lista',
-            'ind_horas_efectivas', 'historial_trazabilidad', 'tour_completed'
+            'ind_horas_efectivas', 'ind_fotos_flujo', 'historial_trazabilidad', 'tour_completed'
         ];
 
         async function exportAllDataAsJson() {
@@ -11497,6 +11548,7 @@ async function maybeAutoStartTour() {
         :is(#tab-status, #prodAcumulado) .sts-tag.pro { color:rgb(var(--copper-rgb)); background:rgba(var(--copper-rgb) / .14); }
         :is(#tab-status, #prodAcumulado) .sts-tag.doc { color:rgb(var(--plum-rgb)); background:rgba(var(--plum-rgb) / .16); }
         :is(#tab-status, #prodAcumulado) .sts-tag.asc { color:rgb(var(--info-rgb)); background:rgba(var(--info-rgb) / .16); }
+        :is(#tab-status, #prodAcumulado) .sts-tag.ok { color:rgb(var(--ok-rgb)); background:rgba(var(--ok-rgb) / .14); }
         :is(#tab-status, #prodAcumulado) .sts-tag.gris { color:var(--slate-400); background:var(--surface-1-faint); font-weight:600; }
         :is(#tab-status, #prodAcumulado) .sts-cc { grid-column:2 / span 4; justify-self:center; display:flex; align-items:center; gap:10px; flex-wrap:wrap; justify-content:center; margin-top:6px; font-size:12px; padding:6px 14px; border:1.5px dashed rgba(var(--copper-rgb) / .55); border-radius:10px; color:var(--app-text); }
         :is(#tab-status, #prodAcumulado) .sts-cc b { font-weight:700; }
@@ -11632,6 +11684,47 @@ async function maybeAutoStartTour() {
             :is(#tab-status, #prodAcumulado) .sts-kpis.cuatro { grid-template-columns:repeat(2, minmax(0, 1fr)); }
             :is(#tab-status, #prodAcumulado) .sts-flujo2 { grid-template-columns:repeat(2, minmax(0, 1fr)); row-gap:14px; }
             :is(#tab-status, #prodAcumulado) .sts-flujo2 > * + *::before { display:none; }
+            :is(#tab-status, #prodAcumulado) .flx > .flx-svg { display:none; }
+        }
+        /* Flujo animado como en el PowerPoint del status (pedido de CINTIA, 04/11/2026): Borrador → Ingresar → Flujo SAP (arriba)
+           o Control de cambio (abajo) → Por revisión → Autorizado, con flechas que se abren y se juntan y puntos que empujan el
+           flujo hacia Autorizado (más puntos donde hay más pendientes). Las flechas se dibujan en un SVG encima. */
+        :is(#tab-status, #prodAcumulado) .flx { position:relative; align-items:center; column-gap:34px; padding:4px 0; }
+        :is(#tab-status, #prodAcumulado) .flx > * + *::before { display:none; }
+        :is(#tab-status, #prodAcumulado) .flx > .flx-svg { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; overflow:visible; z-index:0; }
+        :is(#tab-status, #prodAcumulado) .flx > :not(.flx-svg) { z-index:1; }
+        :is(#tab-status, #prodAcumulado) .flx .sts-rama { border:0; padding:0; gap:30px; }
+        :is(#tab-status, #prodAcumulado) .flx .sts-caja { position:relative; transition:transform .25s ease, box-shadow .25s ease; }
+        :is(#tab-status, #prodAcumulado) .flx button.sts-caja:hover { transform:translateY(-2px); }
+        :is(#tab-status, #prodAcumulado) .flx-svg .flx-linea { fill:none; stroke:rgba(var(--plum-rgb) / .55); stroke-width:2; }
+        :is(#tab-status, #prodAcumulado) .flx-svg .flx-linea.vacia { stroke:rgba(var(--plum-rgb) / .22); stroke-dasharray:4 4; }
+        :is(#tab-status, #prodAcumulado) .flx-svg .flx-flecha { fill:rgba(var(--plum-rgb) / .7); }
+        :is(#tab-status, #prodAcumulado) .flx-svg .flx-punto { fill:rgb(var(--plum-rgb)); }
+        :is(#tab-status, #prodAcumulado) .flx-svg .flx-punto.pro { fill:rgb(var(--copper-rgb)); }
+        :is(#tab-status, #prodAcumulado) .flx-svg .flx-punto.ok { fill:rgb(var(--ok-rgb)); }
+        :is(#tab-status, #prodAcumulado) .flx .sts-caja.ok.flx-latido { animation:flxLatido 2.4s ease-in-out infinite; }
+        @keyframes flxLatido { 0%, 100% { box-shadow:inset 0 3px 0 rgb(var(--ok-rgb)), 0 0 0 0 rgba(var(--ok-rgb) / .35); } 50% { box-shadow:inset 0 3px 0 rgb(var(--ok-rgb)), 0 0 0 7px rgba(var(--ok-rgb) / 0); } }
+        :is(#tab-status, #prodAcumulado) .flx-delta { display:inline-block; margin-left:4px; font-size:11px; font-weight:700; vertical-align:super; }
+        :is(#tab-status, #prodAcumulado) .flx-delta.sube { color:rgb(var(--danger-rgb)); }
+        :is(#tab-status, #prodAcumulado) .flx-delta.baja { color:rgb(var(--ok-rgb)); }
+        :is(#tab-status, #prodAcumulado) .flx-delta.aut.sube { color:rgb(var(--ok-rgb)); }
+        @media (prefers-reduced-motion: reduce) {
+            :is(#tab-status, #prodAcumulado) .flx .sts-caja.ok.flx-latido { animation:none; }
+            :is(#tab-status, #prodAcumulado) .flx-svg .flx-punto { display:none; }
+        }
+        /* Foto diaria del flujo: cómo estaba un día o un rango de días. */
+        #tab-status .fto-barra { display:flex; flex-wrap:wrap; align-items:center; gap:10px; }
+        #tab-status .fto-barra label { display:inline-flex; align-items:center; gap:6px; font-size:12px; color:var(--slate-400); }
+        #tab-status .fto-barra input[type="date"] { font:inherit; font-size:12px; height:30px; padding:0 8px; border-radius:8px; border:1px solid var(--field-border); background:var(--field-bg); color:var(--field-text); }
+        #tab-status .fto-estado { margin-top:10px; font-size:12.5px; color:var(--app-text); }
+        #tab-status .fto-estado b { color:rgb(var(--plum-rgb)); }
+        #tab-status .fto-aviso-foto { display:inline-flex; align-items:center; gap:6px; margin-left:8px; padding:2px 10px; border-radius:999px; font-size:11px; font-weight:700; color:rgb(var(--info-rgb)); background:rgba(var(--info-rgb) / .14); white-space:nowrap; }
+        #tab-status .fto-tabla td.num, #tab-status .fto-tabla th.num { text-align:right; font-variant-numeric:tabular-nums; }
+        #tab-status .fto-tabla td.grupo { font-weight:700; white-space:nowrap; }
+        #tab-status .fto-tabla tr.sep td { border-top:2px solid var(--card-border-highlight); }
+        @media (max-width: 560px) {
+            :is(#tab-status, #prodAcumulado) .flx { column-gap:14px; }
+            :is(#tab-status, #prodAcumulado) .flx .sts-rama { gap:10px; }
         }
     </style>
     <script>
@@ -11654,7 +11747,7 @@ async function maybeAutoStartTour() {
         let estatusCar = {};        // val_estatus_caracterizacion
         const CLAVE_HORAS = 'ind_horas_efectivas';
         let horasEf = {};           // ind_horas_efectivas
-        const vista = { detalleAbierto: false, planta: '', soloPendientes: true, acuAbierto: false, acuPlanta: '', acuLista: 'pend' };
+        const vista = { detalleAbierto: false, planta: '', soloPendientes: true, acuAbierto: false, acuPlanta: '', acuLista: 'pend', foto: '' };
 
         // ---------- Lo que se guarda con cada sincronización con SAP / Exportado RMD ----------
         // Fecha de SAP → dayjs local: Date del Excel, ISO (con o sin hora) o DD/MM/AAAA.
@@ -12364,7 +12457,11 @@ async function maybeAutoStartTour() {
             if (!h.value) h.value = dayjs().format('YYYY-MM-DD');
             if (!d.value) d.value = dayjs(h.value).subtract((dayjs(h.value).day() + 6) % 7, 'day').format('YYYY-MM-DD'); // lunes de esa semana
             if (d.value > h.value) d.value = h.value;
-            const desde = dayjs(d.value), hasta = dayjs(h.value);
+            return periodoDe(dayjs(d.value), dayjs(h.value));
+        }
+        // Periodo de hoy (lunes de esta semana – hoy), sin tocar lo elegido arriba: para la foto diaria.
+        const periodoHoy = () => { const h = dayjs().startOf('day'); return periodoDe(h.subtract((h.day() + 6) % 7, 'day'), h); };
+        function periodoDe(desde, hasta) {
             const meses = [2, 1, 0].map((k) => hasta.startOf('month').subtract(k, 'month'));
             const ini = meses[0], fin = meses[2];
             const rango = ini.year() === fin.year() ? `${MESES_CORTOS[ini.month()]}–${MESES_CORTOS[fin.month()]} ${fin.year()}`
@@ -12442,10 +12539,11 @@ async function maybeAutoStartTour() {
         }
 
         // ---------- Cálculo completo ----------
-        async function calcular() {
-            const per = periodo();
-            const [indicadores, r1, car, est, acu, traz, horas] = await Promise.all([storeGet('val_rmd_indicadores_mes'), calcularRuta1(), storeGet('val_rmd_caracterizaciones'),
-                storeGet('val_estatus_caracterizacion'), calcularAcumulado(), storeGet('val_rmd_trazabilidad'), storeGet(CLAVE_HORAS)]);
+        async function calcular(perForzado) {
+            const per = perForzado || periodo();
+            const [indicadores, r1, car, est, acu, traz, horas, fotos] = await Promise.all([storeGet('val_rmd_indicadores_mes'), calcularRuta1(), storeGet('val_rmd_caracterizaciones'),
+                storeGet('val_estatus_caracterizacion'), calcularAcumulado(), storeGet('val_rmd_trazabilidad'), storeGet(CLAVE_HORAS), storeGet(CLAVE_FOTOS)]);
+            if (fotos && fotos.v === 1 && fotos.dias) fotosGuardadas = fotos;
             estatusCar = (est && typeof est === 'object') ? conEstatusVigente(est) : {};
             const items = (car && Array.isArray(car.items)) ? car.items : [];
             horasEf = horas && typeof horas === 'object' ? horas : {};
@@ -12453,6 +12551,115 @@ async function maybeAutoStartTour() {
             if (!r1.error) ['P1', 'P2'].forEach((pl) => { const a = programa[pl].aut[2]; r1[pl].aut = Number.isFinite(a) ? a : 0; r1[pl].autSinDato = !Number.isFinite(a); });
             return { per, programa, r1, acu, r2: ruta2(items), car: { items, sinDatos: !car, generado: car && car.generado } };
         }
+
+        // ---------- Foto diaria del flujo (pedido de CINTIA, 04/11/2026) ----------
+        // Cada día se guarda cómo estaba el flujo de la Ruta 1 (programa) y la Ruta 2 (caracterizaciones) por planta: cuántos
+        // había en cada casilla (Borrador, Ingresar, Flujo SAP, Control de cambio, Por revisión, Autorizado) y por responsable.
+        // Se guarda solo: cada vez que la página calcula el status de hoy (al abrir INDICADORES, al llegar datos de SAP con
+        // «Enviar a Status RMD» o al cambiar un estatus) la foto del día se reemplaza, así que la última del día queda como la
+        // del cierre. Los días pasados ya no cambian. En ind_fotos_flujo: { v: 1, dias: { 'AAAA-MM-DD': { t, sap, r1, r2 } } }.
+        const CLAVE_FOTOS = 'ind_fotos_flujo';
+        const MAX_FOTOS = 730;   // dos años
+        const CAMPOS_FOTO = ['bor', 'ing', 'flu', 'cc', 'ccPro', 'ccAsc', 'rev', 'aut', 'pend', 'sinEst', 'doc', 'pro', 'asc'];
+        // Completa los conteos de una casilla dada solo por etapa (pendientes y responsables como en la página).
+        function completarFoto(c) {
+            const x = Object.assign({ bor: 0, ing: 0, flu: 0, cc: 0, ccPro: 0, ccAsc: 0, rev: 0, aut: 0, sinEst: 0 }, c);
+            if (x.pend === undefined) x.pend = x.bor + x.ing + x.flu + x.cc + x.rev + x.sinEst;
+            if (x.pro === undefined) x.pro = x.bor + x.flu + x.ccPro;
+            if (x.doc === undefined) x.doc = x.ing + x.rev;
+            if (x.asc === undefined) x.asc = x.ccAsc;
+            return x;
+        }
+        // Datos del PowerPoint STATUS_ACTUALIZACIONES_RMD_2026-11-02 (pedido de CINTIA): el cierre de octubre de 2026. Noviembre
+        // no se copia (CINTIA, 04/11/2026): sale de las fotos que la página guarda sola.
+        const FOTOS_PPT = {
+            '2026-10-31': { t: '2026-10-31T23:59:00-05:00', origen: 'PowerPoint del status del 02/11/2026',
+                r1: { P1: completarFoto({ bor: 3, ing: 5, flu: 1, cc: 4, ccPro: 4, ccAsc: 0, rev: 0, aut: 100 }),
+                      P2: completarFoto({ bor: 0, ing: 0, flu: 1, cc: 0, ccPro: 0, ccAsc: 0, rev: 0, aut: 68 }) },
+                r2: { P1: completarFoto({ bor: 73, ing: 0, flu: 11, cc: 6, ccPro: 6, ccAsc: 0, rev: 3, aut: 20 }),
+                      P2: completarFoto({ bor: 56, ing: 5, flu: 18, cc: 9, ccPro: 0, ccAsc: 9, rev: 11, aut: 38 }) } }
+        };
+        let fotosGuardadas = null;   // { v, dias } de Supabase
+        const diaLocal = (x) => dayjs(x).format('YYYY-MM-DD');
+        function todasLasFotos() {
+            const dias = Object.assign({}, FOTOS_PPT, (fotosGuardadas && fotosGuardadas.dias) || {});
+            return dias;
+        }
+        const recorteFoto = (c, extra) => { const x = {}; CAMPOS_FOTO.forEach((k) => { x[k] = Number(c[k]) || 0; }); return Object.assign(x, extra || {}); };
+        // La foto de hoy con lo calculado (solo las rutas que tienen datos).
+        function fotoDe(d) {
+            const f = { sap: d.programa.generado || d.car.generado || null };
+            if (d.r1 && !d.r1.error && ['P1', 'P2'].some((pl) => d.r1[pl] && !d.r1[pl].sinDatos)) {
+                f.r1 = {};
+                ['P1', 'P2'].forEach((pl) => {
+                    if (!d.r1[pl] || d.r1[pl].sinDatos) return;   // sin Programa de Producción cargado: no hay flujo que guardar
+                    const bk = backlogRuta1(d, pl);
+                    f.r1[pl] = recorteFoto(d.r1[pl], { prog: d.r1[pl].productos || 0, bkN: Number.isFinite(bk.n) ? bk.n : null, bkAut: Number.isFinite(bk.aut) ? bk.aut : null });
+                });
+            }
+            if (!d.car.sinDatos && d.r2) f.r2 = { P1: recorteFoto(d.r2.P1), P2: recorteFoto(d.r2.P2) };
+            return f.r1 || f.r2 ? f : null;
+        }
+        const sinHora = (f) => JSON.stringify({ sap: f.sap, r1: f.r1, r2: f.r2 });
+        let guardandoFoto = null;
+        async function guardarFoto(d) {
+            // Solo con los datos ya cargados (sin ellos la foto saldría vacía) y con el status de hoy.
+            if (!d || !d.per || !d.per.hasta.isSame(dayjs(), 'day')) return false;
+            if (typeof rmdPreciso === 'undefined' || !rmdPreciso || !rmdPreciso.totalEntradas) return false;
+            const f = fotoDe(d);
+            if (!f) return false;
+            const hoy = diaLocal(new Date());
+            const ant = fotosGuardadas && fotosGuardadas.dias && fotosGuardadas.dias[hoy];
+            if (ant && sinHora(ant) === sinHora(f)) return false;
+            if (guardandoFoto) await guardandoFoto.catch(() => {});
+            guardandoFoto = (async () => {
+                // Se vuelve a leer justo antes de escribir, para no pisar lo que guardó otra persona.
+                const g = await storeGet(CLAVE_FOTOS);
+                const base = g && g.v === 1 && g.dias && typeof g.dias === 'object' ? g : { v: 1, dias: {} };
+                const previa = base.dias[hoy];
+                // No se pisa una foto de hoy hecha con datos de SAP más nuevos que los de este navegador.
+                if (previa && previa.sap && f.sap && previa.sap > f.sap) { fotosGuardadas = base; return false; }
+                base.dias[hoy] = Object.assign({ t: new Date().toISOString() }, f);
+                const dias = Object.keys(base.dias).sort();
+                dias.slice(0, Math.max(0, dias.length - MAX_FOTOS)).forEach((k) => { delete base.dias[k]; });
+                fotosGuardadas = base;
+                await storeSet(CLAVE_FOTOS, base);
+                return true;
+            })();
+            try { return await guardandoFoto; } finally { guardandoFoto = null; }
+        }
+        // Tras un cambio de datos (SAP, estatus, autorizaciones a mano): se recalcula el status de hoy y se guarda la foto.
+        let fotoTimer = null;
+        function fotoPronto(ms = 15000) {
+            clearTimeout(fotoTimer);
+            fotoTimer = setTimeout(async () => {
+                try {
+                    if (typeof currentTab !== 'undefined' && currentTab === 'status' && ultimo && ultimo.per.hasta.isSame(dayjs(), 'day')) { await actualizar(); return; }
+                    const g = await storeGet(CLAVE_FOTOS);
+                    if (g && g.v === 1) fotosGuardadas = g;
+                    await guardarFoto(await calcular(periodoHoy()));
+                } catch (err) { console.error('Foto diaria del flujo:', err); }
+            }, ms);
+        }
+        // Foto con que se ve un día: la de ese día o, si ese día no se guardó, la última de antes (así estaba).
+        function fotoDelDia(dia) {
+            const dias = todasLasFotos(), k = Object.keys(dias).filter((x) => x <= dia).sort().pop();
+            return k ? { dia: k, f: dias[k] } : null;
+        }
+        // Lo elegido arriba de las rutas: '' = hoy, en vivo; 'AAAA-MM-DD..AAAA-MM-DD' = un día (iguales) o un rango.
+        function rangoFoto() {
+            const m = /^(\d{4}-\d{2}-\d{2})\.\.(\d{4}-\d{2}-\d{2})$/.exec(vista.foto || '');
+            return m ? (m[1] <= m[2] ? { desde: m[1], hasta: m[2] } : { desde: m[2], hasta: m[1] }) : null;
+        }
+        function fotoEnVista() {
+            const r = rangoFoto();
+            if (!r) return null;
+            const fin = fotoDelDia(r.hasta);
+            // Inicio del rango: como estaba ese día o, si aún no había fotos, la primera foto dentro del rango.
+            const ini = r.desde !== r.hasta ? (fotoDelDia(r.desde) || (() => { const k = Object.keys(todasLasFotos()).filter((x) => x >= r.desde && x <= r.hasta).sort()[0]; return k ? { dia: k, f: todasLasFotos()[k] } : null; })()) : null;
+            return { r, fin, ini: ini && fin && ini.dia !== fin.dia ? ini : null };
+        }
+        const fmtDiaCorto = (k) => dayjs(k).format('DD/MM/YYYY');
 
         // ---------- Vista ----------
         const esc = (s) => escapeHtmlRmdConfig(String(s));
@@ -12650,28 +12857,35 @@ async function maybeAutoStartTour() {
             return { n, aut, pctTxt: ok ? `${(Math.round((aut / n) * 1000) / 10).toFixed(1)}%` : '—', pct: ok ? Math.round((aut / n) * 100) : 0 };
         }
         const avanceTxt = (c) => { const t = c.aut + c.pend; return t ? `${(Math.round((c.aut / t) * 1000) / 10).toFixed(1)}%` : '—'; };
-        function htmlRuta(c, pl, ruta, { autKey = '', extra = '', debajo = '', backlog = null } = {}) {
+        // foto: los números de una foto diaria (no se abren: el detalle es el de hoy); deltas: cambio frente al primer día del rango.
+        function htmlRuta(c, pl, ruta, { autKey = '', extra = '', debajo = '', backlog = null, foto = false, deltas = null } = {}) {
             const det = (k) => `${ruta}|${pl}|${k}`;
-            const caja = (n, clase, k, lbl) => (n > 0
-                ? `<button type="button" class="sts-caja ${clase || ''}" data-det="${esc(k.includes('|') ? k : det(k))}" title="Ver el detalle y descargarlo en Excel" aria-label="${esc(`${lbl}: ${n}. Ver el detalle`)}">${n}</button>`
-                : `<div class="sts-caja ${clase || ''} cero">${n}</div>`);
-            const etapa = (lbl, n, clase, pie, k) => `<div class="sts-etapa"><div class="sts-etapa-nombre">${lbl}</div>${caja(n, clase, k, lbl)}<div class="sts-pie">${pie || ''}</div></div>`;
+            const nD = foto ? (n) => numOGuion(n) : nDet;
+            const delta = (k) => {
+                const v = deltas && deltas[k];
+                return v ? `<span class="flx-delta ${v > 0 ? 'sube' : 'baja'}${k === 'aut' ? ' aut' : ''}" title="Frente al primer día del rango">${v > 0 ? '+' : '−'}${Math.abs(v)}</span>` : '';
+            };
+            const caja = (n, clase, k, lbl, nodo) => (n > 0 && !foto
+                ? `<button type="button" class="sts-caja ${clase || ''}" data-nodo="${nodo}" data-n="${n}" data-det="${esc(k.includes('|') ? k : det(k))}" title="Ver el detalle y descargarlo en Excel" aria-label="${esc(`${lbl}: ${n}. Ver el detalle`)}"><span data-cuenta="${n}">${n}</span>${delta(nodo)}</button>`
+                : `<div class="sts-caja ${clase || ''}${n > 0 ? '' : ' cero'}" data-nodo="${nodo}" data-n="${n || 0}"><span data-cuenta="${n || 0}">${numOGuion(n)}</span>${delta(nodo)}</div>`);
+            const etapa = (lbl, n, clase, pie, k, nodo) => `<div class="sts-etapa"><div class="sts-etapa-nombre">${lbl}</div>${caja(n, clase, k, lbl, nodo)}<div class="sts-pie">${pie || ''}</div></div>`;
             const max = Math.max(c.doc, c.pro, c.asc, 1);
-            const barra = (k, lbl, n) => `<div class="sts-barra ${k}"><span class="lbl">${lbl}</span><span class="pista"><i style="width:${Math.round((n / max) * 100)}%"></i></span><span class="n">${nDet(n, det(k))}</span></div>`;
+            const barra = (k, lbl, n) => `<div class="sts-barra ${k}"><span class="lbl">${lbl}</span><span class="pista"><i style="width:${Math.round((n / max) * 100)}%"></i></span><span class="n">${nD(n, det(k))}</span></div>`;
             const total = c.aut + c.pend, pct = total ? Math.round((c.aut / total) * 100) : 0;
-            const sinEst = c.sinEst ? ` <span class="sts-chip">${nDet(c.sinEst, det('sinEst'), plural(c.sinEst, 'pendiente sin estatus', 'pendientes sin estatus'))}</span>` : '';
+            const sinEst = c.sinEst ? ` <span class="sts-chip">${nD(c.sinEst, det('sinEst'), plural(c.sinEst, 'pendiente sin estatus', 'pendientes sin estatus'))}</span>` : '';
             return `<div class="sts-ruta">
                 <div>
-                    <div class="sts-planta">${backlog ? `${PLANTAS[pl]} <span class="sts-total prog">Programa ${total}</span><span class="sts-total bk">Backlog ${esc(backlog.mes)} ${backlog.n === null ? '—' : nDet(backlog.n, backlog.key)}</span>` : `${PLANTAS[pl]} (TOTAL ${total})`}${sinEst}${extra}</div>
-                    <div class="sts-flujo2">
-                        ${etapa('Borrador', c.bor, 'pro', tagResp('PRO'), 'bor')}
-                        ${etapa('Ingresar', c.ing, 'doc', tagResp('QA-DOC'), 'ing')}
+                    <div class="sts-planta">${backlog ? `${PLANTAS[pl]} <span class="sts-total prog">Programa ${total}</span><span class="sts-total bk">Backlog ${esc(backlog.mes)} ${backlog.n === null ? '—' : nD(backlog.n, backlog.key)}</span>` : `${PLANTAS[pl]} (TOTAL ${total})`}${sinEst}${extra}</div>
+                    <div class="sts-flujo2 flx" data-flujo>
+                        <svg class="flx-svg" aria-hidden="true"></svg>
+                        ${etapa('Borrador', c.bor, 'pro', tagResp('PRO'), 'bor', 'bor')}
+                        ${etapa('Ingresar', c.ing, 'doc', tagResp('QA-DOC'), 'ing', 'ing')}
                         <div class="sts-rama">
-                            ${etapa('Flujo SAP', c.flu, 'pro', tagResp('PRO'), 'flu')}
-                            ${etapa('Control de cambio', c.cc, 'cc', `${tagResp('PRO')}<b>${nDet(c.ccPro, det('ccPro'))}</b>${tagResp('ASC')}<b>${nDet(c.ccAsc, det('ccAsc'))}</b>`, 'cc')}
+                            ${etapa('Flujo SAP', c.flu, 'pro', tagResp('PRO'), 'flu', 'flu')}
+                            ${etapa('Control de cambio', c.cc, 'cc', `${tagResp('PRO')}<b>${nD(c.ccPro, det('ccPro'))}</b>${tagResp('ASC')}<b>${nD(c.ccAsc, det('ccAsc'))}</b>`, 'cc', 'cc')}
                         </div>
-                        ${etapa('Por revisión', c.rev, 'doc', tagResp('DOC'), 'rev')}
-                        ${etapa('Autorizado', c.aut, 'ok', '', autKey || 'aut')}
+                        ${etapa('Por revisión', c.rev, 'doc', tagResp('DOC'), 'rev', 'rev')}
+                        ${etapa('Autorizado', c.aut, 'ok', '', autKey || 'aut', 'aut')}
                     </div>
                     ${debajo}
                 </div>
@@ -12688,7 +12902,169 @@ async function maybeAutoStartTour() {
             </div>`;
         }
         const leyenda = `<div class="sts-leyenda">${tagResp('PRO')}<span class="sts-chip">Producción</span>${tagResp('DOC')}<span class="sts-chip">QA · Documentación</span>${tagResp('ASC')}<span class="sts-chip">Aseguramiento de la Calidad / CC</span></div>`;
+        // ---------- Foto diaria: vista ----------
+        const RUTAS_FOTO = { r1: ['RUTA 1', 'Flujo de Programa – P1 y P2', 'Programa'], r2: ['RUTA 2', 'Flujo de Caracterizaciones – P1 y P2', 'Caracterización'] };
+        const horaFoto = (f) => (f && f.t ? dayjs(f.t).format('HH:mm') : '');
+        const origenFoto = (f) => (f && f.origen ? ` · datos del ${esc(f.origen)}` : '');
+        function filasFotoRango(r) {
+            const dias = todasLasFotos();
+            return Object.keys(dias).filter((k) => k >= r.desde && k <= r.hasta).sort().map((k) => ({ dia: k, f: dias[k] }));
+        }
+        function htmlFotos() {
+            const dias = todasLasFotos(), claves = Object.keys(dias).sort(), hoy = diaLocal(new Date());
+            const r = rangoFoto(), modo = !r ? 'hoy' : (r.desde === r.hasta ? 'dia' : 'rango');
+            const ayer = claves.filter((k) => k < hoy).pop() || dayjs().subtract(1, 'day').format('YYYY-MM-DD');
+            const hace7 = dayjs().subtract(6, 'day').format('YYYY-MM-DD');
+            const btn = (m, lbl, valor) => `<button type="button" class="${modo === m ? 'activo' : ''}" onclick='StatusRmd.verFoto(${JSON.stringify(valor)})'>${lbl}</button>`;
+            const min = claves[0] || hoy;
+            const fecha = (id, lbl, v) => `<label>${lbl}<input type="date" id="${id}" value="${v}" min="${min}" max="${hoy}" onchange="StatusRmd.verFotoDesdeCampos()"></label>`;
+            const campos = modo === 'dia' ? fecha('ftoDesde', 'Día', r.desde) : (modo === 'rango' ? fecha('ftoDesde', 'Desde', r.desde) + fecha('ftoHasta', 'Hasta', r.hasta) : '');
+            let estado;
+            if (modo === 'hoy') {
+                const f = dias[hoy];
+                estado = `Se ve el flujo de <b>hoy, en vivo</b>. ${f && !f.origen ? `La foto de hoy se guardó a las <b>${horaFoto(f)}</b> y se actualiza sola hasta el cierre del día.` : 'La foto de hoy se guarda sola al calcular el status.'}`;
+            } else {
+                const fv = fotoEnVista();
+                if (!fv.fin) estado = 'No hay ninguna foto guardada hasta ese día.';
+                else if (modo === 'dia') estado = `Así estaba el flujo el <b>${fmtDiaCorto(r.desde)}</b>: foto ${fv.fin.dia === hoy ? 'de hoy' : 'del cierre del día'}${fv.fin.f.origen ? '' : ` (guardada a las ${horaFoto(fv.fin.f)})`}${origenFoto(fv.fin.f)}.${fv.fin.dia !== r.desde ? ` Ese día no se guardó foto: se muestra la última de antes, del <b>${fmtDiaCorto(fv.fin.dia)}</b>.` : ''}`;
+                else estado = `Del <b>${fmtDiaCorto(r.desde)}</b> al <b>${fmtDiaCorto(r.hasta)}</b>: las rutas muestran la foto del ${fmtDiaCorto(fv.fin.dia)}${fv.ini ? ` y, junto a cada número, cuánto cambió frente al ${fmtDiaCorto(fv.ini.dia)} (en rojo si sube un pendiente, en verde si baja o si suben los autorizados)` : ''}.`;
+            }
+            const tabla = modo === 'rango' ? htmlTablaFotos(r) : '';
+            return `<section class="sts-seccion" id="stsFotos">
+                <div class="sts-seccion-cab"><div>
+                    <div class="sts-seccion-titulo"><span class="sts-num">FOTO DIARIA</span>Cómo estaba el flujo de programa y caracterización</div>
+                    <div class="sts-seccion-sub">Al final de cada día queda guardado el flujo de la Ruta 1 y la Ruta 2 · ${claves.length ? `${plural(claves.length, 'día', 'días')} con foto desde el ${fmtDiaCorto(claves[0])}` : 'aún sin fotos'}</div>
+                </div>
+                <div class="fto-barra">
+                    <div class="sts-seg" role="group" aria-label="Qué día ver">${btn('hoy', 'Hoy (en vivo)', '')}${btn('dia', 'Un día', `${ayer}..${ayer}`)}${btn('rango', 'Rango de días', `${hace7 < min ? min : hace7}..${hoy}`)}</div>
+                    ${campos}
+                    ${modo === 'rango' ? '<button type="button" class="sts-btn" onclick="StatusRmd.exportarFotos()">Descargar Excel</button>' : ''}
+                </div></div>
+                <p class="fto-estado">${estado}</p>
+                ${tabla}
+            </section>`;
+        }
+        const pctFoto = (c) => { const t = c.aut + c.pend; return t ? `${(Math.round((c.aut / t) * 1000) / 10).toFixed(1)}%` : '—'; };
+        function filasExcelFotos(r) {
+            const out = [];
+            filasFotoRango(r).forEach(({ dia, f }) => {
+                ['r1', 'r2'].forEach((ruta) => {
+                    if (!f[ruta]) return;
+                    ['P1', 'P2'].forEach((pl) => {
+                        if (!f[ruta][pl]) return;
+                        const c = completarFoto(f[ruta][pl]);
+                        out.push({ dia, ruta, pl, c, f });
+                    });
+                });
+            });
+            return out;
+        }
+        function htmlTablaFotos(r) {
+            const filas = filasExcelFotos(r);
+            if (!filas.length) return '<p class="sts-vacio">No hay fotos guardadas en esos días.</p>';
+            let antDia = '';
+            const tr = filas.map(({ dia, ruta, pl, c, f }) => {
+                const nuevo = dia !== antDia; antDia = dia;
+                return `<tr${nuevo ? ' class="sep"' : ''}><td class="grupo">${nuevo ? `${fmtDiaCorto(dia)}${f.origen ? ' <span class="sts-chip" title="' + esc(f.origen) + '">PPT</span>' : ''}` : ''}</td>
+                    <td>${RUTAS_FOTO[ruta][2]}</td><td>${PLANTAS[pl]}</td>
+                    <td class="num">${c.bor}</td><td class="num">${c.ing}</td><td class="num">${c.flu}</td><td class="num">${c.cc}</td><td class="num">${c.rev}</td>
+                    <td class="num"><b>${c.pend}</b></td><td class="num">${c.aut}</td><td class="num">${pctFoto(c)}</td></tr>`;
+            }).join('');
+            return `<div class="sts-tabla-wrap"><table class="sts-tabla fto-tabla">
+                <thead><tr><th>Día</th><th>Ruta</th><th>Planta</th><th class="num">Borrador</th><th class="num">Ingresar</th><th class="num">Flujo SAP</th><th class="num">Control de cambio</th><th class="num">Por revisión</th><th class="num">Pendientes</th><th class="num">Autorizado</th><th class="num">% avance</th></tr></thead>
+                <tbody>${tr}</tbody></table></div>`;
+        }
+        function exportarFotos() {
+            const r = rangoFoto();
+            if (!r || typeof XLSX === 'undefined') return;
+            const filas = filasExcelFotos(r).map(({ dia, ruta, pl, c, f }) => ({
+                'Día': dia, 'Ruta': RUTAS_FOTO[ruta][2], 'Planta': PLANTAS[pl], 'Borrador': c.bor, 'Ingresar': c.ing, 'Flujo SAP': c.flu, 'Control de cambio': c.cc,
+                'CC de PRO': c.ccPro, 'CC de ASC': c.ccAsc, 'Por revisión': c.rev, 'Sin estatus': c.sinEst, 'Pendientes': c.pend, 'Autorizado': c.aut, '% avance': pctFoto(c),
+                'Pendientes PRO': c.pro, 'Pendientes DOC': c.doc, 'Pendientes ASC': c.asc, 'Guardada': f.origen ? f.origen : (f.t ? dayjs(f.t).format('DD/MM/YYYY HH:mm') : '')
+            }));
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(filas), 'Fotos del flujo');
+            XLSX.writeFile(wb, `Foto_flujo_${r.desde}_${r.hasta}.xlsx`, { compression: true });
+        }
+        // Ruta 1 o 2 con la foto elegida (un día, o el último del rango con su cambio frente al primero).
+        function htmlRutaFoto(fv, ruta) {
+            const [num, titulo] = RUTAS_FOTO[ruta];
+            const f = fv.fin && fv.fin.f[ruta], fi = fv.ini && fv.ini.f[ruta];
+            const sub = fv.fin ? `Foto del ${fmtDiaCorto(fv.fin.dia)}${fv.fin.f.origen ? '' : ` · guardada a las ${horaFoto(fv.fin.f)}`}${origenFoto(fv.fin.f)}${fv.ini ? ` · cambio desde el ${fmtDiaCorto(fv.ini.dia)}` : ''}` : 'Sin foto';
+            const deltas = (pl) => (fi && fi[pl] && f[pl] ? Object.fromEntries(['bor', 'ing', 'flu', 'cc', 'rev', 'aut'].map((k) => [k, (f[pl][k] || 0) - (fi[pl][k] || 0)])) : null);
+            const mesAnt = fv.fin ? MESES[dayjs(fv.fin.dia).subtract(1, 'month').month()].toLowerCase() : '';
+            const cuerpo = !f ? '<div class="sts-aviso"><span>No hay foto de esta ruta para ese día.</span></div>'
+                : ['P1', 'P2'].map((pl) => {
+                    if (!f[pl]) return `<div class="sts-aviso"><span>${PLANTAS[pl]}: ese día no había Programa de Producción cargado.</span></div>`;
+                    const c = completarFoto(f[pl]);
+                    const bk = ruta === 'r1' && f[pl] && f[pl].bkN !== null && f[pl].bkN !== undefined
+                        ? { n: f[pl].bkN, aut: f[pl].bkAut, mes: mesAnt, key: '', pctTxt: f[pl].bkN > 0 && Number.isFinite(f[pl].bkAut) ? `${(Math.round((f[pl].bkAut / f[pl].bkN) * 1000) / 10).toFixed(1)}%` : '—' } : null;
+                    const extra = ruta === 'r1' && f[pl] && f[pl].prog ? ` <span class="sts-chip">${plural(f[pl].prog, 'producto programado', 'productos programados')}</span>` : '';
+                    return htmlRuta(c, pl, ruta, { foto: true, deltas: deltas(pl), backlog: bk, extra });
+                }).join('');
+            return `<section class="sts-seccion">
+                <div class="sts-seccion-cab"><div>
+                    <div class="sts-seccion-titulo"><span class="sts-num">${num}</span>${titulo}<span class="fto-aviso-foto">FOTO</span></div>
+                    <div class="sts-seccion-sub">RMD pendientes por etapa y responsable · ${sub}</div>
+                </div>${leyenda}</div>
+                ${cuerpo}
+                <p class="sts-nota">Foto guardada por la página: los números son los de ese día y no se abren (el detalle de cada número es el de hoy). Para volver a lo de hoy, elige «Hoy (en vivo)» en Foto diaria.</p>
+            </section>`;
+        }
+        // Flechas del flujo (SVG encima de las casillas) con puntos que avanzan hacia Autorizado, y números que suben al pintar.
+        let idFlecha = 0;
+        function dibujarFlujos(root) {
+            if (!root) return;
+            const reducir = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+            const ARISTAS = [['bor', 'ing', 'pro'], ['ing', 'flu', 'doc'], ['ing', 'cc', 'doc'], ['flu', 'rev', 'pro'], ['cc', 'rev', 'pro'], ['rev', 'aut', 'ok']];
+            root.querySelectorAll('[data-flujo]').forEach((fl) => {
+                const svg = fl.querySelector('.flx-svg');
+                if (!svg) return;
+                const id = `flxM${++idFlecha}`;
+                const pintarSvg = () => {
+                    const b = fl.getBoundingClientRect();
+                    if (!b.width || getComputedStyle(svg).display === 'none') return;
+                    const pos = (k) => {
+                        const e = fl.querySelector(`[data-nodo="${k}"]`);
+                        if (!e) return null;
+                        const r = e.getBoundingClientRect();
+                        return { l: r.left - b.left, r: r.right - b.left, y: r.top - b.top + r.height / 2, n: Number(e.dataset.n) || 0 };
+                    };
+                    let h = `<defs><marker id="${id}" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L8,4 L0,8 z" class="flx-flecha"/></marker></defs>`;
+                    ARISTAS.forEach(([a, z, cl]) => {
+                        const A = pos(a), Z = pos(z);
+                        if (!A || !Z) return;
+                        const x1 = A.r + 2, y1 = A.y, x2 = Z.l - 3, y2 = Z.y, dx = (x2 - x1) / 2;
+                        const d = `M${x1.toFixed(1)},${y1.toFixed(1)} C${(x1 + dx).toFixed(1)},${y1.toFixed(1)} ${(x2 - dx).toFixed(1)},${y2.toFixed(1)} ${x2.toFixed(1)},${y2.toFixed(1)}`;
+                        h += `<path d="${d}" class="flx-linea${A.n > 0 ? '' : ' vacia'}" marker-end="url(#${id})"/>`;
+                        // Empuje: más puntos donde hay más pendientes (1 a 4), siempre hacia Autorizado.
+                        if (A.n > 0 && !reducir) {
+                            const k = Math.min(4, Math.max(1, Math.ceil(A.n / 8))), dur = 2.2;
+                            for (let i = 0; i < k; i++) h += `<circle r="3.2" class="flx-punto ${cl}"><animateMotion dur="${dur}s" begin="${(-(i * dur) / k).toFixed(2)}s" repeatCount="indefinite" path="${d}"/></circle>`;
+                        }
+                    });
+                    svg.setAttribute('viewBox', `0 0 ${b.width.toFixed(1)} ${b.height.toFixed(1)}`);
+                    svg.innerHTML = h;
+                };
+                pintarSvg();
+                if (window.ResizeObserver && !fl.__flxRo) { fl.__flxRo = new ResizeObserver(() => pintarSvg()); fl.__flxRo.observe(fl); }
+                if (!reducir) fl.querySelectorAll('.sts-caja.ok').forEach((e) => { if (Number(e.dataset.n) > 0) e.classList.add('flx-latido'); });
+            });
+            // Los números suben de 0 a su valor (solo con la pestaña a la vista; si no, quedan con su valor).
+            if (reducir || document.visibilityState !== 'visible') return;
+            root.querySelectorAll('[data-flujo] [data-cuenta]').forEach((el) => {
+                const n = Number(el.dataset.cuenta);
+                if (!(n > 1)) return;
+                const t0 = performance.now(), dur = 800;
+                const paso = (t) => { const p = Math.min(1, (t - t0) / dur); el.textContent = String(Math.round(n * (1 - Math.pow(1 - p, 3)))); if (p < 1) requestAnimationFrame(paso); };
+                el.textContent = '0';
+                requestAnimationFrame(paso);
+                setTimeout(() => { el.textContent = String(n); }, dur + 400);
+            });
+        }
         function htmlRuta1(d) {
+            const fv = fotoEnVista();
+            if (fv) return htmlRutaFoto(fv, 'r1');
             const r1 = d.r1, mes = d.per.hasta.format('YYYY-MM');
             const extra = (pl) => (r1[pl].sinDatos ? ' <span class="sts-chip">sin Programa de Producción cargado</span>' : ` <span class="sts-chip">${plural(r1[pl].productos, 'producto programado', 'productos programados')}${r1[pl].horizonte ? ` · cargado el ${esc(r1[pl].horizonte.carga.format('DD/MM'))}` : ''}</span>`);
             const cuerpo = r1.error ? `<div class="sts-aviso"><span>${esc(r1.error)}</span></div>`
@@ -12714,7 +13090,8 @@ async function maybeAutoStartTour() {
                 const sel = resuelto ? `<span class="sts-estado ok">${esAutorizadoSap(it) ? 'AUTORIZADO' : 'No cuenta'}</span>`
                     : `<select class="sts-select" aria-label="Estatus de ${esc(it.descripcion)}" onchange='StatusRmd.setEstatus(${idAttr}, this.value)'>
                         <option value="">Sin estatus</option>${ESTATUS.map((s) => `<option${e.e === s ? ' selected' : ''}>${s}</option>`).join('')}</select>`;
-                const resp = resuelto ? '' : (e.e === ESTATUS_CC
+                const aut = esAutorizadoSap(it) ? autorizadorDeRmd(it.codigo, it.sol) : null;
+                const resp = resuelto ? (aut ? `<span class="sts-tag ok" title="${esc(`Autorizó en SAP: ${aut.nombre}`)}">${esc(aut.corto)}</span>` : '') : (e.e === ESTATUS_CC
                     ? `<select class="sts-select${e.r ? '' : ' alerta'}" aria-label="Responsable del control de cambio" onchange='StatusRmd.setResponsable(${idAttr}, this.value)'><option value="">Elegir…</option><option${e.r === 'PRO' ? ' selected' : ''}>PRO</option><option${e.r === 'ASC' ? ' selected' : ''}>ASC</option></select>`
                     : tagResp(RESPONSABLE_ESTATUS[e.e] || ''));
                 return `<tr>
@@ -12753,6 +13130,8 @@ async function maybeAutoStartTour() {
             return meses;
         }
         function htmlRuta2(d) {
+            const fv = fotoEnVista();
+            if (fv) return htmlRutaFoto(fv, 'r2');
             const aviso = d.car.sinDatos ? '<div class="sts-aviso"><span>Todavía no hay caracterizaciones guardadas. Se leen de los RMD de SAP con Motivo CARACTERIZACION y aparecen con la próxima sincronización («Enviar a Status RMD» del portal) o al cargar el Exportado RMD.</span></div>'
                 : (!d.car.items.length ? '<div class="sts-aviso"><span>En los datos de SAP no hay ningún RMD con Motivo CARACTERIZACION.</span></div>' : '');
             const tendencia = (pl) => `<div class="sts-grafico-titulo">Tendencia de RMD autorizados por mes, ${d.per.hasta.year()}</div>
@@ -13461,10 +13840,11 @@ async function maybeAutoStartTour() {
 
         function pintar() {
             const cont = document.getElementById('stsContenido');
-            cont.innerHTML = htmlMeta(ultimo) + htmlLogica(ultimo) + htmlResumen(ultimo) + htmlPrograma(ultimo) + htmlRuta1(ultimo) + htmlRuta2(ultimo) + (MOSTRAR_HORAS ? htmlHoras(ultimo) : '');
+            cont.innerHTML = htmlMeta(ultimo) + htmlLogica(ultimo) + htmlResumen(ultimo) + htmlPrograma(ultimo) + htmlFotos() + htmlRuta1(ultimo) + htmlRuta2(ultimo) + (MOSTRAR_HORAS ? htmlHoras(ultimo) : '');
             // Las semanas, desde la más antigua: se deja a la vista la última.
             cont.querySelectorAll('.sts-meses.semanas').forEach((el) => { el.scrollTop = el.scrollHeight; });
             dibujarGraficos(ultimo);
+            dibujarFlujos(cont);
             pintarAcumuladoEn();
         }
         // ---------- Programa acumulado en Producción ----------
@@ -13494,6 +13874,7 @@ async function maybeAutoStartTour() {
                         <p class="sts-vacio">${motorArbolesResuelto() ? 'Calculando el status…' : 'Cargando el árbol de materiales de SAP (Listas de materiales)… la primera vez del día puede tardar unos segundos.'}</p>`;
                     ultimo = await calcular();
                     pintar();
+                    guardarFoto(ultimo).then((ok) => { if (ok && vista.foto) pintar(); }).catch((err) => console.error('Foto diaria del flujo:', err));
                 } catch (err) {
                     console.error(err);
                     cont.innerHTML = `<p class="sts-vacio">No se pudo calcular el status: ${esc(err.message)}</p>`;
@@ -13625,6 +14006,14 @@ async function maybeAutoStartTour() {
             setEstatus: (id, valor) => guardarEstatus(id, { e: valor }),
             setResponsable: (id, valor) => guardarEstatus(id, { r: valor }),
             filtrar: (campo, valor) => { vista[campo] = valor; if (ultimo) pintar(); },
+            verFoto: (valor) => { vista.foto = valor || ''; if (ultimo) pintar(); },
+            verFotoDesdeCampos: () => {
+                const d = document.getElementById('ftoDesde'), h = document.getElementById('ftoHasta');
+                if (!d || !d.value) return;
+                vista.foto = `${d.value}..${h && h.value ? h.value : d.value}`;
+                if (ultimo) pintar();
+            },
+            exportarFotos, fotoPronto, _fotos: () => todasLasFotos(), _guardarFoto: () => guardarFoto(ultimo),
             filtrarAcumulado: (campo, valor) => { vista[campo] = valor; vista.acuAbierto = true; if (ultimo) pintar(); },
             _detalle: (abierto) => { vista.detalleAbierto = abierto; },
             _detalleAcumulado: (abierto) => { vista.acuAbierto = abierto; },
@@ -13907,7 +14296,7 @@ async function maybeAutoStartTour() {
                     'Sección': f.areas || '', 'Fecha caracterización': f.fechaProxima ? dayjs(f.fechaProxima).format('YYYY-MM-DD') : '', 'Etapa': ETAPAS_FIJAS_LABEL[f.fija] || f.fija,
                     'Estado en SAP': cand ? (cand.sinRmd ? 'Sin RMD' : `${cand.estado} v${cand.version}`) : '', 'RMD': cand ? (cand.rmd || cand.sol || '') : '',
                     'Situación': f.estado === 'pendiente' ? 'Pendiente' : (f.estado === 'autorizado' ? 'Autorizado a mano' : 'Autorizado en SAP'),
-                    'Estatus': f.estado === 'pendiente' ? estatusDeFila(f) : '', 'Responsable': f.estado === 'pendiente' ? responsableDeFila(f) : '',
+                    'Estatus': f.estado === 'pendiente' ? estatusDeFila(f) : 'AUTORIZADO', 'Responsable': f.estado === 'pendiente' ? responsableDeFila(f) : (f.estado === 'sap' ? ((autorizadorDeFila(f) || {}).corto || '') : ''),
                     'En listado': f.listado.length ? 'Sí' : 'No', 'Motivo CARACTERIZACION en SAP': f.motivo.length ? 'Sí' : 'No', 'En el Programa de Producción': f.enPrograma ? 'Sí' : 'No'
                 };
             });
