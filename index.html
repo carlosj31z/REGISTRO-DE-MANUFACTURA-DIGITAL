@@ -991,6 +991,41 @@
         .popup-fecha-aut-nota { font-size: 10.5px; color: var(--slate-500, #64748b); }
         .popup-fecha-aut-botones { display: flex; gap: 8px; } .popup-fecha-aut-botones button { flex: 1; }
         .fecha-aut-fila--hoy { display: inline-block; padding: 1px 6px; border-radius: 999px; font-weight: 650; color: rgb(var(--info-rgb)); background: rgb(var(--info-rgb) / 0.16); border: 1px solid rgb(var(--info-rgb) / 0.45); }
+        /* Filtros en los encabezados (embudo junto al nombre de la columna) */
+        .filtros-en-cabecera { display: none !important; }
+        .th-filtro { display: inline-flex; align-items: center; gap: 4px; }
+        .th-filtro-btn { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; border-radius: 4px; color: var(--slate-500); cursor: pointer; transition: color .15s, background-color .15s; }
+        .th-filtro-btn svg { width: 11px; height: 11px; }
+        .th-filtro-btn:hover { color: rgb(var(--info-rgb)); background: rgb(var(--info-rgb) / 0.12); }
+        .th-filtro-btn.is-activo { color: #fff; background: rgb(var(--info-rgb) / 0.85); }
+        th.th-filtrado .th-filtro-txt { color: rgb(var(--info-rgb)); }
+        .popup-filtro-cabecera { position: fixed; z-index: 200; min-width: 200px; max-width: 300px; max-height: 70vh; overflow-y: auto; padding: 10px; display: flex; flex-direction: column; gap: 10px;
+            background: var(--app-bg); border: 1px solid rgb(var(--info-rgb) / 0.35); border-radius: 10px; box-shadow: 0 12px 32px -8px rgba(0,0,0,0.5); font-size: 12px; color: var(--slate-200, #e2e8f0); text-transform: none; letter-spacing: normal; }
+        .pfc-tit { font-size: 10.5px; font-weight: 650; text-transform: uppercase; letter-spacing: 0.03em; color: var(--slate-400, #94a3b8); margin-bottom: 5px; }
+        .pfc-ops { display: flex; flex-direction: column; gap: 2px; }
+        .pfc-ops button { text-align: left; padding: 5px 8px; border-radius: 6px; font-size: 12px; border: 1px solid transparent; background: transparent; color: inherit; cursor: pointer; }
+        .pfc-ops button:hover, .pfc-ops button:focus-visible { background: rgb(var(--info-rgb) / 0.12); outline: none; }
+        .pfc-ops button.is-activo { background: rgb(var(--info-rgb) / 0.18); border-color: rgb(var(--info-rgb) / 0.5); font-weight: 650; }
+        .pfc-ops button .pill-count { margin-left: 6px; opacity: .7; }
+        /* Autorizados agrupados por fecha de autorización */
+        .fila-grupo-aut > td { padding: 4px 0 !important; border-bottom: 1px solid rgb(var(--ok-rgb) / 0.22); }
+        .gaut-btn { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; width: 100%; text-align: left; padding: 7px 10px; border-radius: 8px; color: var(--slate-300); background: rgb(var(--ok-rgb) / 0.06); border: 1px solid rgb(var(--ok-rgb) / 0.2); cursor: pointer; transition: background-color .15s; }
+        .gaut-btn:hover { background: rgb(var(--ok-rgb) / 0.12); }
+        .fila-grupo-aut--hoy .gaut-btn { background: rgb(var(--info-rgb) / 0.1); border-color: rgb(var(--info-rgb) / 0.4); }
+        .gaut-flecha { display: inline-block; font-size: 11px; color: var(--slate-400); transition: transform .15s; }
+        .gaut-btn[aria-expanded="true"] .gaut-flecha { transform: rotate(90deg); }
+        .gaut-fecha, .gaut-total, .gaut-bloque { display: flex; flex-direction: column; gap: 2px; line-height: 1.15; }
+        .gaut-fecha { min-width: 92px; } .gaut-fecha b { font-size: 12.5px; color: var(--slate-200); } .gaut-fecha small, .gaut-total small, .gaut-bloque > small { font-size: 10px; color: var(--slate-500); text-transform: uppercase; letter-spacing: .03em; }
+        .gaut-total { align-items: center; min-width: 64px; } .gaut-total b { font-size: 20px; font-weight: 700; color: rgb(var(--ok-rgb)); font-variant-numeric: tabular-nums; }
+        .fila-grupo-aut--hoy .gaut-total b { color: rgb(var(--info-rgb)); }
+        .gaut-bloque > span { display: flex; flex-wrap: wrap; gap: 4px; }
+        .gaut-chip { display: inline-flex; align-items: center; gap: 5px; padding: 1px 7px; border-radius: 999px; font-size: 10.5px; font-weight: 600; border: 1px solid rgb(var(--ok-rgb) / 0.3); color: var(--slate-300); }
+        .gaut-chip b { font-variant-numeric: tabular-nums; color: var(--slate-200); }
+        .gaut-chip--usuario { border-color: rgb(var(--ok-rgb) / 0.45); color: rgb(var(--c-sage-300)); }
+        .gaut-chip--planta { border-color: rgb(var(--info-rgb) / 0.4); }
+        .gaut-extra { margin-left: auto; font-size: 10.5px; color: var(--slate-500); }
+        tr.gaut-oculta { display: none; }
+        tr.fila-de-grupo-aut > td:first-child { box-shadow: inset 3px 0 0 rgb(var(--ok-rgb) / 0.35); }
         .etapa-autorizada-manual { color: rgb(var(--c-sage-300) / 0.8); }
         .badge-autorizado-manual {
             display: inline-flex; align-items: center; gap: 0.25rem;
@@ -2085,12 +2120,14 @@
                         <svg class="h-3.5 w-3.5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M10.5 7.4v3.3l2.1 1.5"/><path d="M15.4 15.4L20.5 20.5"/></svg>
                     </button>
                 </div>
-                <div class="flex items-center gap-1.5 flex-wrap">
+                <div class="filtros-en-cabecera" id="estadoPillsProd" data-titulo="Mostrar">
                     <button onclick="validacionFiltroEstado='todos'; refiltrarValidacionFiltros();" id="filtroValTodos" class="filter-pill active px-3 py-1.5 rounded-lg text-[11px] font-medium">Todos<span class="pill-count" id="pillCountTodos"></span></button>
                     <button onclick="validacionFiltroEstado='pendientes'; refiltrarValidacionFiltros();" id="filtroValPendientes" class="filter-pill px-3 py-1.5 rounded-lg text-[11px] font-medium">Pendientes<span class="pill-count" id="pillCountPendientes"></span></button>
                     <button onclick="validacionFiltroEstado='autorizados'; refiltrarValidacionFiltros();" id="filtroValAutorizados" class="filter-pill px-3 py-1.5 rounded-lg text-[11px] font-medium" title="Etapas autorizadas en SAP o a mano">Autorizados<span class="pill-count" id="pillCountAutorizados"></span></button>
                 </div>
-                <div class="flex items-center gap-1.5 flex-wrap" id="filtrosEtapaProd">
+                <div class="filtros-en-cabecera" id="filtrosEtapaProd">
+                    <select id="filtroPlantaProd" onchange="setFiltroEtapa('produccion','planta',this.value)" class="field-input filtro-etapa-select" aria-label="Filtrar por planta"><option value="">Planta: todas</option></select>
+                    <select id="filtroAreaProd" onchange="setFiltroEtapa('produccion','area',this.value)" class="field-input filtro-etapa-select" aria-label="Filtrar por área"><option value="">Área: todas</option></select>
                     <select id="filtroEtapaProd" onchange="setFiltroEtapa('produccion','etapa',this.value)" class="field-input filtro-etapa-select" title="Mostrar solo esta etapa" aria-label="Filtrar por etapa">
                         <option value="">Etapa: todas</option><option value="FABRICACION">Fabricación</option><option value="RECUBRIMIENTO">Recubrimiento</option><option value="ENVASE">Envase</option><option value="INSPECCION">Inspección</option><option value="ACONDICIONADO">Acondicionado</option>
                     </select>
@@ -2103,6 +2140,10 @@
                     <select id="filtroEstatusProd" onchange="setFiltroEtapa('produccion','estatus',this.value)" class="field-input filtro-etapa-select" title="Estatus elegido en la etapa pendiente (BORRADOR, INGRESAR…); &quot;Sin estatus&quot;: etapas pendientes a las que aún no se les asignó" aria-label="Filtrar por estatus de la etapa">
                         <option value="">Estatus: todos</option><option value="BORRADOR">BORRADOR</option><option value="INGRESAR">INGRESAR</option><option value="FLUJO SAP">FLUJO SAP</option><option value="CONTROL DE CAMBIO">CONTROL DE CAMBIO</option><option value="POR REVISIÓN">POR REVISIÓN</option><option value="SIN ESTATUS">Sin estatus</option>
                     </select>
+                    
+                    
+                </div>
+                <div class="flex items-center gap-1.5 flex-wrap">
                     <button type="button" id="filtroAutProd" onclick="abrirFiltroFechaAut('produccion', this, event)" class="field-input filtro-etapa-select btn-filtro-fecha-aut" title="Ver solo lo autorizado (en SAP o a mano) un día o en un rango de días" aria-haspopup="dialog">F. autorización: todas</button>
                     <button type="button" id="filtrosEtapaLimpiarProd" onclick="limpiarFiltrosEtapa('produccion')" class="filtro-etapa-limpiar" style="display:none;">Quitar filtros</button>
                 </div>
@@ -2124,10 +2165,10 @@
     </colgroup>
     <thead class="sticky top-0 z-10">
     <tr class="text-left uppercase text-[10px] tracking-wider">
-        <th class="py-2">Planta</th>
+        <th class="py-2" data-filtro="filtroPlantaProd">Planta</th>
         <th class="py-2">Material</th>
         <th class="py-2">Descripción</th>
-        <th class="py-2">Área</th>
+        <th class="py-2" data-filtro="filtroAreaProd">Área</th>
         <th class="py-2">
             <div class="flex items-center gap-1">
                 <span>Inicio de Producción</span>
@@ -2136,10 +2177,10 @@
                 </button>
             </div>
         </th>
-        <th class="py-2">Etapa pendiente</th>
-        <th class="py-2">Estatus</th>
+        <th class="py-2" data-filtro="filtroEtapaProd,filtroSapProd,filtroEdadProd">Etapa pendiente</th>
+        <th class="py-2" data-filtro="filtroEstatusProd">Estatus</th>
         <th class="py-2">Responsable</th>
-        <th class="py-2">Estado</th>
+        <th class="py-2" data-filtro="estadoPillsProd">Estado</th>
     </tr>
 </thead>
                     <tbody id="tablaPendientesBody"></tbody>
@@ -2377,12 +2418,13 @@
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M17 10a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
                     </button>
                 </div>
-                <div class="flex items-center gap-1.5 flex-wrap">
+                <div class="filtros-en-cabecera" id="estadoPillsForecast" data-titulo="Mostrar">
                     <button onclick="validacionForecastFiltroEstado='todos'; refiltrarValidacionForecastFiltros();" id="filtroValForecastTodos" class="filter-pill active px-3 py-1.5 rounded-lg text-[11px] font-medium">Todos<span class="pill-count" id="pillCountForecastTodos"></span></button>
                     <button onclick="validacionForecastFiltroEstado='pendientes'; refiltrarValidacionForecastFiltros();" id="filtroValForecastPendientes" class="filter-pill px-3 py-1.5 rounded-lg text-[11px] font-medium">Pendientes<span class="pill-count" id="pillCountForecastPendientes"></span></button>
                     <button onclick="validacionForecastFiltroEstado='autorizados'; refiltrarValidacionForecastFiltros();" id="filtroValForecastAutorizados" class="filter-pill px-3 py-1.5 rounded-lg text-[11px] font-medium" title="Etapas autorizadas en SAP o a mano">Autorizados<span class="pill-count" id="pillCountForecastAutorizados"></span></button>
                 </div>
-                <div class="flex items-center gap-1.5 flex-wrap" id="filtrosEtapaForecast">
+                <div class="filtros-en-cabecera" id="filtrosEtapaForecast">
+                    <select id="filtroPlantaForecast" onchange="setFiltroEtapa('forecast','planta',this.value)" class="field-input filtro-etapa-select" aria-label="Filtrar por planta"><option value="">Planta: todas</option></select>
                     <select id="filtroEtapaForecast" onchange="setFiltroEtapa('forecast','etapa',this.value)" class="field-input filtro-etapa-select" title="Mostrar solo esta etapa" aria-label="Filtrar por etapa">
                         <option value="">Etapa: todas</option><option value="FABRICACION">Fabricación</option><option value="RECUBRIMIENTO">Recubrimiento</option><option value="ENVASE">Envase</option><option value="INSPECCION">Inspección</option><option value="ACONDICIONADO">Acondicionado</option>
                     </select>
@@ -2395,6 +2437,10 @@
                     <select id="filtroEstatusForecast" onchange="setFiltroEtapa('forecast','estatus',this.value)" class="field-input filtro-etapa-select" title="Estatus elegido en la etapa pendiente (BORRADOR, INGRESAR…); &quot;Sin estatus&quot;: etapas pendientes a las que aún no se les asignó" aria-label="Filtrar por estatus de la etapa">
                         <option value="">Estatus: todos</option><option value="BORRADOR">BORRADOR</option><option value="INGRESAR">INGRESAR</option><option value="FLUJO SAP">FLUJO SAP</option><option value="CONTROL DE CAMBIO">CONTROL DE CAMBIO</option><option value="POR REVISIÓN">POR REVISIÓN</option><option value="SIN ESTATUS">Sin estatus</option>
                     </select>
+                    
+                </div>
+                <div class="flex items-center gap-1.5 flex-wrap">
+                    
                     <button type="button" id="filtrosEtapaLimpiarForecast" onclick="limpiarFiltrosEtapa('forecast')" class="filtro-etapa-limpiar" style="display:none;">Quitar filtros</button>
                 </div>
                 <span id="validacionForecastContadorFilas" class="text-[11px] text-slate-500 whitespace-nowrap sm:ml-auto"></span>
@@ -2404,14 +2450,14 @@
                 <table class="w-full text-xs" id="tablaPendientesForecast">
                     <thead class="sticky top-0 bg-slate-900/95 backdrop-blur z-10">
                         <tr class="text-left text-slate-400 uppercase text-[10px] tracking-wider border-b border-slate-700/50">
-    <th class="py-2">Planta</th>
+    <th class="py-2" data-filtro="filtroPlantaForecast">Planta</th>
     <th class="py-2">Material</th>
     <th class="py-2">Descripción</th>
     <th class="py-2">Meses Programados</th>
-    <th class="py-2">Etapa</th>
-    <th class="py-2">Estatus</th>
+    <th class="py-2" data-filtro="filtroEtapaForecast,filtroSapForecast,filtroEdadForecast">Etapa</th>
+    <th class="py-2" data-filtro="filtroEstatusForecast">Estatus</th>
     <th class="py-2">Responsable</th>
-    <th class="py-2">Estado</th>
+    <th class="py-2" data-filtro="estadoPillsForecast">Estado</th>
 </tr>
                     </thead>
                     <tbody id="tablaPendientesForecastBody"></tbody>
@@ -2584,12 +2630,14 @@
                 <div class="relative flex-1 min-w-[160px]">
                     <input type="text" placeholder="Buscar por código, descripción o nombre del listado..." oninput="clearTimeout(window.__carBuscar); window.__carBuscar = setTimeout(() => Caracterizacion.buscar(this.value), 150);" class="field-input w-full rounded-lg px-3 py-1.5 text-xs transition-colors" aria-label="Buscar">
                 </div>
-                <div class="flex items-center gap-1.5 flex-wrap">
+                <div class="filtros-en-cabecera" id="carEstadoPills" data-titulo="Mostrar">
                     <button onclick="Caracterizacion.filtrar('estado','todos')" id="carFiltroTodos" class="filter-pill active px-3 py-1.5 rounded-lg text-[11px] font-medium">Todos<span class="pill-count" id="carPillTodos"></span></button>
                     <button onclick="Caracterizacion.filtrar('estado','pendientes')" id="carFiltroPendientes" class="filter-pill px-3 py-1.5 rounded-lg text-[11px] font-medium">Pendientes<span class="pill-count" id="carPillPendientes"></span></button>
                     <button onclick="Caracterizacion.filtrar('estado','autorizados')" id="carFiltroAutorizados" class="filter-pill px-3 py-1.5 rounded-lg text-[11px] font-medium" title="Etapas autorizadas en SAP o a mano">Autorizados<span class="pill-count" id="carPillAutorizados"></span></button>
                 </div>
-                <div class="flex items-center gap-1.5 flex-wrap">
+                <div class="filtros-en-cabecera" id="carFiltrosOcultos">
+                    <select id="carFiltro_area" onchange="Caracterizacion.filtrar('area',this.value)" class="field-input filtro-etapa-select" aria-label="Filtrar por sección"><option value="">Sección: todas</option></select>
+                    
                     <select id="carFiltro_planta" onchange="Caracterizacion.filtrar('planta',this.value)" class="field-input filtro-etapa-select" aria-label="Filtrar por planta">
                         <option value="">Planta: todas</option><option value="P1">Planta 1 ATE</option><option value="P2">Planta 2 LIMA</option>
                     </select>
@@ -2608,6 +2656,10 @@
                     <select id="carFiltro_programa" onchange="Caracterizacion.filtrar('programa',this.value)" class="field-input filtro-etapa-select" title="Si la etapa también está en el Programa de Producción" aria-label="Filtrar por Programa de Producción">
                         <option value="">Programa: todos</option><option value="si">También en el programa</option><option value="no">Solo caracterización</option>
                     </select>
+                    
+                    
+                </div>
+                <div class="flex items-center gap-1.5 flex-wrap">
                     <button type="button" id="carFiltro_aut" onclick="abrirFiltroFechaAut('caract', this, event)" class="field-input filtro-etapa-select btn-filtro-fecha-aut" title="Ver solo lo autorizado (en SAP o a mano) un día o en un rango de días" aria-haspopup="dialog">F. autorización: todas</button>
                     <button type="button" onclick="Caracterizacion.limpiar()" class="filtro-etapa-limpiar">Quitar filtros</button>
                 </div>
@@ -2621,9 +2673,9 @@
                     </colgroup>
                     <thead class="sticky top-0 z-10">
                         <tr class="text-left uppercase text-[10px] tracking-wider">
-                            <th class="py-2">Planta</th><th class="py-2">Material</th><th class="py-2">Descripción</th><th class="py-2">Sección</th>
+                            <th class="py-2" data-filtro="carFiltro_planta">Planta</th><th class="py-2">Material</th><th class="py-2" data-filtro="carFiltro_origen,carFiltro_programa">Descripción</th><th class="py-2" data-filtro="carFiltro_area">Sección</th>
                             <th class="py-2" title="Fecha del correo de caracterización (listado) o de la solicitud en SAP">Fecha caract.</th>
-                            <th class="py-2">Etapa pendiente</th><th class="py-2">Estatus</th><th class="py-2">Responsable</th><th class="py-2">Estado</th>
+                            <th class="py-2" data-filtro="carFiltro_etapa,carFiltro_sap">Etapa pendiente</th><th class="py-2" data-filtro="carFiltro_estatus">Estatus</th><th class="py-2">Responsable</th><th class="py-2" data-filtro="carEstadoPills">Estado</th>
                         </tr>
                     </thead>
                     <tbody id="carTablaBody"></tbody>
@@ -8122,12 +8174,13 @@ async function downloadPlanProduccionFromCloud() {
 
         // ---- Filtros de las tablas: Etapa, Estado en SAP, Antigüedad del pendiente y Estatus ----
         // Se aplican a cada fila (etapa) con su estado real en SAP. Los KPI no cambian.
-        const filtrosEtapaProd = { etapa: '', sap: '', edad: '', estatus: '', aut: '' };
-        const filtrosEtapaForecast = { etapa: '', sap: '', edad: '', estatus: '', aut: '' };
+        const filtrosEtapaProd = { etapa: '', sap: '', edad: '', estatus: '', aut: '', planta: '', area: '' };
+        const filtrosEtapaForecast = { etapa: '', sap: '', edad: '', estatus: '', aut: '', planta: '', area: '' };
         const ESTADOS_SAP_FILTRO = ['INGRESADO', 'SUSPENDIDO', 'SOLICITADO'];
         const RANGOS_EDAD_FILTRO = { le7: [0, 7], gt7: [8, Infinity], gt30: [31, Infinity], gt90: [91, Infinity] };
         const filtrosEtapaDe = (origen) => (origen === 'forecast' ? filtrosEtapaForecast : filtrosEtapaProd);
-        const filtrosEtapaActivos = (fx) => !!(fx.etapa || fx.sap || fx.edad || fx.estatus || fx.aut);
+        const filtrosEtapaActivos = (fx) => !!(fx.etapa || fx.sap || fx.edad || fx.estatus || fx.aut || fx.planta || fx.area);
+        const areasDeFila = (f) => (Array.isArray(f.areas) ? f.areas : String(f.areas || '').split(/\s*,\s*/)).map(a => String(a).trim()).filter(Boolean);
         function candidatoPasaFiltros(c, fx) {
             if (!c.pendiente) return false;
             if (fx.sap === 'SIN RMD' && !c.sinRmd) return false;
@@ -8143,6 +8196,8 @@ async function downloadPlanProduccionFromCloud() {
             if (!filtrosEtapaActivos(fx)) return true;
             if (f.estado === 'opsap') return false;
             if (fx.etapa && f.fija !== fx.etapa) return false;
+            if (fx.planta && !plantasDeFilaAut(f, origen).includes(fx.planta)) return false;
+            if (fx.area && !areasDeFila(f).includes(fx.area)) return false;
             // F. autorización: solo etapas autorizadas en ese rango.
             if (fx.aut && ((f.estado !== 'autorizado' && f.estado !== 'sap') || !fechaAutPasaFiltro(fechaAutorizacionDeFila(f, origen), fx.aut))) return false;
             // Estatus de la etapa pendiente; "SIN ESTATUS": pendientes sin estatus asignado
@@ -8154,23 +8209,195 @@ async function downloadPlanProduccionFromCloud() {
             if (!fx.sap && !fx.edad) return true;
             return !!(f.d && f.d.candidatos.some(c => candidatoPasaFiltros(c, fx)));
         }
-        const aplicarFiltrosEtapa = (filas, fx) => filas.filter(f => filaPasaFiltros(f, fx));
+        const aplicarFiltrosEtapa = (filas, fx, origen) => filas.filter(f => filaPasaFiltros(f, fx, origen));
         function textoContadorFilas(visibles, filas, origen) {
             const n = (l) => l.filter(f => f.estado !== 'opsap').length;
             const hoy = filas.filter(f => (f.estado === 'autorizado' || f.estado === 'sap') && autorizadaHoy(fechaAutorizacionDeFila(f, origen))).length;
             return `${n(visibles)} de ${plural(n(filas), 'etapa', 'etapas')}${hoy ? ` · ${plural(hoy, 'autorizada hoy', 'autorizadas hoy')}` : ''}`;
         }
+        // ---- Autorizadas agrupadas por fecha de autorización (Producción, Forecast y Caracterización) ----
+        // Las etapas autorizadas se juntan por día de autorización (fechaAutorizacionDeFila). Cada día es una fila plegada con el
+        // total y el desglose por usuario, etapa y planta; al hacer clic se despliega el detalle. Con una búsqueda escrita, abiertas.
+        const gruposAutAbiertos = new Set(); // `${origen}|${dia}`
+        const CLASE_GRUPO_AUT = (dia) => 'gaut-' + (dia || 'sin-fecha');
+        function conteoOrdenado(lista) {
+            const m = new Map();
+            lista.forEach(k => m.set(k, (m.get(k) || 0) + 1));
+            return Array.from(m.entries()).sort((a, b) => b[1] - a[1] || String(a[0]).localeCompare(String(b[0])));
+        }
+        function plantasDeFilaAut(f, origen) {
+            const v = origen === 'forecast' ? f.centros : f.plantas;
+            const l = Array.isArray(v) ? v : String(v || '').split(/\s*\+\s*|\s*,\s*/);
+            const r = l.map(x => String(x).trim()).filter(Boolean);
+            return r.length ? r : [currentPlanta === 'planta1' ? 'ATE' : currentPlanta === 'planta2' ? 'LIMA' : 'Sin planta'];
+        }
+        function tituloDiaAut(dia) {
+            if (!dia) return { tit: 'Sin fecha de autorización', sub: 'SAP aún no envía la fecha' };
+            const d = dayjs(dia), hoy = dayjs();
+            const tit = d.isSame(hoy, 'day') ? 'Hoy' : d.isSame(hoy.subtract(1, 'day'), 'day') ? 'Ayer' : d.format('dddd');
+            return { tit: tit.charAt(0).toUpperCase() + tit.slice(1), sub: d.format('DD/MM/YYYY') };
+        }
+        function htmlCabeceraGrupoAut(dia, filas, origen, colspan, abierto) {
+            const esc = escapeHtmlRmdConfig;
+            const usuarios = conteoOrdenado(filas.map(f => f.estado === 'autorizado' ? 'A mano' : ((autorizadorDeFila(f) || {}).corto || 'Sin usuario')));
+            const etapas = conteoOrdenado(filas.map(f => f.fija ? (ETAPAS_FIJAS_LABEL[f.fija] || f.fija) : 'Revisar'));
+            const plantas = conteoOrdenado(filas.flatMap(f => plantasDeFilaAut(f, origen)));
+            const areas = conteoOrdenado(filas.flatMap(areasDeFila));
+            const materiales = new Set(filas.flatMap(f => f.codigosRmd || [f.codigo])).size;
+            const hoyTxt = dayjs().format('YYYY-MM-DD');
+            const proximos = origen === 'forecast' ? [] : filas.map(f => f.fechaProxima ? dayjs(f.fechaProxima).format('YYYY-MM-DD') : '').filter(x => x && x >= hoyTxt).sort();
+            const chips = (l, cls) => l.map(([k, n]) => `<span class="gaut-chip ${cls}"><span>${esc(k)}</span><b>${n}</b></span>`).join('');
+            const { tit, sub } = tituloDiaAut(dia);
+            const extra = [`${plural(materiales, 'material', 'materiales')}`];
+            if (proximos.length) extra.push(`próximo inicio ${dayjs(proximos[0]).format('DD/MM')}`);
+            return `<tr class="fila-grupo-aut${dia === hoyTxt ? ' fila-grupo-aut--hoy' : ''}"><td colspan="${colspan}">
+                <button type="button" class="gaut-btn" aria-expanded="${abierto}" onclick="toggleGrupoAut(this,'${origen}','${dia}')" title="${abierto ? 'Ocultar' : 'Ver'} el detalle de los autorizados de este día">
+                    <span class="gaut-flecha" aria-hidden="true">▸</span>
+                    <span class="gaut-fecha"><b>${esc(tit)}</b><small>${esc(sub)}</small></span>
+                    <span class="gaut-total"><b>${filas.length}</b><small>${filas.length === 1 ? 'autorizado' : 'autorizados'}</small></span>
+                    <span class="gaut-bloque"><small>Por usuario</small><span>${chips(usuarios, 'gaut-chip--usuario')}</span></span>
+                    <span class="gaut-bloque"><small>Por etapa</small><span>${chips(etapas, 'gaut-chip--etapa')}</span></span>
+                    <span class="gaut-bloque"><small>Por planta</small><span>${chips(plantas, 'gaut-chip--planta')}</span></span>
+                    ${areas.length ? `<span class="gaut-bloque"><small>${origen === 'caract' ? 'Por sección' : 'Por área'}</small><span>${chips(areas, 'gaut-chip--area')}</span></span>` : ''}
+                    <span class="gaut-extra">${esc(extra.join(' · '))}</span>
+                </button></td></tr>`;
+        }
+        // Pendientes tal cual; luego las autorizadas, un grupo por día (más reciente primero; sin fecha al final).
+        // filaHtml(f) devuelve el <tr> de la etapa; se le agrega la clase del grupo para plegarla.
+        function htmlFilasConAutorizadasPorFecha(etapas, origen, colspan, filaHtml, abrirTodo) {
+            const esAut = (f) => f.estado === 'autorizado' || f.estado === 'sap';
+            const pend = etapas.filter(f => !esAut(f)), grupos = new Map();
+            etapas.filter(esAut).forEach(f => {
+                const fa = fechaAutorizacionDeFila(f, origen), dia = fa ? dayjs(fa.ms).format('YYYY-MM-DD') : '';
+                if (!grupos.has(dia)) grupos.set(dia, []);
+                grupos.get(dia).push(f);
+            });
+            const dias = Array.from(grupos.keys()).sort((a, b) => b.localeCompare(a));
+            return pend.map(filaHtml).join('') + dias.map(dia => {
+                const filas = grupos.get(dia), abierto = !!abrirTodo || gruposAutAbiertos.has(`${origen}|${dia}`);
+                const cls = CLASE_GRUPO_AUT(dia) + (abierto ? '' : ' gaut-oculta');
+                return htmlCabeceraGrupoAut(dia, filas, origen, colspan, abierto)
+                    + filas.map(f => filaHtml(f).replace(/^\s*<tr class="/, `<tr data-gaut="${origen}" class="fila-de-grupo-aut ${cls} `)).join('');
+            }).join('');
+        }
+        window.toggleGrupoAut = function (btn, origen, dia) {
+            const k = `${origen}|${dia}`, abrir = btn.getAttribute('aria-expanded') !== 'true';
+            if (abrir) gruposAutAbiertos.add(k); else gruposAutAbiertos.delete(k);
+            btn.setAttribute('aria-expanded', String(abrir));
+            btn.title = `${abrir ? 'Ocultar' : 'Ver'} el detalle de los autorizados de este día`;
+            const body = btn.closest('tbody');
+            if (body) body.querySelectorAll(`tr.${CLASE_GRUPO_AUT(dia)}[data-gaut="${origen}"]`).forEach(tr => tr.classList.toggle('gaut-oculta', !abrir));
+        };
+        // ---- Filtros en los encabezados de las tablas (pedido de Carlos, 04/11/2026) ----
+        // Cada <th data-filtro="id1,id2"> lleva un embudo junto a su nombre. Los controles de verdad (los <select> y los botones
+        // Todos/Pendientes/Autorizados) siguen en la página, ocultos: el embudo abre una ventanita con sus opciones y, al elegir,
+        // cambia el control y dispara su onchange / onclick de siempre. Fuera de la tabla quedan la búsqueda y «F. autorización».
+        function llenarOpcionesFiltro(id, valores, titulo) {
+            const sel = document.getElementById(id);
+            if (!sel) return;
+            const lista = Array.from(new Set(valores.map(v => String(v || '').trim()).filter(Boolean))).sort((a, b) => a.localeCompare(b, 'es'));
+            if (sel.value && !lista.includes(sel.value)) lista.push(sel.value);
+            const clave = lista.join('\u0001');
+            if (sel.dataset.opciones === clave) return;
+            const actual = sel.value, esc = escapeHtmlRmdConfig;
+            sel.innerHTML = `<option value="">${esc(titulo)}: todas</option>` + lista.map(v => `<option value="${esc(v)}">${esc(v)}</option>`).join('');
+            sel.value = actual;
+            sel.dataset.opciones = clave;
+        }
+        const FiltroCabecera = (() => {
+            const ICONO = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16l-6.2 7.6v5.8L10.2 20v-7.4z" fill="currentColor"/></svg>';
+            // Con .fc-scope (tablas que se repiten en la página, p. ej. el programa acumulado), el control se busca dentro de ese bloque.
+            const controles = (th) => { const sc = th.closest('.fc-scope'); return String(th.dataset.filtro || '').split(',').map(id => id.trim())
+                .map(id => (sc ? sc.querySelector('#' + CSS.escape(id)) : null) || document.getElementById(id)).filter(Boolean); };
+            const botonesDe = (el) => Array.from(el.querySelectorAll('button'));
+            const activo = (el) => el.tagName === 'SELECT' ? !!el.value : (() => { const b = botonesDe(el); return b.length > 0 && !b[0].classList.contains('active'); })();
+            const nombre = (th) => (th.querySelector('.th-filtro-txt') || th).textContent.trim();
+            function montar() {
+                document.querySelectorAll('th[data-filtro]').forEach(th => {
+                    if (th.querySelector('.th-filtro-btn')) return;
+                    const txt = th.innerHTML;
+                    th.innerHTML = `<span class="th-filtro"><span class="th-filtro-txt">${txt}</span><button type="button" class="th-filtro-btn" aria-haspopup="dialog">${ICONO}</button></span>`;
+                    const b = th.querySelector('.th-filtro-btn');
+                    b.title = `Filtrar por ${nombre(th).toLowerCase()}`;
+                    b.addEventListener('click', (e) => abrir(th, b, e));
+                });
+                refrescar();
+            }
+            function refrescar() {
+                document.querySelectorAll('th[data-filtro]').forEach(th => {
+                    const b = th.querySelector('.th-filtro-btn');
+                    if (!b) return;
+                    const on = controles(th).some(activo);
+                    b.classList.toggle('is-activo', on);
+                    th.classList.toggle('th-filtrado', on);
+                });
+            }
+            function cerrar() {
+                const p = document.getElementById('popupFiltroCabecera');
+                if (p) p.remove();
+                document.removeEventListener('click', fuera, true);
+                document.removeEventListener('keydown', tecla, true);
+            }
+            function fuera(e) { const p = document.getElementById('popupFiltroCabecera'); if (p && !p.contains(e.target) && !(e.target.closest && e.target.closest('.th-filtro-btn'))) cerrar(); }
+            function tecla(e) { if (e.key === 'Escape') cerrar(); }
+            function abrir(th, btn, ev) {
+                if (ev) ev.stopPropagation();
+                const yaAbierto = document.getElementById('popupFiltroCabecera');
+                const mismo = yaAbierto && yaAbierto.dataset.th === th.dataset.filtro;
+                cerrar();
+                if (mismo) return;
+                const esc = escapeHtmlRmdConfig, acciones = [];
+                const secciones = controles(th).map(el => {
+                    let tit, ops;
+                    if (el.tagName === 'SELECT') {
+                        const o = Array.from(el.options);
+                        tit = (o[0] && o[0].text.split(':')[0]) || nombre(th);
+                        ops = o.map((op, i) => ({ txt: i === 0 ? (op.text.split(':')[1] || 'Todos').trim().replace(/^./, c => c.toUpperCase()) : op.text, on: el.value === op.value,
+                            fn: () => { el.value = op.value; el.dispatchEvent(new Event('change', { bubbles: true })); } }));
+                    } else {
+                        tit = el.dataset.titulo || 'Mostrar';
+                        ops = botonesDe(el).map(b => ({ txt: b.textContent.replace(/\s+/g, ' ').trim(), on: b.classList.contains('active'), fn: () => b.click() }));
+                    }
+                    return `<div class="pfc-sec"><div class="pfc-tit">${esc(tit)}</div><div class="pfc-ops">${ops.map(o => { acciones.push(o.fn); return `<button type="button" data-i="${acciones.length - 1}" class="${o.on ? 'is-activo' : ''}">${esc(o.txt)}</button>`; }).join('')}</div></div>`;
+                }).join('');
+                const p = document.createElement('div');
+                p.id = 'popupFiltroCabecera';
+                p.className = 'popup-filtro-cabecera';
+                p.dataset.th = th.dataset.filtro;
+                p.setAttribute('role', 'dialog');
+                p.setAttribute('aria-label', `Filtrar por ${nombre(th)}`);
+                p.innerHTML = secciones;
+                document.body.appendChild(p);
+                p.querySelectorAll('button[data-i]').forEach(b => b.addEventListener('click', () => { cerrar(); acciones[+b.dataset.i](); refrescar(); }));
+                const r = btn.getBoundingClientRect(), w = p.offsetWidth || 240, h = p.offsetHeight || 200;
+                p.style.left = Math.max(8, Math.min(r.left - 8, window.innerWidth - w - 8)) + 'px';
+                p.style.top = (r.bottom + 6 + h > window.innerHeight ? Math.max(8, r.top - h - 6) : r.bottom + 6) + 'px';
+                const primero = p.querySelector('button.is-activo') || p.querySelector('button');
+                if (primero) primero.focus({ preventScroll: true });
+                setTimeout(() => { document.addEventListener('click', fuera, true); document.addEventListener('keydown', tecla, true); }, 0);
+            }
+            // Las tablas que se pintan de nuevo (Status RMD) reciben su embudo solas.
+            let pendiente = false;
+            const vigilar = () => new MutationObserver(() => {
+                if (pendiente) return;
+                pendiente = true;
+                requestAnimationFrame(() => { pendiente = false; if (Array.from(document.querySelectorAll('th[data-filtro]')).some(th => !th.querySelector('.th-filtro-btn'))) montar(); });
+            }).observe(document.body, { childList: true, subtree: true });
+            const iniciar = () => { montar(); vigilar(); };
+            if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', iniciar); else setTimeout(iniciar, 0);
+            return { montar, refrescar, cerrar };
+        })();
         window.setFiltroEtapa = function (origen, campo, valor) {
             filtrosEtapaDe(origen)[campo] = valor || '';
             if (origen === 'forecast') refiltrarTablaPendientesForecast(); else refiltrarTablaPendientes();
         };
         window.limpiarFiltrosEtapa = function (origen) {
-            Object.assign(filtrosEtapaDe(origen), { etapa: '', sap: '', edad: '', estatus: '', aut: '' });
+            Object.assign(filtrosEtapaDe(origen), { etapa: '', sap: '', edad: '', estatus: '', aut: '', planta: '', area: '' });
             if (origen === 'forecast') refiltrarTablaPendientesForecast(); else refiltrarTablaPendientes();
         };
         function actualizarControlesFiltrosEtapa(origen) {
             const fx = filtrosEtapaDe(origen), suf = origen === 'forecast' ? 'Forecast' : 'Prod';
-            [['etapa', 'filtroEtapa'], ['sap', 'filtroSap'], ['edad', 'filtroEdad'], ['estatus', 'filtroEstatus']].forEach(([campo, id]) => {
+            [['etapa', 'filtroEtapa'], ['sap', 'filtroSap'], ['edad', 'filtroEdad'], ['estatus', 'filtroEstatus'], ['planta', 'filtroPlanta'], ['area', 'filtroArea']].forEach(([campo, id]) => {
                 const el = document.getElementById(id + suf);
                 if (!el) return;
                 if (el.value !== fx[campo]) el.value = fx[campo];
@@ -8179,9 +8406,10 @@ async function downloadPlanProduccionFromCloud() {
             pintarBotonFiltroFechaAut('filtroAut' + suf, fx.aut);
             const limpiar = document.getElementById('filtrosEtapaLimpiar' + suf);
             if (limpiar) limpiar.style.display = filtrosEtapaActivos(fx) ? '' : 'none';
+            FiltroCabecera.refrescar();
         }
         // Filas que se ven con el filtro Todos / Pendientes / Autorizados, la búsqueda y los filtros de etapa.
-        function filasVisiblesEtapa(filas, estado, busqueda, fx) {
+        function filasVisiblesEtapa(filas, estado, busqueda, fx, origen) {
             let v = filas;
             if (estado === 'pendientes') v = v.filter(f => f.estado === 'pendiente' || f.estado === 'opsap');
             else if (estado === 'autorizados') v = v.filter(f => f.estado === 'autorizado' || f.estado === 'sap');
@@ -8192,7 +8420,7 @@ async function downloadPlanProduccionFromCloud() {
                     || (f.productos || []).some(p => p.material.includes(q) || (p.descripcion || '').toLowerCase().includes(q))
                     || (f.opsSinRmd || []).some(o => o.orden.includes(q) || o.material.includes(q)));
             }
-            return aplicarFiltrosEtapa(v, fx);
+            return aplicarFiltrosEtapa(v, fx, origen);
         }
         function actualizarContadoresPendientes(filas, ids) {
             const set = (id, n) => { const el = document.getElementById(id); if (el) el.textContent = n; };
@@ -8278,10 +8506,12 @@ async function downloadPlanProduccionFromCloud() {
             window.__ultimasFilasValidacion = filas;
             actualizarContadoresPendientes(filas, ['pillCountTodos', 'pillCountPendientes', 'pillCountAutorizados']);
 
-            let visibles = filasVisiblesEtapa(filas, validacionFiltroEstado, validacionBusqueda, filtrosEtapaProd);
+            let visibles = filasVisiblesEtapa(filas, validacionFiltroEstado, validacionBusqueda, filtrosEtapaProd, 'produccion');
             if (validacionFiltroFechas.size > 0) {
                 visibles = visibles.filter(f => f.fechaProxima && validacionFiltroFechas.has(dayjs(f.fechaProxima).format('YYYY-MM-DD')));
             }
+            llenarOpcionesFiltro('filtroPlantaProd', filas.filter(f => f.estado !== 'opsap').flatMap(f => plantasDeFilaAut(f, 'produccion')), 'Planta');
+            llenarOpcionesFiltro('filtroAreaProd', filas.filter(f => f.estado !== 'opsap').flatMap(areasDeFila), 'Área');
             actualizarControlesFiltrosEtapa('produccion');
 
             const body = document.getElementById('tablaPendientesBody');
@@ -8301,7 +8531,7 @@ async function downloadPlanProduccionFromCloud() {
                 return;
             }
             const esc = escapeHtmlRmdConfig;
-            body.innerHTML = etapas.map(f => {
+            const filaHtml = (f) => {
                 const c = celdasDeEtapa(f, 'produccion');
                 const rowCls = claseFilaEtapa(f, 'produccion');
                 const fechaTxt = f.fechaProxima ? dayjs(f.fechaProxima).format('YYYY-MM-DD') : '-';
@@ -8316,7 +8546,8 @@ async function downloadPlanProduccionFromCloud() {
                     <td class="py-2">${c.resp}</td>
                     <td class="py-2">${c.accion}</td>
                 </tr>`;
-            }).join('') + filaOps + (mostrarOpsSinRmd ? ops.map(filaOpsSinRmdHtml).join('') : '');
+            };
+            body.innerHTML = htmlFilasConAutorizadasPorFecha(etapas, 'produccion', 9, filaHtml, !!String(validacionBusqueda || '').trim()) + filaOps + (mostrarOpsSinRmd ? ops.map(filaOpsSinRmdHtml).join('') : '');
 
             // El Estatus guardado manda sobre lo que el navegador haya dejado seleccionado.
             body.querySelectorAll('select[id^="estatus_"]').forEach(sel => {
@@ -9546,7 +9777,8 @@ function updateForecastActiveFiltersBadge() {
         function renderTablaPendientesForecast(filas) {
             window.__ultimasFilasValidacionForecast = filas;
             actualizarContadoresPendientes(filas, ['pillCountForecastTodos', 'pillCountForecastPendientes', 'pillCountForecastAutorizados']);
-            const visibles = filasVisiblesEtapa(filas, validacionForecastFiltroEstado, validacionForecastBusqueda, filtrosEtapaForecast);
+            const visibles = filasVisiblesEtapa(filas, validacionForecastFiltroEstado, validacionForecastBusqueda, filtrosEtapaForecast, 'forecast');
+            llenarOpcionesFiltro('filtroPlantaForecast', filas.filter(f => f.estado !== 'opsap').flatMap(f => plantasDeFilaAut(f, 'forecast')), 'Planta');
             actualizarControlesFiltrosEtapa('forecast');
 
             const body = document.getElementById('tablaPendientesForecastBody');
@@ -9558,7 +9790,7 @@ function updateForecastActiveFiltersBadge() {
                 return;
             }
             const esc = escapeHtmlRmdConfig;
-            body.innerHTML = visibles.map(f => {
+            const filaHtml = (f) => {
                 const c = celdasDeEtapa(f, 'forecast');
                 const rowCls = claseFilaEtapa(f, 'forecast');
                 return `<tr class="${rowCls}">
@@ -9571,7 +9803,8 @@ function updateForecastActiveFiltersBadge() {
                     <td class="py-2">${c.resp}</td>
                     <td class="py-2">${c.accion}</td>
                 </tr>`;
-            }).join('');
+            };
+            body.innerHTML = htmlFilasConAutorizadasPorFecha(visibles, 'forecast', 8, filaHtml, !!String(validacionForecastBusqueda || '').trim());
 
             // El Estatus guardado manda sobre lo que el navegador haya dejado seleccionado.
             body.querySelectorAll('select[id^="estatusfc_"]').forEach(sel => {
@@ -11850,7 +12083,7 @@ async function maybeAutoStartTour() {
         let estatusCar = {};        // val_estatus_caracterizacion
         const CLAVE_HORAS = 'ind_horas_efectivas';
         let horasEf = {};           // ind_horas_efectivas
-        const vista = { detalleAbierto: false, planta: '', soloPendientes: true, acuAbierto: false, acuPlanta: '', acuLista: 'pend', foto: '' };
+        const vista = { detalleAbierto: false, planta: '', soloPendientes: true, acuAbierto: false, acuPlanta: '', acuEtapa: '', acuLista: 'pend', foto: '' };
 
         // ---------- Lo que se guarda con cada sincronización con SAP / Exportado RMD ----------
         // Fecha de SAP → dayjs local: Date del Excel, ISO (con o sin hora) o DD/MM/AAAA.
@@ -13318,14 +13551,15 @@ async function maybeAutoStartTour() {
                     <td>${resp}</td>
                 </tr>`;
             }).join('');
-            const seg = (campo, valores) => `<div class="sts-seg" role="group">${valores.map(([v, l]) => `<button type="button" class="${vista[campo] === v ? 'activo' : ''}" onclick='StatusRmd.filtrar(${JSON.stringify(campo)}, ${JSON.stringify(v)})'>${l}</button>`).join('')}</div>`;
-            return `<details class="sts-detalle"${vista.detalleAbierto ? ' open' : ''} ontoggle="StatusRmd._detalle(this.open)">
+            // Planta y Pendientes/Todas se eligen desde el embudo del encabezado (controles ocultos).
+            const seg = (campo, valores, id, tit) => `<div class="filtros-en-cabecera" id="${id}" data-titulo="${tit}">${valores.map(([v, l]) => `<button type="button" class="${vista[campo] === v ? 'active' : ''}" onclick='StatusRmd.filtrar(${JSON.stringify(campo)}, ${JSON.stringify(v)})'>${l}</button>`).join('')}</div>`;
+            return `<details class="sts-detalle fc-scope"${vista.detalleAbierto ? ' open' : ''} ontoggle="StatusRmd._detalle(this.open)">
                 <summary>Caracterizaciones (${d.car.items.length}) · elegir el estatus de cada una</summary>
                 <div class="sts-detalle-cuerpo">
-                    <div class="sts-filtros">${seg('planta', [['', 'Ambas plantas'], ['P1', 'Ate'], ['P2', 'Lima']])}${seg('soloPendientes', [[true, 'Pendientes'], [false, 'Todas']])}</div>
-                    ${items.length ? `<div class="sts-tabla-wrap"><table class="sts-tabla">
-                        <thead><tr><th>Planta</th><th>RMD</th><th>Descripción</th><th>Etapa</th><th>Versión</th><th>Estado SAP</th><th>Solicitud</th><th>Estatus</th><th>Responsable</th></tr></thead>
-                        <tbody>${filas}</tbody></table></div>` : '<p class="sts-vacio">No hay caracterizaciones con estos filtros.</p>'}
+                    ${seg('planta', [['', 'Ambas plantas'], ['P1', 'Ate'], ['P2', 'Lima']], 'carStsPlanta', 'Planta')}${seg('soloPendientes', [[true, 'Pendientes'], [false, 'Todas']], 'carStsPend', 'Mostrar')}
+                    <div class="sts-tabla-wrap"><table class="sts-tabla">
+                        <thead><tr><th data-filtro="carStsPlanta">Planta</th><th>RMD</th><th>Descripción</th><th>Etapa</th><th>Versión</th><th data-filtro="carStsPend">Estado SAP</th><th>Solicitud</th><th>Estatus</th><th>Responsable</th></tr></thead>
+                        <tbody>${items.length ? filas : '<tr><td colspan="9" class="sts-vacio">No hay caracterizaciones con estos filtros.</td></tr>'}</tbody></table></div>
                 </div>
             </details>`;
         }
@@ -13450,6 +13684,7 @@ async function maybeAutoStartTour() {
             plantas.forEach((pl) => {
                 if (plantas.length > 1 && vista.acuPlanta && vista.acuPlanta !== pl) return;
                 a[pl].periodos.forEach((p) => {
+                    if (vista.acuEtapa && p.etapa !== vista.acuEtapa) return;
                     if (modo === 'pend' ? p.fin !== null : (!esAutorizacion(p) || p.fin < rango.ini || p.fin >= rango.fin)) return;
                     filas.push({ pl, p, it: a[pl].porMaterial.get(p.m) });
                 });
@@ -13475,20 +13710,23 @@ async function maybeAutoStartTour() {
                 return `<tr><td>${pl}</td><td class="mono">${esc(it.m)}</td><td class="desc">${producto(it)}</td><td>${esc(etq(p.etapa))}</td>
                     <td class="mono">${fmtMs(p.ini)}</td><td class="mono">${fmtMs(p.fin)}</td><td class="mono">${diasEntre(p.ini, p.fin)}</td><td><span class="sts-estado ok">${esc(como)}</span></td></tr>`;
             };
-            const seg = plantas.length === 1 ? '' : `<div class="sts-seg" role="group" aria-label="Planta">${[['', 'Ambas plantas'], ['P1', 'Ate'], ['P2', 'Lima']].map(([v, l]) => `<button type="button" class="${vista.acuPlanta === v ? 'activo' : ''}" onclick='StatusRmd.filtrarAcumulado("acuPlanta", ${JSON.stringify(v)})'>${l}</button>`).join('')}</div>`;
+            // Planta y Etapa se filtran desde el embudo del encabezado (los controles van ocultos).
+            const seg = plantas.length === 1 ? '' : `<div class="filtros-en-cabecera" id="acuSegPlanta" data-titulo="Planta">${[['', 'Ambas plantas'], ['P1', 'Ate'], ['P2', 'Lima']].map(([v, l]) => `<button type="button" class="${vista.acuPlanta === v ? 'active' : ''}" onclick='StatusRmd.filtrarAcumulado("acuPlanta", ${JSON.stringify(v)})'>${l}</button>`).join('')}</div>`;
+            const selEtapa = `<select class="filtros-en-cabecera" id="acuSelEtapa" onchange='StatusRmd.filtrarAcumulado("acuEtapa", this.value)'>${[['', 'Etapa: todas'], ...ETAPAS_FIJAS.map((e) => [e, etq(e)])].map(([v, l]) => `<option value="${v}"${vista.acuEtapa === v ? ' selected' : ''}>${esc(l)}</option>`).join('')}</select>`;
             const nombre = (k) => (semanal ? `la ${nombreSemana(conAut.get(k))}` : nombreMes(k).toLowerCase());
             const sel = `<select class="sts-select" aria-label="Qué etapas mostrar" onchange='StatusRmd.filtrarAcumulado("acuLista", this.value)'>
                 <option value="pend"${modo === 'pend' ? ' selected' : ''}>Backlog de hoy</option>
                 ${claves.map((k) => `<option value="${k}"${modo === k ? ' selected' : ''}>Autorizados en ${esc(nombre(k))}</option>`).join('')}</select>`;
+            const thPl = `<th${seg ? ' data-filtro="acuSegPlanta"' : ''}>Planta</th>`, thEt = '<th data-filtro="acuSelEtapa">Etapa</th>';
             const cabeza = modo === 'pend'
-                ? '<th>Planta</th><th>Código</th><th>Producto</th><th>Etapa</th><th>Pendiente desde</th><th>Días</th><th>Estado en SAP</th><th>Observación</th>'
-                : '<th>Planta</th><th>Código</th><th>Producto</th><th>Etapa</th><th>Pendiente desde</th><th>Autorizado</th><th>Días</th><th>RMD</th>';
-            return `<details class="sts-detalle"${vista.acuAbierto ? ' open' : ''} ontoggle="StatusRmd._detalleAcumulado(this.open)">
+                ? `${thPl}<th>Código</th><th>Producto</th>${thEt}<th>Pendiente desde</th><th>Días</th><th>Estado en SAP</th><th>Observación</th>`
+                : `${thPl}<th>Código</th><th>Producto</th>${thEt}<th>Pendiente desde</th><th>Autorizado</th><th>Días</th><th>RMD</th>`;
+            return `<details class="sts-detalle fc-scope"${vista.acuAbierto ? ' open' : ''} ontoggle="StatusRmd._detalleAcumulado(this.open)">
                 <summary>Etapas del programa acumulado · backlog de hoy y autorizadas por ${semanal ? 'semana' : 'mes'}</summary>
                 <div class="sts-detalle-cuerpo">
-                    <div class="sts-filtros">${seg}${sel}<span class="sts-chip">${plural(filas.length, 'etapa', 'etapas')}</span></div>
-                    ${filas.length ? `<div class="sts-tabla-wrap"><table class="sts-tabla"><thead><tr>${cabeza}</tr></thead>
-                        <tbody>${filas.map(modo === 'pend' ? filaPend : filaAut).join('')}</tbody></table></div>` : '<p class="sts-vacio">No hay etapas con estos filtros.</p>'}
+                    <div class="sts-filtros">${seg}${selEtapa}${sel}<span class="sts-chip">${plural(filas.length, 'etapa', 'etapas')}</span>${vista.acuPlanta || vista.acuEtapa ? `<button type="button" class="filtro-etapa-limpiar" onclick='StatusRmd.filtrarAcumulado("acuPlanta", ""); StatusRmd.filtrarAcumulado("acuEtapa", "")'>Quitar filtros</button>` : ''}</div>
+                    <div class="sts-tabla-wrap"><table class="sts-tabla"><thead><tr>${cabeza}</tr></thead>
+                        <tbody>${filas.length ? filas.map(modo === 'pend' ? filaPend : filaAut).join('') : '<tr><td colspan="8" class="sts-vacio">No hay etapas con estos filtros.</td></tr>'}</tbody></table></div>
                 </div>
             </details>`;
         }
@@ -14303,7 +14541,7 @@ async function maybeAutoStartTour() {
         let clavesCaract = null;     // material::ETAPA de las caracterizaciones (para la marca de Producción)
         let filasUltimas = [];
         const vista = { estado: 'todos', busqueda: '', planta: '', origen: '', programa: '' };
-        const fx = { etapa: '', sap: '', edad: '', estatus: '', aut: '' };
+        const fx = { etapa: '', sap: '', edad: '', estatus: '', aut: '', area: '' };
         let cargando = null;
         let programaGuardado = [null, null]; // prod_data_planta1 / prod_data_planta2
 
@@ -14402,9 +14640,9 @@ async function maybeAutoStartTour() {
             return ordenarFilasEtapa(filas);
         }
         function visibles() {
-            let v = filasVisiblesEtapa(filasUltimas, vista.estado, vista.busqueda, fx);
+            let v = filasVisiblesEtapa(filasUltimas, vista.estado, vista.busqueda, fx, 'caract');
             const q = vista.busqueda.trim().toLowerCase();
-            if (q) v = v.concat(filasUltimas.filter((f) => !v.includes(f) && f.listado.some((it) => it.nombre.toLowerCase().includes(q)) && filaPasaFiltros(f, fx)
+            if (q) v = v.concat(filasUltimas.filter((f) => !v.includes(f) && f.listado.some((it) => it.nombre.toLowerCase().includes(q)) && filaPasaFiltros(f, fx, 'caract')
                 && (vista.estado === 'todos' || (vista.estado === 'pendientes') === (f.estado === 'pendiente'))));
             if (vista.planta) v = v.filter((f) => f.pl.includes(vista.planta));
             if (vista.origen === 'listado') v = v.filter((f) => f.listado.length);
@@ -14435,11 +14673,13 @@ async function maybeAutoStartTour() {
             const v = visibles();
             $('carContador').textContent = textoContadorFilas(v, todas, 'caract');
             pintarBotonFiltroFechaAut('carFiltro_aut', fx.aut);
-            ['etapa', 'sap', 'estatus'].forEach((k) => { const el = $('carFiltro_' + k); if (el) { el.value = fx[k]; el.classList.toggle('is-activo', !!fx[k]); } });
+            llenarOpcionesFiltro('carFiltro_area', todas.flatMap(areasDeFila), 'Sección');
+            ['etapa', 'sap', 'estatus', 'area'].forEach((k) => { const el = $('carFiltro_' + k); if (el) { el.value = fx[k]; el.classList.toggle('is-activo', !!fx[k]); } });
             ['planta', 'origen', 'programa'].forEach((k) => { const el = $('carFiltro_' + k); if (el) { el.value = vista[k]; el.classList.toggle('is-activo', !!vista[k]); } });
             [['todos', 'carFiltroTodos'], ['pendientes', 'carFiltroPendientes'], ['autorizados', 'carFiltroAutorizados']].forEach(([e, id]) => $(id).classList.toggle('active', vista.estado === e));
+            FiltroCabecera.refrescar();
             if (!v.length) { body.innerHTML = '<tr><td colspan="9" class="text-center text-slate-500 py-6 text-xs">Ninguna etapa coincide con el filtro/búsqueda actual.</td></tr>'; return; }
-            body.innerHTML = v.map((f) => {
+            const filaHtml = (f) => {
                 const c = celdasDeEtapa(f, 'caract');
                 const estatus = c.estatus.replace('id="estatus_', 'id="estatuscar_'), resp = c.resp.replace('id="resppendcc_', 'id="respcarpendcc_');
                 const nombres = Array.from(new Set(f.listado.map((it) => it.nombre))).filter((n) => sinTildes(n) !== sinTildes(f.descripcion));
@@ -14455,7 +14695,8 @@ async function maybeAutoStartTour() {
                     <td class="py-2">${resp}</td>
                     <td class="py-2">${c.accion}</td>
                 </tr>`;
-            }).join('');
+            };
+            body.innerHTML = htmlFilasConAutorizadasPorFecha(v, 'caract', 9, filaHtml, !!vista.busqueda.trim());
             body.querySelectorAll('select[id^="estatuscar_"]').forEach((sel) => {
                 const parts = sel.id.split('_');
                 const valorGuardado = estatusEtapa.get(responsableKey(parts[1], parts.slice(2).join('_'))) || '';
@@ -14569,7 +14810,7 @@ async function maybeAutoStartTour() {
             filtrar: (k, v) => { if (k in fx) fx[k] = v || ''; else vista[k] = v || ''; pintar(); },
             filtroAut: () => fx.aut,
             buscar: (q) => { vista.busqueda = q || ''; pintar(); },
-            limpiar: () => { Object.assign(fx, { etapa: '', sap: '', edad: '', estatus: '', aut: '' }); Object.assign(vista, { planta: '', origen: '', programa: '' }); pintar(); },
+            limpiar: () => { Object.assign(fx, { etapa: '', sap: '', edad: '', estatus: '', aut: '', area: '' }); Object.assign(vista, { planta: '', origen: '', programa: '' }); pintar(); },
             _filas: () => filasUltimas
         };
     })();
