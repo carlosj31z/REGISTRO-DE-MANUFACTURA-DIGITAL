@@ -1423,6 +1423,10 @@
            columna sin leer cada fecha. */
         .fecha-inicio { display: flex; flex-direction: column; gap: 0.15rem; align-items: flex-start; }
         .fecha-inicio-valor { font-variant-numeric: tabular-nums; color: var(--slate-200); }
+        .fecha-inicio-fila { display: inline-flex; align-items: center; gap: 0.3rem; }
+        .fecha-inicio-editar { border: 0; background: transparent; color: var(--slate-400); cursor: pointer; padding: 0 0.15rem; font-size: 0.75rem; line-height: 1; opacity: 0.55; }
+        .fecha-inicio-editar:hover, .fecha-inicio-editar:focus-visible { opacity: 1; color: var(--slate-200); }
+        .fecha-inicio-manual { font-size: 0.6rem; font-weight: 700; padding: 0.02rem 0.4rem; border-radius: 999px; border: 1px solid #60a5fa; color: #60a5fa; white-space: nowrap; }
         .urg-chip {
             display: inline-flex; align-items: center; gap: 0.25rem;
             padding: 0.05rem 0.45rem; border-radius: 999px;
@@ -3394,6 +3398,9 @@ alter publication supabase_realtime add table public.rmd_dashboard_kv;`;
                     if (currentTab === 'forecast') runValidacionForecast();
                     if (currentTab === 'caract' && typeof Caracterizacion !== 'undefined') Caracterizacion.refrescar();
                 }, 800);
+            } else if (key === 'val_fecha_inicio_manual') {
+                fechasInicioManual = mapaFechasInicioManual(await storeGet('val_fecha_inicio_manual'));
+                if (currentTab === 'produccion') runValidacionMateriales();
             } else if (key === 'val_cambios_sap') {
                 ultimosCambiosSap = await storeGet('val_cambios_sap');
                 actualizarBotonesCambiosSap();
@@ -4550,6 +4557,7 @@ function containsExcludedTermPlanta2(text) {
         // que ya la llama, aunque ahora admite hasta 2 semanas hacia atrás
         // (ver isDentroDeVentanaProduccion), no solo "hoy en adelante".
         function filtrarFechasFuturas(f) { return f.filter(d => isDentroDeVentanaProduccion(d)); }
+        const filtrarFechasFuturasProd = filtrarFechasFuturas;
 
         function parseExcelDateDirect(v) {
             if (v === null || v === undefined || v === '') return null;
@@ -4889,7 +4897,9 @@ function buildDateColumnMapPlanta1(headerRow, weekLabelRow, hiddenCols) {
 
         // Lee el Excel del Programa de Producción de una planta, sin guardar nada: los productos con sus fechas desde hoy (y,
         // en la hoja ACO de LIMA, las del envase y el acondicionado) y las áreas (hojas) leídas.
-        function leerProgramaProduccion(wb, plantaObjetivo) {
+        function leerProgramaProduccion(wb, plantaObjetivo, opciones) {
+                    // opciones.sinVentana: todas las fechas del archivo (para completar datos guardados), sin cortar en el lunes de esta semana.
+                    const filtrarFechasFuturas = (opciones && opciones.sinVentana) ? (f) => f.slice() : filtrarFechasFuturasProd;
                     const pmap = new Map();
                     const areasDeEstaCarga = new Set();
 
@@ -5226,6 +5236,8 @@ function buildDateColumnMapPlanta1(headerRow, weekLabelRow, hiddenCols) {
             // "tarde" y no debe pisar lo que ya se está mostrando ahora.
             if (myToken !== __loadProdDataToken || currentPlanta !== plantaObjetivo) return;
             if (saved) {
+                await completarFechasEtapaLima(saved, plantaObjetivo);
+                if (myToken !== __loadProdDataToken || currentPlanta !== plantaObjetivo) return;
                 productionData = saved.data;
                 availableAreas = new Set(saved.areas);
                 document.getElementById('prodStatusBadge').style.display = 'inline';
@@ -5239,6 +5251,46 @@ function buildDateColumnMapPlanta1(headerRow, weekLabelRow, hiddenCols) {
             }
         }
 
+        // Programa de LIMA guardado antes de la regla E / A / EA (carga del 30/10/2026 y anteriores): la hoja ACO quedó con
+        // todas sus celdas (F, Enc, S...) y sin fechasEtapa, así que envase y acondicionado tomaban la primera fecha del
+        // producto (6000001754: 04/11 en vez del EA del 10/11). Si falta fechasEtapa, se vuelve a leer el Excel original
+        // guardado (prod_archivo_original_planta2) y se completan, en memoria, las fechas de la hoja ACO: solo EA, E y A,
+        // desde la primera fecha que ya tenía guardada. No se guarda nada; con la próxima carga del programa queda guardado.
+        const cacheFechasEtapaLima = { carga: null, porClave: null };
+        async function completarFechasEtapaLima(guardado, planta) {
+            if (planta !== 'planta2' || !guardado || !Array.isArray(guardado.data)) return;
+            const esAco = (p) => String(p.area || '').trim().toUpperCase() === 'ACO';
+            const faltan = guardado.data.filter(p => esAco(p) && !p.fechasEtapa);
+            if (!faltan.length) return;
+            try {
+                const arch = await storeGet('prod_archivo_original_planta2');
+                if (!arch || !arch.base64) return;
+                if (cacheFechasEtapaLima.carga !== arch.fechaCarga || !cacheFechasEtapaLima.porClave) {
+                    const bin = atob(arch.base64), bytes = new Uint8Array(bin.length);
+                    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+                    const wb = XLSX.read(bytes, { type: 'array', cellDates: true, cellStyles: true });
+                    const { data } = leerProgramaProduccion(wb, 'planta2', { sinVentana: true });
+                    cacheFechasEtapaLima.porClave = new Map(data.filter(esAco).map(p => [`${p.codigo}_${p.area}`, p]));
+                    cacheFechasEtapaLima.carga = arch.fechaCarga;
+                }
+                const quitar = new Set();
+                faltan.forEach(p => {
+                    const nuevo = cacheFechasEtapaLima.porClave.get(`${p.codigo}_${p.area}`);
+                    const desde = (p.fechas || []).map(d => String(d).slice(0, 10)).sort()[0] || '';
+                    const corta = (arr) => (arr || []).filter(d => String(d).slice(0, 10) >= desde);
+                    const env = nuevo ? corta(nuevo.fechasEtapa && nuevo.fechasEtapa.ENVASE) : [];
+                    const aco = nuevo ? corta(nuevo.fechasEtapa && nuevo.fechasEtapa.ACONDICIONADO) : [];
+                    const fechas = Array.from(new Set([...env, ...aco])).sort();
+                    if (!fechas.length) { quitar.add(p); return; } // sin EA, E ni A en la hoja ACO: no es producción del área
+                    p.fechas = fechas;
+                    p.fechasEtapa = { ENVASE: env, ACONDICIONADO: aco };
+                });
+                if (quitar.size) guardado.data = guardado.data.filter(p => !quitar.has(p));
+            } catch (err) {
+                console.error('No se pudieron completar las fechas de la hoja ACO desde el Excel guardado:', err);
+            }
+        }
+
         // Carga y fusiona los datos guardados de Planta ATE y Planta LIMA en la
         // misma forma que espera el resto del pipeline (productionData /
         // availableAreas), etiquetando cada producto con su planta de origen
@@ -5246,6 +5298,7 @@ function buildDateColumnMapPlanta1(headerRow, weekLabelRow, hiddenCols) {
         async function loadProdDataConsolidado() {
             const myToken = ++__loadProdDataToken;
             const [d1, d2] = await Promise.all([storeGet('prod_data_planta1'), storeGet('prod_data_planta2')]);
+            await completarFechasEtapaLima(d2, 'planta2');
             if (myToken !== __loadProdDataToken || currentPlanta !== 'consolidado') return;
             const merged = [];
             const areasMerged = new Set();
@@ -5778,6 +5831,9 @@ function buildDateColumnMapPlanta1(headerRow, weekLabelRow, hiddenCols) {
         let rmdAutorizadosLoaded = false;
         let ultimoResultadoValidacion = { revisados: 0, autorizados: 0, pendientes: [] };
         let manualAutorizados = new Set();
+        // Inicio de producción corregido a mano (Producción): "CÓDIGO::ETAPA" -> 'AAAA-MM-DD'. Manda sobre la fecha del
+        // programa hasta que el usuario vuelva a la del programa. Es global (las dos plantas y el consolidado).
+        let fechasInicioManual = new Map();
         let manualAutorizadosMeta = new Map(); // "material::ETAPA" -> { f: fecha de la autorización, c: huella de lo pendiente en SAP }
         let validacionFiltroEstado = 'todos';
         let validacionBusqueda = '';
@@ -7583,7 +7639,7 @@ async function downloadPlanProduccionFromCloud() {
             // en paralelo: con Supabase de por medio (llamadas de red reales),
             // hacerlas una tras otra sumaría varios round-trips innecesarios al
             // tiempo de carga inicial de la página.
-            const [ma, mm, re, flags, rd, es, rp, cs, ops, traz] = await Promise.all([
+            const [ma, mm, re, flags, rd, es, rp, cs, ops, traz, fim] = await Promise.all([
                 storeGet('val_manual_autorizados'),
                 storeGet('val_manual_autorizados_meta'),
                 storeGet('val_responsables_etapa'),
@@ -7593,8 +7649,10 @@ async function downloadPlanProduccionFromCloud() {
                 storeGet('val_rmd_preciso'),
                 storeGet('val_cambios_sap'),
                 storeGet('val_op_sap'),
-                storeGet('val_rmd_trazabilidad')
+                storeGet('val_rmd_trazabilidad'),
+                storeGet('val_fecha_inicio_manual')
             ]);
+            fechasInicioManual = mapaFechasInicioManual(fim);
             if (traz) trazabilidadSap = traz;
             opsSap = normalizarOpsSap(ops);
             if (ma) manualAutorizados = new Set(ma);
@@ -7734,6 +7792,7 @@ async function downloadPlanProduccionFromCloud() {
             });
             revisarAutorizacionesManuales(); // las que SAP ya autorizó o con versión nueva dejan de tapar la etapa
             const { filas: etapas, pendientesPorProducto } = etapasDeProductos(productos, manualAutorizados);
+            aplicarFechasInicioManual(etapas);
             guardarMigracionClaves();
             const revisados = productos.length;
             const productosPendientes = productos.filter(p => pendientesPorProducto.get(p.material) > 0)
@@ -7780,6 +7839,55 @@ async function downloadPlanProduccionFromCloud() {
             if (activeBtn) activeBtn.classList.add('active');
             refiltrarTablaPendientes();
         }
+
+        // ---- Inicio de producción corregido a mano ----
+        // Cada etapa de la tabla de Producción toma su fecha del programa (envase y acondicionado de LIMA con la hoja ACO).
+        // Si el usuario la cambia con el lápiz, se guarda en val_fecha_inicio_manual por "CÓDIGO::ETAPA" y manda sobre la
+        // del programa (también en el Excel, los filtros por fecha y la urgencia), hasta que elija volver a la del programa.
+        const claveFechaInicio = (f) => `${f.codigo || f.material || ''}::${f.fija || 'REVISAR'}`;
+        function mapaFechasInicioManual(obj) {
+            const m = new Map();
+            if (obj && typeof obj === 'object' && !Array.isArray(obj)) Object.entries(obj).forEach(([k, v]) => { if (/^\d{4}-\d{2}-\d{2}$/.test(String(v || ''))) m.set(k, v); });
+            return m;
+        }
+        function aplicarFechasInicioManual(filas) {
+            filas.forEach(f => {
+                const manual = fechasInicioManual.get(claveFechaInicio(f));
+                f.fechaPrograma = f.fechaProxima || null;
+                if (manual) { f.fechaProxima = manual; f.fechaManual = true; }
+            });
+        }
+        function htmlFechaInicioEtapa(f) {
+            const esc = escapeHtmlRmdConfig;
+            const fechaTxt = f.fechaProxima ? dayjs(f.fechaProxima).format('YYYY-MM-DD') : '-';
+            const editable = f.estado !== 'opsap';
+            const prog = f.fechaPrograma ? dayjs(f.fechaPrograma).format('YYYY-MM-DD') : 'sin fecha';
+            const chip = f.fechaManual ? `<span class="fecha-inicio-manual" title="${esc(`Fecha corregida a mano. Según el programa: ${prog}.`)}">editada</span>` : '';
+            const lapiz = editable ? `<button type="button" class="fecha-inicio-editar" title="Cambiar la fecha de inicio" aria-label="Cambiar la fecha de inicio" onclick="editarFechaInicio('${esc(claveFechaInicio(f))}')">✎</button>` : '';
+            return `<div class="fecha-inicio"><span class="fecha-inicio-fila"><span class="fecha-inicio-valor">${fechaTxt}</span>${lapiz}</span>${chip}${f.estado === 'pendiente' ? urgenciaInicioHtml(f.fechaProxima) : ''}</div>`;
+        }
+        window.editarFechaInicio = async function (clave) {
+            const f = (window.__ultimasFilasValidacion || []).find(x => x.estado !== 'opsap' && claveFechaInicio(x) === clave);
+            if (!f) return;
+            const prog = f.fechaPrograma ? dayjs(f.fechaPrograma).format('YYYY-MM-DD') : '';
+            const actual = f.fechaProxima ? dayjs(f.fechaProxima).format('YYYY-MM-DD') : '';
+            const etapa = (typeof ETAPAS_FIJAS_LABEL !== 'undefined' && ETAPAS_FIJAS_LABEL[f.fija]) || f.fija || 'Etapa';
+            const res = await Swal.fire({
+                title: 'Inicio de producción', background: '#0f172a', color: '#e2e8f0',
+                html: `<div class="text-left text-sm space-y-2"><div><b>${escapeHtmlRmdConfig(f.codigo || '')}</b> · ${escapeHtmlRmdConfig(etapa)}</div>`
+                    + `<div class="text-slate-400 text-xs">Según el programa: ${prog ? dayjs(prog).format('DD/MM/YYYY') : 'sin fecha'}</div></div>`,
+                input: 'date', inputValue: actual || prog,
+                showCancelButton: true, confirmButtonText: 'Guardar', cancelButtonText: 'Cancelar',
+                showDenyButton: !!f.fechaManual, denyButtonText: 'Usar la del programa',
+                inputValidator: (v) => (/^\d{4}-\d{2}-\d{2}$/.test(v || '') ? null : 'Elige una fecha')
+            });
+            if (res.isDenied) fechasInicioManual.delete(clave);
+            else if (res.isConfirmed) {
+                if (res.value === prog) fechasInicioManual.delete(clave); else fechasInicioManual.set(clave, res.value);
+            } else return;
+            await storeSet('val_fecha_inicio_manual', Object.fromEntries(fechasInicioManual));
+            runValidacionMateriales();
+        };
 
         // Etiqueta de urgencia para "Inicio de Producción": cuántos días
         // faltan desde hoy. Una fecha ya pasada con el RMD aún pendiente
@@ -8540,13 +8648,12 @@ async function downloadPlanProduccionFromCloud() {
             const filaHtml = (f) => {
                 const c = celdasDeEtapa(f, 'produccion');
                 const rowCls = claseFilaEtapa(f, 'produccion');
-                const fechaTxt = f.fechaProxima ? dayjs(f.fechaProxima).format('YYYY-MM-DD') : '-';
                 return `<tr class="${rowCls}">
                     <td class="whitespace-nowrap py-2 text-slate-300">${plantaCelda(f)}</td>
                     <td class="whitespace-nowrap py-2">${htmlMaterialEtapa(f, 'mat-code')}</td>
                     <td class="text-slate-200 py-2">${esc(f.descripcion || '-')}${htmlProductosDeEtapa(f)}${typeof Caracterizacion !== 'undefined' ? Caracterizacion.chipProduccion(f) : ''}</td>
                     <td class="text-slate-400 py-2">${esc(f.areas || '')}</td>
-                    <td class="whitespace-nowrap py-2"><div class="fecha-inicio"><span class="fecha-inicio-valor">${fechaTxt}</span>${f.estado === 'pendiente' ? urgenciaInicioHtml(f.fechaProxima) : ''}</div></td>
+                    <td class="whitespace-nowrap py-2">${htmlFechaInicioEtapa(f)}</td>
                     <td class="py-2">${c.etapa}</td>
                     <td class="py-2">${c.estatus}</td>
                     <td class="py-2">${c.resp}</td>
@@ -10142,7 +10249,7 @@ function updateForecastActiveFiltersBadge() {
             'forecast_data', 'forecast_months_meta',
             'val_flags', 'val_rmd_autorizados_detalle', 'val_rmd_preciso', 'val_cambios_sap', 'val_op_sap',
             'val_manual_autorizados', 'val_manual_autorizados_meta', 'val_manual_autorizados_forecast', 'val_manual_autorizados_forecast_meta',
-            'val_responsables_etapa', 'val_estatus_etapa',
+            'val_responsables_etapa', 'val_estatus_etapa', 'val_fecha_inicio_manual',
             'val_rmd_indicadores_mes', 'val_rmd_caracterizaciones', 'val_estatus_caracterizacion', 'val_rmd_trazabilidad', 'val_caracterizacion_lista',
             'ind_horas_efectivas', 'ind_fotos_flujo', 'historial_trazabilidad', 'tour_completed'
         ];
