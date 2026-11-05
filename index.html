@@ -8284,7 +8284,12 @@ async function downloadPlanProduccionFromCloud() {
         }
         // Estatus y responsable de una fila pendiente.
         const estatusDeFila = (f) => (f.clave && estatusEtapa.get(f.clave)) || '';
-        const responsableDeFila = (f) => (f.clave && responsablesEtapa.get(f.clave)) || '';
+        // El responsable sale SIEMPRE del Estatus (INGRESAR y POR REVISIÓN → DOC, BORRADOR y FLUJO SAP → PRO); solo CONTROL DE
+        // CAMBIO usa el elegido (ASC o PRO). Antes se leía lo guardado y una etapa cuyo estatus llegó sin responsable (renombrado
+        // de «POR INGRESAR», heredado de otra clave del grupo, etc.) quedaba en «—» y descuadraba el total por responsable.
+        const responsableDeEstatus = (estatus, guardado) => !estatus ? ''
+            : (estatus === ESTATUS_CC ? (guardado || '') : (ESTATUS_ETAPA_RESPONSABLE_DEFECTO[estatus] || guardado || ''));
+        const responsableDeFila = (f) => (f.clave ? responsableDeEstatus(estatusEtapa.get(f.clave), responsablesEtapa.get(f.clave)) : '');
 
         // ---- Filtros de las tablas: Etapa, Estado en SAP, Antigüedad del pendiente y Estatus ----
         // Se aplican a cada fila (etapa) con su estado real en SAP. Los KPI no cambian.
@@ -8893,20 +8898,26 @@ async function downloadPlanProduccionFromCloud() {
         // Excel completa solo para verlo en pantalla.
         function calcularMatrizActividadResponsable(filasObjeto) {
             const ETAPAS = ['FABRICACIÓN', 'RECUBRIMIENTO', 'INSPECCIÓN', 'ENVASE', 'ACONDICIONADO'];
-            const ACTIVIDADES = ESTATUS_ETAPA_OPCIONES;
-            const RESPONSABLES = ['DOC', 'PRO', 'ASC', 'IDE'];
+            // Cada etapa pendiente (X) cuenta una vez: sin Estatus va a «SIN ESTATUS» y sin responsable (control de cambio sin
+            // elegir ASC/PRO) a «SIN ASIGNAR», así el total cuadra con los pendientes. Esa fila/columna solo sale si hay casos.
+            const SIN_EST = 'SIN ESTATUS', SIN_RESP = 'SIN ASIGNAR';
+            const todasAct = [...ESTATUS_ETAPA_OPCIONES, SIN_EST];
+            const todosResp = ['DOC', 'PRO', 'ASC', 'IDE', SIN_RESP];
             const matrizActResp = {};
-            ACTIVIDADES.forEach(a => { matrizActResp[a] = {}; RESPONSABLES.forEach(r => matrizActResp[a][r] = 0); });
+            todasAct.forEach(a => { matrizActResp[a] = {}; todosResp.forEach(r => matrizActResp[a][r] = 0); });
 
             filasObjeto.forEach(row => {
                 ETAPAS.forEach(etapa => {
-                    const valorResp = String(row[`Responsable ${etapa}`] || '').trim().toUpperCase();
-                    const valorAct = estatusVigente(String(row[`Actividad Pendiente ${etapa}`] || '').trim().toUpperCase());
-                    if (ACTIVIDADES.includes(valorAct) && RESPONSABLES.includes(valorResp)) {
-                        matrizActResp[valorAct][valorResp]++;
-                    }
+                    if (String(row[etapa] || '').trim().toUpperCase() !== 'X') return;
+                    let valorResp = String(row[`Responsable ${etapa}`] || '').trim().toUpperCase();
+                    let valorAct = estatusVigente(String(row[`Actividad Pendiente ${etapa}`] || '').trim().toUpperCase());
+                    if (!ESTATUS_ETAPA_OPCIONES.includes(valorAct)) valorAct = SIN_EST;
+                    if (!todosResp.includes(valorResp)) valorResp = SIN_RESP;
+                    matrizActResp[valorAct][valorResp]++;
                 });
             });
+            const ACTIVIDADES = todasAct.filter(a => a !== SIN_EST || todosResp.some(r => matrizActResp[a][r] > 0));
+            const RESPONSABLES = todosResp.filter(r => r !== SIN_RESP || todasAct.some(a => matrizActResp[a][r] > 0));
             return { ACTIVIDADES, RESPONSABLES, matrizActResp };
         }
 
@@ -8927,7 +8938,9 @@ async function downloadPlanProduccionFromCloud() {
             // Responsable (la matriz cruzada ya se calculó arriba).
             const conteo = {}; // conteo[planta][etapa] = n
             plantas.forEach(p => { conteo[p] = {}; ETAPAS.forEach(e => conteo[p][e] = 0); });
-            const conteoResp = { DOC: 0, PRO: 0, ASC: 0, IDE: 0 };
+            // Acumulado por responsable = suma de la columna de la matriz (mismo conteo: cada etapa pendiente una vez).
+            const conteoResp = {};
+            RESPONSABLES.forEach(r => { conteoResp[r] = ACTIVIDADES.reduce((n, a) => n + matrizActResp[a][r], 0); });
 
             filasObjeto.forEach(row => {
                 const planta = String(row[colPlantaKey] || '').trim();
@@ -8935,8 +8948,6 @@ async function downloadPlanProduccionFromCloud() {
                     if (planta && conteo[planta] && String(row[etapa] || '').trim().toUpperCase() === 'X') {
                         conteo[planta][etapa]++;
                     }
-                    const valorResp = String(row[`Responsable ${etapa}`] || '').trim().toUpperCase();
-                    if (RESPONSABLES.includes(valorResp)) conteoResp[valorResp]++;
                 });
             });
 
