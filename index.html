@@ -8566,7 +8566,9 @@ async function downloadPlanProduccionFromCloud() {
                 };
             }
             const mat = esc(f.codigo), fija = f.fija, label = ETAPAS_FIJAS_LABEL[fija] || fija;
-            const chip = chipSapEtapa({ detallePreciso: { [fija]: f.d } }, fija);
+            // En los autorizados (SAP o a mano) no se muestra «Solicitud Aprobada/Rechazada vN»: la etapa ya está resuelta.
+            const chipSolResuelta = (f.estado === 'sap' || f.estado === 'autorizado') && f.d && f.d.candidatos && f.d.candidatos.length && /^SOLICITUD (APROBADA|RECHAZADA)/.test(String(candidatoDelChip(f.d).estadoNorm || '').toUpperCase());
+            const chip = chipSolResuelta ? '' : chipSapEtapa({ detallePreciso: { [fija]: f.d } }, fija);
             const verDetalle = `mostrarDetalleEtapa('${esc(f.producto)}','${fija}','${origen}')`;
             if (f.estado === 'sap') {
                 const c = f.d.candidatos[0];
@@ -9216,7 +9218,7 @@ async function downloadPlanProduccionFromCloud() {
                 'Etapa pendiente': f.fija ? (ETAPAS_FIJAS_LABEL[f.fija] || f.fija) : 'REVISAR',
                 'Estatus': f.estado === 'pendiente' ? estatusDeFila(f) : situacion,
                 'Responsable': f.estado === 'pendiente' ? responsableDeFila(f) : (f.estado === 'sap' ? ((autorizadorDeFila(f) || {}).corto || '') : ''),
-                'Estado en SAP': !f.d ? (f.revisar || '') : (c && !c.sinRmd ? c.estado : 'Sin RMD'),
+                'Estado en SAP': !f.d ? (f.revisar || '') : (c && !c.sinRmd ? (situacion && /^SOLICITUD (APROBADA|RECHAZADA)/.test(String(c.estadoNorm || '').toUpperCase()) ? '' : c.estado) : 'Sin RMD'),
                 'RMD': c && !c.sinRmd ? (c.rmd || (c.sol ? 'Solicitud ' + c.sol : '')) : '',
                 'Versión': c && !c.sinRmd ? c.version : '',
                 'Antigüedad (días)': f.estado === 'pendiente' && c && !c.sinRmd && Number.isFinite(c.fecha) ? diasDesde(c.fecha) : '',
