@@ -13039,8 +13039,14 @@ async function maybeAutoStartTour() {
         const pctDe = (aut, base) => (base > 0 ? Math.round((aut / base) * 100) : null);
         // Backlog que se muestra (lámina 2, Ruta 1 y % Backlog DOC): el del PowerPoint (vigentes al empezar el mes, ver
         // cuadroDesdeVersiones) si ya está calculado; si no (datos guardados antes de este cambio), los pendientes del mes anterior.
-        const backlogDe = (x) => (x && Number.isFinite(x.bkv && x.bkv[2]) ? x.bkv[2] : (x ? x.ant[2] : null));
-        const claveBacklog = (x) => (x && Number.isFinite(x.bkv && x.bkv[2]) ? 'bkv' : 'ant');
+        // Pedido de CINTIA (07/11/2026): desde noviembre de 2026 el Backlog de la lámina 2 (y del PowerPoint que se exporta, de la
+        // Ruta 1 y del % Backlog DOC) es el total de pendientes del mes sin los INACTIVO: RMD con la última versión Ingresada o
+        // Solicitada + suspendidos que el equipo mantiene + masivos (ver cuadroDesdeVersiones). En el mes en curso, a la fecha de
+        // SAP. Los meses anteriores siguen con los RMD vigentes, como se reportaron.
+        const BACKLOG_PENDIENTES_DESDE = '2026-11';
+        const backlogPend = (x) => !!(x && x.tres && x.tres[2] && x.tres[2].clave >= BACKLOG_PENDIENTES_DESDE && Number.isFinite(x.pend && x.pend[2]));
+        const backlogDe = (x) => (backlogPend(x) ? x.pend[2] : (x && Number.isFinite(x.bkv && x.bkv[2]) ? x.bkv[2] : (x ? x.ant[2] : null)));
+        const claveBacklog = (x) => (backlogPend(x) ? 'pend' : (x && Number.isFinite(x.bkv && x.bkv[2]) ? 'bkv' : 'ant'));
         function cuadroPrograma(ind, per, traz) {
             // Indicadores guardados por una versión anterior de la página: se recalculan con el detalle de RMD guardado, si trae la planta.
             const cuadro = ind && ind.v === 3 ? ind : (ind ? cuadroDesdeDetalle(ind.generado, traz) : null);
@@ -13248,7 +13254,7 @@ async function maybeAutoStartTour() {
                 <summary>¿Cómo se calculan estos números?</summary>
                 <div class="sts-logica-grid">
                     <div><h4>1. De dónde salen</h4><p>De SAP. Se actualizan cada vez que alguien usa <b>«Enviar a Status RMD»</b> en el portal. Últimos datos: <b>${sap ? esc(dayjs(sap).format('DD/MM/YYYY HH:mm')) : 'sin datos'}</b>.</p></div>
-                    ${d.programa && ['P1', 'P2'].some((pl) => d.programa[pl] && claveBacklog(d.programa[pl]) === 'bkv') ? `<div><h4>2. Backlog de ${esc(mes)}</h4><p>Como en el PowerPoint del status: los RMD <b>vigentes</b> al empezar ${esc(mes)} (última versión Autorizada de cada RMD): <b>P1 ${bk('P1')} · P2 ${bk('P2')}</b>. No cuentan los códigos que <b>no empiezan por 2</b> (migrados antes de SAP) ni los que dicen <b>«descontinuado»</b> en Observaciones.</p></div>` : `<div><h4>2. Backlog de ${esc(mes)}</h4><p>Lo que quedó pendiente al cierre de ${esc(mesAnt)}: <b>P1 ${bk('P1')} · P2 ${bk('P2')}</b>. Cuenta como pendiente:</p>
+                    ${d.programa && ['P1', 'P2'].some((pl) => d.programa[pl] && claveBacklog(d.programa[pl]) === 'pend') ? `<div><h4>2. Backlog de ${esc(mes)}</h4><p>El total de pendientes, sin los <b>INACTIVO</b>: RMD cuya última versión está <b>Ingresada</b> o <b>Solicitada</b> (sin Solicitud Aprobada) + <b>suspendidos que el equipo mantiene</b> y masivos: <b>P1 ${bk('P1')} · P2 ${bk('P2')}</b>. Es el mismo número del PowerPoint que se exporta.</p></div>` : d.programa && ['P1', 'P2'].some((pl) => d.programa[pl] && claveBacklog(d.programa[pl]) === 'bkv') ? `<div><h4>2. Backlog de ${esc(mes)}</h4><p>Como en el PowerPoint del status: los RMD <b>vigentes</b> al empezar ${esc(mes)} (última versión Autorizada de cada RMD): <b>P1 ${bk('P1')} · P2 ${bk('P2')}</b>. No cuentan los códigos que <b>no empiezan por 2</b> (migrados antes de SAP) ni los que dicen <b>«descontinuado»</b> en Observaciones.</p></div>` : `<div><h4>2. Backlog de ${esc(mes)}</h4><p>Lo que quedó pendiente al cierre de ${esc(mesAnt)}: <b>P1 ${bk('P1')} · P2 ${bk('P2')}</b>. Cuenta como pendiente:</p>
                         <ul><li>RMD <b>Ingresados</b>, hasta que se autorizan.</li><li><b>Solicitudes abiertas</b> (Solicitado o Solicitud Aprobada).</li>
                         <li><b>Suspendidos con «masivo»</b> en Observaciones, hasta que su siguiente versión se solicite o ingrese (desde ahí cuenta la nueva, no los dos).</li>
                         <li><b>Versiones vigentes (Autorizadas) con «PENDIENTE MASIVO»</b> en Observaciones: un masivo sin versión nueva. Cuentan desde el mes en curso (noviembre de 2026 en adelante) hasta que se solicite, ingrese o autorice otra versión.</li></ul>
@@ -13339,6 +13345,10 @@ async function maybeAutoStartTour() {
             else linea1 = `Backlog de ${esc(nombreMes(clave).toLowerCase())}: ${kpi === null || kpi === undefined ? '—' : `<b class="n">${kpi}</b>`}.`;
             const hoy = clave === mesSap ? partesBacklog(p.cuadro, clave, pl) : null;
             const linea2 = hoy ? `<br>Hoy en SAP siguen pendientes (backlog del mes siguiente, si no se autorizan): ${formula(hoy)}.` : '';
+            if (claveBacklog(p[pl]) === 'pend') {
+                const r = partesBacklog(p.cuadro, clave, pl);
+                return `<div class="sts-regla"><span class="sts-regla-f"><b>¿Qué es el Backlog?</b> Desde noviembre de 2026, el total de pendientes: RMD cuya <b>última versión</b> está <b>Ingresada</b> + <b>Solicitados</b> (sin Solicitud Aprobada) + <b>suspendidos que el equipo mantiene</b> y masivos. No cuentan los <b>INACTIVO</b> (1 328 suspendidos que el equipo decidió dar de baja el 07/11/2026). En el mes en curso es la foto de SAP de hoy. % Backlog DOC = autorizados del backlog en el mes / backlog.</span>Backlog de ${esc(nombreMes(clave).toLowerCase())}${clave === mesSap ? ' (a la fecha de SAP)' : ''}: ${r ? formula(r) : `<b class="n">${backlogDe(p[pl])}</b>`}.</div>`;
+            }
             if (claveBacklog(p[pl]) === 'bkv') return `<div class="sts-regla"><span class="sts-regla-f"><b>¿Qué es el Backlog?</b> Como en el PowerPoint del status: los RMD <b>vigentes</b> al empezar el mes (la última versión Autorizada de cada RMD), sin los códigos que <b>no empiezan por 2</b> (se migraron antes de SAP y no se actualizaron) ni los que dicen <b>«descontinuado»</b> en Observaciones. % Backlog DOC = autorizados del backlog en el mes / backlog.</span>Backlog de ${esc(nombreMes(clave).toLowerCase())}: <b class="n">${backlogDe(p[pl])}</b> RMD vigentes. Pendientes al cierre de ${esc(nombreMes(ant).toLowerCase())} (cuadro del área): <b class="n">${kpi === null || kpi === undefined ? '—' : kpi}</b>.</div>`;
             return `<div class="sts-regla"><span class="sts-regla-f"><b>¿Qué es el Backlog?</b> Lo que quedó pendiente al cierre del mes anterior: RMD cuya <b>última versión</b> está <b>Ingresada</b> + <b>Solicitados</b> (sin Solicitud Aprobada: para el área ya es su RMD Ingresado) + <b>Suspendidos que el equipo mantiene</b> (última versión Suspendida; desde noviembre de 2026) o con «masivo» en Observaciones + versiones vigentes con <b>«PENDIENTE MASIVO»</b>, vengan de ese mes o de meses anteriores. No cuentan los <b>INACTIVO</b> (1 328 suspendidos que el equipo decidió dar de baja el 07/11/2026), Autorizados, Cancelados, rechazados ni los que SAP suspende al autorizar otra versión.</span>${linea1}${linea2}</div>`;
         }
@@ -13352,7 +13362,7 @@ async function maybeAutoStartTour() {
                 <div class="sts-planta">${PLANTAS[pl]}</div>
                 <div class="sts-kpis cuatro">
                     <div class="sts-kpi"><small>Solicitados</small><b>${nDet(p[pl].sol[2], `cuadro|${pl}|${clave}|sol`)}</b><span class="meta">por fecha de ingreso real</span></div>
-                    <div class="sts-kpi"><small>Backlog</small><b>${nDet(backlogDe(p[pl]), `cuadro|${pl}|${clave}|${claveBacklog(p[pl])}`)}</b><span class="meta">${claveBacklog(p[pl]) === 'bkv' ? 'RMD vigentes al empezar el mes' : 'pendiente al empezar el mes'}</span></div>
+                    <div class="sts-kpi"><small>Backlog</small><b>${nDet(backlogDe(p[pl]), `cuadro|${pl}|${clave}|${claveBacklog(p[pl])}`)}</b><span class="meta">${claveBacklog(p[pl]) === 'pend' ? 'total de pendientes, sin INACTIVO' : (claveBacklog(p[pl]) === 'bkv' ? 'RMD vigentes al empezar el mes' : 'pendiente al empezar el mes')}</span></div>
                     <div class="sts-kpi naranja"><small>Autorizados</small><b>${nDet(p[pl].aut[2], `cuadro|${pl}|${clave}|aut`)}</b>${p[pl].autBk[2] !== null ? `<span class="meta">${nDet(p[pl].autMes[2], `cuadro|${pl}|${clave}|autMes`)} del mes · ${nDet(p[pl].autBk[2], `cuadro|${pl}|${clave}|autBk`)} del backlog</span>` : ''}</div>
                     <div class="sts-kpi"><small>% autorizados</small><b>${pctTxt(p[pl].pct[2])}</b><span class="meta">del área ${p[pl].fuera[2] ? nDet(p[pl].fuera[2], `cuadro|${pl}|${clave}|fuera`, pctTxt(p[pl].pctArea[2])) : pctTxt(p[pl].pctArea[2])} · meta ${META_AUTORIZADOS} %</span></div>
                 </div>
