@@ -12376,9 +12376,9 @@ async function maybeAutoStartTour() {
                     const nueva = [...new Set((v.grupos || []).flatMap((g) => grupos.get(g) || []))]
                         .filter((w) => w !== v && w.version > v.version && w.fAut).sort((x, y) => x.fAut - y.fAut)[0];
                     tramos.push([v, tI, nueva ? Math.min(nueva.fAut.endOf('day').valueOf(), ahora) : Infinity]);
-                // Pedido de CINTIA (07/11/2026): de las solicitudes solo cuentan las Solicitadas; una Solicitud Aprobada es, para el
-                // área, un Ingresado (ya está en el RMD que se ingresa), así que no se cuenta aparte.
-                } else if (CONTAR_SOLICITUDES_ABIERTAS && estado === 'SOLICITADO') tramos.push([v, tI, Infinity]);
+                // Pedido de CINTIA (07/11/2026): una Solicitud Aprobada es, para el área, un Ingresado (sigue pendiente, pero se
+                // muestra con los Ingresados); en «Solicitados» solo van las que siguen en Solicitado (ver partesBacklog).
+                } else if (CONTAR_SOLICITUDES_ABIERTAS && ES_SOLICITUD_ABIERTA.has(estado)) tramos.push([v, tI, Infinity]);
                 else if ((estado === 'AUTORIZADO' || estado === 'SUSPENDIDO') && v.fAut) tramos.push([v, tI, Math.min(v.fAut.endOf('day').valueOf(), ahora)]);
                 if (estado === 'SUSPENDIDO') {
                     if (esInactivo(v)) { v.inactivo = true; return; }   // INACTIVO (decisión del equipo): ni suspendido ni backlog
@@ -13311,7 +13311,7 @@ async function maybeAutoStartTour() {
             x.pend.forEach((id) => {
                 const v = versionDe((c.vers || {})[id]) || {};
                 if (susp.has(id) || v.estado === 'AUTORIZADO') r.mas++;
-                else if (!v.codigo || ES_SOLICITUD_ABIERTA.has(v.estado)) r.sol++;
+                else if (v.estado === 'SOLICITADO' || (!v.codigo && v.estado !== 'SOLICITUD APROBADA')) r.sol++;   // Solicitud Aprobada = Ingresado
                 else r.ing++;
             });
             return r;
@@ -13328,7 +13328,7 @@ async function maybeAutoStartTour() {
             const hoy = clave === mesSap ? partesBacklog(p.cuadro, clave, pl) : null;
             const linea2 = hoy ? `<br>Hoy en SAP siguen pendientes (backlog del mes siguiente, si no se autorizan): ${formula(hoy)}.` : '';
             if (claveBacklog(p[pl]) === 'bkv') return `<div class="sts-regla"><span class="sts-regla-f"><b>¿Qué es el Backlog?</b> Como en el PowerPoint del status: los RMD <b>vigentes</b> al empezar el mes (la última versión Autorizada de cada RMD), sin los códigos que <b>no empiezan por 2</b> (se migraron antes de SAP y no se actualizaron) ni los que dicen <b>«descontinuado»</b> en Observaciones. % Backlog DOC = autorizados del backlog en el mes / backlog.</span>Backlog de ${esc(nombreMes(clave).toLowerCase())}: <b class="n">${backlogDe(p[pl])}</b> RMD vigentes. Pendientes al cierre de ${esc(nombreMes(ant).toLowerCase())} (cuadro del área): <b class="n">${kpi === null || kpi === undefined ? '—' : kpi}</b>.</div>`;
-            return `<div class="sts-regla"><span class="sts-regla-f"><b>¿Qué es el Backlog?</b> Lo que quedó pendiente al cierre del mes anterior: RMD cuya <b>última versión</b> está <b>Ingresada</b> + <b>Solicitados</b> (sin Solicitud Aprobada, que para el área ya es un Ingresado) + <b>Suspendidos que el equipo mantiene</b> (última versión Suspendida; desde noviembre de 2026) o con «masivo» en Observaciones + versiones vigentes con <b>«PENDIENTE MASIVO»</b>, vengan de ese mes o de meses anteriores. No cuentan los <b>INACTIVO</b> (1 328 suspendidos que el equipo decidió dar de baja el 07/11/2026), Autorizados, Cancelados, rechazados ni los que SAP suspende al autorizar otra versión.</span>${linea1}${linea2}</div>`;
+            return `<div class="sts-regla"><span class="sts-regla-f"><b>¿Qué es el Backlog?</b> Lo que quedó pendiente al cierre del mes anterior: RMD cuya <b>última versión</b> está <b>Ingresada</b> + <b>Solicitados</b> (una Solicitud Aprobada cuenta como Ingresado) + <b>Suspendidos que el equipo mantiene</b> (última versión Suspendida; desde noviembre de 2026) o con «masivo» en Observaciones + versiones vigentes con <b>«PENDIENTE MASIVO»</b>, vengan de ese mes o de meses anteriores. No cuentan los <b>INACTIVO</b> (1 328 suspendidos que el equipo decidió dar de baja el 07/11/2026), Autorizados, Cancelados, rechazados ni los que SAP suspende al autorizar otra versión.</span>${linea1}${linea2}</div>`;
         }
         function htmlPrograma(d) {
             const p = d.programa, meses = d.per.meses.map((m) => MESES[m.month()]), clave = d.per.hasta.format('YYYY-MM');
@@ -14129,7 +14129,7 @@ async function maybeAutoStartTour() {
             const ver = (id) => versionDe(c.vers[id]) || { codigo: id };
             const ingresoEn = (v, m) => !!(v.fIng ? v.fIng.slice(0, 7) === m : v.fReg && v.fReg.slice(0, 7) === m);
             const como = {
-                pend: (m, id) => { const v = ver(id); const s = ids(m, 'susp').includes(id) ? (v.suspEquipo || !RX_MASIVO.test(v.obs || '') ? 'Suspendido que se mantiene' : 'Suspendido masivo') : (v.estado === 'AUTORIZADO' ? 'Vigente con «PENDIENTE MASIVO»' : (ES_SOLICITUD_ABIERTA.has(v.estado) ? 'Solicitud abierta' : 'Ingresado sin autorizar'));
+                pend: (m, id) => { const v = ver(id); const s = ids(m, 'susp').includes(id) ? (v.suspEquipo || !RX_MASIVO.test(v.obs || '') ? 'Suspendido que se mantiene' : 'Suspendido masivo') : (v.estado === 'AUTORIZADO' ? 'Vigente con «PENDIENTE MASIVO»' : (v.estado === 'SOLICITADO' ? 'Solicitado' : v.estado === 'SOLICITUD APROBADA' ? 'Solicitud Aprobada (cuenta como Ingresado)' : 'Ingresado sin autorizar'));
                     return `${s}${m === mesSap ? ' · a la fecha de SAP' : ' · al cierre'}${ids(m, 'fuera').includes(id) ? ' · no depende del área' : ''}`; },
                 aut: (m, id) => `Autorizado en el mes · ${ingresoEn(ver(id), m) ? 'ingreso real del mes' : 'del backlog'}`,
                 bkv: (m, id) => `Vigente al empezar el mes (${ver(id).estado === 'SUSPENDIDO' ? 'luego reemplazado por otra versión' : 'última versión Autorizada'})`,
