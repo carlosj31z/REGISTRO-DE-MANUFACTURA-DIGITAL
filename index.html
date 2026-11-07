@@ -13361,7 +13361,22 @@ async function maybeAutoStartTour() {
         // Días laborables = backlog / RMD por día; meses = días / días laborables por mes; fecha = hoy + esos meses. Si siguen
         // entrando solicitados como el promedio de los 3 últimos meses cerrados, el backlog baja solo con lo que se autoriza de más.
         const DIAS_LAB_MES = 21;
-        const diasLaborables = (m) => { let n = 0; for (let x = m.startOf('month'), fin = m.endOf('month'); !x.isAfter(fin); x = x.add(1, 'day')) if (x.day() % 6) n++; return n; };
+        // Días laborables: lunes a viernes sin los feriados nacionales de Perú (pedido de CINTIA, 07/11/2026). Jueves y Viernes
+        // Santo cambian cada año (se calculan con la fecha de Pascua).
+        const FERIADOS_PE = ['01-01', '05-01', '06-07', '06-29', '07-23', '07-28', '07-29', '08-06', '08-30', '10-08', '11-01', '12-08', '12-09', '12-25'];
+        const feriadosAnio = {};
+        function feriadosPeru(anio) {
+            if (feriadosAnio[anio]) return feriadosAnio[anio];
+            const a = anio % 19, b = Math.floor(anio / 100), c = anio % 100, d = Math.floor(b / 4), e = b % 4, f = Math.floor((b + 8) / 25), g = Math.floor((b - f + 1) / 3);
+            const h = (19 * a + b - d - g + 15) % 30, i = Math.floor(c / 4), k = c % 4, l = (32 + 2 * e + 2 * i - h - k) % 7, m = Math.floor((a + 11 * h + 22 * l) / 451);
+            const mes = Math.floor((h + l - 7 * m + 114) / 31), dia = ((h + l - 7 * m + 114) % 31) + 1;
+            const pascua = dayjs(new Date(anio, mes - 1, dia));
+            return (feriadosAnio[anio] = new Set([...FERIADOS_PE.map((x) => `${anio}-${x}`), pascua.subtract(3, 'day').format('YYYY-MM-DD'), pascua.subtract(2, 'day').format('YYYY-MM-DD')]));
+        }
+        const esLaborable = (x) => x.day() % 6 !== 0 && !feriadosPeru(x.year()).has(x.format('YYYY-MM-DD'));
+        const diasLaborables = (m) => { let n = 0; for (let x = m.startOf('month'), fin = m.endOf('month'); !x.isAfter(fin); x = x.add(1, 'day')) if (esLaborable(x)) n++; return n; };
+        // Fecha en que se cumplen n días laborables contando desde mañana.
+        const trasLaborables = (n) => { let x = dayjs().startOf('day'), k = 0; while (k < n) { x = x.add(1, 'day'); if (esLaborable(x)) k++; } return x; };
         const dec1 = (n) => (Math.round(n * 10) / 10).toLocaleString('es-PE', { maximumFractionDigits: 1 });
         function estimadoBacklog(d, pl) {
             const p = d.programa && d.programa[pl], bk = p ? backlogDe(p) : null;
@@ -13373,29 +13388,29 @@ async function maybeAutoStartTour() {
             const solProm = cerr.length && cerr.every((f) => Number.isFinite(f.sol)) ? cerr.reduce((t, f) => t + f.sol, 0) / cerr.length : null;
             const cfg = estimadoCfg[pl] || {};
             const rmdDia = Number.isFinite(cfg.rmdDia) && cfg.rmdDia > 0 ? cfg.rmdDia : rmdDef;
-            const diasMes = Number.isFinite(cfg.diasMes) && cfg.diasMes > 0 ? cfg.diasMes : DIAS_LAB_MES;
-            const r = { bk, rmdDia, diasMes, rmdDef, propio: { rmdDia: Number.isFinite(cfg.rmdDia), diasMes: Number.isFinite(cfg.diasMes) }, solProm,
+            const diasMesDef = cerr.length ? Math.round((dias / cerr.length) * 10) / 10 : DIAS_LAB_MES;
+            const diasMes = Number.isFinite(cfg.diasMes) && cfg.diasMes > 0 ? cfg.diasMes : diasMesDef;
+            const r = { bk, rmdDia, diasMes, rmdDef, diasMesDef, propio: { rmdDia: Number.isFinite(cfg.rmdDia), diasMes: Number.isFinite(cfg.diasMes) }, solProm,
                 meses3: cerr.map((f) => nombreMes(f.clave).split(' ')[0].toLowerCase()) };
             if (!(rmdDia > 0)) return r;
             r.dias = Math.ceil(bk / rmdDia); r.meses = r.dias / diasMes;
-            const fin = (m) => { const e = Math.floor(m); return dayjs().add(e, 'month').add(Math.round((m - e) * 30), 'day'); };
-            r.fecha = fin(r.meses);
+            r.fecha = trasLaborables(r.dias);
             if (solProm !== null) {
                 r.netoMes = rmdDia * diasMes - solProm;
-                if (r.netoMes > 0) { r.mesesNeto = bk / r.netoMes; r.fechaNeto = fin(r.mesesNeto); }
+                if (r.netoMes > 0) { r.mesesNeto = bk / r.netoMes; r.fechaNeto = trasLaborables(Math.ceil(r.mesesNeto * diasMes)); }
             }
             return r;
         }
         // Una línea para el PowerPoint (lámina 2, debajo de cada panel).
         function textoEstimado(e) {
             if (!e || !e.dias) return '';
-            return `Estimado para terminar el backlog: ${e.bk} RMD ÷ ${dec1(e.rmdDia)} por día laborable = ${e.dias} días laborables ≈ ${dec1(e.meses)} meses (de ${dec1(e.diasMes)} días), hacia el ${e.fecha.format('DD/MM/YYYY')}, si no entran nuevos.`;
+            return `Estimado para terminar el backlog: ${e.bk} RMD ÷ ${dec1(e.rmdDia)} por día laborable = ${e.dias} días laborables (lun–vie, sin feriados de Perú) ≈ ${dec1(e.meses)} meses, hacia el ${e.fecha.format('DD/MM/YYYY')}, si no entran nuevos.`;
         }
         function htmlEstimado(d, pl) {
             const e = estimadoBacklog(d, pl);
             if (!e) return '';
             const campo = (k, v, paso, txt) => `<input type="number" inputmode="decimal" min="0" step="${paso}" class="sts-campo sts-horas" data-est="${pl}|${k}" value="${e.propio[k] ? v : ''}" placeholder="${v === null ? '' : dec1(v)}" aria-label="${txt} · ${pl}">`;
-            const base = e.rmdDef === null ? 'sin datos de meses cerrados: escribe cuántos RMD por día' : `vacío = ${dec1(e.rmdDef)}, el promedio autorizado por día laborable en ${esc(e.meses3.join(', '))}`;
+            const base = (e.rmdDef === null ? 'sin datos de meses cerrados: escribe cuántos RMD por día' : `vacío = ${dec1(e.rmdDef)} RMD y ${dec1(e.diasMesDef)} días, el promedio de ${esc(e.meses3.join(', '))}`) + '. Días laborables: lunes a viernes, sin feriados de Perú';
             let res = 'Escribe cuántos RMD se autorizan por día laborable.';
             if (e.dias) {
                 res = `<b class="n">${e.bk}</b> RMD ÷ <b class="n">${dec1(e.rmdDia)}</b> por día = <b class="n">${e.dias}</b> días laborables ≈ <b class="n">${dec1(e.meses)}</b> meses, hacia el <b class="n">${e.fecha.format('DD/MM/YYYY')}</b>, si no entran nuevos.`;
