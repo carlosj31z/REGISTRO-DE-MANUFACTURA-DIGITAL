@@ -12208,6 +12208,10 @@ async function maybeAutoStartTour() {
         let graficos = [], graficosAcu = [];
         let estatusCar = {};        // val_estatus_caracterizacion
         const CLAVE_HORAS = 'ind_horas_efectivas';
+        // Estimado para terminar el backlog (pedido de CINTIA, 07/11/2026): RMD por día laborable y días laborables por mes, por
+        // planta. Se escriben en la lámina 2; vacío = promedio de los autorizados de los 3 últimos meses cerrados y 21 días.
+        const CLAVE_ESTIMADO = 'ind_estimado_backlog';
+        let estimadoCfg = {};
         let horasEf = {};           // ind_horas_efectivas
         const vista = { detalleAbierto: false, planta: '', soloPendientes: true, acuAbierto: false, acuPlanta: '', acuEtapa: '', acuLista: 'pend', foto: '' };
 
@@ -13094,12 +13098,13 @@ async function maybeAutoStartTour() {
         // ---------- Cálculo completo ----------
         async function calcular(perForzado) {
             const per = perForzado || periodo();
-            const [indicadores, r1, car, est, acu, traz, horas, fotos] = await Promise.all([storeGet('val_rmd_indicadores_mes'), calcularRuta1(), storeGet('val_rmd_caracterizaciones'),
-                storeGet('val_estatus_caracterizacion'), calcularAcumulado(), storeGet('val_rmd_trazabilidad'), storeGet(CLAVE_HORAS), storeGet(CLAVE_FOTOS)]);
+            const [indicadores, r1, car, est, acu, traz, horas, fotos, est2] = await Promise.all([storeGet('val_rmd_indicadores_mes'), calcularRuta1(), storeGet('val_rmd_caracterizaciones'),
+                storeGet('val_estatus_caracterizacion'), calcularAcumulado(), storeGet('val_rmd_trazabilidad'), storeGet(CLAVE_HORAS), storeGet(CLAVE_FOTOS), storeGet(CLAVE_ESTIMADO)]);
             if (fotos && fotos.v === 1 && fotos.dias) fotosGuardadas = fotos;
             estatusCar = (est && typeof est === 'object') ? conEstatusVigente(est) : {};
             const items = (car && Array.isArray(car.items)) ? car.items : [];
             horasEf = horas && typeof horas === 'object' ? horas : {};
+            estimadoCfg = (est2 && typeof est2 === 'object') ? est2 : {};
             const programa = cuadroPrograma(indicadores, per, traz);
             if (!r1.error) ['P1', 'P2'].forEach((pl) => { const a = programa[pl].aut[2]; r1[pl].aut = Number.isFinite(a) ? a : 0; r1[pl].autSinDato = !Number.isFinite(a); });
             return { per, programa, r1, acu, r2: ruta2(items), car: { items, sinDatos: !car, generado: car && car.generado } };
@@ -13352,6 +13357,71 @@ async function maybeAutoStartTour() {
             if (claveBacklog(p[pl]) === 'bkv') return `<div class="sts-regla"><span class="sts-regla-f"><b>¿Qué es el Backlog?</b> Como en el PowerPoint del status: los RMD <b>vigentes</b> al empezar el mes (la última versión Autorizada de cada RMD), sin los códigos que <b>no empiezan por 2</b> (se migraron antes de SAP y no se actualizaron) ni los que dicen <b>«descontinuado»</b> en Observaciones. % Backlog DOC = autorizados del backlog en el mes / backlog.</span>Backlog de ${esc(nombreMes(clave).toLowerCase())}: <b class="n">${backlogDe(p[pl])}</b> RMD vigentes. Pendientes al cierre de ${esc(nombreMes(ant).toLowerCase())} (cuadro del área): <b class="n">${kpi === null || kpi === undefined ? '—' : kpi}</b>.</div>`;
             return `<div class="sts-regla"><span class="sts-regla-f"><b>¿Qué es el Backlog?</b> Lo que quedó pendiente al cierre del mes anterior: RMD cuya <b>última versión</b> está <b>Ingresada</b> + <b>Solicitados</b> (sin Solicitud Aprobada: para el área ya es su RMD Ingresado) + <b>Suspendidos que el equipo mantiene</b> (última versión Suspendida; desde noviembre de 2026) o con «masivo» en Observaciones + versiones vigentes con <b>«PENDIENTE MASIVO»</b>, vengan de ese mes o de meses anteriores. No cuentan los <b>INACTIVO</b> (1 328 suspendidos que el equipo decidió dar de baja el 07/11/2026), Autorizados, Cancelados, rechazados ni los que SAP suspende al autorizar otra versión.</span>${linea1}${linea2}</div>`;
         }
+        // ---------- Estimado para terminar el backlog (pedido de CINTIA, 07/11/2026) ----------
+        // Días laborables = backlog / RMD por día; meses = días / días laborables por mes; fecha = hoy + esos meses. Si siguen
+        // entrando solicitados como el promedio de los 3 últimos meses cerrados, el backlog baja solo con lo que se autoriza de más.
+        const DIAS_LAB_MES = 21;
+        const diasLaborables = (m) => { let n = 0; for (let x = m.startOf('month'), fin = m.endOf('month'); !x.isAfter(fin); x = x.add(1, 'day')) if (x.day() % 6) n++; return n; };
+        const dec1 = (n) => (Math.round(n * 10) / 10).toLocaleString('es-PE', { maximumFractionDigits: 1 });
+        function estimadoBacklog(d, pl) {
+            const p = d.programa && d.programa[pl], bk = p ? backlogDe(p) : null;
+            if (!Number.isFinite(bk)) return null;
+            const mesAct = dayjs().format('YYYY-MM');
+            const cerr = (p.filas || []).filter((f) => f.clave < mesAct && Number.isFinite(f.aut)).slice(-3);
+            const dias = cerr.reduce((t, f) => t + diasLaborables(dayjs(f.clave + '-01')), 0), autT = cerr.reduce((t, f) => t + f.aut, 0);
+            const rmdDef = dias ? Math.round((autT / dias) * 10) / 10 : null;
+            const solProm = cerr.length && cerr.every((f) => Number.isFinite(f.sol)) ? cerr.reduce((t, f) => t + f.sol, 0) / cerr.length : null;
+            const cfg = estimadoCfg[pl] || {};
+            const rmdDia = Number.isFinite(cfg.rmdDia) && cfg.rmdDia > 0 ? cfg.rmdDia : rmdDef;
+            const diasMes = Number.isFinite(cfg.diasMes) && cfg.diasMes > 0 ? cfg.diasMes : DIAS_LAB_MES;
+            const r = { bk, rmdDia, diasMes, rmdDef, propio: { rmdDia: Number.isFinite(cfg.rmdDia), diasMes: Number.isFinite(cfg.diasMes) }, solProm,
+                meses3: cerr.map((f) => nombreMes(f.clave).split(' ')[0].toLowerCase()) };
+            if (!(rmdDia > 0)) return r;
+            r.dias = Math.ceil(bk / rmdDia); r.meses = r.dias / diasMes;
+            const fin = (m) => { const e = Math.floor(m); return dayjs().add(e, 'month').add(Math.round((m - e) * 30), 'day'); };
+            r.fecha = fin(r.meses);
+            if (solProm !== null) {
+                r.netoMes = rmdDia * diasMes - solProm;
+                if (r.netoMes > 0) { r.mesesNeto = bk / r.netoMes; r.fechaNeto = fin(r.mesesNeto); }
+            }
+            return r;
+        }
+        // Una línea para el PowerPoint (lámina 2, debajo de cada panel).
+        function textoEstimado(e) {
+            if (!e || !e.dias) return '';
+            return `Estimado para terminar el backlog: ${e.bk} RMD ÷ ${dec1(e.rmdDia)} por día laborable = ${e.dias} días laborables ≈ ${dec1(e.meses)} meses (de ${dec1(e.diasMes)} días), hacia el ${e.fecha.format('DD/MM/YYYY')}, si no entran nuevos.`;
+        }
+        function htmlEstimado(d, pl) {
+            const e = estimadoBacklog(d, pl);
+            if (!e) return '';
+            const campo = (k, v, paso, txt) => `<input type="number" inputmode="decimal" min="0" step="${paso}" class="sts-campo sts-horas" data-est="${pl}|${k}" value="${e.propio[k] ? v : ''}" placeholder="${v === null ? '' : dec1(v)}" aria-label="${txt} · ${pl}">`;
+            const base = e.rmdDef === null ? 'sin datos de meses cerrados: escribe cuántos RMD por día' : `vacío = ${dec1(e.rmdDef)}, el promedio autorizado por día laborable en ${esc(e.meses3.join(', '))}`;
+            let res = 'Escribe cuántos RMD se autorizan por día laborable.';
+            if (e.dias) {
+                res = `<b class="n">${e.bk}</b> RMD ÷ <b class="n">${dec1(e.rmdDia)}</b> por día = <b class="n">${e.dias}</b> días laborables ≈ <b class="n">${dec1(e.meses)}</b> meses, hacia el <b class="n">${e.fecha.format('DD/MM/YYYY')}</b>, si no entran nuevos.`;
+                if (e.netoMes !== undefined) res += e.netoMes > 0
+                    ? `<br>Si siguen entrando unos ${Math.round(e.solProm)} solicitados al mes (promedio de ${esc(e.meses3.join(', '))}), el backlog baja ${Math.round(e.netoMes)} al mes: ≈ <b class="n">${dec1(e.mesesNeto)}</b> meses, hacia el <b class="n">${e.fechaNeto.format('DD/MM/YYYY')}</b>.`
+                    : `<br>Si siguen entrando unos ${Math.round(e.solProm)} solicitados al mes (promedio de ${esc(e.meses3.join(', '))}), a ${dec1(e.rmdDia * e.diasMes)} autorizados al mes el backlog <b>no baja</b>: hace falta autorizar más de ${dec1(e.solProm / e.diasMes)} por día.`;
+            }
+            return `<div class="sts-regla"><span class="sts-regla-f"><b>Estimado para terminar el backlog</b> · ${base}. Sale también en el PowerPoint.</span>
+                <label>RMD por día laborable ${campo('rmdDia', e.rmdDia, 0.1, 'RMD por día laborable')}</label>
+                <label>Días laborables al mes ${campo('diasMes', e.diasMes, 1, 'Días laborables al mes')}</label><br>${res}</div>`;
+        }
+        async function alCambiarEstimado(e) {
+            const inp = e.target.closest('input[data-est]');
+            if (!inp) return;
+            const [pl, k] = inp.dataset.est.split('|');
+            const t = String(inp.value).trim().replace(',', '.'), v = t === '' ? null : Number(t);
+            if (v !== null && (!Number.isFinite(v) || v <= 0)) { inp.value = ''; return; }
+            try {
+                const guardado = await storeGet(CLAVE_ESTIMADO);
+                if (guardado && typeof guardado === 'object') estimadoCfg = guardado;
+                const x = estimadoCfg[pl] || (estimadoCfg[pl] = {});
+                if (v === null) delete x[k]; else x[k] = v;
+                await storeSet(CLAVE_ESTIMADO, estimadoCfg);
+                if (ultimo) pintar();
+            } catch (err) { console.error(err); Swal.fire({ icon: 'error', title: 'No se pudo guardar el estimado', text: err.message, background: '#0f172a' }); }
+        }
         function htmlPrograma(d) {
             const p = d.programa, meses = d.per.meses.map((m) => MESES[m.month()]), clave = d.per.hasta.format('YYYY-MM');
             const avisos = [];
@@ -13367,6 +13437,7 @@ async function maybeAutoStartTour() {
                     <div class="sts-kpi"><small>% autorizados</small><b>${pctTxt(p[pl].pct[2])}</b><span class="meta">del área ${p[pl].fuera[2] ? nDet(p[pl].fuera[2], `cuadro|${pl}|${clave}|fuera`, pctTxt(p[pl].pctArea[2])) : pctTxt(p[pl].pctArea[2])} · meta ${META_AUTORIZADOS} %</span></div>
                 </div>
                 ${htmlReglaBacklog(p, pl, clave)}
+                ${htmlEstimado(d, pl)}
                 <div class="sts-grafico-titulo">RMD: backlog, solicitados y autorizados, ${esc(d.per.rango)}</div>
                 <div class="sts-grafico"><canvas id="stsGrafico${pl}" role="img" aria-label="Backlog, solicitados y autorizados de ${esc(meses.join(', '))}"></canvas></div>
                 <div class="sts-grafico-titulo">Cuadro del mes, como el del área de RMD</div>
@@ -14579,6 +14650,7 @@ async function maybeAutoStartTour() {
             const f = d.per.hasta;
             const v = { MES_NOMBRE: d.per.mesNombre, MES_ANIO: d.per.mesAnio, RANGO_GRAFICO: d.per.rango, FECHA_STATUS: f.format('DD/MM/YYYY'),
                 FECHA_LARGA: `${f.date()} ${MESES[f.month()]} ${f.year()}` };
+            ['P1', 'P2'].forEach((pl) => { v[`S2_${pl}_EST`] = textoEstimado(estimadoBacklog(d, pl)); });
             ['P1', 'P2'].forEach((pl) => { const p = d.programa[pl]; Object.assign(v, { [`S2_${pl}_SOL`]: numOGuion(p.sol[2]), [`S2_${pl}_BK`]: numOGuion(backlogDe(p)), [`S2_${pl}_AUT`]: numOGuion(p.aut[2]) }); });
             const ruta = (R, r) => ['P1', 'P2'].forEach((pl) => {
                 const c = r[pl] || contadorVacio(), k = `${R}_${pl}_`;
@@ -14629,6 +14701,21 @@ async function maybeAutoStartTour() {
                 const JSZip = await cargarJsZip();
                 const zip = await JSZip.loadAsync(STATUS_RMD_PLANTILLA_B64, { base64: true });
                 const v = valoresPpt(ultimo);
+                // Lámina 2: una línea con el estimado para terminar el backlog debajo de cada panel (copia de la etiqueta del gráfico).
+                {
+                    const n2 = 'ppt/slides/slide2.xml';
+                    let x2 = await zip.file(n2).async('string');
+                    ['P1', 'P2'].forEach((pl, i) => {
+                        const m = x2.match(new RegExp(`<p:sp>(?:(?!</p:sp>).)*?name="Etiqueta gráfico ${i + 1}"(?:(?!</p:sp>).)*?</p:sp>`, 's'));
+                        if (!m || !v[`S2_${pl}_EST`]) return;
+                        const nuevo = m[0].replace(/<p:cNvPr id="\d+" name="[^"]*"/, `<p:cNvPr id="${950 + i}" name="Estimado backlog ${i + 1}"`)
+                            .replace(/(<a:off x="\d+") y="\d+"\/><a:ext (cx="\d+") cy="\d+"/, `$1 y="${518 * 12700}"/><a:ext $2 cy="${21 * 12700}"`)
+                            .replace(/tIns="\d+"/, 'tIns="0"').replace(/bIns="\d+"/, 'bIns="0"').replace(/sz="\d+" b="1"/, 'sz="800" b="0"')
+                            .replace(/<a:t>[^<]*<\/a:t>/, `<a:t>{{S2_${pl}_EST}}</a:t>`);
+                        x2 = x2.replace('</p:spTree>', nuevo + '</p:spTree>');
+                    });
+                    zip.file(n2, x2);
+                }
                 for (const n of Object.keys(zip.files).filter((n) => /^ppt\/slides\/slide\d+\.xml$/.test(n))) {
                     const x = await zip.file(n).async('string');
                     if (x.includes('{{')) zip.file(n, x.replace(/\{\{([A-Z0-9_]+)\}\}/g, (m, k) => (k in v ? xml(v[k]) : m)));
@@ -14658,7 +14745,7 @@ async function maybeAutoStartTour() {
                 if (cont) cont.addEventListener('click', (e) => { const b = e.target.closest('[data-det]'); if (b && cont.contains(b)) abrirDetalle(b.dataset.det); });
             });
             const sts = document.getElementById('stsContenido');
-            if (sts) sts.addEventListener('change', alCambiarHoras);
+            if (sts) { sts.addEventListener('change', alCambiarHoras); sts.addEventListener('change', alCambiarEstimado); }
         }
         if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', iniciar); else iniciar();
 
