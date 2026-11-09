@@ -13242,6 +13242,20 @@ async function maybeAutoStartTour() {
             '2026-09': { P1: 170, P2: 121 },
             '2026-10': { P1: 170, P2: 100 }
         };
+        // Valores fijos de agosto a octubre de 2026, copiados de la lámina 2 del PowerPoint STATUS_ACTUALIZACIONES_RMD_2026-11-02
+        // (pedido de CINTIA, 04/11/2026): backlog (bkv), solicitados (sol) y autorizados del mes + del backlog (aut = autMes + autBk).
+        // Reemplazan lo calculado con SAP en esos meses; desde noviembre de 2026 se calcula con la lógica nueva.
+        const VALORES_PPT = {
+            '2026-08': { P1: { bkv: 590, sol: 106, autMes: 56, autBk: 19 }, P2: { bkv: 225, sol: 112, autMes: 50, autBk: 15 } },
+            '2026-09': { P1: { bkv: 621, sol: 130, autMes: 74, autBk: 18 }, P2: { bkv: 272, sol: 77, autMes: 20, autBk: 11 } },
+            '2026-10': { P1: { bkv: 659, sol: 115, autMes: 63, autBk: 37 }, P2: { bkv: 318, sol: 65, autMes: 29, autBk: 39 } }
+        };
+        const valorPpt = (mes, pl, k) => {
+            const v = (VALORES_PPT[mes] || {})[pl];
+            if (!v) return undefined;
+            if (k === 'aut') return v.autMes + v.autBk;
+            return Number.isFinite(v[k]) ? v[k] : undefined;
+        };
         const pctDe = (aut, base) => (base > 0 ? Math.round((aut / base) * 100) : null);
         // Backlog que se muestra (lámina 2, Ruta 1 y % Backlog DOC): el del PowerPoint (vigentes al empezar el mes, ver
         // cuadroDesdeVersiones) si ya está calculado; si no (datos guardados antes de este cambio), los pendientes del mes anterior.
@@ -13259,7 +13273,11 @@ async function maybeAutoStartTour() {
             const porMes = (cuadro && cuadro.porMes) || {};
             // Masivos pendientes escritos a mano por el área (ind_horas_efectivas[mes][planta].ma): se suman a los pendientes del mes.
             const masivos = (m, pl) => { if (!SUMAR_MASIVOS_A_MANO) return 0; const h = ((horasEf || {})[m.format('YYYY-MM')] || {})[pl]; return h && Number.isFinite(h.ma) ? h.ma : 0; };
-            const datoSap = (m, pl, k) => { const x = (porMes[m.format('YYYY-MM')] || {})[pl]; return x && Number.isFinite(x[k]) ? x[k] : null; };
+            const datoSap = (m, pl, k) => {
+                const fijo = valorPpt(m.format('YYYY-MM'), pl, k);
+                if (fijo !== undefined) return fijo;
+                const x = (porMes[m.format('YYYY-MM')] || {})[pl]; return x && Number.isFinite(x[k]) ? x[k] : null;
+            };
             const dato = (m, pl, k) => {
                 const v = datoSap(m, pl, k);
                 if (k !== 'pend') return v;
@@ -13273,7 +13291,7 @@ async function maybeAutoStartTour() {
                 const acum = ok ? pend + aut : null, autBk = ok ? dato(m, pl, 'autBk') : null, fuera = ok ? dato(m, pl, 'fuera') : null;
                 const x = (porMes[m.format('YYYY-MM')] || {})[pl] || {};
                 return { clave: m.format('YYYY-MM'), ini: m.valueOf(), ant: ok ? ant : null, sol: ok ? sol : null, otros: ok ? acum - ant - sol : null, acum, aut: ok ? aut : null,
-                    autMes: autBk === null ? null : aut - autBk, autBk, pend: ok ? pend : null, susp: ok ? dato(m, pl, 'susp') : null, fuera, fijo: !!x.fijo, cong: !!x.cong, masivos: masivos(m, pl),
+                    autMes: autBk === null ? null : aut - autBk, autBk, pend: ok ? pend : null, susp: ok ? dato(m, pl, 'susp') : null, fuera, fijo: !!x.fijo, ppt: !!VALORES_PPT[m.format('YYYY-MM')], cong: !!x.cong, masivos: masivos(m, pl),
                     pct: ok ? pctDe(aut, acum) : null, pctArea: ok && fuera !== null ? pctDe(aut, acum - fuera) : null, reg: dato(m, pl, 'reg'), bkv: datoSap(m, pl, 'bkv') };
             };
             const meses = [];
@@ -14256,7 +14274,7 @@ async function maybeAutoStartTour() {
             const p = d.programa[pl], partes = p.autBk.every((v, k) => v !== null || p.aut[k] === null);
             const barra = { borderRadius: 4, maxBarThickness: imagen ? 70 : 42 };
             const datasets = [
-                { label: 'Backlog', data: p.ant, backgroundColor: COLORES_CUADRO.backlog, stack: 'b', etiqueta: 'arriba', ...barra },
+                { label: 'Backlog', data: p.ant.map((v, k) => { const c = claveBacklogMes(p, k); return c === 'ant' ? v : p[c][k]; }), backgroundColor: COLORES_CUADRO.backlog, stack: 'b', etiqueta: 'arriba', ...barra },
                 { label: 'Solicitados del mes', data: p.sol, backgroundColor: COLORES_CUADRO.sol, stack: 's', etiqueta: 'arriba', ...barra },
                 ...(partes ? [
                     { label: 'Autorizados del mes', data: p.autMes, backgroundColor: COLORES_CUADRO.autMes, stack: 'a', etiqueta: 'dentro', ...barra, borderRadius: 0 },
@@ -14303,7 +14321,10 @@ async function maybeAutoStartTour() {
                 plugins: [etiquetasValores]
             };
         }
-        const CLAVE_DATASET_CUADRO = { 'Backlog': 'ant', 'Solicitados del mes': 'sol', 'Autorizados del mes': 'autMes', 'Autorizados del backlog': 'autBk', 'Autorizados': 'aut' };
+        // Backlog de cada mes del gráfico, igual que en la tarjeta (backlogDe): desde noviembre de 2026 los pendientes sin INACTIVO;
+        // antes, los RMD vigentes (agosto a octubre, los fijos del PowerPoint).
+        const claveBacklogMes = (p, k) => (p.tres && p.tres[k] && p.tres[k].clave >= BACKLOG_PENDIENTES_DESDE && Number.isFinite(p.pend[k]) ? 'pend' : (Number.isFinite(p.bkv[k]) ? 'bkv' : 'ant'));
+        const CLAVE_DATASET_CUADRO = { 'Backlog': 'bkv', 'Solicitados del mes': 'sol', 'Autorizados del mes': 'autMes', 'Autorizados del backlog': 'autBk', 'Autorizados': 'aut' };
         function dibujarGraficos(d) {
             graficos.forEach((g) => g.destroy()); graficos = [];
             if (typeof Chart === 'undefined') return;
@@ -14313,7 +14334,7 @@ async function maybeAutoStartTour() {
                 const el = document.getElementById('stsGrafico' + pl);
                 if (el) {
                     const cfg = configCuadro(d, pl, { texto, rejilla,
-                        onClick: (evt, els, chart) => clicEnGrafico(evt, chart, (e) => `cuadro|${pl}|${d.per.meses[e.index].format('YYYY-MM')}|${CLAVE_DATASET_CUADRO[chart.data.datasets[e.datasetIndex].label]}`),
+                        onClick: (evt, els, chart) => clicEnGrafico(evt, chart, (e) => `cuadro|${pl}|${d.per.meses[e.index].format('YYYY-MM')}|${chart.data.datasets[e.datasetIndex].label === 'Backlog' ? claveBacklogMes(d.programa[pl], e.index) : CLAVE_DATASET_CUADRO[chart.data.datasets[e.datasetIndex].label]}`),
                         onHover: manoEnGrafico });
                     graficos.push(new Chart(el, cfg));
                 }
@@ -14482,6 +14503,8 @@ async function maybeAutoStartTour() {
             });
             if (Number.isFinite(det.numero) && k !== 'otros' && k !== 'acum' && det.filas.length !== det.numero)
                 det.aviso = `El detalle da ${det.filas.length} en lugar de ${det.numero}: vuelve a «Enviar a Status RMD» desde el portal para que coincidan.`;
+            if (!total && meses.some((m) => VALORES_PPT[m.format('YYYY-MM')]) && ['bkv', 'sol', 'aut', 'autMes', 'autBk'].includes(k))
+                det.aviso = 'Número fijo copiado del PowerPoint del status (agosto a octubre de 2026). La lista es la de SAP y puede no coincidir con él.';
             if (k === 'fuera' && f.fijo === false) det.aviso = 'Mes cerrado antes de guardar esta foto: se aproxima con el flujo de Producción y las Observaciones de hoy. Desde ahora, cada mes queda fijo con la última sincronización hecha en ese mes.';
             return det;
         }
