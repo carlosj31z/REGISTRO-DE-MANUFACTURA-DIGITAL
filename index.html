@@ -14274,7 +14274,7 @@ async function maybeAutoStartTour() {
             const p = d.programa[pl], partes = p.autBk.every((v, k) => v !== null || p.aut[k] === null);
             const barra = { borderRadius: 4, maxBarThickness: imagen ? 70 : 42 };
             const datasets = [
-                { label: 'Backlog', data: p.ant.map((v, k) => (Number.isFinite(p.bkv[k]) ? p.bkv[k] : v)), backgroundColor: COLORES_CUADRO.backlog, stack: 'b', etiqueta: 'arriba', ...barra },
+                { label: 'Backlog', data: p.ant.map((v, k) => { const c = claveBacklogMes(p, k); return c === 'ant' ? v : p[c][k]; }), backgroundColor: COLORES_CUADRO.backlog, stack: 'b', etiqueta: 'arriba', ...barra },
                 { label: 'Solicitados del mes', data: p.sol, backgroundColor: COLORES_CUADRO.sol, stack: 's', etiqueta: 'arriba', ...barra },
                 ...(partes ? [
                     { label: 'Autorizados del mes', data: p.autMes, backgroundColor: COLORES_CUADRO.autMes, stack: 'a', etiqueta: 'dentro', ...barra, borderRadius: 0 },
@@ -14321,6 +14321,9 @@ async function maybeAutoStartTour() {
                 plugins: [etiquetasValores]
             };
         }
+        // Backlog de cada mes del gráfico, igual que en la tarjeta (backlogDe): desde noviembre de 2026 los pendientes sin INACTIVO;
+        // antes, los RMD vigentes (agosto a octubre, los fijos del PowerPoint).
+        const claveBacklogMes = (p, k) => (p.tres && p.tres[k] && p.tres[k].clave >= BACKLOG_PENDIENTES_DESDE && Number.isFinite(p.pend[k]) ? 'pend' : (Number.isFinite(p.bkv[k]) ? 'bkv' : 'ant'));
         const CLAVE_DATASET_CUADRO = { 'Backlog': 'bkv', 'Solicitados del mes': 'sol', 'Autorizados del mes': 'autMes', 'Autorizados del backlog': 'autBk', 'Autorizados': 'aut' };
         function dibujarGraficos(d) {
             graficos.forEach((g) => g.destroy()); graficos = [];
@@ -14331,7 +14334,7 @@ async function maybeAutoStartTour() {
                 const el = document.getElementById('stsGrafico' + pl);
                 if (el) {
                     const cfg = configCuadro(d, pl, { texto, rejilla,
-                        onClick: (evt, els, chart) => clicEnGrafico(evt, chart, (e) => `cuadro|${pl}|${d.per.meses[e.index].format('YYYY-MM')}|${CLAVE_DATASET_CUADRO[chart.data.datasets[e.datasetIndex].label]}`),
+                        onClick: (evt, els, chart) => clicEnGrafico(evt, chart, (e) => `cuadro|${pl}|${d.per.meses[e.index].format('YYYY-MM')}|${chart.data.datasets[e.datasetIndex].label === 'Backlog' ? claveBacklogMes(d.programa[pl], e.index) : CLAVE_DATASET_CUADRO[chart.data.datasets[e.datasetIndex].label]}`),
                         onHover: manoEnGrafico });
                     graficos.push(new Chart(el, cfg));
                 }
