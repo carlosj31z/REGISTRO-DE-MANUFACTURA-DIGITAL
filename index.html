@@ -849,14 +849,6 @@
         .ops-resumen-btn { display: flex; align-items: center; gap: 0.4rem; width: 100%; text-align: left; font-size: 11px; color: var(--slate-300); padding: 0.15rem 0.25rem; border-radius: 0.4rem; }
         .ops-resumen-btn:hover { background: rgb(var(--semaforo-ambar-rgb) / 0.08); }
         .ops-resumen-accion { margin-left: auto; font-weight: 700; color: rgb(var(--semaforo-ambar-rgb)); text-decoration: underline; }
-        /* Pendientes que vienen de un programa anterior (no se autorizaron y siguen contando hasta que se retiren) */
-        .chip-programa-anterior { display: inline-block; margin-left: 0.35rem; font-size: 9.5px; font-weight: 700; padding: 0 0.35rem; border-radius: 0.3rem; color: rgb(var(--semaforo-ambar-rgb)); background: rgb(var(--semaforo-ambar-rgb) / 0.1); border: 1px dashed rgb(var(--semaforo-ambar-rgb) / 0.55); white-space: nowrap; cursor: help; vertical-align: 1px; }
-        .fila-programa-anterior > td:first-child { box-shadow: inset 3px 0 0 rgb(var(--semaforo-ambar-rgb) / 0.6); }
-        .fila-retirada-anterior { opacity: 0.75; }
-        .acciones-etapa { display: flex; flex-wrap: wrap; align-items: center; gap: 0.3rem; }
-        .btn-retirar-anterior { font-size: 10px; font-weight: 600; color: var(--slate-300); border: 1px solid var(--slate-600, rgba(148,163,184,0.45)); border-radius: 0.3rem; padding: 0.1rem 0.4rem; white-space: nowrap; background: transparent; }
-        .btn-retirar-anterior:hover { color: var(--slate-100); border-color: rgb(var(--semaforo-ambar-rgb) / 0.7); }
-        .kpi-nota-anterior { font-size: 10px; line-height: 1.2; color: rgb(var(--semaforo-ambar-rgb)); margin-top: 0.1rem; cursor: help; }
         /* Pendientes por etapa: los productos del programa que usan la etapa, y la etapa ya autorizada en SAP */
         .etapa-para { display: block; font-size: 10px; color: var(--slate-400); margin-top: 0.15rem; cursor: help; }
         .badge-autorizado-sap { display: inline-flex; font-size: 10px; font-weight: 600; padding: 0.125rem 0.5rem; border-radius: 9999px; white-space: nowrap; color: rgb(var(--ok-rgb)); background: rgb(var(--ok-rgb) / 0.1); border: 1px solid rgb(var(--ok-rgb) / 0.35); cursor: help; }
@@ -2117,7 +2109,6 @@
                 <div class="rmd-pendientes-highlight rounded-lg px-3 py-1.5 text-center relative">
                     <p class="val-kpi-label" style="color: var(--accent);">RMD Pendientes</p>
                     <p id="kpi-val-rmd" class="text-3xl font-bold mt-0.5" style="color: var(--accent-strong); font-variant-numeric: tabular-nums;">0</p>
-                    <p id="kpi-val-rmd-anterior" class="kpi-nota-anterior" style="display:none;" title="Etapas que no se autorizaron en un programa anterior y siguen pendientes (se pueden retirar desde la tabla)"></p>
                 </div>
             </div>
 
@@ -2137,7 +2128,6 @@
                     <button onclick="validacionFiltroEstado='todos'; refiltrarValidacionFiltros();" id="filtroValTodos" class="filter-pill active px-3 py-1.5 rounded-lg text-[11px] font-medium">Todos<span class="pill-count" id="pillCountTodos"></span></button>
                     <button onclick="validacionFiltroEstado='pendientes'; refiltrarValidacionFiltros();" id="filtroValPendientes" class="filter-pill px-3 py-1.5 rounded-lg text-[11px] font-medium">Pendientes<span class="pill-count" id="pillCountPendientes"></span></button>
                     <button onclick="validacionFiltroEstado='autorizados'; refiltrarValidacionFiltros();" id="filtroValAutorizados" class="filter-pill px-3 py-1.5 rounded-lg text-[11px] font-medium" title="Etapas autorizadas en SAP o a mano">Autorizados<span class="pill-count" id="pillCountAutorizados"></span></button>
-                    <button onclick="validacionFiltroEstado='anterior'; refiltrarValidacionFiltros();" id="filtroValAnterior" class="filter-pill px-3 py-1.5 rounded-lg text-[11px] font-medium" style="display:none;" title="Etapas que no se autorizaron en un programa anterior y siguen pendientes">Programa anterior<span class="pill-count" id="pillCountAnterior"></span></button>
                 </div>
                 <div class="filtros-en-cabecera" id="filtrosEtapaProd">
                     <select id="filtroPlantaProd" onchange="setFiltroEtapa('produccion','planta',this.value)" class="field-input filtro-etapa-select" aria-label="Filtrar por planta"><option value="">Planta: todas</option></select>
@@ -2841,6 +2831,9 @@
         })();
 
         let currentTab = 'produccion';
+        // Pestaña CARACTERIZACIÓN oculta por pedido de Carlos (2026-11-09). El código y los datos se mantienen;
+        // para volver a mostrarla (pestaña y marca «Caracterización» en Producción), poner MOSTRAR_CARACTERIZACION = true.
+        const MOSTRAR_CARACTERIZACION = false;
         // ==================== CONSULTAR RMD (lupa) ====================
         // Desde Forecast y Producción: buscar por Descripción RMD y ver el historial de versiones. Sale de los RMD de SAP
         // que ya tiene la página (rmdAutorizadosDetalle, una fila por RMD de la última sincronización o Exportado).
@@ -3408,9 +3401,6 @@ alter publication supabase_realtime add table public.rmd_dashboard_kv;`;
                     if (currentTab === 'forecast') runValidacionForecast();
                     if (currentTab === 'caract' && typeof Caracterizacion !== 'undefined') Caracterizacion.refrescar();
                 }, 800);
-            } else if (key === CLAVE_RETIROS_ANTERIOR || key === 'prod_acumulado_planta1' || key === 'prod_acumulado_planta2') {
-                await cargarProgramaAnterior();
-                if (currentTab === 'produccion') runValidacionMateriales();
             } else if (key === 'val_fecha_inicio_manual') {
                 fechasInicioManual = mapaFechasInicioManual(await storeGet('val_fecha_inicio_manual'));
                 if (currentTab === 'produccion') runValidacionMateriales();
@@ -3712,125 +3702,6 @@ alter publication supabase_realtime add table public.rmd_dashboard_kv;`;
             return storeSet(clave, acc);
         }
 
-        // ==================== PENDIENTES DEL PROGRAMA ANTERIOR ====================
-        // Pedido de CINTIA (07/11/2026): al cargar un programa nuevo, lo que no se llegó a autorizar del programa anterior
-        // sigue sumando como pendiente (en Producción, la Ruta 1 y el programa acumulado), marcado con el programa del que
-        // viene. Sale de los pendientes solo cuando se autoriza o cuando un usuario lo retira desde la tabla de Producción
-        // («Retirar»); el retiro se guarda (val_programa_anterior_retirados) y se deshace con «Volver a pendientes».
-        // De programas anteriores = productos del programa acumulado (prod_acumulado_<planta>) que ya no están en el programa
-        // actual de su planta. Las cargas corregidas en menos de un día no cuentan (igual que en el acumulado).
-        // Retiro: "planta1|material::ETAPA" -> { f: ISO }. Vale solo si es posterior a la última carga en que estuvo el
-        // producto: si vuelve a programarse y sale otra vez sin autorizar, vuelve a aparecer.
-        const CLAVE_RETIROS_ANTERIOR = 'val_programa_anterior_retirados';
-        let acumuladoEnMemoria = { planta1: null, planta2: null };
-        let retirosAnterior = new Map();
-        const claveRetiroAnterior = (planta, material, fija) => `${planta}|${material}::${fija}`;
-        function mapaRetirosAnterior(obj) {
-            const m = new Map();
-            if (obj && typeof obj === 'object' && !Array.isArray(obj)) Object.entries(obj).forEach(([k, v]) => { if (v && typeof v === 'object' && Date.parse(v.f)) m.set(k, v); });
-            return m;
-        }
-        async function cargarProgramaAnterior() {
-            try {
-                const [a1, a2, r] = await Promise.all([leerAcumuladoPrograma('planta1'), leerAcumuladoPrograma('planta2'), storeGet(CLAVE_RETIROS_ANTERIOR)]);
-                acumuladoEnMemoria = { planta1: a1, planta2: a2 };
-                retirosAnterior = mapaRetirosAnterior(r);
-            } catch (err) { console.error('Programa anterior:', err); }
-        }
-        // Productos de programas anteriores de una planta (que ya no están en su programa actual): [{ material, producto,
-        // areas, planta, u (última carga en que estuvo), s (carga en que ya no estaba) }].
-        function productosProgramaAnterior(planta, acc, actuales, area) {
-            if (!acc || !acc.items) return [];
-            const res = [];
-            Object.entries(acc.items).forEach(([m, it]) => {
-                if (!m || actuales.has(m) || !it || !it.u) return;
-                const e = Date.parse(it.e), s = Date.parse(it.s);
-                if (Number.isFinite(e) && Number.isFinite(s) && s - e < 24 * 3600000) return; // carga corregida enseguida
-                const areas = Array.isArray(it.a) ? it.a : [];
-                if (area && area !== 'TODAS' && !areas.includes(area)) return;
-                res.push({ material: m, producto: it.p || '', areas, planta, u: it.u, s: it.s || null });
-            });
-            return res;
-        }
-        // El retiro vigente de una etapa de un producto anterior (o null).
-        function retiroAnteriorVigente(x, fija) {
-            const r = retirosAnterior.get(claveRetiroAnterior(x.planta, x.material, fija));
-            return r && Date.parse(r.f) >= Date.parse(x.u) ? r : null;
-        }
-        const textoProgramaAnterior = (u) => { const d = dayjs(u); return d.isValid() ? `S${d.week()} · cargado el ${d.format('DD/MM')}` : ''; };
-        // Separa las filas de etapas (etapasDeProductos) en las que cuentan y las retiradas. Una fila es «del programa
-        // anterior» si todos sus productos vienen de programas anteriores; si comparte la etapa con un producto programado
-        // hoy, es del programa actual. De las anteriores solo siguen las pendientes (las autorizadas ya no se arrastran) y,
-        // si todos sus productos están retirados, va a retiradas.
-        function separarFilasAnterior(filas, anteriores) {
-            const cuentan = [], retiradas = [];
-            filas.forEach((f) => {
-                const prods = (f.productos || []).map((p) => anteriores.get(p.material));
-                if (!prods.length || prods.some((x) => !x)) { cuentan.push(f); return; }
-                if (f.estado !== 'pendiente' || !f.fija) return;
-                const ult = prods.map((x) => x.u).sort().pop();
-                f.anterior = { u: ult, s: prods.map((x) => x.s).filter(Boolean).sort().pop() || null, texto: textoProgramaAnterior(ult),
-                    claves: prods.map((x) => claveRetiroAnterior(x.planta, x.material, f.fija)) };
-                const ret = prods.map((x) => retiroAnteriorVigente(x, f.fija));
-                if (ret.every(Boolean)) { f.anterior.retiro = ret.map((r) => r.f).sort().pop(); retiradas.push(f); } else cuentan.push(f);
-            });
-            return { cuentan, retiradas };
-        }
-        // Productos anteriores listos para etapasDeProductos (sin fecha de inicio: su programa ya pasó).
-        function productosAnterioresParaEtapas(plantas, actualesDe, area, yaProgramados) {
-            const porMaterial = new Map();
-            plantas.forEach((pk) => productosProgramaAnterior(pk, acumuladoEnMemoria[pk], actualesDe(pk), area).forEach((x) => {
-                if (yaProgramados.has(x.material)) return;
-                const y = porMaterial.get(x.material);
-                if (!y || x.u > y.u) porMaterial.set(x.material, x);
-            }));
-            const anteriores = new Map(), productos = [];
-            porMaterial.forEach((x, m) => {
-                const r = evaluarMaterialPreciso(m);
-                anteriores.set(m, x);
-                productos.push({ material: m, descripcion: r.descripcion || x.producto, r, areas: x.areas, plantas: [x.planta === 'planta1' ? 'ATE' : 'LIMA'], fechaProxima: null,
-                    fechaDe: () => null, motivoRevisar: !r.conArbol ? `Sin árbol de producción: ${r.sinArbol}` : '', anterior: x });
-            });
-            return { anteriores, productos };
-        }
-        async function guardarRetirosAnterior() { return storeSet(CLAVE_RETIROS_ANTERIOR, Object.fromEntries(retirosAnterior)); }
-        window.retirarPendienteAnterior = async function (id) {
-            const f = (window.__ultimasFilasValidacion || []).find((x) => x.anterior && x.id === id);
-            if (!f) return;
-            const etapa = ETAPAS_FIJAS_LABEL[f.fija] || f.fija;
-            const res = await Swal.fire({ title: 'Retirar de los pendientes', background: '#0f172a', color: '#e2e8f0', icon: 'question',
-                html: `<div class="text-left text-sm space-y-2"><div><b>${escapeHtmlRmdConfig(f.codigo || '')}</b> · ${escapeHtmlRmdConfig(etapa)}</div>`
-                    + `<div class="text-slate-300 text-xs">${escapeHtmlRmdConfig(f.descripcion || '')}</div>`
-                    + `<div class="text-slate-400 text-xs">Viene del programa anterior (${escapeHtmlRmdConfig(f.anterior.texto)}) y no se autorizó. Si ya no se necesita, deja de contar como pendiente aquí, en la Ruta 1 y en el programa acumulado. Se puede volver a pendientes cuando quieras.</div></div>`,
-                showCancelButton: true, confirmButtonText: 'Retirar', cancelButtonText: 'Cancelar' });
-            if (!res.isConfirmed) return;
-            const ahora = new Date().toISOString(), antes = new Map(retirosAnterior);
-            f.anterior.claves.forEach((k) => retirosAnterior.set(k, { f: ahora }));
-            if (!(await guardarRetirosAnterior())) {
-                retirosAnterior = antes;
-                Swal.fire({ icon: 'error', title: 'No se pudo guardar', text: 'No se retiró: intenta de nuevo.', background: '#0f172a' });
-            }
-            runValidacionMateriales();
-        };
-        window.devolverPendienteAnterior = async function (id) {
-            const f = (window.__retiradasAnterior || []).find((x) => x.id === id);
-            if (!f) return;
-            const antes = new Map(retirosAnterior);
-            f.anterior.claves.forEach((k) => retirosAnterior.delete(k));
-            if (!(await guardarRetirosAnterior())) {
-                retirosAnterior = antes;
-                Swal.fire({ icon: 'error', title: 'No se pudo guardar', text: 'Sigue retirada: intenta de nuevo.', background: '#0f172a' });
-            }
-            runValidacionMateriales();
-        };
-        let mostrarRetiradasAnterior = false;
-        window.toggleRetiradasAnterior = function () { mostrarRetiradasAnterior = !mostrarRetiradasAnterior; refiltrarTablaPendientes(); };
-        function htmlChipProgramaAnterior(f) {
-            if (!f.anterior) return '';
-            const tit = `No se autorizó en un programa anterior y sigue pendiente. Estuvo hasta el programa cargado el ${dayjs(f.anterior.u).format('DD/MM/YYYY HH:mm')}${f.anterior.s ? ` y ya no está desde la carga del ${dayjs(f.anterior.s).format('DD/MM/YYYY')}` : ''}.`;
-            return `<span class="chip-programa-anterior" title="${escapeHtmlRmdConfig(tit)}">Programa anterior · ${escapeHtmlRmdConfig(f.anterior.texto)}</span>`;
-        }
-
         function escapeHtmlHistProd(s) { const d = document.createElement('div'); d.textContent = s == null ? '' : String(s); return d.innerHTML; }
 
         // Modal principal del historial de trazabilidad del Programa de
@@ -4024,6 +3895,7 @@ alter publication supabase_realtime add table public.rmd_dashboard_kv;`;
         function initGooeyNav() {
             const container = document.getElementById('gooeyNavContainer');
             const navList = document.getElementById('gooeyNavList');
+            if (!MOSTRAR_CARACTERIZACION) { const liCar = navList.querySelector('li[data-tab="caract"]'); if (liCar) liCar.style.display = 'none'; }
             const pillEl = document.getElementById('gooeyNavPill');
             const items = navList.querySelectorAll('li');
 
@@ -5314,7 +5186,6 @@ function buildDateColumnMapPlanta1(headerRow, weekLabelRow, hiddenCols) {
                     // Programa acumulado (pestaña Status RMD): esta carga se suma a todo lo programado antes.
                     if (guardadoOk) {
                         try { await acumularCargaPrograma(plantaObjetivo, nuevaProductionData); } catch (accErr) { console.error('Programa acumulado:', accErr); }
-                        await cargarProgramaAnterior(); // lo no autorizado del programa que se reemplazó sigue como pendiente
                     }
 
                     if (currentPlanta === plantaObjetivo) {
@@ -5369,7 +5240,7 @@ function buildDateColumnMapPlanta1(headerRow, weekLabelRow, hiddenCols) {
             // "tarde" y no debe pisar lo que ya se está mostrando ahora.
             if (myToken !== __loadProdDataToken || currentPlanta !== plantaObjetivo) return;
             if (saved) {
-                await Promise.all([completarFechasEtapaLima(saved, plantaObjetivo), cargarProgramaAnterior()]);
+                await completarFechasEtapaLima(saved, plantaObjetivo);
                 if (myToken !== __loadProdDataToken || currentPlanta !== plantaObjetivo) return;
                 productionData = saved.data;
                 availableAreas = new Set(saved.areas);
@@ -5431,7 +5302,7 @@ function buildDateColumnMapPlanta1(headerRow, weekLabelRow, hiddenCols) {
         async function loadProdDataConsolidado() {
             const myToken = ++__loadProdDataToken;
             const [d1, d2] = await Promise.all([storeGet('prod_data_planta1'), storeGet('prod_data_planta2')]);
-            await Promise.all([completarFechasEtapaLima(d2, 'planta2'), cargarProgramaAnterior()]);
+            await completarFechasEtapaLima(d2, 'planta2');
             if (myToken !== __loadProdDataToken || currentPlanta !== 'consolidado') return;
             const merged = [];
             const areasMerged = new Set();
@@ -7858,7 +7729,6 @@ async function downloadPlanProduccionFromCloud() {
                 animateCounter('kpi-val-autorizados', 0);
                 animateCounter('kpi-val-pendientes', 0);
                 animateCounter('kpi-val-rmd', 0);
-                { const n = document.getElementById('kpi-val-rmd-anterior'); if (n) n.style.display = 'none'; }
                 actualizarContadorPanelRmd(0);
                 ultimoResultadoValidacion = { revisados: 0, autorizados: 0, pendientes: [], rmdPendientes: 0 };
                 renderSummaryProd();
@@ -7924,14 +7794,8 @@ async function downloadPlanProduccionFromCloud() {
                     motivoRevisar: !r.conArbol ? `Sin árbol de producción: ${r.sinArbol}` : ''
                 });
             });
-            // Lo que no se autorizó de programas anteriores sigue pendiente (marcado), hasta que se autorice o se retire.
-            const plantasVista = currentPlanta === 'consolidado' ? ['planta1', 'planta2'] : [currentPlanta];
-            const actualesDe = (pk) => new Set(productionData.filter(p => (p.planta || currentPlanta) === pk).map(p => normalizeMaterialCode(p.codigo)).filter(Boolean));
-            const prev = productosAnterioresParaEtapas(plantasVista, actualesDe, currentAreaFilter, materialAreas);
             revisarAutorizacionesManuales(); // las que SAP ya autorizó o con versión nueva dejan de tapar la etapa
-            const { filas: etapasTodas, pendientesPorProducto } = etapasDeProductos([...productos, ...prev.productos], manualAutorizados);
-            const { cuentan: etapas, retiradas: retiradasAnterior } = separarFilasAnterior(etapasTodas, prev.anteriores);
-            window.__retiradasAnterior = retiradasAnterior;
+            const { filas: etapas, pendientesPorProducto } = etapasDeProductos(productos, manualAutorizados);
             aplicarFechasInicioManual(etapas);
             guardarMigracionClaves();
             const revisados = productos.length;
@@ -7942,19 +7806,12 @@ async function downloadPlanProduccionFromCloud() {
             const autorizadosTotal = revisados - productosPendientes.length;
             // RMD Pendientes: etapas pendientes, cada una UNA vez aunque la compartan varios productos del programa.
             const rmdPendientesTotal = etapasPendientes.length;
-            const anterioresPendientes = etapasPendientes.filter(f => f.anterior).length;
-            ultimoResultadoValidacion = { revisados, autorizados: autorizadosTotal, pendientes: productosPendientes, etapas, etapasPendientes, autorizadosManual: etapasManual, rmdPendientes: rmdPendientesTotal,
-                anterioresPendientes, anterioresRetiradas: retiradasAnterior.length };
+            ultimoResultadoValidacion = { revisados, autorizados: autorizadosTotal, pendientes: productosPendientes, etapas, etapasPendientes, autorizadosManual: etapasManual, rmdPendientes: rmdPendientesTotal };
 
             animateCounter('kpi-val-revisados', revisados, 1.2);
             animateCounter('kpi-val-autorizados', autorizadosTotal, 1.2);
             animateCounter('kpi-val-pendientes', productosPendientes.length, 1.2);
             animateCounter('kpi-val-rmd', rmdPendientesTotal, 1.2);
-            const notaAnt = document.getElementById('kpi-val-rmd-anterior');
-            if (notaAnt) {
-                notaAnt.textContent = anterioresPendientes ? `incluye ${anterioresPendientes} del programa anterior` : '';
-                notaAnt.style.display = anterioresPendientes ? '' : 'none';
-            }
             actualizarContadorPanelRmd(rmdPendientesTotal);
 
             // OP sin RMD de SAP: filas propias (por fecha de inicio), que no cuentan en los KPI y por defecto van compactadas.
@@ -7980,7 +7837,7 @@ async function downloadPlanProduccionFromCloud() {
         }
 
         function refiltrarValidacionFiltros() {
-            const map = { todos: 'filtroValTodos', pendientes: 'filtroValPendientes', autorizados: 'filtroValAutorizados', anterior: 'filtroValAnterior' };
+            const map = { todos: 'filtroValTodos', pendientes: 'filtroValPendientes', autorizados: 'filtroValAutorizados' };
             Object.values(map).forEach(id => document.getElementById(id) && document.getElementById(id).classList.remove('active'));
             const activeBtn = document.getElementById(map[validacionFiltroEstado]);
             if (activeBtn) activeBtn.classList.add('active');
@@ -8679,7 +8536,6 @@ async function downloadPlanProduccionFromCloud() {
             let v = filas;
             if (estado === 'pendientes') v = v.filter(f => f.estado === 'pendiente' || f.estado === 'opsap');
             else if (estado === 'autorizados') v = v.filter(f => f.estado === 'autorizado' || f.estado === 'sap');
-            else if (estado === 'anterior') v = v.filter(f => f.anterior);
             const q = String(busqueda || '').trim().toLowerCase();
             if (q) {
                 v = v.filter(f => String(f.material).toLowerCase().includes(q) || (f.descripcion || '').toLowerCase().includes(q)
@@ -8774,9 +8630,6 @@ async function downloadPlanProduccionFromCloud() {
         function renderTablaPendientes(filas) {
             window.__ultimasFilasValidacion = filas;
             actualizarContadoresPendientes(filas, ['pillCountTodos', 'pillCountPendientes', 'pillCountAutorizados']);
-            const nAnterior = filas.filter(f => f.anterior).length, pillAnt = document.getElementById('filtroValAnterior');
-            if (pillAnt) { pillAnt.style.display = nAnterior ? '' : 'none'; document.getElementById('pillCountAnterior').textContent = nAnterior; }
-            if (!nAnterior && validacionFiltroEstado === 'anterior') { validacionFiltroEstado = 'todos'; refiltrarValidacionFiltros(); return; }
 
             let visibles = filasVisiblesEtapa(filas, validacionFiltroEstado, validacionBusqueda, filtrosEtapaProd, 'produccion');
             if (validacionFiltroFechas.size > 0) {
@@ -8798,46 +8651,27 @@ async function downloadPlanProduccionFromCloud() {
                         <span class="op-sin-rmd-tag">OP sin RMD</span> ${plural(nOps, 'orden de producción de SAP', 'órdenes de producción de SAP')} sin RMD autorizado (${plural(ops.length, 'material', 'materiales')})
                         <span class="ops-resumen-accion">${mostrarOpsSinRmd ? 'Ocultar' : 'Ver'}</span></button></td></tr>` : '';
 
-            // Retiradas del programa anterior: compactadas en una fila, con «Volver a pendientes» al desplegarlas.
-            const retiradas = validacionFiltroEstado === 'autorizados' ? [] : filasVisiblesEtapa(window.__retiradasAnterior || [], 'todos', validacionBusqueda, filtrosEtapaProd, 'produccion');
-            const filaRet = retiradas.length ? `<tr class="fila-ops-resumen"><td colspan="9" class="py-1.5">
-                    <button type="button" onclick="toggleRetiradasAnterior()" class="ops-resumen-btn" aria-expanded="${mostrarRetiradasAnterior}">
-                        <span class="chip-programa-anterior">Retiradas</span> ${plural(retiradas.length, 'etapa del programa anterior retirada', 'etapas del programa anterior retiradas')} de los pendientes
-                        <span class="ops-resumen-accion">${mostrarRetiradasAnterior ? 'Ocultar' : 'Ver'}</span></button></td></tr>` : '';
-
-            if (!etapas.length && !nOps && !retiradas.length) {
+            if (!etapas.length && !nOps) {
                 body.innerHTML = `<tr><td colspan="9" class="text-center text-slate-500 py-6 text-xs">Ninguna etapa coincide con el filtro/búsqueda actual.</td></tr>`;
                 return;
             }
             const esc = escapeHtmlRmdConfig;
-            const btnRetirar = (f) => (f.anterior && f.estado === 'pendiente' ? `<button type="button" onclick="retirarPendienteAnterior('${esc(f.id)}')" class="btn-retirar-anterior" title="Ya no se necesita: retirarla de los pendientes (se puede deshacer)">Retirar</button>` : '');
             const filaHtml = (f) => {
                 const c = celdasDeEtapa(f, 'produccion');
-                const rowCls = claseFilaEtapa(f, 'produccion') + (f.anterior ? ' fila-programa-anterior' : '');
+                const rowCls = claseFilaEtapa(f, 'produccion');
                 return `<tr class="${rowCls}">
                     <td class="whitespace-nowrap py-2 text-slate-300">${plantaCelda(f)}</td>
                     <td class="whitespace-nowrap py-2">${htmlMaterialEtapa(f, 'mat-code')}</td>
-                    <td class="text-slate-200 py-2">${esc(f.descripcion || '-')}${htmlChipProgramaAnterior(f)}${htmlProductosDeEtapa(f)}${typeof Caracterizacion !== 'undefined' ? Caracterizacion.chipProduccion(f) : ''}</td>
+                    <td class="text-slate-200 py-2">${esc(f.descripcion || '-')}${htmlProductosDeEtapa(f)}${typeof Caracterizacion !== 'undefined' ? Caracterizacion.chipProduccion(f) : ''}</td>
                     <td class="text-slate-400 py-2">${esc(f.areas || '')}</td>
                     <td class="whitespace-nowrap py-2">${htmlFechaInicioEtapa(f)}</td>
                     <td class="py-2">${c.etapa}</td>
                     <td class="py-2">${c.estatus}</td>
                     <td class="py-2">${c.resp}</td>
-                    <td class="py-2"><div class="acciones-etapa">${c.accion}${btnRetirar(f)}</div></td>
+                    <td class="py-2">${c.accion}</td>
                 </tr>`;
             };
-            const filaRetiradaHtml = (f) => `<tr class="border-b border-slate-800/60 last:border-0 fila-programa-anterior fila-retirada-anterior">
-                    <td class="whitespace-nowrap py-2 text-slate-400">${plantaCelda(f)}</td>
-                    <td class="whitespace-nowrap py-2">${htmlMaterialEtapa(f, 'mat-code')}</td>
-                    <td class="text-slate-400 py-2">${esc(f.descripcion || '-')}${htmlChipProgramaAnterior(f)}${htmlProductosDeEtapa(f)}</td>
-                    <td class="text-slate-500 py-2">${esc(f.areas || '')}</td>
-                    <td class="whitespace-nowrap py-2 text-slate-500">-</td>
-                    <td class="py-2 text-slate-400 line-through">${esc(ETAPAS_FIJAS_LABEL[f.fija] || f.fija)}</td>
-                    <td class="py-2 text-slate-500" colspan="2">Retirada el ${esc(dayjs(f.anterior.retiro).format('DD/MM/YYYY HH:mm'))}</td>
-                    <td class="py-2"><button type="button" onclick="devolverPendienteAnterior('${esc(f.id)}')" class="btn-retirar-anterior" title="Volver a contarla como pendiente">Volver a pendientes</button></td>
-                </tr>`;
-            body.innerHTML = htmlFilasConAutorizadasPorFecha(etapas, 'produccion', 9, filaHtml, !!String(validacionBusqueda || '').trim()) + filaOps + (mostrarOpsSinRmd ? ops.map(filaOpsSinRmdHtml).join('') : '')
-                + filaRet + (mostrarRetiradasAnterior ? retiradas.map(filaRetiradaHtml).join('') : '');
+            body.innerHTML = htmlFilasConAutorizadasPorFecha(etapas, 'produccion', 9, filaHtml, !!String(validacionBusqueda || '').trim()) + filaOps + (mostrarOpsSinRmd ? ops.map(filaOpsSinRmdHtml).join('') : '');
 
             // El Estatus guardado manda sobre lo que el navegador haya dejado seleccionado.
             body.querySelectorAll('select[id^="estatus_"]').forEach(sel => {
@@ -9382,7 +9216,6 @@ async function downloadPlanProduccionFromCloud() {
             const base = fc
                 ? { 'Planta': f.centros || '', 'Material': (f.codigosRmd || [f.codigo]).join(', '), 'Descripción': f.descripcion || '', 'Mes(es)': (f.meses || []).join(', ') }
                 : { 'Planta': f.plantas || (currentPlanta === 'planta1' ? 'ATE' : currentPlanta === 'planta2' ? 'LIMA' : ''), 'Material': (f.codigosRmd || [f.codigo]).join(', '), 'Descripción': f.descripcion || '', 'Área': f.areas || '',
-                    'Programa': f.anterior ? `Anterior (${f.anterior.texto})` : 'Actual',
                     'Inicio de producción': f.fechaProxima ? dayjs(f.fechaProxima).format('YYYY-MM-DD') : '' };
             const situacion = f.estado === 'sap' ? 'AUTORIZADO' : (f.estado === 'autorizado' ? 'AUTORIZADO A MANO' : '');
             return Object.assign(base, {
@@ -9401,7 +9234,7 @@ async function downloadPlanProduccionFromCloud() {
             const datos = filas.map(f => filaExcelDeEtapa(f, origen));
             const headers = Object.keys(datos[0]);
             const ws = XLSX.utils.json_to_sheet(datos, { header: headers });
-            const anchos = { 'Planta': 10, 'Material': 13, 'Descripción': 44, 'Área': 16, 'Mes(es)': 22, 'Programa': 24, 'Inicio de producción': 13, 'Etapa pendiente': 16, 'Estatus': 19, 'Responsable': 12,
+            const anchos = { 'Planta': 10, 'Material': 13, 'Descripción': 44, 'Área': 16, 'Mes(es)': 22, 'Inicio de producción': 13, 'Etapa pendiente': 16, 'Estatus': 19, 'Responsable': 12,
                 'Estado en SAP': 14, 'RMD': 13, 'Versión': 8, 'Antigüedad (días)': 10, 'Para los productos': 26, 'Observación': 60 };
             ws['!cols'] = headers.map(h => ({ wch: anchos[h] || 12 }));
             ws['!autofilter'] = { ref: `A1:${XLSX.utils.encode_col(headers.length - 1)}${datos.length + 1}` };
@@ -10433,7 +10266,7 @@ function updateForecastActiveFiltersBadge() {
             'forecast_data', 'forecast_months_meta',
             'val_flags', 'val_rmd_autorizados_detalle', 'val_rmd_preciso', 'val_cambios_sap', 'val_op_sap',
             'val_manual_autorizados', 'val_manual_autorizados_meta', 'val_manual_autorizados_forecast', 'val_manual_autorizados_forecast_meta',
-            'val_responsables_etapa', 'val_estatus_etapa', 'val_fecha_inicio_manual', 'val_programa_anterior_retirados',
+            'val_responsables_etapa', 'val_estatus_etapa', 'val_fecha_inicio_manual',
             'val_rmd_indicadores_mes', 'val_rmd_caracterizaciones', 'val_estatus_caracterizacion', 'val_rmd_trazabilidad', 'val_caracterizacion_lista',
             'ind_horas_efectivas', 'ind_fotos_flujo', 'historial_trazabilidad', 'tour_completed'
         ];
@@ -12811,20 +12644,14 @@ async function maybeAutoStartTour() {
                 return { material: cod, descripcion: r.descripcion || desc, r, fechaDe: () => null, motivoRevisar: !r.conArbol ? (r.sinArbol || true) : '' };
             });
             c.productos = productos.length;
-            // Lo no autorizado de programas anteriores sigue sumando (hasta que se autorice o se retire en Producción).
-            const pk = pl === 'P1' ? 'planta1' : 'planta2';
-            const prev = productosAnterioresParaEtapas([pk], () => new Set(materiales.keys()), 'TODAS', materiales);
-            const { filas: todas } = etapasDeProductos([...productos, ...prev.productos], manualAutorizados);
-            const { cuentan: filas, retiradas } = separarFilasAnterior(todas, prev.anteriores);
-            c.anteriores = 0; c.retiradasAnterior = retiradas.length;
+            const { filas } = etapasDeProductos(productos, manualAutorizados);
             guardarMigracionClaves();
             filas.forEach((f) => {
                 if (f.estado !== 'pendiente') { c.autEtapas++; return; }
                 const estatus = estatusDeFila(f), resp = responsableDeFila(f);
                 sumarPendiente(c, estatus, resp);
-                if (f.anterior) c.anteriores++;
                 c.items.push({ pl, m: f.codigo, producto: f.descripcion || '', etapa: f.fija || '', d: f.d, cat: 'pend', estatus, resp: clasePendiente(estatus, resp).resp,
-                    productos: f.productos, revisar: f.fija ? undefined : (f.revisar || true), anterior: f.anterior ? f.anterior.texto : '' });
+                    productos: f.productos, revisar: f.fija ? undefined : (f.revisar || true) });
             });
             return c;
         }
@@ -12832,7 +12659,7 @@ async function maybeAutoStartTour() {
             if (!rmdPreciso || !rmdPreciso.totalEntradas) return { error: 'Faltan los RMD de SAP: usa «Enviar a Status RMD» en el portal o carga el Exportado RMD en Producción.' };
             await asegurarMotorArboles();
             const [d1, d2, a1, a2] = await Promise.all([storeGet('prod_data_planta1'), storeGet('prod_data_planta2'),
-                storeGet('prod_archivo_original_planta1'), storeGet('prod_archivo_original_planta2'), cargarProgramaAnterior()]);
+                storeGet('prod_archivo_original_planta1'), storeGet('prod_archivo_original_planta2')]);
             const r = { P1: ruta1DePlanta(d1, 'P1'), P2: ruta1DePlanta(d2, 'P2'), sinArbol: motorArboles.estado !== 'listo' };
             // Horizonte del Programa de Producción: 2 semanas desde la semana en que se cargó (lunes de esa semana + 13 días).
             [['P1', a1], ['P2', a2]].forEach(([pl, a]) => {
@@ -13078,7 +12905,7 @@ async function maybeAutoStartTour() {
         }
         const ORDEN_ESTADO_HOY = ['Sin RMD', 'Solicitado', 'Ingresado', 'Suspendido'];
         const UN_DIA_PROGRAMA_MS = 24 * 3600000;
-        function acumuladoDePlanta(H, acc, prod, pl) {
+        function acumuladoDePlanta(H, acc, prod) {
             const r = { productos: 0, fuera: 0, sinArbol: 0, descartados: 0, periodos: [], porMaterial: new Map(), inicio: acc && acc.inicio, detalleDesde: acc && acc.detalleDesde,
                 cargas: acc && Array.isArray(acc.cargas) ? acc.cargas.length : 0, reconstruido: !!(acc && acc.reconstruido) };
             if (!acc || !acc.items) return r;
@@ -13086,7 +12913,7 @@ async function maybeAutoStartTour() {
             // Una etapa compartida por varios productos (la Fabricación del mismo granel en dos presentaciones) cuenta una vez,
             // desde que entró el primero de ellos.
             // Igual que en Producción, los materiales pendientes por el mismo RMD cuentan una vez.
-            const etapasUnicas = new Map(), evaluados = [], plantaKey = pl === 'P1' ? 'planta1' : 'planta2';
+            const etapasUnicas = new Map(), evaluados = [];
             Object.entries(acc.items).forEach(([m, it]) => {
                 const desde = Date.parse(it.e);
                 if (!Number.isFinite(desde)) return;
@@ -13094,7 +12921,7 @@ async function maybeAutoStartTour() {
                 // sus productos estuvieron en el programa menos de un día.
                 if (it.s && Date.parse(it.s) - desde < UN_DIA_PROGRAMA_MS) { r.descartados++; return; }
                 const ev = evaluarMaterialPreciso(m);
-                const item = { m, producto: it.p || ev.descripcion || '', actual: enPrograma.has(m), entro: it.e, salio: it.s, ultima: it.u, ev };
+                const item = { m, producto: it.p || ev.descripcion || '', actual: enPrograma.has(m), entro: it.e, salio: it.s, ev };
                 r.productos++;
                 if (!item.actual) r.fuera++;
                 if (!ev.conArbol && !ev.verificable) r.sinArbol++;
@@ -13106,41 +12933,17 @@ async function maybeAutoStartTour() {
                 ev.etapas.forEach((etapa) => {
                     const det = ev.detalle[etapa], fija = mapEtapaAFija(etapa) || etapa, refs = refsRmdPendientes(det);
                     const g = refs ? grupos.get(`${refs}::${fija}`) : null, id = g ? `${refs}::${fija}` : idEtapaPrograma(m, fija, det);
-                    const ya = etapasUnicas.get(id), mats = ya ? ya.mats : [];
-                    mats.push(m);
+                    const ya = etapasUnicas.get(id);
                     if (ya && ya.desde <= desde) return;
-                    etapasUnicas.set(id, { m, etapa, det, fija: mapEtapaAFija(etapa), desde, canon: g ? g.canon : null, mats });
+                    etapasUnicas.set(id, { m, etapa, det, fija: mapEtapaAFija(etapa), desde, canon: g ? g.canon : null });
                 });
             });
-            // Retirada en Producción (programa anterior que ya no se necesita): deja el backlog en esa fecha, como «sin
-            // autorizar», si ninguno de sus productos está en el programa actual y todos están retirados.
-            const retiroDe = (mats, fija) => {
-                if (!fija) return null;
-                let ult = null;
-                for (const x of new Set(mats)) {
-                    const item = r.porMaterial.get(x);
-                    if (!item || item.actual) return null;
-                    const ret = retiroAnteriorVigente({ planta: plantaKey, material: x, u: item.ultima }, fija);
-                    if (!ret) return null;
-                    const t = Date.parse(ret.f);
-                    if (ult === null || t > ult) ult = t;
-                }
-                return ult;
-            };
-            r.retirados = 0;
-            etapasUnicas.forEach(({ m, etapa, det, fija, desde, canon, mats: matsProd }) => {
+            etapasUnicas.forEach(({ m, etapa, det, fija, desde, canon }) => {
                 const mats = det.candidatos.map((c) => c.material);
                 const key = fija ? [canon && responsableKey(canon, fija), claveDeEtapa(m, fija, det), responsableKey(m, fija)].find((k) => k && manualAutorizados.has(k)) : null;
                 let manualDesde = null;
                 if (key) { const f = Date.parse(((manualAutorizadosMeta.get(key) || {}).f) || ''); manualDesde = Number.isFinite(f) ? f : 0; }
-                const retiro = retiroDe(matsProd, fija);
-                periodosPendientes(H, mats, etapa, desde, manualDesde, Math.max(H.ahora, Date.now())).forEach((p) => {
-                    if (retiro !== null) {
-                        if (p.ini >= retiro) return;
-                        if (p.fin === null || p.fin > retiro) { p.fin = retiro; p.cierre = 'otro'; p.retirado = true; r.retirados++; }
-                    }
-                    r.periodos.push(Object.assign(p, { m, etapa }));
-                });
+                periodosPendientes(H, mats, etapa, desde, manualDesde, Math.max(H.ahora, Date.now())).forEach((p) => r.periodos.push(Object.assign(p, { m, etapa })));
             });
             return r;
         }
@@ -13173,12 +12976,11 @@ async function maybeAutoStartTour() {
         async function calcularAcumulado() {
             if (!rmdPrecisoDatos || !rmdPreciso || !rmdPreciso.totalEntradas) return { error: 'Faltan los RMD de SAP: usa «Enviar a Status RMD» en el portal o carga el Exportado RMD en Producción.' };
             await asegurarMotorArboles();
-            const [acc1, acc2, d1, d2, traz, ret] = await Promise.all([leerAcumuladoPrograma('planta1'), leerAcumuladoPrograma('planta2'),
-                storeGet('prod_data_planta1'), storeGet('prod_data_planta2'), storeGet('val_rmd_trazabilidad'), storeGet(CLAVE_RETIROS_ANTERIOR)]);
-            retirosAnterior = mapaRetirosAnterior(ret);
+            const [acc1, acc2, d1, d2, traz] = await Promise.all([leerAcumuladoPrograma('planta1'), leerAcumuladoPrograma('planta2'),
+                storeGet('prod_data_planta1'), storeGet('prod_data_planta2'), storeGet('val_rmd_trazabilidad')]);
             const trazOk = traz && traz.v === 1 && traz.items ? traz : null;
             const H = indiceHistorico(trazOk);
-            const res = { H, P1: acumuladoDePlanta(H, acc1, d1, 'P1'), P2: acumuladoDePlanta(H, acc2, d2, 'P2'), traz: !!trazOk, trazDesde: trazOk && trazOk.desde,
+            const res = { H, P1: acumuladoDePlanta(H, acc1, d1), P2: acumuladoDePlanta(H, acc2, d2), traz: !!trazOk, trazDesde: trazOk && trazOk.desde,
                 sinArbol: motorArboles.estado !== 'listo' };
             ['P1', 'P2'].forEach((pl) => {
                 const x = res[pl];
@@ -13490,7 +13292,7 @@ async function maybeAutoStartTour() {
                     <div><h4>5. Porcentajes</h4><ul><li><b>% total</b> = autorizados / (backlog + solicitados ± otros).</li>
                         <li><b>% del área</b> = lo mismo sin lo que no depende de RMD (flujo de Producción sin aprobar o pendiente de CC). Meta: <b>${META_AUTORIZADOS} % o más</b>.</li>
                         <li><b>% Backlog DOC</b> = autorizados del backlog en ${esc(mes)} / backlog de ${esc(mes)}. Arranca en 0 cada mes.</li></ul></div>
-                    <div><h4>6. Rutas</h4><ul><li><b>Ruta 1, Programa</b>: etapas pendientes del último Programa de Producción cargado de cada planta, más lo que no se autorizó de programas anteriores (marcado «programa anterior», hasta que se autorice o se retire en Producción), por estatus y responsable; varios materiales pendientes por el mismo RMD (un máster con varias recetas) cuentan como un solo pendiente. Programa PLA = el periodo elegido arriba (<b>${esc(d.per.texto)}</b>).</li>
+                    <div><h4>6. Rutas</h4><ul><li><b>Ruta 1, Programa</b>: etapas pendientes del último Programa de Producción cargado de cada planta, por estatus y responsable; varios materiales pendientes por el mismo RMD (un máster con varias recetas) cuentan como un solo pendiente. Programa PLA = el periodo elegido arriba (<b>${esc(d.per.texto)}</b>).</li>
                         <li><b>Ruta 2, Caracterizaciones</b>: RMD con Motivo CARACTERIZACION. Autorizado = Autorizado o Suspendido; las solicitudes rechazadas no cuentan. También cuentan, como pendientes, las versiones vigentes (Autorizadas) con «PENDIENTE BORRADOR CARACTERIZACION» en Observaciones: productos cuyo borrador aún no llega y a los que no se crea versión nueva. El Estatus de cada pendiente es el elegido en la tabla de caracterizaciones de abajo o, si no tiene, el de su etapa en la pestaña CARACTERIZACIÓN (el mismo de Producción); los «PENDIENTE BORRADOR» sin estatus van en Borrador.</li>
                         <li>Responsables: <b>PRO</b> Producción · <b>DOC</b> QA Documentación · <b>ASC</b> Aseguramiento de la Calidad / CC. P1 = ATE, P2 = LIMA.</li></ul></div>
                 </div>
@@ -13999,8 +13801,7 @@ async function maybeAutoStartTour() {
             const fv = fotoEnVista();
             if (fv) return htmlRutaFoto(fv, 'r1');
             const r1 = d.r1, mes = d.per.hasta.format('YYYY-MM');
-            const extra = (pl) => (r1[pl].sinDatos ? ' <span class="sts-chip">sin Programa de Producción cargado</span>' : ` <span class="sts-chip">${plural(r1[pl].productos, 'producto programado', 'productos programados')}${r1[pl].horizonte ? ` · cargado el ${esc(r1[pl].horizonte.carga.format('DD/MM'))}` : ''}</span>`
-                + (r1[pl].anteriores ? ` <span class="sts-chip" title="Etapas que no se autorizaron en un programa anterior: siguen en los pendientes hasta que se autoricen o se retiren en Producción">incluye ${plural(r1[pl].anteriores, 'pendiente', 'pendientes')} del programa anterior</span>` : ''));
+            const extra = (pl) => (r1[pl].sinDatos ? ' <span class="sts-chip">sin Programa de Producción cargado</span>' : ` <span class="sts-chip">${plural(r1[pl].productos, 'producto programado', 'productos programados')}${r1[pl].horizonte ? ` · cargado el ${esc(r1[pl].horizonte.carga.format('DD/MM'))}` : ''}</span>`);
             const cuerpo = r1.error ? `<div class="sts-aviso"><span>${esc(r1.error)}</span></div>`
                 : (r1.sinArbol ? '<div class="sts-aviso"><span>No se pudo cargar el árbol de materiales de SAP: solo se cuenta el RMD del propio código de cada producto.</span></div>' : '')
                   + ['P1', 'P2'].map((pl) => htmlRuta(r1[pl], pl, 'r1', { autKey: `cuadro|${pl}|${mes}|aut`, extra: extra(pl),
@@ -14011,7 +13812,7 @@ async function maybeAutoStartTour() {
                     <div class="sts-seccion-sub">RMD pendientes por etapa y responsable · ${esc(d.per.mesAnio)} · Programa PLA ${esc(rangoPrograma(d))}</div>
                 </div><div class="fto-cab">${htmlFiltroFecha()}${leyenda}</div></div>
                 ${cuerpo}
-                <p class="sts-nota">Pendientes: las etapas del programa sin autorizar, contadas como en Producción (cada etapa una vez, aunque la compartan varias presentaciones) y repartidas según su Estatus. Incluyen lo que no se autorizó de programas anteriores, hasta que se autorice o se retire en Producción. Autorizado: los autorizados del mes del cuadro (${esc(d.per.mesNombre.toLowerCase())}). El total del programa (pendientes + autorizados del mes) es el universo del mes; % de avance del programa = autorizados / total. Backlog: los pendientes del cuadro al cierre de ${esc(d.per.mesAnterior.toLowerCase())}; % de avance del backlog DOC = autorizados del backlog en el mes / backlog. Programa PLA: el periodo del status elegido arriba (Desde – Hasta).</p>
+                <p class="sts-nota">Pendientes: las etapas del programa sin autorizar, contadas como en Producción (cada etapa una vez, aunque la compartan varias presentaciones) y repartidas según su Estatus. Autorizado: los autorizados del mes del cuadro (${esc(d.per.mesNombre.toLowerCase())}). El total del programa (pendientes + autorizados del mes) es el universo del mes; % de avance del programa = autorizados / total. Backlog: los pendientes del cuadro al cierre de ${esc(d.per.mesAnterior.toLowerCase())}; % de avance del backlog DOC = autorizados del backlog en el mes / backlog. Programa PLA: el periodo del status elegido arriba (Desde – Hasta).</p>
             </section>`;
         }
         function htmlTablaCar(d) {
@@ -14097,7 +13898,7 @@ async function maybeAutoStartTour() {
             nuevos: 'Etapas que quedaron pendientes en el periodo: su producto entró al programa sin RMD autorizado, o se abrió una versión nueva o se suspendió',
             total: 'Backlog + nuevos: todo lo que estuvo pendiente en el periodo',
             autorizados: 'Etapas pendientes que se autorizaron en el periodo (en SAP o a mano en Producción)',
-            otros: 'Dejaron de estar pendientes sin autorizarse: se canceló la versión nueva, se rechazó o aprobó la solicitud, o se retiró en Producción porque ya no se necesitaba (programa anterior)',
+            otros: 'Dejaron de estar pendientes sin autorizarse: se canceló la versión nueva o se rechazó o aprobó la solicitud',
             nuevoBacklog: 'Total − autorizados − sin autorizar: lo que sigue pendiente al terminar el periodo (en el periodo en curso, hoy). Es el backlog del periodo siguiente'
         };
         // En Producción: el de la planta que se está viendo (las dos en el consolidado).
@@ -14135,7 +13936,7 @@ async function maybeAutoStartTour() {
                     <div class="sts-desglose">
                         ${chips('Backlog hoy en SAP', x.porEstado, ORDEN_ESTADO_HOY, `acuEstado|${pl}`)}
                         ${chips('Según la Observación', x.porObs, null, `acuObs|${pl}`)}
-                        ${x.fueraPend || x.retirados ? `<div class="sts-desglose-fila"><span class="sts-desglose-lbl">Del programa anterior</span>${x.fueraPend ? `<span class="sts-chip">${nDet(x.fueraPend, `acuFuera|${pl}`, plural(x.fueraPend, 'etapa pendiente de productos que ya no están en el programa actual', 'etapas pendientes de productos que ya no están en el programa actual'))}</span>` : ''}${x.retirados ? `<span class="sts-chip" title="Etapas del programa anterior que un usuario retiró de los pendientes en Producción: cuentan en «Sin autorizar»">${plural(x.retirados, 'retirada en Producción', 'retiradas en Producción')}</span>` : ''}</div>` : ''}
+                        ${x.fueraPend ? `<div class="sts-desglose-fila"><span class="sts-desglose-lbl">Ya no programados</span><span class="sts-chip">${nDet(x.fueraPend, `acuFuera|${pl}`, plural(x.fueraPend, 'etapa pendiente de productos que ya no están en el programa actual', 'etapas pendientes de productos que ya no están en el programa actual'))}</span></div>` : ''}
                     </div>
                 </div>`;
             };
@@ -14180,7 +13981,7 @@ async function maybeAutoStartTour() {
             });
             filas.sort((x, y) => (modo === 'pend' ? x.p.ini - y.p.ini : x.p.fin - y.p.fin) || x.it.m.localeCompare(y.it.m));
             const etq = (e) => ETAPAS_FIJAS_LABEL[e] || e;
-            const producto = (it) => `${esc(it.producto)}${it.actual ? '' : ` <span class="sts-chip" title="${esc(it.salio ? `Salió del programa el ${fmtDia(it.salio)}` : 'Ya no está en el programa actual')}">programa anterior</span>`}`;
+            const producto = (it) => `${esc(it.producto)}${it.actual ? '' : ` <span class="sts-chip" title="${esc(it.salio ? `Salió del programa el ${fmtDia(it.salio)}` : 'Ya no está en el programa actual')}">ya no programado</span>`}`;
             const ref = (c) => (c.rmd ? `RMD ${c.rmd}` : (c.sol ? `solicitud ${c.sol}` : ''));
             const filaPend = ({ pl, p, it }) => {
                 const s = p.hoy || situacionHoy(it.ev.detalle[p.etapa]), c = s.c;
@@ -14404,7 +14205,6 @@ async function maybeAutoStartTour() {
             mes: { t: 'Mes', w: 15 },
             como: { t: 'Cuenta como', w: 30 },
             situacion: { t: 'Situación', w: 11 },
-            prog: { t: 'Programa', w: 24 },
             m: { t: 'Código producto', w: 14, mono: true },
             producto: { t: 'Producto', w: 40, desc: true },
             etapa: { t: 'Etapa', w: 16 },
@@ -14430,7 +14230,7 @@ async function maybeAutoStartTour() {
         };
         const COLUMNAS_DET = {
             cuadro: ['planta', 'mes', 'como', 'codigo', 'desc', 'version', 'etapa', 'estado', 'fSol', 'fReg', 'fIng', 'fAut', 'fSusp', 'prodEstado', 'fuera', 'codDef', 'obs'],
-            r1: ['planta', 'm', 'producto', 'prog', 'etapa', 'situacion', 'estatus', 'resp', 'codigo', 'desc', 'version', 'estado', 'material', 'obs'],
+            r1: ['planta', 'm', 'producto', 'etapa', 'situacion', 'estatus', 'resp', 'codigo', 'desc', 'version', 'estado', 'material', 'obs'],
             r2: ['planta', 'codigo', 'desc', 'version', 'etapa', 'estado', 'situacion', 'estatus', 'resp', 'fSol', 'fAut', 'codDef', 'obs'],
             acu: ['planta', 'm', 'producto', 'etapa', 'desde', 'hasta', 'dias', 'como', 'codigo', 'desc', 'version', 'estado', 'material', 'obs']
         };
@@ -14524,7 +14324,7 @@ async function maybeAutoStartTour() {
             return campo === k;
         }
         function filaRuta1(it) {
-            const base = { planta: it.pl, m: it.m, producto: it.producto, prog: it.cat === 'aut' ? '' : (it.anterior ? `Anterior (${it.anterior})` : 'Actual'), etapa: etapaTxt(it.etapa) || '—', situacion: it.cat === 'aut' ? 'Autorizado' : 'Pendiente',
+            const base = { planta: it.pl, m: it.m, producto: it.producto, etapa: etapaTxt(it.etapa) || '—', situacion: it.cat === 'aut' ? 'Autorizado' : 'Pendiente',
                 estatus: it.cat === 'aut' ? (it.manual ? 'Autorizado a mano' : '') : (it.estatus || 'Sin estatus'), resp: it.resp || '' };
             if (!it.d) return Object.assign(base, { estado: 'Sin árbol de producción', obs: `Para revisar en Producción${typeof it.revisar === 'string' ? `: ${it.revisar}` : ''}` });
             // El RMD que decide la etapa: el pendiente (como en Producción) o, si ya está resuelta, el de versión más alta.
@@ -14550,7 +14350,7 @@ async function maybeAutoStartTour() {
             const nombre = k === 'todo' ? (ruta === 'r1' ? 'Etapas pendientes' : 'Todos los RMD') : NOMBRES_RUTA[k];
             return { tipo: ruta, pl, titulo: `${nombre} · ${ruta === 'r1' ? 'Ruta 1, programa' : 'Ruta 2, caracterizaciones'}`,
                 sub: pl === 'ambas' ? 'P1 y P2 · Plantas Ate y Lima' : PLANTAS[pl], numero, filas: items.map(ruta === 'r1' ? filaRuta1 : filaRuta2).sort(orden),
-                explica: ruta === 'r1' ? 'Cada etapa pendiente de los productos programados, contada como en Producción (una vez aunque la compartan varias presentaciones), con su Estatus y responsable. Incluye lo que no se autorizó de programas anteriores (columna Programa), hasta que se autorice o se retire en Producción. El RMD es el que deja pendiente la etapa. Los autorizados de la Ruta 1 son los del cuadro del mes.'
+                explica: ruta === 'r1' ? 'Cada etapa pendiente de los productos programados, contada como en Producción (una vez aunque la compartan varias presentaciones), con su Estatus y responsable. El RMD es el que deja pendiente la etapa. Los autorizados de la Ruta 1 son los del cuadro del mes.'
                     : 'RMD de SAP con Motivo CARACTERIZACION. Autorizado o Suspendido en SAP cuenta como autorizado; el resto, como pendiente, con el Estatus elegido en la tabla de caracterizaciones.' };
         }
 
@@ -14569,7 +14369,7 @@ async function maybeAutoStartTour() {
             const u = (d ? d.candidatos : []).map((c) => { const k = cadenaEn(a.H, c.material, p.etapa, p.fin); return k && { u: k.ultima, material: c.material }; })
                 .filter(Boolean).sort((x, y) => y.u.version - x.u.version)[0];
             const fila = u ? filaDetalleDeEntrada(u.u) : null;
-            return Object.assign(base, { como: p.cierre === 'manual' ? 'Autorizado a mano en Producción' : (esAutorizacion(p) ? 'Autorizado en SAP' : (p.retirado ? 'Retirado en Producción (programa anterior)' : 'Salió sin autorizarse')),
+            return Object.assign(base, { como: p.cierre === 'manual' ? 'Autorizado a mano en Producción' : (esAutorizacion(p) ? 'Autorizado en SAP' : 'Salió sin autorizarse'),
                 codigo: u ? refRmd(u.u) : '', desc: fila ? fila.descripcion : '', version: u ? u.u.version : '', estado: u ? estadoTxt(u.u.estado) : 'Sin RMD', material: u ? u.material : '' });
         }
         const NOMBRES_ACU = { backlog: 'Backlog', nuevos: 'Nuevos pendientes', total: 'Total pendiente', autorizados: 'Autorizados', otros: 'Sin autorizar', nuevoBacklog: 'Nuevo backlog' };
@@ -14633,7 +14433,7 @@ async function maybeAutoStartTour() {
             // En la ventana no van las columnas vacías ni las que repiten lo que ya dice el título (la misma planta, mes, estatus…).
             const vacia = (c) => filas.every((f) => f[c] === undefined || f[c] === null || f[c] === '');
             const iguales = (c) => filas.length > 0 && filas.every((f) => f[c] === filas[0][c]);
-            const cols = COLUMNAS_DET[det.tipo].filter((c) => !COLS_DET[c].soloExcel && !vacia(c) && !(['planta', 'mes', 'como', 'situacion', 'estatus', 'resp', 'prog'].includes(c) && iguales(c)));
+            const cols = COLUMNAS_DET[det.tipo].filter((c) => !COLS_DET[c].soloExcel && !vacia(c) && !(['planta', 'mes', 'como', 'situacion', 'estatus', 'resp'].includes(c) && iguales(c)));
             const MAX = 2500;
             const tabla = filas.length ? `<div class="sts-det-herr"><input type="search" class="sts-det-buscar" placeholder="Buscar código, descripción, etapa, estado…" aria-label="Buscar en el detalle"><span class="sts-det-n" aria-live="polite">${cuantas(filas.length)}</span></div>
                 <div class="sts-det-wrap"><table class="sts-det-tabla"><thead><tr>${cols.map((c) => `<th>${COLS_DET[c].t}</th>`).join('')}</tr></thead>
@@ -14899,7 +14699,7 @@ async function maybeAutoStartTour() {
                 Object.assign(v, {
                     [k + 'TOTAL']: c.pend + c.aut, [k + 'BOR']: c.bor, [k + 'ING']: c.ing, [k + 'FLU']: c.flu, [k + 'REV']: c.rev, [k + 'AUT']: c.aut,
                     [k + 'CC']: c.cc, [k + 'CC_PRO']: c.ccPro, [k + 'CC_ASC']: c.ccAsc, [k + 'AVANCE']: avanceTxt(c),
-                    [k + 'SINEST']: (c.sinEst ? ` · ${c.sinEst} sin estatus` : '') + (c.anteriores ? ` · ${c.anteriores} del programa anterior` : '')
+                    [k + 'SINEST']: c.sinEst ? ` · ${c.sinEst} sin estatus` : ''
                 });
             });
             ruta('R1', d.r1.error ? {} : d.r1); ruta('R2', d.r2);
@@ -15304,7 +15104,7 @@ async function maybeAutoStartTour() {
 
         // Marca de la pestaña Producción: la etapa también está en caracterización.
         function chipProduccion(f) {
-            if (!f || !f.fija || !lista) return '';
+            if (!MOSTRAR_CARACTERIZACION || !f || !f.fija || !lista) return '';
             const s = clavesCaracterizacion();
             if (!s.size || !(f.d && f.d.candidatos.some((c) => s.has(`${c.material}::${f.fija}`)))) return '';
             return '<span class="car-tag car-tag--listado" title="Esta etapa también está en caracterización (pestaña CARACTERIZACIÓN): comparten el Estatus, el responsable y la autorización a mano.">Caracterización</span>';
