@@ -15162,10 +15162,13 @@ async function maybeAutoStartTour() {
             const padre = new Map(), raiz = (k) => { let r = k; while (padre.get(r) !== r) r = padre.get(r); let c = k; while (c !== r) { const nx = padre.get(c); padre.set(c, r); c = nx; } return r; };
             const unirUF = (a, b) => { [a, b].forEach((k) => { if (!padre.has(k)) padre.set(k, k); }); const ra = raiz(a), rb = raiz(b); if (ra !== rb) padre.set(ra < rb ? rb : ra, ra < rb ? ra : rb); };
             const nodoV = (v) => `${v.planta}|c:${String(v.codigo || `S${v.sol}`).trim()}`;
+            // Desde el script v1.135.4 el linaje llega como «M:<código>» = el master tal como lo arma el portal (linaje, versión
+            // anterior, descripción + planta + área + etapa): entonces se agrupa solo por él y el Resumen cuadra exacto con el Excel.
+            const conMaster = [...linajeDe.values()].some((l) => l.startsWith('M:'));
             versiones.forEach((v) => {
                 const c = nodoV(v), l = v.codigo && linajeDe.get(String(v.codigo).trim()); unirUF(c, c);
                 if (l) unirUF(c, `${v.planta}|c:${l}`);
-                if (v.desc) unirUF(c, `${v.planta}|d:${String(v.desc).normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toUpperCase().replace(/\s+/g, ' ')}|${etapaDe(v)}`);
+                if (v.desc && !(conMaster && l)) unirUF(c, `${v.planta}|d:${String(v.desc).normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toUpperCase().replace(/\s+/g, ' ')}|${etapaDe(v)}`);
             });
             const masters = new Map();
             versiones.forEach((v) => { if (!ULT.has(v.estado)) return; const k = raiz(nodoV(v)); if (!masters.has(k)) masters.set(k, []); masters.get(k).push(v); });
