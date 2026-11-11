@@ -15175,6 +15175,10 @@ async function maybeAutoStartTour() {
             const ultimas = new Set();
             masters.forEach((vs) => { vs.sort((a, b) => (b.version - a.version) || ((b.fReg ? b.fReg.valueOf() : 0) - (a.fReg ? a.fReg.valueOf() : 0))); ultimas.add(vs[0]); });
             const esUltima = (v) => ultimas.has(v);
+            // Masters con un código de los INACTIVO del análisis (pedido de Carlos, 11/11/2026: «que cuadre 892 en ATE y 436 en
+            // LIMA»): el master cuenta como INACTIVO aunque ya tenga una versión más nueva, y no suma como suspendido.
+            const ultInactivo = new Set();
+            masters.forEach((vs) => { if (vs.some(esInactivo)) ultInactivo.add(vs[0]); });
             // Suspendidos de hoy en SAP (sin los INACTIVO), última versión y sin otra versión nueva ya iniciada.
             const susp = [], omitidos = [];
             versiones.forEach((v) => {
@@ -15185,7 +15189,7 @@ async function maybeAutoStartTour() {
                 const nueva = linea(v).find((w) => w.version > v.version && (w.estado === 'INGRESADO' || w.estado === 'SOLICITADO') && (w.fReg || w.fSol) && !(w.fReg || w.fSol).isAfter(fin));
                 if (nueva) { omitidos.push({ v, nueva }); return; }
                 // Con una versión más nueva (Autorizada, Suspendida…) no es la última: no es pendiente.
-                if (!esUltima(v)) return;
+                if (!esUltima(v) || ultInactivo.has(v)) return;
                 const m = fS ? mesDe(fS) : 'sin fecha';
                 const d = decision(v);
                 const x = { tipo: 'Suspendido', v, m, cuando: vigente(m), fS, d, porque: `Suspendido sin versión nueva: cuenta en el mes de su suspensión${fS ? `, ${dd(fS)}` : ''}.` };
@@ -15213,12 +15217,13 @@ async function maybeAutoStartTour() {
             ['P1', 'P2'].forEach((pl) => DECISION_EQUIPO[pl].forEach((d, cod) => { if (d.c !== 'I') return; const f = sap.get(`${pl}|${cod}`);
                 dec.push({ pl, cod, c: 'I', d, fS: d.fSusp ? dTxt(d.fSusp) : null, v: f ? { desc: f.descripcion || '', etapa: f.etapa || '', estado: normalizeEstadoRmd(f.estado), version: Number(f.version) || '' } : null }); }));
             // Resumen: status de hoy de la última versión de cada master (como el Excel «Última versión» del portal). INACTIVO =
-            // la última versión Suspendida que está en el análisis de suspendidos; los INACTIVO del análisis que ya tienen una
-            // versión más nueva cuentan con el status de esa versión (decisión de Carlos, 11/11/2026).
+            // los del análisis de suspendidos, fijos (892 ATE / 436 LIMA, pedido de Carlos 11/11/2026): un master con un código
+            // de esa lista no cuenta en otro status aunque ya tenga una versión más nueva.
             const resumen = { P1: { AUTORIZADO: 0, INGRESADO: 0, SUSPENDIDO: 0, INACTIVO: 0 }, P2: { AUTORIZADO: 0, INGRESADO: 0, SUSPENDIDO: 0, INACTIVO: 0 } };
+            ['P1', 'P2'].forEach((pl) => { resumen[pl].INACTIVO = RMD_INACTIVOS[pl].size; });
             ultimas.forEach((v) => {
-                if (!resumen[v.planta]) return;
-                if (v.estado === 'INACTIVO' || (v.estado === 'SUSPENDIDO' && esInactivo(v))) { resumen[v.planta].INACTIVO += 1; return; }
+                if (!resumen[v.planta] || ultInactivo.has(v) || esInactivo(v)) return;
+                if (v.estado === 'INACTIVO') { resumen[v.planta].INACTIVO += 1; return; }
                 resumen[v.planta][v.estado] += 1;
                 if (v.estado === 'SUSPENDIDO') dec.push({ pl: v.planta, cod: String(v.codigo || '').trim(), c: 'S', d: decision(v) || {}, fS: suspDe(v), v: { desc: v.desc || '', etapa: v.etapa || '', estado: v.estado, version: v.version } });
             });
