@@ -7926,7 +7926,10 @@ async function downloadPlanProduccionFromCloud() {
             // en paralelo: con Supabase de por medio (llamadas de red reales),
             // hacerlas una tras otra sumaría varios round-trips innecesarios al
             // tiempo de carga inicial de la página.
-            const [ma, mm, re, flags, rd, es, rp, cs, ops, traz, fim] = await Promise.all([
+            // Las autorizaciones a mano de Forecast también se leen aquí (antes en loadForecastData, en paralelo con la primera
+            // validación): si llegaban DESPUÉS de que la validación de Producción revisara las caducadas, volvían a la memoria y
+            // se daban por caducadas dos veces (aviso y anotación en el historial repetidos).
+            const [ma, mm, re, flags, rd, es, rp, cs, ops, traz, fim, maf, mmf] = await Promise.all([
                 storeGet('val_manual_autorizados'),
                 storeGet('val_manual_autorizados_meta'),
                 storeGet('val_responsables_etapa'),
@@ -7937,8 +7940,12 @@ async function downloadPlanProduccionFromCloud() {
                 storeGet('val_cambios_sap'),
                 storeGet('val_op_sap'),
                 storeGet('val_rmd_trazabilidad'),
-                storeGet('val_fecha_inicio_manual')
+                storeGet('val_fecha_inicio_manual'),
+                storeGet('val_manual_autorizados_forecast'),
+                storeGet('val_manual_autorizados_forecast_meta')
             ]);
+            if (maf) manualAutorizadosForecast = new Set(maf);
+            manualAutorizadosForecastMeta = metaManualDesdeGuardado(mmf);
             fechasInicioManual = mapaFechasInicioManual(fim);
             if (traz) trazabilidadSap = traz;
             opsSap = normalizarOpsSap(ops);
@@ -9989,14 +9996,11 @@ function updateForecastActiveFiltersBadge() {
         }
 
         async function loadForecastData() {
-            const [saved, savedMeta, ma, mm] = await Promise.all([
+            // (Las autorizaciones a mano de Forecast se leen en loadValidacionData, antes de la primera validación.)
+            const [saved, savedMeta] = await Promise.all([
                 storeGet('forecast_data'),
-                storeGet('forecast_months_meta'),
-                storeGet('val_manual_autorizados_forecast'),
-                storeGet('val_manual_autorizados_forecast_meta')
+                storeGet('forecast_months_meta')
             ]);
-            if (ma) manualAutorizadosForecast = new Set(ma);
-            manualAutorizadosForecastMeta = metaManualDesdeGuardado(mm);
             if (saved) {
                 forecastData = saved;
                 forecastMonthsMeta = savedMeta || [];
@@ -10945,6 +10949,9 @@ async function maybeAutoStartTour() {
         });
 
         document.addEventListener('DOMContentLoaded', async () => {
+            // El árbol de materiales (copia local de las listas de SAP) se empieza a preparar ya, en paralelo con los datos:
+            // con los datos ahora en copia local, era lo último en llegar y la tabla esperaba por él.
+            setTimeout(() => { try { asegurarMotorArboles(); } catch (e) { /* se reintenta al validar */ } }, 0);
             initCalendarRMD();
             initCalendarProd();
             initCalendarForecast();
