@@ -12524,7 +12524,10 @@ async function maybeAutoStartTour() {
         }
         const diaDe = (v) => { const d = fechaDe(v); return d ? d.format('YYYY-MM-DD') : ''; };
         function plantaDe(v) {
-            const t = String(v || '').toUpperCase();
+            const t = String(v || '').toUpperCase().trim();
+            // El detalle de RMD guardado (rmdAutorizadosDetalle) ya trae la planta como «P1»/«P2»: sin esto, el Excel «Backlog del
+            // mes» salía en 0 (pendientes, prioridades y autorizados) porque ninguna versión tenía planta.
+            if (/^P\s*[12]$/.test(t)) return t.replace(/\s+/g, '');
             if (/\bATE\b|PLANTA\s*1\b|\b1020\b/.test(t)) return 'P1';
             if (/\bLIMA\b|PLANTA\s*2\b|\b1021\b/.test(t)) return 'P2';
             return null;
