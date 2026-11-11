@@ -14903,99 +14903,321 @@ async function maybeAutoStartTour() {
         }
         const NOMBRE_PLANTA_BK = { P1: 'ATE', P2: 'LIMA' };
         const SUGERENCIA_BK = { A: 'ACTUALIZAR', R: 'REVISAR', P: 'PASAR A INACTIVO', N: 'NO CONSIDERAR' };
-        function libroBacklogMes(r) {
-            const wb = XLSX.utils.book_new(), pl2 = ['P1', 'P2'], n = (xs, f) => xs.filter(f).length;
-            const nomMes = MESES[r.corte.month()], titMes = `${nomMes.toUpperCase()} ${r.corte.year()}`;
-            const azul = { patternType: 'solid', fgColor: { rgb: '1F3864' } }, claro = { patternType: 'solid', fgColor: { rgb: 'DDEBF7' } };
-            const borde = { top: { style: 'thin', color: { rgb: 'BFBFBF' } }, bottom: { style: 'thin', color: { rgb: 'BFBFBF' } }, left: { style: 'thin', color: { rgb: 'BFBFBF' } }, right: { style: 'thin', color: { rgb: 'BFBFBF' } } };
-            const S = { tit: { font: { bold: true, sz: 16, color: { rgb: '1F3864' } } }, sec: { font: { bold: true, sz: 12, color: { rgb: '1F3864' } } }, nota: { font: { italic: true, sz: 9, color: { rgb: '595959' } } },
-                cab: { font: { bold: true, color: { rgb: 'FFFFFF' } }, fill: azul, border: borde, alignment: { wrapText: true, vertical: 'center' } }, cel: { border: borde }, num: { border: borde, alignment: { horizontal: 'right' } },
-                tot: { font: { bold: true }, fill: claro, border: borde }, rojo: { font: { color: { rgb: 'C00000' } }, border: borde } };
-            // ---- Resumen ----
-            const aoa = [], est = {};
-            const fila = (vals, estilos) => { const rr = aoa.length; aoa.push(['', ...vals]); (estilos || []).forEach((s, c) => { if (s) est[XLSX.utils.encode_cell({ r: rr, c: c + 1 })] = s; }); };
-            const P = (pl, tipo, cuando) => n(r.pend, (x) => x.v.planta === pl && (!tipo || x.tipo === tipo) && (!cuando || x.cuando === cuando));
-            const ANT = 'Meses anteriores (backlog)', VIG = 'Mes vigente';
-            fila([`BACKLOG RMD – ${titMes}`], [S.tit]); fila([`Corte: ${r.corte.format('DD/MM/YYYY')} · descargado de status-rmd el ${dayjs().format('DD/MM/YYYY HH:mm')}`], [S.nota]); fila([]);
-            fila(['1. Pendientes (Solicitudes del mes + Backlog)'], [S.sec]); fila(['Planta', nomMes], [S.cab, S.cab]);
-            fila(['ATE', P('P1')], [S.cel, S.num]); fila(['LIMA', P('P2')], [S.cel, S.num]); fila(['Total', P('P1') + P('P2')], [S.tot, S.tot]);
-            fila(['Ingresados + solicitados + suspendidos que el equipo mantiene (sin los INACTIVO). Detalle: hoja «1-2 Pendientes».'], [S.nota]); fila([]);
-            fila(['2. Composición de los pendientes'], [S.sec]);
-            fila(['Tipo (Backlog + Solicitados del mes)', 'ATE', 'LIMA', 'Total', '', 'ATE meses anteriores', `ATE mes vigente (${MESES_CORTOS[r.corte.month()]})`, 'LIMA meses anteriores', `LIMA mes vigente (${MESES_CORTOS[r.corte.month()]})`], [S.cab, S.cab, S.cab, S.cab, null, S.cab, S.cab, S.cab, S.cab]);
-            [['Ingresados', 'Ingresado'], ['Solicitados', 'Solicitado'], ['Suspendido', 'Suspendido'], ['Total Pendientes', null]].forEach(([t, tipo]) => {
-                const a = P('P1', tipo, ANT) + P('P2', tipo, ANT), b = P('P1', tipo, VIG) + P('P2', tipo, VIG), s = tipo ? S.num : S.tot;
-                fila([`${t} (${a} + ${b})`, P('P1', tipo), P('P2', tipo), P('P1', tipo) + P('P2', tipo), '', P('P1', tipo, ANT), P('P1', tipo, VIG), P('P2', tipo, ANT), P('P2', tipo, VIG)], [tipo ? S.cel : S.tot, s, s, s, null, s, s, s, s]);
-            });
-            fila(['(a + b) = meses anteriores + mes vigente. Ver la regla del mes en la hoja «1-2 Pendientes».'], [S.nota]); fila([]);
-            const D = (pl, c) => n(r.dec, (x) => x.pl === pl && (!c || x.d.c === c));
-            fila(['3. Diferenciación de SUSPENDIDOS vs INACTIVOS'], [S.sec]); fila(['', 'ATE', 'LIMA', 'Total'], [S.cab, S.cab, S.cab, S.cab]);
-            fila(['Suspendidos en SAP RMD (revisados por el equipo)', D('P1'), D('P2'), D('P1') + D('P2')], [S.tot, S.tot, S.tot, S.tot]);
-            fila(['Se mantienen como SUSPENDIDOS', D('P1', 'S'), D('P2', 'S'), D('P1', 'S') + D('P2', 'S')], [S.cel, S.num, S.num, S.num]);
-            fila(['Pasan a INACTIVOS', D('P1', 'I'), D('P2', 'I'), D('P1', 'I') + D('P2', 'I'), 'Se colocarán como INACTIVOS una vez creado el nuevo status en SAP.'], [S.cel, S.num, S.num, S.num, S.nota]); fila([]);
-            const anio = r.corte.year(), prios = [`Prioridad 1 (${anio})`, `Prioridad 2 (${anio - 1})`, `Prioridad 3 (${anio - 2} y antes)`];
-            if (r.susp.some((x) => x.prio === 'Sin fecha')) prios.push('Sin fecha');
-            const PR = (pl, p) => n(r.susp, (x) => x.v.planta === pl && x.prio === p);
-            fila(['4. Suspendidos por prioridad (año de suspensión)'], [S.sec]); fila(['Prioridad', 'ATE', 'LIMA', 'Total'], [S.cab, S.cab, S.cab, S.cab]);
-            prios.forEach((p) => fila([p, PR('P1', p), PR('P2', p), PR('P1', p) + PR('P2', p)], [S.cel, S.num, S.num, S.num]));
-            fila(['Total', n(r.susp, (x) => x.v.planta === 'P1'), n(r.susp, (x) => x.v.planta === 'P2'), r.susp.length], [S.tot, S.tot, S.tot, S.tot]); fila([]);
-            const A = (pl, c) => n(r.aut, (x) => x.v.planta === pl && (!c || x.cuenta === c));
-            fila([`5. Autorizados (del 01/${r.corte.format('MM/YYYY')} al ${r.corte.format('DD/MM/YYYY')})`], [S.sec]); fila(['Tipo', 'ATE', 'LIMA', 'Total'], [S.cab, S.cab, S.cab, S.cab]);
-            fila(['Backlog', A('P1', 'Backlog'), A('P2', 'Backlog'), A('P1', 'Backlog') + A('P2', 'Backlog')], [S.cel, S.num, S.num, S.num]);
-            fila(['Solicitados del Mes', A('P1', 'Solicitados del mes'), A('P2', 'Solicitados del mes'), A('P1', 'Solicitados del mes') + A('P2', 'Solicitados del mes')], [S.cel, S.num, S.num, S.num]);
-            fila(['Total', A('P1'), A('P2'), r.aut.length], [S.tot, S.tot, S.tot, S.tot]);
-            const ws = XLSX.utils.aoa_to_sheet(aoa);
-            Object.entries(est).forEach(([k, s]) => { if (ws[k]) ws[k].s = s; else ws[k] = { t: 's', v: '', s }; });
-            ws['!cols'] = [{ wch: 3 }, { wch: 52 }, { wch: 14 }, { wch: 12 }, { wch: 12 }, { wch: 3 }, { wch: 16 }, { wch: 16 }, { wch: 16 }, { wch: 16 }];
-            XLSX.utils.book_append_sheet(wb, ws, 'Resumen');
-            // ---- Hojas de detalle: título, notas y una tabla filtrable ----
-            const fx = (d) => (d ? new Date(Date.UTC(d.year(), d.month(), d.date())) : '');
-            const hojaDet = (nombre, titulo, notas, cols, filas) => {
-                const ini = notas.length + 2, data = [[titulo], ...notas.map((t) => [t]), [], cols.map((c) => c[0]), ...filas];
-                const h = XLSX.utils.aoa_to_sheet(data, { cellDates: true });
-                h.A1.s = S.tit; notas.forEach((_, k) => { const c = h[XLSX.utils.encode_cell({ r: k + 1, c: 0 })]; if (c) c.s = S.nota; });
-                cols.forEach((c, j) => { const cel = h[XLSX.utils.encode_cell({ r: ini, c: j })]; if (cel) cel.s = S.cab; });
-                filas.forEach((f, k) => f.forEach((v, j) => { const cel = h[XLSX.utils.encode_cell({ r: ini + 1 + k, c: j })]; if (cel && v instanceof Date) { cel.z = 'dd/mm/yyyy'; } }));
-                h['!cols'] = cols.map((c) => ({ wch: c[1] }));
-                h['!autofilter'] = { ref: XLSX.utils.encode_range({ s: { r: ini, c: 0 }, e: { r: ini + Math.max(filas.length, 1), c: cols.length - 1 } }) };
-                h['!freeze'] = { xSplit: 0, ySplit: ini + 1 };
-                XLSX.utils.book_append_sheet(wb, h, nombre);
+        // Escribe el Excel «BACKLOG RMD – <MES>» (reestructurado el 11/11/2026, pedido de Carlos): hoja Resumen con tarjetas y
+        // las 5 tablas (los números son fórmulas CONTAR.SI.CONJUNTO sobre las hojas de detalle, así siempre cuadran), una hoja
+        // de detalle por tabla (mismos nombres de siempre) y la hoja «Como se cuenta» con las reglas. Recibe un modelo neutro
+        // (m) para que el mismo diseño sirva al botón de la página y al Excel del área armado fuera de ella.
+        //   m = { titulo, subtitulo, mesCorto, rangoAut, notaInactivo, reglas: [[título, [líneas]]],
+        //         pend|dec|prio|aut: { nombre, titulo, nota, cols: [[cabecera, ancho]], filas: [[...]], claves: {...} } }
+        //   claves: pend {planta, tipo, cuando} · dec {planta, decision} · prio {planta, prio} · aut {planta, cuenta}
+        //   Las fechas de las filas van como Date (medianoche UTC) o vacías.
+        function escribirLibroBacklog(XL, m) {
+            const wb = XL.utils.book_new(), enc = XL.utils.encode_cell, col = XL.utils.encode_col;
+            const AZUL = '1F3864', GRIS = '595959', BORDE = 'D0D7E5';
+            const C = { ATE: ['7A6A3F', 'F5F1E6'], LIMA: ['4E7A35', 'EDF4E6'], Total: [AZUL, 'E7EDF7'] };
+            const linea = { style: 'thin', color: { rgb: BORDE } }, borde = { top: linea, bottom: linea, left: linea, right: linea };
+            const fill = (rgb) => ({ patternType: 'solid', fgColor: { rgb } });
+            const fuente = (o) => Object.assign({ name: 'Calibri', sz: 11 }, o);
+            const S = {
+                tit: { font: fuente({ bold: true, sz: 18, color: { rgb: AZUL } }) },
+                sub: { font: fuente({ sz: 10, color: { rgb: GRIS } }) },
+                sec: { font: fuente({ bold: true, sz: 13, color: { rgb: AZUL } }), border: { bottom: { style: 'medium', color: { rgb: AZUL } } } },
+                nota: { font: fuente({ italic: true, sz: 9, color: { rgb: GRIS } }), alignment: { wrapText: true, vertical: 'top' } },
+                link: { font: fuente({ sz: 10, color: { rgb: '0563C1' }, underline: true }), alignment: { horizontal: 'right' } },
+                cab: (rgb) => ({ font: fuente({ bold: true, color: { rgb: 'FFFFFF' } }), fill: fill(rgb), border: borde, alignment: { horizontal: 'center', vertical: 'center', wrapText: true } }),
+                eti: { font: fuente({}), border: borde, alignment: { vertical: 'center' } },
+                num: (rgb, neg) => ({ font: fuente({ bold: !!neg }), fill: fill(rgb), border: borde, alignment: { horizontal: 'center', vertical: 'center' }, numFmt: '0' }),
+                tot: { font: fuente({ bold: true }), fill: fill('DDE5F2'), border: borde, alignment: { vertical: 'center' } },
+                kTit: { font: fuente({ bold: true, sz: 10, color: { rgb: 'FFFFFF' } }), fill: fill(AZUL), alignment: { horizontal: 'center', vertical: 'center', wrapText: true } },
+                kNum: { font: fuente({ bold: true, sz: 26, color: { rgb: AZUL } }), fill: fill('F3F6FB'), alignment: { horizontal: 'center', vertical: 'center' }, numFmt: '0' },
+                kPie: { font: fuente({ sz: 10, color: { rgb: GRIS } }), fill: fill('F3F6FB'), alignment: { horizontal: 'center', vertical: 'center' } },
+                dCab: { font: fuente({ bold: true, color: { rgb: 'FFFFFF' } }), fill: fill(AZUL), border: borde, alignment: { vertical: 'center', wrapText: true } },
+                dCel: { font: fuente({ sz: 10 }), border: borde, alignment: { vertical: 'top' } },
+                dTxt: { font: fuente({ sz: 10 }), border: borde, alignment: { vertical: 'top', wrapText: true } }
             };
+            const hojaNueva = () => ({ '!merges': [], '!rows': [], _max: { r: 0, c: 0 } });
+            const poner = (h, r, c, v, s, extra) => {
+                const cel = { t: 's', v: '' };
+                if (v instanceof Date) { cel.t = 'n'; cel.v = (v.getTime() - Date.UTC(1899, 11, 30)) / 864e5; cel.z = 'dd/mm/yyyy'; }
+                else if (typeof v === 'number') { cel.t = 'n'; cel.v = v; }
+                else if (v !== null && v !== undefined) cel.v = String(v);
+                if (s) cel.s = cel.z ? Object.assign({}, s, { numFmt: cel.z }) : s;
+                Object.assign(cel, extra || {});
+                h[enc({ r, c })] = cel;
+                h._max.r = Math.max(h._max.r, r); h._max.c = Math.max(h._max.c, c);
+                return cel;
+            };
+            const unir = (h, r, c, r2, c2, s) => { h['!merges'].push({ s: { r, c }, e: { r: r2, c: c2 } }); for (let i = r; i <= r2; i++) for (let j = c; j <= c2; j++) if (!h[enc({ r: i, c: j })]) poner(h, i, j, '', s); };
+            wb._vistas = {};
+            const cerrar = (h, nombre, vista) => { h['!ref'] = XL.utils.encode_range({ s: { r: 0, c: 0 }, e: h._max }); delete h._max; XL.utils.book_append_sheet(wb, h, nombre); wb._vistas[nombre] = vista || {}; };
+            const q = (nombre) => `'${String(nombre).replace(/'/g, "''")}'`;
+            const irA = (nombre, texto, tip) => ({ l: { Target: `#${q(nombre)}!A1`, Tooltip: tip || texto } });
+
+            // --- Conteos: fórmula CONTAR.SI.CONJUNTO sobre la hoja de detalle + el mismo número calculado aquí ---
+            // crit: { clave: 'ATE' (igual) | 'Mes vigente*' (empieza con) }
+            const FILA_CAB = 3; // fila (0-based) de la cabecera en las hojas de detalle
+            const contar = (d, crit) => {
+                const pares = Object.entries(crit).map(([k, pat]) => {
+                    const j = d.cols.findIndex((c) => c[0] === d.claves[k]);
+                    if (j < 0) throw new Error(`Falta la columna «${d.claves[k]}» en ${d.nombre}`);
+                    return { j, pat };
+                });
+                const cumple = (v, pat) => { const s = String(v === null || v === undefined ? '' : v); return pat.endsWith('*') ? s.startsWith(pat.slice(0, -1)) : s === pat; };
+                const n = d.filas.filter((f) => pares.every(({ j, pat }) => cumple(f[j], pat))).length;
+                const ult = FILA_CAB + 1 + Math.max(d.filas.length, 1);
+                const f = 'COUNTIFS(' + pares.map(({ j, pat }) => `${q(d.nombre)}!$${col(j)}$${FILA_CAB + 2}:$${col(j)}$${ult + 500},"${pat}"`).join(',') + ')';
+                return { n, f };
+            };
+            const numCel = (h, r, c, x, s) => poner(h, r, c, x.n, s, { f: x.f });
+            const sumaCel = (h, r, c, refs, n, s) => poner(h, r, c, n, s, { f: refs.join('+') });
+
+            // ================= Resumen =================
+            const R = hojaNueva();
+            R['!cols'] = [{ wch: 2 }, { wch: 46 }, ...Array(9).fill({ wch: 11.5 }), { wch: 2 }, { wch: 16 }];
+            poner(R, 0, 1, m.titulo, S.tit); R['!rows'][0] = { hpt: 30 };
+            poner(R, 1, 1, m.subtitulo, S.sub);
+            poner(R, 2, 1, 'Cada número sale de su hoja de detalle (fórmulas). Clic en «Ver detalle» para ir a la lista; las reglas están en la hoja «Como se cuenta».', S.nota);
+            unir(R, 2, 1, 2, 12, S.nota);
+            poner(R, 2, 12, '');
+
+            // Tarjetas (fila 4 a 6): se llenan al final con referencias a las tablas
+            const tarjetas = [];
+            const T0 = 4; R['!rows'][T0] = { hpt: 28 }; R['!rows'][T0 + 1] = { hpt: 40 }; R['!rows'][T0 + 2] = { hpt: 18 };
+
+            // --- Tabla 1-2: Pendientes ---
+            const P = m.pend, plantas = ['ATE', 'LIMA'];
+            let r = 8;
+            poner(R, r, 1, `1 y 2. Pendientes de ${m.mesNombre} (backlog + solicitudes del mes)`, S.sec); for (let c = 2; c <= 10; c++) poner(R, r, c, '', S.sec);
+            poner(R, r, 12, 'Ver detalle →', S.link, irA(P.nombre, 'Ver detalle', `Ir a la hoja ${P.nombre}`));
+            r += 1;
+            poner(R, r, 1, 'Tipo', S.cab(AZUL)); unir(R, r, 1, r + 1, 1, S.cab(AZUL));
+            const grupos = ['ATE', 'LIMA', 'Total'];
+            grupos.forEach((g, k) => { poner(R, r, 2 + k * 3, g === 'Total' ? 'TOTAL' : g, S.cab(C[g][0])); unir(R, r, 2 + k * 3, r, 4 + k * 3, S.cab(C[g][0])); });
+            r += 1;
+            grupos.forEach((g, k) => ['Meses anteriores', `Mes vigente (${m.mesCorto})`, 'Total'].forEach((t, j) => poner(R, r, 2 + k * 3 + j, t, S.cab(C[g][0]))));
+            R['!rows'][r] = { hpt: 30 };
+            r += 1;
+            const tipos = [['Ingresados', 'Ingresado'], ['Solicitados', 'Solicitado'], ['Suspendidos que se mantienen', 'Suspendido']];
+            const ini12 = r, cuandos = ['Meses anteriores*', 'Mes vigente*'];
+            const valP = {};
+            tipos.forEach(([eti, tipo]) => {
+                poner(R, r, 1, eti, S.eti);
+                plantas.forEach((pl, k) => {
+                    const a = contar(P, { planta: pl, tipo, cuando: cuandos[0] }), b = contar(P, { planta: pl, tipo, cuando: cuandos[1] });
+                    numCel(R, r, 2 + k * 3, a, S.num(C[pl][1])); numCel(R, r, 3 + k * 3, b, S.num(C[pl][1]));
+                    sumaCel(R, r, 4 + k * 3, [enc({ r, c: 2 + k * 3 }), enc({ r, c: 3 + k * 3 })], a.n + b.n, S.num(C[pl][1], true));
+                    valP[`${pl}|${tipo}`] = [a.n, b.n];
+                });
+                [0, 1].forEach((j) => sumaCel(R, r, 8 + j, [enc({ r, c: 2 + j }), enc({ r, c: 5 + j })], valP[`ATE|${tipo}`][j] + valP[`LIMA|${tipo}`][j], S.num(C.Total[1])));
+                sumaCel(R, r, 10, [enc({ r, c: 8 }), enc({ r, c: 9 })], valP[`ATE|${tipo}`][0] + valP[`ATE|${tipo}`][1] + valP[`LIMA|${tipo}`][0] + valP[`LIMA|${tipo}`][1], S.num(C.Total[1], true));
+                r += 1;
+            });
+            poner(R, r, 1, 'Total pendientes', S.tot);
+            const totP = [];
+            for (let c = 2; c <= 10; c++) {
+                const n = [0, 1, 2].reduce((s, k) => s + R[enc({ r: ini12 + k, c })].v, 0);
+                poner(R, r, c, n, Object.assign({}, S.tot, { alignment: { horizontal: 'center' }, numFmt: '0' }), { f: `SUM(${enc({ r: ini12, c })}:${enc({ r: r - 1, c })})` });
+                totP[c] = enc({ r, c });
+            }
+            const filaTotP = r;
+            r += 1;
+            poner(R, r, 1, `Tabla 1 = columna «Total» de cada planta (ATE ${R[enc({ r: filaTotP, c: 4 })].v}, LIMA ${R[enc({ r: filaTotP, c: 7 })].v}). Tabla 2 = el detalle por tipo y por mes. No incluye los que pasan a INACTIVO.`, S.nota);
+            unir(R, r, 1, r, 12, S.nota); R['!rows'][r] = { hpt: 24 };
+            tarjetas.push({ t: `Pendientes de ${m.mesNombre}`, ref: totP[10], n: R[totP[10]].v, pie: `ATE ${R[totP[4]].v}  ·  LIMA ${R[totP[7]].v}`, hoja: P.nombre });
+
+            // --- Tablas chicas (3, 4, 5): ATE | LIMA | Total ---
+            const tablaChica = (titulo, d, filas, notaTxt, etiTotal) => {
+                r += 2;
+                poner(R, r, 1, titulo, S.sec); for (let c = 2; c <= 10; c++) poner(R, r, c, '', S.sec);
+                poner(R, r, 12, 'Ver detalle →', S.link, irA(d.nombre, 'Ver detalle', `Ir a la hoja ${d.nombre}`));
+                r += 1;
+                poner(R, r, 1, '', S.cab(AZUL)); ['ATE', 'LIMA', 'Total'].forEach((g, k) => poner(R, r, 2 + k, g === 'Total' ? 'TOTAL' : g, S.cab(C[g][0])));
+                r += 1;
+                const ini = r, out = {};
+                filas.forEach(([eti, crit, esTot]) => {
+                    poner(R, r, 1, eti, esTot ? S.tot : S.eti);
+                    const vals = plantas.map((pl, k) => { const x = contar(d, Object.assign({ planta: pl }, crit)); numCel(R, r, 2 + k, x, esTot ? Object.assign({}, S.tot, { alignment: { horizontal: 'center' }, numFmt: '0' }) : S.num(C[pl][1])); return x.n; });
+                    sumaCel(R, r, 4, [enc({ r, c: 2 }), enc({ r, c: 3 })], vals[0] + vals[1], esTot ? Object.assign({}, S.tot, { alignment: { horizontal: 'center' }, numFmt: '0' }) : S.num(C.Total[1], true));
+                    out[eti] = { r, vals };
+                    r += 1;
+                });
+                if (etiTotal) {
+                    poner(R, r, 1, etiTotal, S.tot);
+                    for (let c = 2; c <= 4; c++) {
+                        const n = filas.reduce((s, _, k) => s + R[enc({ r: ini + k, c })].v, 0);
+                        poner(R, r, c, n, Object.assign({}, S.tot, { alignment: { horizontal: 'center' }, numFmt: '0' }), { f: `SUM(${enc({ r: ini, c })}:${enc({ r: r - 1, c })})` });
+                    }
+                    out[etiTotal] = { r, vals: [R[enc({ r, c: 2 })].v, R[enc({ r, c: 3 })].v] };
+                    r += 1;
+                }
+                if (notaTxt) { poner(R, r, 1, notaTxt, S.nota); unir(R, r, 1, r, 12, S.nota); r += 0; }
+                return out;
+            };
+            const t3 = tablaChica('3. Suspendidos en SAP vs INACTIVOS (decisión del equipo)', m.dec, [
+                ['Suspendidos en SAP (última versión de cada master)', {}, true],
+                ['Se mantienen como SUSPENDIDOS', { decision: 'Se mantiene*' }],
+                ['Pasan a INACTIVO', { decision: 'Pasa a INACTIVO*' }]], m.notaInactivo);
+            const fI = t3['Pasan a INACTIVO'].r, fS = t3['Se mantienen como SUSPENDIDOS'].r;
+            tarjetas.push({ t: 'Suspendidos que se mantienen', ref: enc({ r: fS, c: 4 }), n: R[enc({ r: fS, c: 4 })].v, pie: `ATE ${t3['Se mantienen como SUSPENDIDOS'].vals[0]}  ·  LIMA ${t3['Se mantienen como SUSPENDIDOS'].vals[1]}`, hoja: m.prio.nombre });
+            tarjetas.push({ t: 'Pasan a INACTIVO', ref: enc({ r: fI, c: 4 }), n: R[enc({ r: fI, c: 4 })].v, pie: `ATE ${t3['Pasan a INACTIVO'].vals[0]}  ·  LIMA ${t3['Pasan a INACTIVO'].vals[1]}`, hoja: m.dec.nombre });
+
+            const jP = m.prio.cols.findIndex((c) => c[0] === m.prio.claves.prio);
+            const prios = [...new Set(m.prio.filas.map((f) => String(f[jP] || '')))].filter(Boolean).sort((a, b) => a.localeCompare(b, 'es', { numeric: true }));
+            tablaChica('4. Suspendidos que se mantienen, por prioridad (año de su última suspensión)', m.prio,
+                prios.map((p) => [p, { prio: p }]), 'Dentro de cada prioridad, la hoja de detalle trae un «Orden sugerido»: primero con forecast, luego con OP asociada y luego la suspensión más reciente.', 'Total');
+
+            const t5 = tablaChica(`5. Autorizados ${m.rangoAut}`, m.aut, [
+                ['Del backlog', { cuenta: 'Backlog*' }],
+                ['De las solicitudes del mes', { cuenta: 'Solicitado*' }]], 'Solo los que siguen Autorizados hoy.', 'Total autorizados');
+            const tA = t5['Total autorizados'];
+            tarjetas.push({ t: `Autorizados ${m.rangoAutCorto || 'en el mes'}`, ref: enc({ r: tA.r, c: 4 }), n: R[enc({ r: tA.r, c: 4 })].v, pie: `ATE ${tA.vals[0]}  ·  LIMA ${tA.vals[1]}`, hoja: m.aut.nombre });
+
+            // Tarjetas: 4 de 2 columnas con 1 de separación (C-D, F-G, I-J, L-M... ajustado a 9 columnas: B, C-D, ...)
+            const posT = [[1, 1], [3, 4], [6, 7], [9, 10]];
+            [tarjetas[0], tarjetas[3], tarjetas[1], tarjetas[2]].forEach((t, k) => {
+                const [c1, c2] = posT[k];
+                poner(R, T0, c1, t.t, S.kTit); unir(R, T0, c1, T0, c2, S.kTit);
+                poner(R, T0 + 1, c1, t.n, S.kNum, { f: t.ref }); unir(R, T0 + 1, c1, T0 + 1, c2, S.kNum);
+                poner(R, T0 + 2, c1, t.pie, S.kPie); unir(R, T0 + 2, c1, T0 + 2, c2, S.kPie);
+            });
+            cerrar(R, 'Resumen', { sinCuadricula: true });
+
+            // ================= Hojas de detalle =================
+            const hojaDet = (d, colorDe) => {
+                const h = hojaNueva(), nc = d.cols.length;
+                poner(h, 0, 0, d.titulo, Object.assign({}, S.tit, { font: fuente({ bold: true, sz: 14, color: { rgb: AZUL } }) }));
+                poner(h, 0, Math.max(nc - 1, 1), '← Volver al Resumen', S.link, irA('Resumen', '← Volver al Resumen'));
+                poner(h, 1, 0, d.nota, S.nota); unir(h, 1, 0, 1, Math.max(nc - 2, 0), S.nota); h['!rows'][1] = { hpt: 26 };
+                d.cols.forEach((c, j) => poner(h, FILA_CAB, j, c[0], S.dCab));
+                h['!rows'][FILA_CAB] = { hpt: 42 };
+                const anchas = new Set(d.cols.map((c, j) => (c[1] >= 30 ? j : -1)).filter((j) => j >= 0));
+                d.filas.forEach((f, k) => {
+                    const rr = FILA_CAB + 1 + k;
+                    f.forEach((v, j) => {
+                        const tinte = colorDe ? colorDe(d.cols[j][0], v) : null;
+                        const base = S.dCel;
+                        poner(h, rr, j, v === null || v === undefined ? '' : v, tinte ? Object.assign({}, base, { fill: fill(tinte) }) : base);
+                    });
+                });
+                h['!cols'] = d.cols.map((c) => ({ wch: c[1] }));
+                h['!autofilter'] = { ref: XL.utils.encode_range({ s: { r: FILA_CAB, c: 0 }, e: { r: FILA_CAB + Math.max(d.filas.length, 1), c: nc - 1 } }) };
+                cerrar(h, d.nombre, { filasFijas: FILA_CAB + 1, colsFijas: 2, zoom: 90 });
+            };
+            const TINTES = { ATE: C.ATE[1], LIMA: C.LIMA[1], Ingresado: 'E2EFDA', Solicitado: 'FFF2CC', Suspendido: 'FCE4D6', 'Pasa a INACTIVO': 'EDEDED', 'Se mantiene SUSPENDIDO': 'FCE4D6', Backlog: 'DDEBF7' };
+            const tinte = (cab, v) => {
+                const s = String(v || '');
+                if (cab === 'Planta') return TINTES[s] || null;
+                if (TINTES[s]) return TINTES[s];
+                if (/^Solicitado/.test(s) && /cuenta/i.test(cab)) return 'FFF2CC';
+                if (/^Prioridad 1/.test(s)) return 'FCE4D6';
+                if (/^Prioridad 2/.test(s)) return 'FFF2CC';
+                if (/^Prioridad 3/.test(s)) return 'E2EFDA';
+                if (/^Mes vigente/.test(s)) return 'FFF2CC';
+                return null;
+            };
+            [m.pend, m.dec, m.prio, m.aut].forEach((d) => hojaDet(d, tinte));
+
+            // ================= Como se cuenta =================
+            const G = hojaNueva();
+            G['!cols'] = [{ wch: 2 }, { wch: 30 }, { wch: 110 }];
+            poner(G, 0, 1, 'Cómo se cuenta cada número', S.tit);
+            poner(G, 1, 1, m.subtitulo, S.sub);
+            poner(G, 1, 2, '← Volver al Resumen', S.link, irA('Resumen', '← Volver al Resumen'));
+            let g = 3;
+            m.reglas.forEach(([tit, lineas]) => {
+                poner(G, g, 1, tit, Object.assign({}, S.eti, { font: fuente({ bold: true, color: { rgb: AZUL } }), alignment: { vertical: 'top', wrapText: true } }));
+                lineas.forEach((l, k) => { if (k > 0) poner(G, g, 1, '', S.eti); poner(G, g, 2, `• ${l}`, Object.assign({}, S.eti, { alignment: { vertical: 'top', wrapText: true } })); G['!rows'][g] = { hpt: Math.max(15, Math.ceil(l.length / 105) * 14 + 2) }; g += 1; });
+                g += 1;
+            });
+            cerrar(G, 'Como se cuenta', { sinCuadricula: true });
+            return wb;
+        }
+        // SheetJS (versión libre) no escribe paneles inmovilizados ni oculta la cuadrícula: se ajusta el XML de cada hoja en
+        // el .xlsx ya generado. Devuelve los bytes (Uint8Array) listos para descargar.
+        function bytesLibroBacklog(XL, wb) {
+            const z = XL.CFB.read(new Uint8Array(XL.write(wb, { type: 'array', bookType: 'xlsx', bookSST: true, compression: true, cellStyles: true })), { type: 'array' });
+            const dec = new TextDecoder(), encd = new TextEncoder();
+            wb.SheetNames.forEach((nombre, k) => {
+                const v = (wb._vistas || {})[nombre] || {}, i = z.FullPaths.findIndex((p) => p.endsWith(`xl/worksheets/sheet${k + 1}.xml`));
+                if (i < 0) return;
+                const atr = `${v.sinCuadricula ? ' showGridLines="0"' : ''}${v.zoom ? ` zoomScale="${v.zoom}" zoomScaleNormal="${v.zoom}"` : ''}${k === 0 ? ' tabSelected="1"' : ''}`;
+                let panel = '';
+                if (v.filasFijas || v.colsFijas) {
+                    const y = v.filasFijas || 0, x = v.colsFijas || 0, celda = XL.utils.encode_cell({ r: y, c: x });
+                    const act = x && y ? 'bottomRight' : y ? 'bottomLeft' : 'topRight';
+                    panel = `<pane${x ? ` xSplit="${x}"` : ''}${y ? ` ySplit="${y}"` : ''} topLeftCell="${celda}" activePane="${act}" state="frozen"/><selection pane="${act}" activeCell="${celda}" sqref="${celda}"/>`;
+                }
+                const xml = dec.decode(z.FileIndex[i].content).replace(/<sheetView workbookViewId="0"\s*\/>/, `<sheetView workbookViewId="0"${atr}>${panel}</sheetView>`);
+                z.FileIndex[i].content = encd.encode(xml);
+            });
+            return XL.CFB.write(z, { type: 'array', fileType: 'zip', compression: true });
+        }
+        // Arma el modelo del Excel con los datos de la página y lo escribe con escribirLibroBacklog (mismo diseño que el Excel
+        // del área). Las hojas de detalle conservan sus nombres y columnas; el Resumen cuenta sobre ellas con fórmulas.
+        function libroBacklogMes(r) {
+            const nomMes = MESES[r.corte.month()], anio = r.corte.year(), corte = r.corte.format('DD/MM/YYYY');
+            const fx = (d) => (d ? new Date(Date.UTC(d.year(), d.month(), d.date())) : '');
+            const fTxt = (s) => (s ? new Date(Date.UTC(+s.slice(0, 4), +s.slice(4, 6) - 1, +s.slice(6, 8))) : '');
             const antTxt = (w) => (w ? `${w.codigo || w.sol || ''} v${w.version} · hoy ${w.estado.toLowerCase()}` : '');
+            const n = (xs, f) => xs.filter(f).length, VIG = 'Mes vigente';
+            const P = (pl) => n(r.pend, (x) => x.v.planta === pl), D = (pl, c) => n(r.dec, (x) => x.pl === pl && (!c || x.d.c === c)), A = (pl) => n(r.aut, (x) => x.v.planta === pl);
             const oT = { Ingresado: 0, Solicitado: 1, Suspendido: 2 };
             const pend = r.pend.slice().sort((a, b) => a.v.planta.localeCompare(b.v.planta) || oT[a.tipo] - oT[b.tipo] || (a.cuando === VIG ? 0 : 1) - (b.cuando === VIG ? 0 : 1) || a.m.localeCompare(b.m));
-            hojaDet('1-2 Pendientes', `Detalle de las tablas 1 y 2: pendientes de ${nomMes.toLowerCase()} (corte ${r.corte.format('DD/MM/YYYY')})`, [
-                `Una fila por RMD pendiente: Ingresados + Solicitados + Suspendidos que el equipo mantiene. Suma ATE ${P('P1')} y LIMA ${P('P2')} (tabla 1).`,
-                'Mes al que pertenece: Ingresado = mes de su Fecha Registro, salvo que su versión anterior SIGA suspendida desde un mes anterior (entonces ese mes). Solicitado = igual con la Fecha Solicitud. Suspendido = mes de su suspensión.',
-                'Filtra «Planta» y «Meses anteriores / Mes vigente» para obtener las columnas de la tabla 2.'],
-                [['Tipo', 11], ['Planta', 7], ['Meses anteriores / Mes vigente', 24], ['Mes al que pertenece', 12], ['Código RMD', 14], ['Código de solicitud', 14], ['Versión', 8], ['Descripción', 44], ['Etapa', 15],
-                    ['Fecha de solicitud', 12], ['Fecha de registro', 12], ['Versión anterior (estado hoy)', 30], ['Fecha de suspensión (versión anterior, o la propia si es Suspendido)', 18], ['Explicación', 80]],
-                pend.map((x) => [x.tipo, NOMBRE_PLANTA_BK[x.v.planta], x.cuando, x.m, x.v.codigo || '(sin código aún)', x.v.sol || '', x.v.version, x.v.desc || '', x.v.etapa || '', fx(x.v.fSol), fx(x.v.fReg), antTxt(x.ant), fx(x.fS), x.porque]));
             const dec = r.dec.slice().sort((a, b) => a.pl.localeCompare(b.pl) || a.d.c.localeCompare(b.d.c) || String((a.v && a.v.desc) || '').localeCompare(String((b.v && b.v.desc) || '')));
-            hojaDet('3 Suspendidos vs INACTIVOS', `Detalle de la tabla 3: los ${r.dec.length} suspendidos revisados por el equipo y su decisión`, [
-                `Decisión del equipo (Excel REVISAR 8, columna CONCLUSION): ${D('P1', 'I') + D('P2', 'I')} pasan a INACTIVO (ATE ${D('P1', 'I')}, LIMA ${D('P2', 'I')}) y ${D('P1', 'S') + D('P2', 'S')} se mantienen SUSPENDIDOS (ATE ${D('P1', 'S')}, LIMA ${D('P2', 'S')}).`,
-                'INACTIVO se colocará en SAP cuando TI cree el nuevo status. «Sugerencia inicial» es lo que proponía el cuadro antes de la revisión del equipo. «Estado hoy en SAP» sale de la última sincronización.'],
-                [['Planta', 7], ['Decisión del equipo', 22], ['Código RMD', 13], ['Versión', 8], ['Descripción', 44], ['Etapa', 15], ['Estado hoy en SAP', 14], ['Suspendido desde', 12], ['Fecha del último lote', 12], ['Lotes en 48 meses', 10],
-                    ['Forecast nov-26 a oct-27 (unid)', 12], ['Tiene OP asociada', 10], ['Sugerencia inicial', 18]],
-                dec.map((x) => [NOMBRE_PLANTA_BK[x.pl], x.d.c === 'I' ? 'Pasa a INACTIVO' : 'Se mantiene SUSPENDIDO', x.cod, x.d.ver || (x.v ? x.v.version : ''), x.v ? x.v.desc : '', x.v ? x.v.etapa : '', x.v ? x.v.estado : '(no está en SAP)',
-                    fx(x.d.fSusp && dayjs(`${x.d.fSusp.slice(0, 4)}-${x.d.fSusp.slice(4, 6)}-${x.d.fSusp.slice(6, 8)}`)), fx(x.d.fLote && dayjs(`${x.d.fLote.slice(0, 4)}-${x.d.fLote.slice(4, 6)}-${x.d.fLote.slice(6, 8)}`)), x.d.lotes, x.d.fc, x.d.op ? 'Sí' : 'No', SUGERENCIA_BK[x.d.sug] || '']));
             const cont = {};
             const susp = r.susp.slice().sort((a, b) => a.v.planta.localeCompare(b.v.planta) || a.prio.localeCompare(b.prio) || ((b.d && b.d.fc > 0) - (a.d && a.d.fc > 0)) || ((b.d && b.d.op) - (a.d && a.d.op)) || ((b.fS ? b.fS.valueOf() : 0) - (a.fS ? a.fS.valueOf() : 0)));
-            hojaDet('4 Prioridades', `Detalle de la tabla 4: los ${r.susp.length} suspendidos que se mantienen, por prioridad (año de su última suspensión)`, [
-                `Prioridad 1 = suspendido en ${anio}, 2 = en ${anio - 1}, 3 = en ${anio - 2} o antes.`,
-                '«Orden sugerido» dentro de cada planta y prioridad: primero los que tienen forecast, luego los que tienen OP asociada y luego la suspensión más reciente.'],
-                [['Planta', 7], ['Prioridad', 22], ['Orden sugerido', 9], ['Con forecast', 10], ['Con OP asociada', 10], ['Código RMD', 13], ['Versión', 8], ['Descripción', 44], ['Etapa', 15], ['Suspendido desde', 12],
-                    ['Fecha del último lote', 12], ['Lotes en 48 meses', 10], ['Forecast nov-26 a oct-27 (unid)', 12]],
-                susp.map((x) => { const k = x.v.planta + x.prio; cont[k] = (cont[k] || 0) + 1; const d = x.d || {};
-                    return [NOMBRE_PLANTA_BK[x.v.planta], x.prio, cont[k], d.fc > 0 ? 'Sí' : 'No', d.op ? 'Sí' : 'No', x.v.codigo, x.v.version, x.v.desc || '', x.v.etapa || '', fx(x.fS),
-                        fx(d.fLote && dayjs(`${d.fLote.slice(0, 4)}-${d.fLote.slice(4, 6)}-${d.fLote.slice(6, 8)}`)), d.lotes === undefined ? '' : d.lotes, d.fc === undefined ? '' : d.fc]; }));
             const aut = r.aut.slice().sort((a, b) => a.v.planta.localeCompare(b.v.planta) || a.cuenta.localeCompare(b.cuenta) || a.v.fAut - b.v.fAut);
-            hojaDet('5 Autorizados', `Detalle de la tabla 5: autorizados del 01/${r.corte.format('MM/YYYY')} al ${r.corte.format('DD/MM/YYYY')}`, [
-                `Solo los que siguen Autorizados (como la tarjeta). ATE ${A('P1')} y LIMA ${A('P2')}.`,
-                'Regla 1: registrado en el mes pero su versión anterior se suspendió en un mes anterior → Backlog. Regla 2: registrado en un mes anterior → Backlog. Regla 3: registrado en el mes y versión anterior suspendida en el mes (o master nuevo) → Solicitados del mes.'],
-                [['Planta', 7], ['Cuenta como', 18], ['Regla', 9], ['Código RMD', 13], ['Versión', 8], ['Descripción', 44], ['Etapa', 15], ['Fecha de registro', 12], ['Fecha de autorización', 12], ['Versión anterior (estado hoy)', 30],
-                    ['Suspensión de la versión anterior', 14], ['Explicación', 80]],
-                aut.map((x) => [NOMBRE_PLANTA_BK[x.v.planta], x.cuenta, x.regla, x.v.codigo, x.v.version, x.v.desc || '', x.v.etapa || '', fx(x.v.fReg), fx(x.v.fAut), antTxt(x.ant), fx(x.fS), x.porque]));
-            return wb;
+            const inact = D('P1', 'I') + D('P2', 'I'), mant = D('P1', 'S') + D('P2', 'S');
+            return escribirLibroBacklog(XLSX, {
+                titulo: `BACKLOG RMD – ${nomMes.toUpperCase()} ${anio}`,
+                subtitulo: `Corte: ${corte} · descargado de status-rmd el ${dayjs().format('DD/MM/YYYY HH:mm')}`,
+                mesCorto: MESES_CORTOS[r.corte.month()], mesNombre: nomMes.toLowerCase(),
+                rangoAut: `del 01/${r.corte.format('MM')} al ${corte}`, rangoAutCorto: `del 01/${r.corte.format('MM')} al ${r.corte.format('DD/MM')}`,
+                notaInactivo: 'Se colocarán como INACTIVOS una vez creado el nuevo status en SAP.',
+                pend: { nombre: '1-2 Pendientes', titulo: `Pendientes de ${nomMes.toLowerCase()} (tablas 1 y 2) · corte ${corte}`,
+                    nota: `Una fila por RMD pendiente: Ingresados + Solicitados + Suspendidos que el equipo mantiene (ATE ${P('P1')}, LIMA ${P('P2')}). Filtra «Planta», «Tipo» y «Meses anteriores / Mes vigente» para ver cada número del Resumen.`,
+                    claves: { planta: 'Planta', tipo: 'Tipo', cuando: 'Meses anteriores / Mes vigente' },
+                    cols: [['Planta', 7], ['Tipo', 11], ['Meses anteriores / Mes vigente', 16], ['Mes al que pertenece', 10], ['Código RMD', 13], ['Versión', 8], ['Descripción', 46], ['Etapa', 15], ['Código de solicitud', 13],
+                        ['Fecha de solicitud', 11], ['Fecha de registro', 11], ['Versión anterior (estado hoy)', 26], ['Fecha de suspensión (versión anterior, o la propia si es Suspendido)', 14], ['Explicación', 70]],
+                    filas: pend.map((x) => [NOMBRE_PLANTA_BK[x.v.planta], x.tipo, x.cuando, x.m, x.v.codigo || '(sin código aún)', x.v.version, x.v.desc || '', x.v.etapa || '', x.v.sol || '', fx(x.v.fSol), fx(x.v.fReg), antTxt(x.ant), fx(x.fS), x.porque]) },
+                dec: { nombre: '3 Suspendidos vs INACTIVOS', titulo: `Los ${r.dec.length} suspendidos revisados por el equipo y su decisión (tabla 3)`,
+                    nota: `Una fila por suspendido revisado. «Decisión del equipo» = columna CONCLUSION (REVISAR 8): ${inact} pasan a INACTIVO y ${mant} se mantienen SUSPENDIDOS. «Estado hoy en SAP» sale de la última sincronización.`,
+                    claves: { planta: 'Planta', decision: 'Decisión del equipo' },
+                    cols: [['Planta', 7], ['Decisión del equipo', 18], ['Código RMD', 13], ['Versión', 8], ['Descripción', 46], ['Etapa', 15], ['Estado hoy en SAP', 13], ['Suspendido desde', 11], ['Fecha del último lote', 11], ['Lotes en 48 meses', 9],
+                        ['Forecast nov-26 a oct-27 (unid)', 12], ['Tiene OP asociada', 9], ['Sugerencia inicial', 16]],
+                    filas: dec.map((x) => [NOMBRE_PLANTA_BK[x.pl], x.d.c === 'I' ? 'Pasa a INACTIVO' : 'Se mantiene SUSPENDIDO', x.cod, x.d.ver || (x.v ? x.v.version : ''), x.v ? x.v.desc : '', x.v ? x.v.etapa : '', x.v ? x.v.estado : '(no está en SAP)',
+                        fTxt(x.d.fSusp), fTxt(x.d.fLote), x.d.lotes, x.d.fc, x.d.op ? 'Sí' : 'No', SUGERENCIA_BK[x.d.sug] || '']) },
+                prio: { nombre: '4 Prioridades', titulo: `Los ${r.susp.length} suspendidos que se mantienen, por prioridad (tabla 4)`,
+                    nota: 'Ordenados por planta, prioridad y «Orden sugerido» (primero con forecast, luego con OP asociada, luego la suspensión más reciente).',
+                    claves: { planta: 'Planta', prio: 'Prioridad' },
+                    cols: [['Planta', 7], ['Prioridad', 18], ['Orden sugerido', 9], ['Código RMD', 13], ['Versión', 8], ['Descripción', 46], ['Etapa', 15], ['Con forecast', 9], ['Con OP asociada', 9], ['Suspendido desde', 11],
+                        ['Fecha del último lote', 11], ['Lotes en 48 meses', 9], ['Forecast nov-26 a oct-27 (unid)', 12]],
+                    filas: susp.map((x) => { const k = x.v.planta + x.prio; cont[k] = (cont[k] || 0) + 1; const d = x.d || {};
+                        return [NOMBRE_PLANTA_BK[x.v.planta], x.prio, cont[k], x.v.codigo, x.v.version, x.v.desc || '', x.v.etapa || '', d.fc > 0 ? 'Sí' : 'No', d.op ? 'Sí' : 'No', fx(x.fS),
+                            fTxt(d.fLote), d.lotes === undefined ? '' : d.lotes, d.fc === undefined ? '' : d.fc]; }) },
+                aut: { nombre: '5 Autorizados', titulo: `Autorizados del 01/${r.corte.format('MM/YYYY')} al ${corte} (tabla 5)`,
+                    nota: `Solo los que siguen Autorizados (ATE ${A('P1')}, LIMA ${A('P2')}). «Cuenta como» dice si es del backlog o de las solicitudes del mes y «Regla» qué regla se aplicó (ver «Como se cuenta»).`,
+                    claves: { planta: 'Planta', cuenta: 'Cuenta como' },
+                    cols: [['Planta', 7], ['Cuenta como', 16], ['Regla', 8], ['Código RMD', 13], ['Versión', 8], ['Descripción', 46], ['Etapa', 15], ['Fecha de registro', 11], ['Fecha de autorización', 11], ['Versión anterior (estado hoy)', 26],
+                        ['Suspensión de la versión anterior', 12], ['Explicación', 70]],
+                    filas: aut.map((x) => [NOMBRE_PLANTA_BK[x.v.planta], x.cuenta, x.regla, x.v.codigo, x.v.version, x.v.desc || '', x.v.etapa || '', fx(x.v.fReg), fx(x.v.fAut), antTxt(x.ant), fx(x.fS), x.porque]) },
+                reglas: [
+                    ['1. Pendientes', ['Ingresados + solicitados + suspendidos que el equipo mantiene. No entran los INACTIVO, las Solicitudes Rechazadas, las Canceladas, los Autorizados ni las «Solicitud Aprobada».']],
+                    ['2. Composición (mes de cada pendiente)', [
+                        'Ingresado = mes de su Fecha Registro, salvo que su versión anterior SIGA suspendida desde un mes anterior: entonces cuenta en el mes de esa suspensión. Si la anterior se reactivó (hoy Autorizada), manda la Fecha Registro.',
+                        'Solicitado (solo estado «Solicitado») = igual, con la Fecha Solicitud.',
+                        'Suspendido = mes de su última suspensión (Trazabilidad). Si ya tiene una versión nueva solicitada o ingresada, cuenta esa y no los dos.',
+                        `Meses anteriores = backlog; mes vigente = ${nomMes.toLowerCase()} (mes de la fecha de corte).`]],
+                    ['3. Suspendidos vs INACTIVOS', [`Decisión del equipo (Excel REVISAR 8, columna CONCLUSION): ${inact} pasan a INACTIVO (ATE ${D('P1', 'I')}, LIMA ${D('P2', 'I')}) y ${mant} se mantienen SUSPENDIDOS (ATE ${D('P1', 'S')}, LIMA ${D('P2', 'S')}).`,
+                        'INACTIVO se colocará en SAP cuando TI cree el nuevo status. «Sugerencia inicial» es lo que proponía el cuadro antes de la revisión del equipo.']],
+                    ['4. Prioridades', [`Prioridad 1 = suspendido en ${anio}, 2 = en ${anio - 1}, 3 = en ${anio - 2} o antes.`,
+                        '«Orden sugerido» dentro de cada planta y prioridad: primero los que tienen forecast, luego los que tienen OP asociada y luego la suspensión más reciente.']],
+                    ['5. Autorizados', ['Solo los autorizados del 1 del mes a la fecha de corte que siguen Autorizados (como la tarjeta).',
+                        'Regla 1: registrado en el mes, pero su versión anterior se suspendió en un mes anterior → Backlog.',
+                        'Regla 2: registrado en un mes anterior → Backlog.',
+                        'Regla 3: registrado en el mes y su versión anterior se suspendió en el mes (o master nuevo) → Solicitados del mes.']]
+                ]
+            });
         }
         async function exportarBacklogMes() {
             const filas = Array.isArray(rmdAutorizadosDetalle) ? rmdAutorizadosDetalle : [];
@@ -15013,7 +15235,16 @@ async function maybeAutoStartTour() {
             let traz = trazabilidadSap;
             if (!traz) { try { traz = await storeGet('val_rmd_trazabilidad'); } catch (err) { traz = null; } }
             const wb = libroBacklogMes(datosBacklogMes(filas, traz, corte));
-            XLSX.writeFile(wb, `Backlog_RMD_${corte.format('YYYY-MM')}_corte_${corte.format('YYYY-MM-DD')}.xlsx`, { compression: true, cellStyles: true });
+            const nombre = `Backlog_RMD_${corte.format('YYYY-MM')}_corte_${corte.format('YYYY-MM-DD')}.xlsx`;
+            try {
+                const blob = new Blob([bytesLibroBacklog(XLSX, wb)], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+                const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = nombre;
+                document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+            } catch (err) {
+                // Si falla el ajuste de vistas, se descarga igual sin paneles inmovilizados.
+                console.warn('Backlog del mes: sin ajuste de vistas', err);
+                XLSX.writeFile(wb, nombre, { bookSST: true, compression: true, cellStyles: true });
+            }
         }
 
         return {
