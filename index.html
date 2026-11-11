@@ -25,51 +25,6 @@
         } catch (e) { /* localStorage no disponible: se queda en oscuro por defecto */ }
     </script>
 
-    <!-- Tailwind CSS -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-        // Paleta propia de la app. Cada familia resuelve a variables CSS en
-        // formato "R G B" (definidas en el <style> principal para modo oscuro
-        // en :root y redefinidas bajo html[data-theme="light"]), así que:
-        //  1) TODAS las clases de color que ya existen en el HTML y en las
-        //     plantillas JS (text-emerald-400, bg-red-500/10, border-slate-700/50…)
-        //     cambian solas al alternar el tema, sin tocar ni una clase.
-        //  2) Los modificadores de opacidad (/10, /50…) ahora SÍ funcionan.
-        //     Antes slate apuntaba a var(--slate-X) sin canal alfa, y Tailwind
-        //     no podía generar bg-slate-900/50, border-slate-700/50, etc.: esas
-        //     clases se ignoraban en silencio (de ahí los bordes blancos por
-        //     defecto en las cajas de KPI y fondos que no respetaban el tema).
-        //  3) Los tonos genéricos de Tailwind (azul, violeta, esmeralda…) se
-        //     reemplazan por una paleta armonizada de 6 familias: tinta
-        //     (neutros), oro rosa (acento de marca), cobre, bermellón, salvia,
-        //     petróleo y ciruela.
-        (function () {
-            const SHADES = [50, 100, 200, 300, 400, 500, 600, 700, 800, 900];
-            const fam = (name) => Object.fromEntries(SHADES.map(n => [n, `rgb(var(--c-${name}-${n}) / <alpha-value>)`]));
-            const ink = fam('slate'), brass = fam('brass'), copper = fam('copper'),
-                  verm = fam('verm'), sage = fam('sage'), petrol = fam('petrol'), plum = fam('plum');
-            tailwind.config = {
-                darkMode: 'class',
-                theme: {
-                    extend: {
-                        colors: {
-                            slate: ink, gray: ink, zinc: ink, neutral: ink, stone: ink,
-                            amber: brass, yellow: brass,
-                            orange: copper,
-                            red: verm, rose: verm,
-                            emerald: sage, green: sage, teal: sage, lime: sage,
-                            blue: petrol, sky: petrol, cyan: petrol, indigo: petrol,
-                            purple: plum, violet: plum, fuchsia: plum, pink: plum,
-                        },
-                        fontFamily: {
-                            sans: ['Inter', 'sans-serif'],
-                        }
-                    }
-                }
-            };
-        })();
-    </script>
-
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
@@ -408,7 +363,10 @@
 
         /* Grano de textura reducido a la mitad: aportaba un ruido sutil
            pero constante sobre toda la pantalla. */
+        /* Grano de textura apagado (11/11/2026): al 1,2 % de opacidad no se veía, pero era una capa fija sobre toda la página
+           que el navegador volvía a componer en cada scroll. */
         #grain-overlay {
+            display: none;
             position: fixed;
             inset: 0;
             z-index: 40;
@@ -422,8 +380,8 @@
             border: 1px solid var(--card-border);
             border-radius: 1rem;
             box-shadow: var(--card-shadow);
-            backdrop-filter: blur(16px) saturate(140%);
-            -webkit-backdrop-filter: blur(16px) saturate(140%);
+            /* Sin desenfoque de fondo (backdrop-filter): detrás de las tarjetas solo está el degradado liso del body, así que
+               no se notaba, pero obligaba a recalcular el desenfoque de TODAS las tarjetas en cada cuadro del scroll. */
             transition: border-color 0.35s ease, box-shadow 0.35s ease, transform 0.35s ease, background 0.35s ease;
             margin-bottom: 1.5rem;
             position: relative;
@@ -1756,6 +1714,14 @@
 .tour-btn-prev:disabled { opacity: 0.35; cursor: default; }
 .tour-btn-next { color: var(--accent-ink); background: var(--accent); box-shadow: 0 6px 16px -8px rgb(var(--accent-rgb) / 0.6); }
 .tour-btn-next:hover { filter: brightness(1.08); }
+    </style>
+    <!-- Tailwind CSS ya compilado (antes: cdn.tailwindcss.com, que baja ~400 KB y compila las clases EN el navegador en cada
+         apertura y cada vez que cambia una tabla). Si agregas clases de Tailwind que no estaban en la página, vuelve a generarlo:
+         ver herramientas/tailwind/LEEME.md (un comando). La paleta propia (colores a variables CSS) está en
+         herramientas/tailwind/tailwind.config.js. Va al final del <head>, donde lo ponía el CDN, para que gane igual que antes
+         sobre los estilos propios de arriba. -->
+    <style id="tailwind-compilado">
+*,:after,:before{--tw-border-spacing-x:0;--tw-border-spacing-y:0;--tw-translate-x:0;--tw-translate-y:0;--tw-rotate:0;--tw-skew-x:0;--tw-skew-y:0;--tw-scale-x:1;--tw-scale-y:1;--tw-pan-x: ;--tw-pan-y: ;--tw-pinch-zoom: ;--tw-scroll-snap-strictness:proximity;--tw-gradient-from-position: ;--tw-gradient-via-position: ;--tw-gradient-to-position: ;--tw-ordinal: ;--tw-slashed-zero: ;--tw-numeric-figure: ;--tw-numeric-spacing: ;--tw-numeric-fraction: ;--tw-ring-inset: ;--tw-ring-offset-width:0px;--tw-ring-offset-color:#fff;--tw-ring-color:rgba(147,197,253,.5);--tw-ring-offset-shadow:0 0 #0000;--tw-ring-shadow:0 0 #0000;--tw-shadow:0 0 #0000;--tw-shadow-colored:0 0 #0000;--tw-blur: ;--tw-brightness: ;--tw-contrast: ;--tw-grayscale: ;--tw-hue-rotate: ;--tw-invert: ;--tw-saturate: ;--tw-sepia: ;--tw-drop-shadow: ;--tw-backdrop-blur: ;--tw-backdrop-brightness: ;--tw-backdrop-contrast: ;--tw-backdrop-grayscale: ;--tw-backdrop-hue-rotate: ;--tw-backdrop-invert: ;--tw-backdrop-opacity: ;--tw-backdrop-saturate: ;--tw-backdrop-sepia: ;--tw-contain-size: ;--tw-contain-layout: ;--tw-contain-paint: ;--tw-contain-style: }::backdrop{--tw-border-spacing-x:0;--tw-border-spacing-y:0;--tw-translate-x:0;--tw-translate-y:0;--tw-rotate:0;--tw-skew-x:0;--tw-skew-y:0;--tw-scale-x:1;--tw-scale-y:1;--tw-pan-x: ;--tw-pan-y: ;--tw-pinch-zoom: ;--tw-scroll-snap-strictness:proximity;--tw-gradient-from-position: ;--tw-gradient-via-position: ;--tw-gradient-to-position: ;--tw-ordinal: ;--tw-slashed-zero: ;--tw-numeric-figure: ;--tw-numeric-spacing: ;--tw-numeric-fraction: ;--tw-ring-inset: ;--tw-ring-offset-width:0px;--tw-ring-offset-color:#fff;--tw-ring-color:rgba(147,197,253,.5);--tw-ring-offset-shadow:0 0 #0000;--tw-ring-shadow:0 0 #0000;--tw-shadow:0 0 #0000;--tw-shadow-colored:0 0 #0000;--tw-blur: ;--tw-brightness: ;--tw-contrast: ;--tw-grayscale: ;--tw-hue-rotate: ;--tw-invert: ;--tw-saturate: ;--tw-sepia: ;--tw-drop-shadow: ;--tw-backdrop-blur: ;--tw-backdrop-brightness: ;--tw-backdrop-contrast: ;--tw-backdrop-grayscale: ;--tw-backdrop-hue-rotate: ;--tw-backdrop-invert: ;--tw-backdrop-opacity: ;--tw-backdrop-saturate: ;--tw-backdrop-sepia: ;--tw-contain-size: ;--tw-contain-layout: ;--tw-contain-paint: ;--tw-contain-style: }/*! tailwindcss v3.4.17 | MIT License | https://tailwindcss.com*/*,:after,:before{box-sizing:border-box;border-width:0;border-style:solid;border-color:rgb(var(--c-slate-200)/1)}:after,:before{--tw-content:""}:host,html{line-height:1.5;-webkit-text-size-adjust:100%;-moz-tab-size:4;-o-tab-size:4;tab-size:4;font-family:Inter,sans-serif;font-feature-settings:normal;font-variation-settings:normal;-webkit-tap-highlight-color:transparent}body{margin:0;line-height:inherit}hr{height:0;color:inherit;border-top-width:1px}abbr:where([title]){-webkit-text-decoration:underline dotted;text-decoration:underline dotted}h1,h2,h3,h4,h5,h6{font-size:inherit;font-weight:inherit}a{color:inherit;text-decoration:inherit}b,strong{font-weight:bolder}code,kbd,pre,samp{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,Liberation Mono,Courier New,monospace;font-feature-settings:normal;font-variation-settings:normal;font-size:1em}small{font-size:80%}sub,sup{font-size:75%;line-height:0;position:relative;vertical-align:baseline}sub{bottom:-.25em}sup{top:-.5em}table{text-indent:0;border-color:inherit;border-collapse:collapse}button,input,optgroup,select,textarea{font-family:inherit;font-feature-settings:inherit;font-variation-settings:inherit;font-size:100%;font-weight:inherit;line-height:inherit;letter-spacing:inherit;color:inherit;margin:0;padding:0}button,select{text-transform:none}button,input:where([type=button]),input:where([type=reset]),input:where([type=submit]){-webkit-appearance:button;background-color:transparent;background-image:none}:-moz-focusring{outline:auto}:-moz-ui-invalid{box-shadow:none}progress{vertical-align:baseline}::-webkit-inner-spin-button,::-webkit-outer-spin-button{height:auto}[type=search]{-webkit-appearance:textfield;outline-offset:-2px}::-webkit-search-decoration{-webkit-appearance:none}::-webkit-file-upload-button{-webkit-appearance:button;font:inherit}summary{display:list-item}blockquote,dd,dl,figure,h1,h2,h3,h4,h5,h6,hr,p,pre{margin:0}fieldset{margin:0}fieldset,legend{padding:0}menu,ol,ul{list-style:none;margin:0;padding:0}dialog{padding:0}textarea{resize:vertical}input::-moz-placeholder,textarea::-moz-placeholder{opacity:1;color:rgb(var(--c-slate-400)/1)}input::placeholder,textarea::placeholder{opacity:1;color:rgb(var(--c-slate-400)/1)}[role=button],button{cursor:pointer}:disabled{cursor:default}audio,canvas,embed,iframe,img,object,svg,video{display:block;vertical-align:middle}img,video{max-width:100%;height:auto}[hidden]:where(:not([hidden=until-found])){display:none}.\!container{width:100%!important}.container{width:100%}@media (min-width:640px){.\!container{max-width:640px!important}.container{max-width:640px}}@media (min-width:768px){.\!container{max-width:768px!important}.container{max-width:768px}}@media (min-width:1024px){.\!container{max-width:1024px!important}.container{max-width:1024px}}@media (min-width:1280px){.\!container{max-width:1280px!important}.container{max-width:1280px}}@media (min-width:1536px){.\!container{max-width:1536px!important}.container{max-width:1536px}}.pointer-events-none{pointer-events:none}.visible{visibility:visible}.invisible{visibility:hidden}.static{position:static}.fixed{position:fixed}.absolute{position:absolute}.relative{position:relative}.sticky{position:sticky}.left-2\.5{left:.625rem}.right-0{right:0}.right-2{right:.5rem}.top-0{top:0}.top-1\/2{top:50%}.isolate{isolation:isolate}.z-10{z-index:10}.z-20{z-index:20}.-m-1\.5{margin:-.375rem}.-mx-3{margin-left:-.75rem;margin-right:-.75rem}.mb-1{margin-bottom:.25rem}.mb-1\.5{margin-bottom:.375rem}.mb-2{margin-bottom:.5rem}.mb-3{margin-bottom:.75rem}.mb-4{margin-bottom:1rem}.ml-0\.5{margin-left:.125rem}.ml-auto{margin-left:auto}.mr-1\.5{margin-right:.375rem}.mr-2{margin-right:.5rem}.mt-0\.5{margin-top:.125rem}.mt-1{margin-top:.25rem}.mt-1\.5{margin-top:.375rem}.mt-2{margin-top:.5rem}.mt-3{margin-top:.75rem}.mt-4{margin-top:1rem}.mt-8{margin-top:2rem}.block{display:block}.inline-block{display:inline-block}.inline{display:inline}.flex{display:flex}.inline-flex{display:inline-flex}.table{display:table}.grid{display:grid}.hidden{display:none}.h-3{height:.75rem}.h-3\.5{height:.875rem}.h-4{height:1rem}.h-44{height:11rem}.h-5{height:1.25rem}.h-9{height:2.25rem}.h-\[230px\]{height:230px}.h-\[260px\]{height:260px}.h-\[280px\]{height:280px}.h-\[480px\]{height:480px}.h-full{height:100%}.max-h-32{max-height:8rem}.max-h-80{max-height:20rem}.min-h-\[260px\]{min-height:260px}.min-h-\[420px\]{min-height:420px}.min-h-screen{min-height:100vh}.w-3{width:.75rem}.w-3\.5{width:.875rem}.w-4{width:1rem}.w-5{width:1.25rem}.w-64{width:16rem}.w-9{width:2.25rem}.w-full{width:100%}.min-w-0{min-width:0}.min-w-\[160px\]{min-width:160px}.min-w-\[3\.5rem\]{min-width:3.5rem}.min-w-\[44px\]{min-width:44px}.min-w-\[65px\]{min-width:65px}.flex-1{flex:1 1 0%}.flex-shrink{flex-shrink:1}.flex-shrink-0{flex-shrink:0}.table-fixed{table-layout:fixed}.-translate-y-1\/2{--tw-translate-y:-50%}.-translate-y-1\/2,.transform{transform:translate(var(--tw-translate-x),var(--tw-translate-y)) rotate(var(--tw-rotate)) skewX(var(--tw-skew-x)) skewY(var(--tw-skew-y)) scaleX(var(--tw-scale-x)) scaleY(var(--tw-scale-y))}.cursor-pointer{cursor:pointer}.resize{resize:both}.grid-cols-1{grid-template-columns:repeat(1,minmax(0,1fr))}.grid-cols-2{grid-template-columns:repeat(2,minmax(0,1fr))}.flex-col{flex-direction:column}.flex-wrap{flex-wrap:wrap}.items-start{align-items:flex-start}.items-center{align-items:center}.justify-center{justify-content:center}.justify-between{justify-content:space-between}.gap-1{gap:.25rem}.gap-1\.5{gap:.375rem}.gap-2{gap:.5rem}.gap-2\.5{gap:.625rem}.gap-3{gap:.75rem}.gap-3\.5{gap:.875rem}.gap-4{gap:1rem}.gap-5{gap:1.25rem}.space-y-1\.5>:not([hidden])~:not([hidden]){--tw-space-y-reverse:0;margin-top:calc(.375rem*(1 - var(--tw-space-y-reverse)));margin-bottom:calc(.375rem*var(--tw-space-y-reverse))}.space-y-2>:not([hidden])~:not([hidden]){--tw-space-y-reverse:0;margin-top:calc(.5rem*(1 - var(--tw-space-y-reverse)));margin-bottom:calc(.5rem*var(--tw-space-y-reverse))}.space-y-2\.5>:not([hidden])~:not([hidden]){--tw-space-y-reverse:0;margin-top:calc(.625rem*(1 - var(--tw-space-y-reverse)));margin-bottom:calc(.625rem*var(--tw-space-y-reverse))}.space-y-3>:not([hidden])~:not([hidden]){--tw-space-y-reverse:0;margin-top:calc(.75rem*(1 - var(--tw-space-y-reverse)));margin-bottom:calc(.75rem*var(--tw-space-y-reverse))}.space-y-4>:not([hidden])~:not([hidden]){--tw-space-y-reverse:0;margin-top:calc(1rem*(1 - var(--tw-space-y-reverse)));margin-bottom:calc(1rem*var(--tw-space-y-reverse))}.space-y-5>:not([hidden])~:not([hidden]){--tw-space-y-reverse:0;margin-top:calc(1.25rem*(1 - var(--tw-space-y-reverse)));margin-bottom:calc(1.25rem*var(--tw-space-y-reverse))}.overflow-hidden{overflow:hidden}.overflow-x-auto{overflow-x:auto}.overflow-y-auto{overflow-y:auto}.truncate{overflow:hidden;text-overflow:ellipsis}.truncate,.whitespace-nowrap{white-space:nowrap}.rounded{border-radius:.25rem}.rounded-full{border-radius:9999px}.rounded-lg{border-radius:.5rem}.rounded-xl{border-radius:.75rem}.rounded-l-full{border-top-left-radius:9999px;border-bottom-left-radius:9999px}.rounded-r-full{border-top-right-radius:9999px;border-bottom-right-radius:9999px}.border{border-width:1px}.border-b{border-bottom-width:1px}.border-t{border-top-width:1px}.border-dashed{border-style:dashed}.border-amber-100\/10{border-color:rgb(var(--c-brass-100)/.1)}.border-emerald-500\/40{border-color:rgb(var(--c-sage-500)/.4)}.border-emerald-700\/30{border-color:rgb(var(--c-sage-700)/.3)}.border-indigo-500\/30{border-color:rgb(var(--c-petrol-500)/.3)}.border-red-700\/30{border-color:rgb(var(--c-verm-700)/.3)}.border-rose-100\/10{border-color:rgb(var(--c-verm-100)/.1)}.border-rose-500\/40{border-color:rgb(var(--c-verm-500)/.4)}.border-slate-600{--tw-border-opacity:1;border-color:rgb(var(--c-slate-600)/var(--tw-border-opacity,1))}.border-slate-700{--tw-border-opacity:1;border-color:rgb(var(--c-slate-700)/var(--tw-border-opacity,1))}.border-slate-700\/30{border-color:rgb(var(--c-slate-700)/.3)}.border-slate-700\/50{border-color:rgb(var(--c-slate-700)/.5)}.border-slate-700\/60{border-color:rgb(var(--c-slate-700)/.6)}.border-slate-800\/40{border-color:rgb(var(--c-slate-800)/.4)}.border-slate-800\/60{border-color:rgb(var(--c-slate-800)/.6)}.bg-blue-500\/20{background-color:rgb(var(--c-petrol-500)/.2)}.bg-blue-600,.bg-cyan-600{--tw-bg-opacity:1;background-color:rgb(var(--c-petrol-600)/var(--tw-bg-opacity,1))}.bg-emerald-500\/5{background-color:rgb(var(--c-sage-500)/.05)}.bg-indigo-900\/20{background-color:rgb(var(--c-petrol-900)/.2)}.bg-red-600{--tw-bg-opacity:1;background-color:rgb(var(--c-verm-600)/var(--tw-bg-opacity,1))}.bg-rose-500{--tw-bg-opacity:1;background-color:rgb(var(--c-verm-500)/var(--tw-bg-opacity,1))}.bg-rose-500\/10{background-color:rgb(var(--c-verm-500)/.1)}.bg-slate-600{--tw-bg-opacity:1;background-color:rgb(var(--c-slate-600)/var(--tw-bg-opacity,1))}.bg-slate-700{--tw-bg-opacity:1;background-color:rgb(var(--c-slate-700)/var(--tw-bg-opacity,1))}.bg-slate-700\/50{background-color:rgb(var(--c-slate-700)/.5)}.bg-slate-800{--tw-bg-opacity:1;background-color:rgb(var(--c-slate-800)/var(--tw-bg-opacity,1))}.bg-slate-800\/30{background-color:rgb(var(--c-slate-800)/.3)}.bg-slate-800\/40{background-color:rgb(var(--c-slate-800)/.4)}.bg-slate-800\/50{background-color:rgb(var(--c-slate-800)/.5)}.bg-slate-800\/60{background-color:rgb(var(--c-slate-800)/.6)}.bg-slate-800\/80{background-color:rgb(var(--c-slate-800)/.8)}.bg-slate-900{--tw-bg-opacity:1;background-color:rgb(var(--c-slate-900)/var(--tw-bg-opacity,1))}.bg-slate-900\/30{background-color:rgb(var(--c-slate-900)/.3)}.bg-slate-900\/40{background-color:rgb(var(--c-slate-900)/.4)}.bg-slate-900\/50{background-color:rgb(var(--c-slate-900)/.5)}.bg-slate-900\/60{background-color:rgb(var(--c-slate-900)/.6)}.bg-slate-900\/95{background-color:rgb(var(--c-slate-900)/.95)}.bg-gradient-to-br{background-image:linear-gradient(to bottom right,var(--tw-gradient-stops))}.bg-gradient-to-r{background-image:linear-gradient(to right,var(--tw-gradient-stops))}.from-blue-400{--tw-gradient-from:rgb(var(--c-petrol-400)/1) var(--tw-gradient-from-position);--tw-gradient-to:rgb(var(--c-petrol-400)/0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.from-blue-500{--tw-gradient-from:rgb(var(--c-petrol-500)/1) var(--tw-gradient-from-position);--tw-gradient-to:rgb(var(--c-petrol-500)/0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.from-emerald-400{--tw-gradient-from:rgb(var(--c-sage-400)/1) var(--tw-gradient-from-position);--tw-gradient-to:rgb(var(--c-sage-400)/0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.from-purple-400{--tw-gradient-from:rgb(var(--c-plum-400)/1) var(--tw-gradient-from-position);--tw-gradient-to:rgb(var(--c-plum-400)/0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.from-red-400,.from-rose-400{--tw-gradient-from:rgb(var(--c-verm-400)/1) var(--tw-gradient-from-position);--tw-gradient-to:rgb(var(--c-verm-400)/0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.from-yellow-300{--tw-gradient-from:rgb(var(--c-brass-300)/1) var(--tw-gradient-from-position);--tw-gradient-to:rgb(var(--c-brass-300)/0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}.to-cyan-400{--tw-gradient-to:rgb(var(--c-petrol-400)/1) var(--tw-gradient-to-position)}.to-fuchsia-400{--tw-gradient-to:rgb(var(--c-plum-400)/1) var(--tw-gradient-to-position)}.to-orange-400{--tw-gradient-to:rgb(var(--c-copper-400)/1) var(--tw-gradient-to-position)}.to-purple-500{--tw-gradient-to:rgb(var(--c-plum-500)/1) var(--tw-gradient-to-position)}.to-teal-400{--tw-gradient-to:rgb(var(--c-sage-400)/1) var(--tw-gradient-to-position)}.to-yellow-500{--tw-gradient-to:rgb(var(--c-brass-500)/1) var(--tw-gradient-to-position)}.bg-clip-text{-webkit-background-clip:text;background-clip:text}.p-0{padding:0}.p-0\.5{padding:.125rem}.p-1\.5{padding:.375rem}.p-2\.5{padding:.625rem}.p-3{padding:.75rem}.p-4{padding:1rem}.px-1{padding-left:.25rem;padding-right:.25rem}.px-1\.5{padding-left:.375rem;padding-right:.375rem}.px-2{padding-left:.5rem;padding-right:.5rem}.px-2\.5{padding-left:.625rem;padding-right:.625rem}.px-3{padding-left:.75rem;padding-right:.75rem}.px-4{padding-left:1rem;padding-right:1rem}.py-0\.5{padding-top:.125rem;padding-bottom:.125rem}.py-1{padding-top:.25rem;padding-bottom:.25rem}.py-1\.5{padding-top:.375rem;padding-bottom:.375rem}.py-2{padding-top:.5rem;padding-bottom:.5rem}.py-2\.5{padding-top:.625rem;padding-bottom:.625rem}.py-3\.5{padding-top:.875rem;padding-bottom:.875rem}.py-4{padding-top:1rem;padding-bottom:1rem}.py-6{padding-top:1.5rem;padding-bottom:1.5rem}.py-8{padding-top:2rem;padding-bottom:2rem}.pb-2{padding-bottom:.5rem}.pb-6{padding-bottom:1.5rem}.pl-8{padding-left:2rem}.pr-1{padding-right:.25rem}.pr-3{padding-right:.75rem}.pr-8{padding-right:2rem}.pt-3{padding-top:.75rem}.text-left{text-align:left}.text-center{text-align:center}.font-mono{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,Liberation Mono,Courier New,monospace}.text-2xl{font-size:1.5rem;line-height:2rem}.text-3xl{font-size:1.875rem;line-height:2.25rem}.text-\[10px\]{font-size:10px}.text-\[11px\]{font-size:11px}.text-\[9px\]{font-size:9px}.text-base{font-size:1rem;line-height:1.5rem}.text-lg{font-size:1.125rem;line-height:1.75rem}.text-sm{font-size:.875rem;line-height:1.25rem}.text-xl{font-size:1.25rem;line-height:1.75rem}.text-xs{font-size:.75rem;line-height:1rem}.font-bold{font-weight:700}.font-medium{font-weight:500}.font-semibold{font-weight:600}.uppercase{text-transform:uppercase}.capitalize{text-transform:capitalize}.italic{font-style:italic}.leading-none{line-height:1}.leading-relaxed{line-height:1.625}.tracking-wide{letter-spacing:.025em}.tracking-wider{letter-spacing:.05em}.text-amber-300{--tw-text-opacity:1;color:rgb(var(--c-brass-300)/var(--tw-text-opacity,1))}.text-amber-400{--tw-text-opacity:1;color:rgb(var(--c-brass-400)/var(--tw-text-opacity,1))}.text-blue-400{--tw-text-opacity:1;color:rgb(var(--c-petrol-400)/var(--tw-text-opacity,1))}.text-blue-400\/70{color:rgb(var(--c-petrol-400)/.7)}.text-cyan-400{--tw-text-opacity:1;color:rgb(var(--c-petrol-400)/var(--tw-text-opacity,1))}.text-emerald-300{--tw-text-opacity:1;color:rgb(var(--c-sage-300)/var(--tw-text-opacity,1))}.text-emerald-400{--tw-text-opacity:1;color:rgb(var(--c-sage-400)/var(--tw-text-opacity,1))}.text-indigo-300{--tw-text-opacity:1;color:rgb(var(--c-petrol-300)/var(--tw-text-opacity,1))}.text-indigo-400{--tw-text-opacity:1;color:rgb(var(--c-petrol-400)/var(--tw-text-opacity,1))}.text-orange-300\/90{color:rgb(var(--c-copper-300)/.9)}.text-orange-400{--tw-text-opacity:1;color:rgb(var(--c-copper-400)/var(--tw-text-opacity,1))}.text-purple-400{--tw-text-opacity:1;color:rgb(var(--c-plum-400)/var(--tw-text-opacity,1))}.text-red-300{--tw-text-opacity:1;color:rgb(var(--c-verm-300)/var(--tw-text-opacity,1))}.text-red-400{--tw-text-opacity:1;color:rgb(var(--c-verm-400)/var(--tw-text-opacity,1))}.text-rose-200{--tw-text-opacity:1;color:rgb(var(--c-verm-200)/var(--tw-text-opacity,1))}.text-rose-300\/80{color:rgb(var(--c-verm-300)/.8)}.text-rose-300\/90{color:rgb(var(--c-verm-300)/.9)}.text-rose-400{--tw-text-opacity:1;color:rgb(var(--c-verm-400)/var(--tw-text-opacity,1))}.text-sky-400{--tw-text-opacity:1;color:rgb(var(--c-petrol-400)/var(--tw-text-opacity,1))}.text-slate-100{--tw-text-opacity:1;color:rgb(var(--c-slate-100)/var(--tw-text-opacity,1))}.text-slate-200{--tw-text-opacity:1;color:rgb(var(--c-slate-200)/var(--tw-text-opacity,1))}.text-slate-300{--tw-text-opacity:1;color:rgb(var(--c-slate-300)/var(--tw-text-opacity,1))}.text-slate-400{--tw-text-opacity:1;color:rgb(var(--c-slate-400)/var(--tw-text-opacity,1))}.text-slate-500{--tw-text-opacity:1;color:rgb(var(--c-slate-500)/var(--tw-text-opacity,1))}.text-slate-600{--tw-text-opacity:1;color:rgb(var(--c-slate-600)/var(--tw-text-opacity,1))}.text-transparent{color:transparent}.text-white{--tw-text-opacity:1;color:rgb(255 255 255/var(--tw-text-opacity,1))}.underline{text-decoration-line:underline}.line-through{text-decoration-line:line-through}.placeholder-slate-500::-moz-placeholder{--tw-placeholder-opacity:1;color:rgb(var(--c-slate-500)/var(--tw-placeholder-opacity,1))}.placeholder-slate-500::placeholder{--tw-placeholder-opacity:1;color:rgb(var(--c-slate-500)/var(--tw-placeholder-opacity,1))}.opacity-0{opacity:0}.opacity-100{opacity:1}.opacity-50{opacity:.5}.shadow-inner{--tw-shadow:inset 0 2px 4px 0 rgba(0,0,0,.05);--tw-shadow-colored:inset 0 2px 4px 0 var(--tw-shadow-color)}.shadow-inner,.shadow-lg{box-shadow:var(--tw-ring-offset-shadow,0 0 #0000),var(--tw-ring-shadow,0 0 #0000),var(--tw-shadow)}.shadow-lg{--tw-shadow:0 10px 15px -3px rgba(0,0,0,.1),0 4px 6px -4px rgba(0,0,0,.1);--tw-shadow-colored:0 10px 15px -3px var(--tw-shadow-color),0 4px 6px -4px var(--tw-shadow-color)}.shadow-sm{--tw-shadow:0 1px 2px 0 rgba(0,0,0,.05);--tw-shadow-colored:0 1px 2px 0 var(--tw-shadow-color)}.shadow-sm,.shadow-xl{box-shadow:var(--tw-ring-offset-shadow,0 0 #0000),var(--tw-ring-shadow,0 0 #0000),var(--tw-shadow)}.shadow-xl{--tw-shadow:0 20px 25px -5px rgba(0,0,0,.1),0 8px 10px -6px rgba(0,0,0,.1);--tw-shadow-colored:0 20px 25px -5px var(--tw-shadow-color),0 8px 10px -6px var(--tw-shadow-color)}.shadow-blue-500\/20{--tw-shadow-color:rgb(var(--c-petrol-500)/0.2);--tw-shadow:var(--tw-shadow-colored)}.outline{outline-style:solid}.ring-1{--tw-ring-offset-shadow:var(--tw-ring-inset) 0 0 0 var(--tw-ring-offset-width) var(--tw-ring-offset-color);--tw-ring-shadow:var(--tw-ring-inset) 0 0 0 calc(1px + var(--tw-ring-offset-width)) var(--tw-ring-color);box-shadow:var(--tw-ring-offset-shadow),var(--tw-ring-shadow),var(--tw-shadow,0 0 #0000)}.ring-rose-400\/60{--tw-ring-color:rgb(var(--c-verm-400)/0.6)}.blur{--tw-blur:blur(8px)}.blur,.drop-shadow{filter:var(--tw-blur) var(--tw-brightness) var(--tw-contrast) var(--tw-grayscale) var(--tw-hue-rotate) var(--tw-invert) var(--tw-saturate) var(--tw-sepia) var(--tw-drop-shadow)}.drop-shadow{--tw-drop-shadow:drop-shadow(0 1px 2px rgba(0,0,0,.1)) drop-shadow(0 1px 1px rgba(0,0,0,.06))}.filter{filter:var(--tw-blur) var(--tw-brightness) var(--tw-contrast) var(--tw-grayscale) var(--tw-hue-rotate) var(--tw-invert) var(--tw-saturate) var(--tw-sepia) var(--tw-drop-shadow)}.backdrop-blur{--tw-backdrop-blur:blur(8px)}.backdrop-blur,.backdrop-filter{-webkit-backdrop-filter:var(--tw-backdrop-blur) var(--tw-backdrop-brightness) var(--tw-backdrop-contrast) var(--tw-backdrop-grayscale) var(--tw-backdrop-hue-rotate) var(--tw-backdrop-invert) var(--tw-backdrop-opacity) var(--tw-backdrop-saturate) var(--tw-backdrop-sepia);backdrop-filter:var(--tw-backdrop-blur) var(--tw-backdrop-brightness) var(--tw-backdrop-contrast) var(--tw-backdrop-grayscale) var(--tw-backdrop-hue-rotate) var(--tw-backdrop-invert) var(--tw-backdrop-opacity) var(--tw-backdrop-saturate) var(--tw-backdrop-sepia)}.transition{transition-property:color,background-color,border-color,text-decoration-color,fill,stroke,opacity,box-shadow,transform,filter,-webkit-backdrop-filter;transition-property:color,background-color,border-color,text-decoration-color,fill,stroke,opacity,box-shadow,transform,filter,backdrop-filter;transition-property:color,background-color,border-color,text-decoration-color,fill,stroke,opacity,box-shadow,transform,filter,backdrop-filter,-webkit-backdrop-filter;transition-timing-function:cubic-bezier(.4,0,.2,1);transition-duration:.15s}.transition-all{transition-property:all;transition-timing-function:cubic-bezier(.4,0,.2,1);transition-duration:.15s}.transition-colors{transition-property:color,background-color,border-color,text-decoration-color,fill,stroke;transition-timing-function:cubic-bezier(.4,0,.2,1);transition-duration:.15s}.duration-1000{transition-duration:1s}.ease-in-out{transition-timing-function:cubic-bezier(.4,0,.2,1)}.ease-out{transition-timing-function:cubic-bezier(0,0,.2,1)}.placeholder\:text-slate-500::-moz-placeholder{--tw-text-opacity:1;color:rgb(var(--c-slate-500)/var(--tw-text-opacity,1))}.placeholder\:text-slate-500::placeholder{--tw-text-opacity:1;color:rgb(var(--c-slate-500)/var(--tw-text-opacity,1))}.last\:border-0:last-child{border-width:0}.hover\:border-emerald-400:hover{--tw-border-opacity:1;border-color:rgb(var(--c-sage-400)/var(--tw-border-opacity,1))}.hover\:border-slate-400:hover{--tw-border-opacity:1;border-color:rgb(var(--c-slate-400)/var(--tw-border-opacity,1))}.hover\:bg-blue-500:hover,.hover\:bg-cyan-500:hover{--tw-bg-opacity:1;background-color:rgb(var(--c-petrol-500)/var(--tw-bg-opacity,1))}.hover\:bg-emerald-500\/10:hover{background-color:rgb(var(--c-sage-500)/.1)}.hover\:bg-rose-500\/15:hover{background-color:rgb(var(--c-verm-500)/.15)}.hover\:bg-slate-500:hover{--tw-bg-opacity:1;background-color:rgb(var(--c-slate-500)/var(--tw-bg-opacity,1))}.hover\:bg-slate-600:hover{--tw-bg-opacity:1;background-color:rgb(var(--c-slate-600)/var(--tw-bg-opacity,1))}.hover\:bg-slate-700:hover{--tw-bg-opacity:1;background-color:rgb(var(--c-slate-700)/var(--tw-bg-opacity,1))}.hover\:bg-slate-700\/60:hover{background-color:rgb(var(--c-slate-700)/.6)}.hover\:bg-slate-800\/30:hover{background-color:rgb(var(--c-slate-800)/.3)}.hover\:bg-slate-800\/40:hover{background-color:rgb(var(--c-slate-800)/.4)}.hover\:bg-slate-800\/60:hover{background-color:rgb(var(--c-slate-800)/.6)}.hover\:text-amber-300:hover{--tw-text-opacity:1;color:rgb(var(--c-brass-300)/var(--tw-text-opacity,1))}.hover\:text-amber-400:hover{--tw-text-opacity:1;color:rgb(var(--c-brass-400)/var(--tw-text-opacity,1))}.hover\:text-emerald-300:hover{--tw-text-opacity:1;color:rgb(var(--c-sage-300)/var(--tw-text-opacity,1))}.hover\:text-red-400:hover{--tw-text-opacity:1;color:rgb(var(--c-verm-400)/var(--tw-text-opacity,1))}.hover\:text-slate-200:hover{--tw-text-opacity:1;color:rgb(var(--c-slate-200)/var(--tw-text-opacity,1))}.hover\:text-white:hover{--tw-text-opacity:1;color:rgb(255 255 255/var(--tw-text-opacity,1))}.hover\:underline:hover{text-decoration-line:underline}.focus\:border-amber-300\/50:focus{border-color:rgb(var(--c-brass-300)/.5)}.focus\:border-rose-400\/60:focus{border-color:rgb(var(--c-verm-400)/.6)}.focus\:outline-none:focus{outline:2px solid transparent;outline-offset:2px}.active\:scale-95:active{--tw-scale-x:.95;--tw-scale-y:.95;transform:translate(var(--tw-translate-x),var(--tw-translate-y)) rotate(var(--tw-rotate)) skewX(var(--tw-skew-x)) skewY(var(--tw-skew-y)) scaleX(var(--tw-scale-x)) scaleY(var(--tw-scale-y))}@media (min-width:640px){.sm\:ml-auto{margin-left:auto}.sm\:grid-cols-2{grid-template-columns:repeat(2,minmax(0,1fr))}.sm\:grid-cols-3{grid-template-columns:repeat(3,minmax(0,1fr))}.sm\:grid-cols-4{grid-template-columns:repeat(4,minmax(0,1fr))}.sm\:flex-row{flex-direction:row}.sm\:flex-wrap{flex-wrap:wrap}.sm\:items-center{align-items:center}}@media (min-width:768px){.md\:mx-0{margin-left:0;margin-right:0}.md\:ml-auto{margin-left:auto}.md\:h-\[250px\]{height:250px}.md\:h-\[280px\]{height:280px}.md\:h-\[300px\]{height:300px}.md\:min-h-\[500px\]{min-height:500px}.md\:w-auto{width:auto}.md\:flex-initial{flex:0 1 auto}.md\:grid-cols-3{grid-template-columns:repeat(3,minmax(0,1fr))}.md\:grid-cols-4{grid-template-columns:repeat(4,minmax(0,1fr))}.md\:flex-row{flex-direction:row}.md\:items-start{align-items:flex-start}.md\:items-center{align-items:center}.md\:justify-between{justify-content:space-between}.md\:gap-0{gap:0}.md\:gap-4{gap:1rem}.md\:gap-5{gap:1.25rem}.md\:p-4{padding:1rem}.md\:p-5{padding:1.25rem}.md\:p-6{padding:1.5rem}.md\:px-0{padding-left:0;padding-right:0}.md\:opacity-0{opacity:0}.group:hover .md\:group-hover\:opacity-100{opacity:1}}@media (min-width:1024px){.lg\:col-span-1{grid-column:span 1/span 1}.lg\:col-span-2{grid-column:span 2/span 2}.lg\:col-span-3{grid-column:span 3/span 3}.lg\:h-\[500px\]{height:500px}.lg\:h-\[560px\]{height:560px}.lg\:grid-cols-2{grid-template-columns:repeat(2,minmax(0,1fr))}.lg\:grid-cols-3{grid-template-columns:repeat(3,minmax(0,1fr))}.lg\:grid-cols-4{grid-template-columns:repeat(4,minmax(0,1fr))}.lg\:grid-cols-6{grid-template-columns:repeat(6,minmax(0,1fr))}}
     </style>
 </head>
 <body class="min-h-screen flex flex-col p-3 md:p-5 space-y-4 relative">
@@ -3202,14 +3168,21 @@ alter publication supabase_realtime add table public.rmd_dashboard_kv;`;
             });
         }
 
-        // storeSet: sube la key/value a Supabase (upsert) y además la guarda en la
-        // caché local. Si Supabase falla, igual se guarda localmente y se
-        // devuelve true (para no bloquear al usuario), pero queda marcado como
-        // "pendiente de subir" para reintentarlo más adelante.
-        // Claves grandes que se suben comprimidas (gzip en base64: { __gz }). El detalle de RMD pasó de 5 MB al traer la planta y
-        // las fechas de cada RMD y Supabase dejó de aceptarlo sin avisar (se quedó con el del 29/10/2026); comprimido pesa unas 5
-        // veces menos. storeGet lo descomprime, venga de Supabase o de la caché local.
-        const CLAVES_COMPRIMIDAS = new Set(['val_rmd_autorizados_detalle', 'val_rmd_indicadores_mes']);
+        // ==================== Lectura rápida y guardado seguro (pedido de Carlos, 11/11/2026) ====================
+        // Antes, cada apertura de la página bajaba de Supabase ~5,6 MB (los RMD de SAP pesan ~4,5 MB) y varias claves se pedían
+        // 2 a 8 veces; cada petición tarda 0,3 a 2,7 s. Ahora:
+        //  - Una consulta de ~2,5 KB trae la fecha de cambio (updated_at) de todas las claves. Si la copia de este navegador
+        //    (IndexedDB) tiene la misma fecha, se usa la copia y no se baja nada; solo se baja lo que cambió. La copia se vuelve
+        //    a bajar igual una vez al día por si alguien escribió sin poner la fecha.
+        //  - Dos lecturas iguales al mismo tiempo comparten una sola petición.
+        //  - Las claves grandes se suben comprimidas (gzip): ~5 veces menos que bajar.
+        //  - Estatus, responsables, autorizados a mano y fechas de inicio se guardan FUSIONANDO con lo último de Supabase: antes se
+        //    subía el mapa entero y, si dos personas cambiaban estatus casi a la vez (o una tenía la página abierta desde hacía rato
+        //    sin recibir los cambios de la otra), el último guardado borraba lo del otro sin avisar.
+        //  - Si Supabase no responde, se avisa en pantalla (antes solo cambiaba el puntito de la nube) y se reintenta cada minuto.
+        const CLAVES_COMPRIMIDAS = new Set(['val_rmd_autorizados_detalle', 'val_rmd_indicadores_mes', 'val_rmd_preciso', 'val_rmd_trazabilidad',
+            'val_op_sap', 'val_caracterizacion_lista', 'historial_trazabilidad', 'prod_historial_planta1', 'prod_historial_planta2',
+            'prod_acumulado_planta1', 'prod_acumulado_planta2', 'forecast_data']);
         async function comprimirValor(value) {
             if (typeof CompressionStream === 'undefined') return value;
             const flujo = new Blob([JSON.stringify(value)]).stream().pipeThrough(new CompressionStream('gzip'));
@@ -3227,42 +3200,122 @@ alter publication supabase_realtime add table public.rmd_dashboard_kv;`;
         }
         const CLAVES_FOTO_FLUJO = new Set(['val_rmd_autorizados_detalle', 'val_rmd_preciso', 'val_rmd_caracterizaciones', 'val_rmd_indicadores_mes',
             'val_estatus_etapa', 'val_responsables_etapa', 'val_estatus_caracterizacion', 'val_manual_autorizados', 'prod_data_planta1', 'prod_data_planta2']);
-        async function storeSet(key, value, _retried) {
-            // Caché local siempre, sin importar cómo salga lo de Supabase.
-            try { await dbStore.setItem(key, value); } catch (err) { console.error('Caché local set error:', key, err); }
-            ultimoGuardadoPropio.set(key, Date.now());
-            // Foto diaria del flujo de INDICADORES: un cambio de datos de SAP, de estatus o de autorizaciones la actualiza.
-            if (CLAVES_FOTO_FLUJO.has(key)) { try { StatusRmd.fotoPronto(); } catch (e) { /* la página aún no termina de cargar */ } }
 
-            try {
-                const valor = CLAVES_COMPRIMIDAS.has(key) ? await comprimirValor(value) : value;
-                const res = await fetch(`${SUPABASE_URL}/rest/v1/${SUPABASE_KV_TABLE}?on_conflict=key`, {
-                    method: 'POST',
-                    headers: supabaseHeaders({ 'Prefer': 'resolution=merge-duplicates,return=minimal' }),
-                    body: JSON.stringify([{ key, value: valor, updated_at: new Date().toISOString() }])
-                });
-                if (!res.ok) throw new Error('HTTP ' + res.status);
-                supabaseKvReachable = true;
-                actualizarIndicadorSupabase();
-                return true;
-            } catch (err) {
-                if (!_retried) {
-                    await new Promise(r => setTimeout(r, 150));
-                    return storeSet(key, value, true);
-                }
-                console.error('Supabase set error:', key, err);
-                supabaseKvReachable = false;
-                actualizarIndicadorSupabase();
-                await storePendingMark(key);
-                return true; // ya quedó guardado en caché local; no se bloquea al usuario
+        const KV_URL = `${SUPABASE_URL}/rest/v1/${SUPABASE_KV_TABLE}`;
+        const META_PREFIJO = '__meta__:';   // en IndexedDB: { u: updated_at de Supabase (ms), l: cuándo se bajó/subió (ms) }
+        const BASE_PREFIJO = '__base__:';   // en IndexedDB: lo último que se sabe de Supabase de una clave compartida (para fusionar)
+        const COPIA_VALIDA_MS = 24 * 3600 * 1000;
+        const VERSIONES_VIGENCIA_MS = 20000;
+        const msFecha = (s) => { const t = Date.parse(s || ''); return Number.isFinite(t) ? t : 0; };
+
+        // ---- Fechas de cambio de todas las claves (una sola consulta liviana) ----
+        let versionesKv = { mapa: null, t: 0, promesa: null };
+        function leerVersionesKv() {
+            if (versionesKv.promesa) return versionesKv.promesa;
+            if (versionesKv.mapa && Date.now() - versionesKv.t < VERSIONES_VIGENCIA_MS) return Promise.resolve(versionesKv.mapa);
+            const pedido = fetch(`${KV_URL}?select=key,updated_at`, { headers: supabaseHeaders({ 'Accept': 'application/json' }) })
+                .then((res) => { if (!res.ok) throw new Error('HTTP ' + res.status); return res.json(); })
+                .then((filas) => {
+                    versionesKv = { mapa: new Map(filas.map((f) => [f.key, msFecha(f.updated_at) || -1])), t: Date.now(), promesa: null };
+                    return versionesKv.mapa;
+                })
+                .catch((err) => { versionesKv = { mapa: null, t: 0, promesa: null }; throw err; });
+            versionesKv.promesa = pedido;
+            return pedido;
+        }
+        // Un cambio que llega por Realtime (o un guardado propio) actualiza la fecha conocida de esa clave: -1 = hay que bajarla.
+        function anotarVersionKv(key, u) { if (versionesKv.mapa) versionesKv.mapa.set(key, u || -1); }
+
+        // ---- Claves que no se pudieron subir (quedan en este navegador y se reintentan) ----
+        let pendientesKv = null;
+        async function pendientesKvSet() {
+            if (!pendientesKv) {
+                let lista = [];
+                try { lista = (await dbStore.getItem('__pending_kv_keys__')) || []; } catch (e) { /* sin caché local */ }
+                if (!pendientesKv) pendientesKv = new Set(lista);
             }
+            return pendientesKv;
+        }
+        async function guardarPendientesKv() { try { await dbStore.setItem('__pending_kv_keys__', Array.from(await pendientesKvSet())); } catch (e) { /* best effort */ } }
+        async function storePendingMark(key) { (await pendientesKvSet()).add(key); await guardarPendientesKv(); avisarFalloGuardado(); }
+        async function storePendingClear(key) { const p = await pendientesKvSet(); if (p.delete(key)) await guardarPendientesKv(); }
+
+        // Aviso visible cuando un guardado no llega a Supabase (una vez por tanda), y otro cuando se logra subir lo pendiente.
+        let avisoFalloMostrado = false;
+        function avisarFalloGuardado() {
+            if (avisoFalloMostrado || typeof Swal === 'undefined') return;
+            avisoFalloMostrado = true;
+            Swal.fire({ toast: true, position: 'bottom-end', icon: 'warning', showConfirmButton: false, timer: 7000, background: '#0f172a', color: '#f8fafc',
+                title: 'No se pudo guardar en Supabase', text: 'El cambio quedó en este equipo y se subirá solo cuando vuelva la conexión. No cierres el navegador hasta ver el aviso de subido.' });
+        }
+        function avisarPendientesSubidos() {
+            if (!avisoFalloMostrado || typeof Swal === 'undefined') return;
+            avisoFalloMostrado = false;
+            Swal.fire({ toast: true, position: 'bottom-end', icon: 'success', showConfirmButton: false, timer: 3500, background: '#0f172a', color: '#f8fafc', title: 'Cambios pendientes subidos a Supabase' });
         }
 
-        // storeGet: intenta leer de Supabase primero (fuente de verdad); si falla,
-        // recurre a la caché local para que la app siga funcionando.
-        async function storeGet(key) {
+        async function guardarCopiaLocal(key, value, u) {
+            try { await dbStore.setItem(key, value); } catch (err) { console.error('Caché local set error:', key, err); }
+            try { await dbStore.setItem(META_PREFIJO + key, { u: u || 0, l: Date.now() }); } catch (e) { /* no crítico */ }
+        }
+        async function copiaLocalSiVigente(key, u) {
+            if (!(u > 0)) return undefined;
+            let meta = null;
+            try { meta = await dbStore.getItem(META_PREFIJO + key); } catch (e) { return undefined; }
+            if (!meta || meta.u !== u || !(Date.now() - (meta.l || 0) < COPIA_VALIDA_MS)) return undefined;
             try {
-                const res = await fetch(`${SUPABASE_URL}/rest/v1/${SUPABASE_KV_TABLE}?key=eq.${encodeURIComponent(key)}&select=value`, {
+                const v = await dbStore.getItem(key);
+                return v === null || v === undefined ? undefined : await descomprimirValor(v);
+            } catch (e) { return undefined; }
+        }
+        // Base para fusionar una clave compartida: lo último de Supabase que conoce este navegador.
+        const basesCompartidas = new Map();
+        function anotarBaseCompartida(key, value) {
+            if (!CLAVES_COMPARTIDAS[key]) return;
+            basesCompartidas.set(key, value);
+            dbStore.setItem(BASE_PREFIJO + key, value).catch(() => { /* no crítico */ });
+        }
+        async function baseCompartida(key) {
+            if (basesCompartidas.has(key)) return basesCompartidas.get(key);
+            try { const b = await dbStore.getItem(BASE_PREFIJO + key); if (b !== null && b !== undefined) { basesCompartidas.set(key, b); return b; } } catch (e) { /* sin caché */ }
+            return null;
+        }
+
+        // storeGet: lo de Supabase (fuente de verdad), pero sin bajarlo si la copia local ya es esa misma versión.
+        const lecturasEnCurso = new Map();
+        async function storeGet(key) {
+            const enCurso = lecturasEnCurso.get(key);
+            if (enCurso) { const v = await enCurso; return v && typeof v === 'object' ? structuredClone(v) : v; }
+            const p = storeGetReal(key);
+            lecturasEnCurso.set(key, p);
+            try { return await p; } finally { lecturasEnCurso.delete(key); }
+        }
+        // Para leer justo antes de escribir (historiales, fotos, horas…): siempre lo último de Supabase, sin usar la copia local.
+        async function storeGetFresco(key) {
+            anotarVersionKv(key, -1);
+            return storeGetReal(key);
+        }
+        async function storeGetReal(key) {
+            // Lo que no se pudo subir manda sobre Supabase: es más nuevo (si no, se perdería al recargar).
+            if ((await pendientesKvSet()).has(key)) {
+                try { const v = await dbStore.getItem(key); if (v !== null && v !== undefined) return await descomprimirValor(v); } catch (e) { /* sigue a Supabase */ }
+            }
+            let versiones = null;
+            try { versiones = await leerVersionesKv(); } catch (e) { /* se intenta la lectura directa */ }
+            if (versiones) {
+                const u = versiones.get(key);
+                // No estaba en la lista: si la lista es de recién (la carga inicial), no existe; si ya tiene unos segundos, pudo
+                // crearse después (y el aviso de Realtime perderse), así que se pregunta directo.
+                if (u === undefined && Date.now() - versionesKv.t < 3000) { supabaseKvReachable = true; actualizarIndicadorSupabase(); return null; }
+                const copia = await copiaLocalSiVigente(key, u);
+                if (copia !== undefined) {
+                    supabaseKvReachable = true; actualizarIndicadorSupabase();
+                    if (CLAVES_COMPARTIDAS[key] && !basesCompartidas.has(key)) anotarBaseCompartida(key, copia);
+                    return copia;
+                }
+            }
+            try {
+                const res = await fetch(`${KV_URL}?key=eq.${encodeURIComponent(key)}&select=value,updated_at`, {
                     headers: supabaseHeaders({ 'Accept': 'application/json' })
                 });
                 if (!res.ok) throw new Error('HTTP ' + res.status);
@@ -3271,9 +3324,13 @@ alter publication supabase_realtime add table public.rmd_dashboard_kv;`;
                 actualizarIndicadorSupabase();
                 if (rows.length > 0) {
                     const value = await descomprimirValor(rows[0].value);
-                    try { await dbStore.setItem(key, value); } catch (e) { /* refresco de caché, no crítico */ }
+                    const u = msFecha(rows[0].updated_at);
+                    anotarVersionKv(key, u);
+                    await guardarCopiaLocal(key, value, u);
+                    anotarBaseCompartida(key, value);
                     return value;
                 }
+                anotarVersionKv(key, 0);
                 return null;
             } catch (err) {
                 console.error('Supabase get error, usando caché local:', key, err);
@@ -3283,15 +3340,185 @@ alter publication supabase_realtime add table public.rmd_dashboard_kv;`;
             }
         }
 
-        async function storeRemove(key) {
-            try { await dbStore.removeItem(key); } catch (err) { console.error('Caché local remove error:', key, err); }
-            ultimoGuardadoPropio.set(key, Date.now());
+        // Subida simple (upsert). Devuelve el updated_at que quedó en Supabase (ms) o lanza error.
+        async function subirKv(key, value, fecha) {
+            const valor = CLAVES_COMPRIMIDAS.has(key) ? await comprimirValor(value) : value;
+            const res = await fetch(`${KV_URL}?on_conflict=key&select=updated_at`, {
+                method: 'POST',
+                headers: supabaseHeaders({ 'Prefer': 'resolution=merge-duplicates,return=representation', 'Accept': 'application/json' }),
+                body: JSON.stringify([{ key, value: valor, updated_at: fecha }])
+            });
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+            let u = 0;
+            try { const filas = await res.json(); u = msFecha(filas && filas[0] && filas[0].updated_at); } catch (e) { /* respuesta vacía */ }
+            return u || msFecha(fecha);
+        }
+
+        // storeSet: guarda en la caché local y sube a Supabase. Las claves compartidas (estatus, etc.) se fusionan con lo último de
+        // Supabase en vez de pisarlo. Si Supabase falla, queda en este navegador, se avisa y se reintenta. Devuelve true para no
+        // bloquear al usuario (lo guardado localmente se sube después).
+        async function storeSet(key, value, _retried) {
+            if (CLAVES_COMPARTIDAS[key]) return (await storeSetCompartido(key, () => value)).ok;
+            const fecha = new Date().toISOString();
+            ultimoGuardadoPropio.set(key, { t: Date.now(), u: msFecha(fecha) });
+            await guardarCopiaLocal(key, value, 0);
+            // Foto diaria del flujo de INDICADORES: un cambio de datos de SAP, de estatus o de autorizaciones la actualiza.
+            if (CLAVES_FOTO_FLUJO.has(key)) { try { StatusRmd.fotoPronto(); } catch (e) { /* la página aún no termina de cargar */ } }
             try {
-                const res = await fetch(`${SUPABASE_URL}/rest/v1/${SUPABASE_KV_TABLE}?key=eq.${encodeURIComponent(key)}`, {
+                let u;
+                try { u = await subirKv(key, value, fecha); }
+                catch (err) { await new Promise(r => setTimeout(r, 400)); u = await subirKv(key, value, fecha); }
+                ultimoGuardadoPropio.set(key, { t: Date.now(), u });
+                anotarVersionKv(key, u);
+                try { await dbStore.setItem(META_PREFIJO + key, { u, l: Date.now() }); } catch (e) { /* no crítico */ }
+                await storePendingClear(key);
+                supabaseKvReachable = true;
+                actualizarIndicadorSupabase();
+                return true;
+            } catch (err) {
+                console.error('Supabase set error:', key, err);
+                supabaseKvReachable = false;
+                actualizarIndicadorSupabase();
+                await storePendingMark(key);
+                return true; // ya quedó guardado en caché local; no se bloquea al usuario
+            }
+        }
+
+        // ---- Claves compartidas: varias personas cambian entradas distintas a la vez ----
+        // formato: 'pares' = [[clave, valor], ...], 'lista' = [clave, ...], 'objeto' = { clave: valor }.
+        // Al guardar se compara lo de este navegador con la base (lo último que vino de Supabase): solo lo que cambió aquí se
+        // aplica sobre lo que hay HOY en Supabase, y se escribe con la condición de que nadie haya escrito entre medio (si alguien
+        // escribió, se vuelve a leer y se repite). Lo que trajeron los demás se pasa a la memoria de esta página.
+        const CLAVES_COMPARTIDAS = {
+            val_estatus_etapa: 'pares', val_responsables_etapa: 'pares',
+            val_manual_autorizados: 'lista', val_manual_autorizados_meta: 'objeto',
+            val_manual_autorizados_forecast: 'lista', val_manual_autorizados_forecast_meta: 'objeto',
+            val_fecha_inicio_manual: 'objeto'
+        };
+        function compartidoAMapa(formato, valor) {
+            const m = new Map();
+            if (formato === 'pares') (Array.isArray(valor) ? valor : []).forEach((e) => { if (Array.isArray(e)) m.set(String(e[0]), JSON.stringify(e[1] === undefined ? null : e[1])); });
+            else if (formato === 'lista') (Array.isArray(valor) ? valor : []).forEach((k) => m.set(String(k), 'true'));
+            else if (valor && typeof valor === 'object' && !Array.isArray(valor)) Object.entries(valor).forEach(([k, v]) => m.set(k, JSON.stringify(v === undefined ? null : v)));
+            return m;
+        }
+        function compartidoDesdeMapa(formato, m) {
+            if (formato === 'pares') return Array.from(m, ([k, v]) => [k, JSON.parse(v)]);
+            if (formato === 'lista') return Array.from(m.keys());
+            const o = {}; m.forEach((v, k) => { o[k] = JSON.parse(v); }); return o;
+        }
+        const colasCompartidas = new Map();
+        function storeSetCompartido(key, valorLocalFn) {
+            // Un guardado por clave a la vez (el siguiente toma lo de memoria recién al empezar, con lo que trajo el anterior).
+            const previo = colasCompartidas.get(key) || Promise.resolve();
+            const tarea = previo.catch(() => {}).then(() => guardarCompartidoAhora(key, valorLocalFn));
+            colasCompartidas.set(key, tarea);
+            tarea.finally(() => { if (colasCompartidas.get(key) === tarea) colasCompartidas.delete(key); });
+            return tarea;
+        }
+        async function guardarCompartidoAhora(key, valorLocalFn) {
+            const formato = CLAVES_COMPARTIDAS[key];
+            const local = valorLocalFn();
+            const mLocal = compartidoAMapa(formato, local);
+            await guardarCopiaLocal(key, local, 0);
+            if (CLAVES_FOTO_FLUJO.has(key)) { try { StatusRmd.fotoPronto(); } catch (e) { /* la página aún no termina de cargar */ } }
+            const base = await baseCompartida(key);
+            const mBase = base === null ? null : compartidoAMapa(formato, base);
+            try {
+                for (let intento = 0; intento < 5; intento++) {
+                    const res = await fetch(`${KV_URL}?key=eq.${encodeURIComponent(key)}&select=value,updated_at`, { headers: supabaseHeaders({ 'Accept': 'application/json' }) });
+                    if (!res.ok) throw new Error('HTTP ' + res.status);
+                    const filas = await res.json();
+                    const remoto = filas.length ? filas[0].value : null;
+                    const mRemoto = compartidoAMapa(formato, remoto);
+                    const mFinal = new Map(mRemoto);
+                    // Lo cambiado aquí (o todo lo de aquí, si no se conoce la base) pisa lo de Supabase.
+                    mLocal.forEach((v, k) => { if (!mBase || mBase.get(k) !== v) mFinal.set(k, v); });
+                    // Lo quitado aquí se quita, salvo que otra persona lo haya cambiado mientras tanto.
+                    if (mBase) mBase.forEach((v, k) => { if (!mLocal.has(k) && mRemoto.get(k) === v) mFinal.delete(k); });
+                    const final = compartidoDesdeMapa(formato, mFinal);
+                    const fecha = new Date().toISOString();
+                    ultimoGuardadoPropio.set(key, { t: Date.now(), u: msFecha(fecha) });
+                    let u = 0;
+                    if (!filas.length) {
+                        u = await subirKv(key, final, fecha);
+                    } else {
+                        const res2 = await fetch(`${KV_URL}?key=eq.${encodeURIComponent(key)}&updated_at=eq.${encodeURIComponent(filas[0].updated_at)}&select=updated_at`, {
+                            method: 'PATCH',
+                            headers: supabaseHeaders({ 'Prefer': 'return=representation', 'Accept': 'application/json' }),
+                            body: JSON.stringify({ value: final, updated_at: fecha })
+                        });
+                        if (!res2.ok) throw new Error('HTTP ' + res2.status);
+                        const out = await res2.json();
+                        if (!out.length) { await new Promise(r => setTimeout(r, 120 + Math.random() * 300)); continue; } // alguien escribió entre medio
+                        u = msFecha(out[0].updated_at) || msFecha(fecha);
+                    }
+                    ultimoGuardadoPropio.set(key, { t: Date.now(), u });
+                    anotarVersionKv(key, u);
+                    anotarBaseCompartida(key, final);
+                    await guardarCopiaLocal(key, final, u);
+                    await storePendingClear(key);
+                    supabaseKvReachable = true;
+                    actualizarIndicadorSupabase();
+                    // Lo que trajeron otras personas (distinto de lo de este navegador) pasa a la memoria de la página.
+                    const ajenos = [];
+                    mFinal.forEach((v, k) => { if (mLocal.get(k) !== v) ajenos.push([k, JSON.parse(v)]); });
+                    mLocal.forEach((v, k) => { if (!mFinal.has(k)) ajenos.push([k, undefined]); });
+                    if (ajenos.length) aplicarAjenosCompartidos(key, ajenos);
+                    return { ok: true, valor: final, ajenos: ajenos.length };
+                }
+                throw new Error('otra persona guardó varias veces seguidas; se reintentará');
+            } catch (err) {
+                console.error('Supabase set error (compartida):', key, err);
+                supabaseKvReachable = false;
+                actualizarIndicadorSupabase();
+                await storePendingMark(key);
+                return { ok: true, valor: local, ajenos: 0, pendiente: true };
+            }
+        }
+        // Pasa a la memoria de la página lo que otras personas guardaron en una clave compartida, sin tocar lo demás.
+        function aplicarAjenosCompartidos(key, ajenos) {
+            const pon = (m, k, v) => { if (v === undefined) m.delete(k); else m.set(k, v); };
+            const ponSet = (s, k, v) => { if (v === undefined) s.delete(k); else s.add(k); };
+            const ponMeta = (m, k, v) => { if (v && typeof v === 'object') m.set(k, v); else m.delete(k); };
+            ajenos.forEach(([k, v]) => {
+                switch (key) {
+                    case 'val_estatus_etapa': pon(estatusEtapa, k, v === undefined ? undefined : estatusVigente(v)); break;
+                    case 'val_responsables_etapa': pon(responsablesEtapa, k, v); break;
+                    case 'val_manual_autorizados': ponSet(manualAutorizados, k, v); break;
+                    case 'val_manual_autorizados_meta': ponMeta(manualAutorizadosMeta, k, v); break;
+                    case 'val_manual_autorizados_forecast': ponSet(manualAutorizadosForecast, k, v); break;
+                    case 'val_manual_autorizados_forecast_meta': ponMeta(manualAutorizadosForecastMeta, k, v); break;
+                    case 'val_fecha_inicio_manual': pon(fechasInicioManual, k, /^\d{4}-\d{2}-\d{2}$/.test(String(v || '')) ? v : undefined); break;
+                }
+            });
+            refrescarVistasPronto();
+        }
+        let refrescoVistasTimer = null;
+        function refrescarVistasPronto() {
+            clearTimeout(refrescoVistasTimer);
+            refrescoVistasTimer = setTimeout(() => {
+                try {
+                    if (currentTab === 'produccion') runValidacionMateriales();
+                    if (currentTab === 'forecast') runValidacionForecast();
+                    if (currentTab === 'caract' && typeof Caracterizacion !== 'undefined') Caracterizacion.refrescar();
+                    StatusRmd.recargarPronto();
+                } catch (e) { console.error('No se pudo refrescar la vista:', e); }
+            }, 600);
+        }
+
+        async function storeRemove(key) {
+            try { await dbStore.removeItem(key); await dbStore.removeItem(META_PREFIJO + key); } catch (err) { console.error('Caché local remove error:', key, err); }
+            ultimoGuardadoPropio.set(key, { t: Date.now(), u: 0 });
+            anotarVersionKv(key, -1);
+            try {
+                const res = await fetch(`${KV_URL}?key=eq.${encodeURIComponent(key)}`, {
                     method: 'DELETE',
                     headers: supabaseHeaders({ 'Prefer': 'return=minimal' })
                 });
                 if (!res.ok) throw new Error('HTTP ' + res.status);
+                if (versionesKv.mapa) versionesKv.mapa.delete(key);
+                await storePendingClear(key);
                 supabaseKvReachable = true;
             } catch (err) {
                 console.error('Supabase remove error:', key, err);
@@ -3300,40 +3527,40 @@ alter publication supabase_realtime add table public.rmd_dashboard_kv;`;
             return true;
         }
 
-        // Lista de keys que quedaron pendientes de subir a Supabase por un fallo
-        // de red, para reintentarlas cuando vuelva la conexión (ver
-        // reintentarPendientesSupabase, llamada en el evento 'online').
-        async function storePendingMark(key) {
-            try {
-                const pend = (await dbStore.getItem('__pending_kv_keys__')) || [];
-                if (!pend.includes(key)) pend.push(key);
-                await dbStore.setItem('__pending_kv_keys__', pend);
-            } catch (e) { /* best effort */ }
-        }
+        // Reintenta subir lo que quedó pendiente: al volver la red, al volver a la pestaña y cada minuto mientras haya pendientes.
+        let reintentando = null;
         async function reintentarPendientesSupabase() {
-            let pend = [];
-            try { pend = (await dbStore.getItem('__pending_kv_keys__')) || []; } catch (e) { return; }
-            if (!pend.length) return;
-            const restantes = [];
-            for (const key of pend) {
-                const value = await dbStore.getItem(key).catch(() => null);
-                if (value === null || value === undefined) continue;
-                const ok = await storeSet(key, value);
-                if (!ok) restantes.push(key);
-            }
-            try { await dbStore.setItem('__pending_kv_keys__', restantes); } catch (e) { /* best effort */ }
+            if (reintentando) return reintentando;
+            reintentando = (async () => {
+                const pend = Array.from(await pendientesKvSet());
+                if (!pend.length) return;
+                let quedan = 0;
+                for (const key of pend) {
+                    let value = null;
+                    try { value = await dbStore.getItem(key); } catch (e) { /* sin caché */ }
+                    if (value === null || value === undefined) { await storePendingClear(key); continue; }
+                    await storeSet(key, value);
+                    if ((await pendientesKvSet()).has(key)) quedan++;
+                }
+                if (!quedan) avisarPendientesSubidos();
+            })();
+            try { await reintentando; } finally { reintentando = null; }
         }
         window.addEventListener('online', reintentarPendientesSupabase);
+        document.addEventListener('visibilitychange', () => { if (!document.hidden && pendientesKv && pendientesKv.size) reintentarPendientesSupabase(); });
+        setInterval(() => { if (pendientesKv && pendientesKv.size) reintentarPendientesSupabase(); }, 60000);
+        // Al abrir: si quedó algo sin subir de la vez anterior, se intenta apenas cargue la página.
+        setTimeout(async () => { if ((await pendientesKvSet()).size) { avisoFalloMostrado = true; reintentarPendientesSupabase(); } }, 8000);
 
         // ==================== SUPABASE REALTIME (sincronización entre dispositivos) ====================
         // Cuando otro dispositivo/pestaña cambia una key en rmd_dashboard_kv,
         // este cliente recibe el evento y recarga la vista correspondiente, para
         // que los cambios se reflejen sin tener que recargar la página a mano.
         let supabaseRealtimeChannel = null;
-        // Sello de tiempo del último guardado propio por key: Supabase Realtime
-        // notifica TODOS los cambios, incluidos los que este mismo cliente acaba
-        // de hacer. Sin esto, cada guardado propio dispararía también un
-        // refresco redundante (ya se actualizó la UI localmente al guardar).
+        // Último guardado propio por key ({ t: cuándo, u: updated_at que se escribió }): Realtime avisa TODOS los cambios,
+        // también los propios. Se reconoce el eco por su updated_at (antes era «cualquier cambio de esa clave en los 4 s
+        // siguientes», y así se ignoraba el estatus que otra persona guardaba justo después: la página se quedaba sin él y el
+        // siguiente guardado propio lo borraba).
         const ultimoGuardadoPropio = new Map();
         const VENTANA_ECO_MS = 4000;
 
@@ -3343,17 +3570,41 @@ alter publication supabase_realtime add table public.rmd_dashboard_kv;`;
                 supabaseRealtimeChannel = client
                     .channel('rmd_dashboard_kv_changes')
                     .on('postgres_changes', { event: '*', schema: 'public', table: SUPABASE_KV_TABLE }, (payload) => {
-                        const key = payload.new ? payload.new.key : (payload.old ? payload.old.key : null);
+                        const key = payload.new && payload.new.key ? payload.new.key : (payload.old ? payload.old.key : null);
                         if (!key) return;
+                        const u = payload.new && payload.new.updated_at ? msFecha(payload.new.updated_at) : 0;
                         const propio = ultimoGuardadoPropio.get(key);
-                        if (propio && (Date.now() - propio) < VENTANA_ECO_MS) return; // es el eco de mi propio guardado
+                        if (propio && (u ? propio.u === u : (Date.now() - propio.t) < VENTANA_ECO_MS)) return; // eco de mi propio guardado
+                        anotarVersionKv(key, -1);
                         onRemoteKeyChanged(key);
                     })
-                    .subscribe();
+                    .subscribe((estado) => {
+                        // Al reconectar (la PC se suspendió, se cortó la red) pudieron perderse avisos: se revisa qué cambió.
+                        if (estado === 'SUBSCRIBED' && supabaseRealtimeChannel && supabaseRealtimeChannel.__yaConectado) revisarCambiosPerdidos();
+                        if (estado === 'SUBSCRIBED' && supabaseRealtimeChannel) supabaseRealtimeChannel.__yaConectado = true;
+                    });
             } catch (err) {
                 console.error('No se pudo iniciar Supabase Realtime:', err);
             }
         }
+        // Compara las fechas de cambio de Supabase con las de la copia local y recarga lo que cambió (tras una reconexión o al
+        // volver a la pestaña después de un buen rato).
+        let ultimaRevisionCambios = Date.now();
+        async function revisarCambiosPerdidos() {
+            ultimaRevisionCambios = Date.now();
+            versionesKv = { mapa: null, t: 0, promesa: null };
+            let versiones;
+            try { versiones = await leerVersionesKv(); } catch (e) { return; }
+            for (const [key, u] of versiones) {
+                if (key.startsWith('acuerdo:')) continue;
+                let meta = null;
+                try { meta = await dbStore.getItem(META_PREFIJO + key); } catch (e) { continue; }
+                if (meta && meta.u && meta.u !== u) onRemoteKeyChanged(key);
+            }
+        }
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden && window.__statusRmdAppLista && Date.now() - ultimaRevisionCambios > 5 * 60 * 1000) revisarCambiosPerdidos();
+        });
 
         // Vuelve a cargar en memoria y a refrescar en pantalla solo la parte
         // afectada por la key que cambió en otro dispositivo, sin recargar toda
@@ -3364,6 +3615,9 @@ alter publication supabase_realtime add table public.rmd_dashboard_kv;`;
         let recargaManualesTimer = null;
         let recargaDatosValidacionTimer = null;
         async function onRemoteKeyChanged(key) {
+            // Si esta página está guardando esa misma clave compartida, el guardado ya fusiona y trae lo del otro: no se recarga
+            // aquí (recargar a media fusión borraría de la memoria lo que se acaba de elegir).
+            if (CLAVES_COMPARTIDAS[key] && colasCompartidas.has(key)) return;
             // La foto diaria la guarda otra persona: no hace falta recalcular aquí.
             if (!key.startsWith('acuerdo:') && key !== 'ind_fotos_flujo') StatusRmd.recargarPronto();
             if (key.startsWith('acuerdo:')) {
@@ -3485,7 +3739,7 @@ alter publication supabase_realtime add table public.rmd_dashboard_kv;`;
             // ADMIN no debe dejar ningún rastro en el historial: si se usó
             // ADMIN, esta función no escribe nada y termina aquí.
             if (identidad.esAdmin) return;
-            const entradas = (await storeGet('historial_trazabilidad')) || [];
+            const entradas = (await storeGetFresco('historial_trazabilidad')) || [];
             // usuarioTxt: identidades sin DNI (sincronización con el usuario del portal SAP, o acciones automáticas).
             const entrada = { fecha: new Date().toISOString(), accion, detalle, usuario: identidad.usuarioTxt || `${identidad.nombre} (${identidad.dni})` };
             if (identidad.usuarioSap) entrada.usuarioSap = identidad.usuarioSap;
@@ -3555,7 +3809,7 @@ alter publication supabase_realtime add table public.rmd_dashboard_kv;`;
             const cambios = compararVersionesProduccion(dataAnterior, dataNueva);
             const totalCambios = cambios.desaparecidos.length + cambios.reprogramados.length + cambios.nuevos.length;
             const clave = `prod_historial_${plantaKey}`;
-            const historial = (await storeGet(clave)) || [];
+            const historial = (await storeGetFresco(clave)) || [];
             historial.unshift({
                 fecha: new Date().toISOString(),
                 totalMaterialesAntes: (dataAnterior || []).length,
@@ -3700,7 +3954,7 @@ alter publication supabase_realtime add table public.rmd_dashboard_kv;`;
         // Con cada carga del programa, después de su foto en el historial (así la reconstrucción ya la incluye).
         async function acumularCargaPrograma(plantaKey, data) {
             const clave = `prod_acumulado_${plantaKey}`;
-            const guardado = await storeGet(clave);
+            const guardado = await storeGetFresco(clave);
             const acc = guardado && guardado.v === 1 && guardado.items ? sumarCargaAlAcumulado(guardado, data, new Date().toISOString())
                 : await leerAcumuladoPrograma(plantaKey);
             return storeSet(clave, acc);
@@ -6073,7 +6327,10 @@ function buildDateColumnMapPlanta1(headerRow, weekLabelRow, hiddenCols) {
             try {
                 const parsed = await arbolLocalDbStore.getItem(ARBOL_LOCAL_CACHE_KEY);
                 if (!parsed) return null;
-                if ((Date.now() - (parsed.guardadoEn || 0)) > ARBOL_LOCAL_CACHE_TTL_MS) return null;
+                const edad = Date.now() - (parsed.guardadoEn || 0);
+                // Vencida (más de 12 h) pero de menos de 7 días: se usa para mostrar la tabla al instante y se renueva detrás
+                // (ver obtenerMotorArbolLocal). Antes, la primera apertura del día dejaba la tabla en «Cargando el árbol…».
+                if (edad > ARBOL_LOCAL_CACHE_TTL_MS) return edad < 7 * 24 * 3600 * 1000 ? { ...parsed, vencida: true } : null;
                 return parsed;
             } catch (err) { return null; }
         }
@@ -6129,6 +6386,7 @@ function buildDateColumnMapPlanta1(headerRow, weekLabelRow, hiddenCols) {
                         await guardarArbolLocalCache({ datosMotor });
                     }
                     arbolLocalMotor = window.crearMotorArbol(datosMotor);
+                    if (cache && cache.vencida) renovarArbolLocalDetras();
                     return arbolLocalMotor;
                 } catch (err) {
                     console.error('No se pudo construir el motor de árbol local:', err);
@@ -6138,6 +6396,27 @@ function buildDateColumnMapPlanta1(headerRow, weekLabelRow, hiddenCols) {
                 }
             })();
             return arbolLocalCargando;
+        }
+
+        // Caché del árbol vencida: ya se mostró con ella; se bajan las 4 tablas de nuevo sin bloquear y, al terminar, se vuelve a
+        // validar con el árbol nuevo (los árboles calculados se rehacen solos al cambiar el motor).
+        let renovandoArbolLocal = false;
+        function renovarArbolLocalDetras() {
+            if (renovandoArbolLocal) return;
+            renovandoArbolLocal = true;
+            setTimeout(async () => {
+                try {
+                    // Mientras baja, se sigue usando el árbol anterior (obtenerMotorArbolLocal solo lo cambia si todo salió bien).
+                    const nuevo = await obtenerMotorArbolLocal(true);
+                    if (!nuevo) return;
+                    if (motorArboles.estado === 'listo') {
+                        if (typeof currentTab === 'undefined' || currentTab === 'produccion') runValidacionMateriales();
+                        if (typeof currentTab !== 'undefined' && currentTab === 'forecast') runValidacionForecast();
+                        if (typeof currentTab !== 'undefined' && currentTab === 'caract' && typeof Caracterizacion !== 'undefined') Caracterizacion.refrescar();
+                    }
+                } catch (err) { console.error('No se pudo renovar el árbol de materiales:', err); }
+                finally { renovandoArbolLocal = false; }
+            }, 3000);
         }
 
         // Precalienta el motor local en segundo plano, cuando el navegador
@@ -13205,7 +13484,7 @@ async function maybeAutoStartTour() {
             if (guardandoFoto) await guardandoFoto.catch(() => {});
             guardandoFoto = (async () => {
                 // Se vuelve a leer justo antes de escribir, para no pisar lo que guardó otra persona.
-                const g = await storeGet(CLAVE_FOTOS);
+                const g = await storeGetFresco(CLAVE_FOTOS);
                 const base = g && g.v === 1 && g.dias && typeof g.dias === 'object' ? g : { v: 1, dias: {} };
                 const previa = base.dias[hoy];
                 // No se pisa una foto de hoy hecha con datos de SAP más nuevos que los de este navegador.
@@ -13462,7 +13741,7 @@ async function maybeAutoStartTour() {
             const t = String(inp.value).trim().replace(',', '.'), v = t === '' ? null : Number(t);
             if (v !== null && (!Number.isFinite(v) || v <= 0)) { inp.value = ''; return; }
             try {
-                const guardado = await storeGet(CLAVE_ESTIMADO);
+                const guardado = await storeGetFresco(CLAVE_ESTIMADO);
                 if (guardado && typeof guardado === 'object') estimadoCfg = guardado;
                 const x = estimadoCfg[pl] || (estimadoCfg[pl] = {});
                 if (v === null) delete x[k]; else x[k] = v;
@@ -14571,7 +14850,7 @@ async function maybeAutoStartTour() {
         }
         // Vuelve a leer lo guardado justo antes de escribir, para no pisar lo que otra persona cambió.
         async function guardarHoras(mes, pl, k, valor) {
-            const guardado = await storeGet(CLAVE_HORAS);
+            const guardado = await storeGetFresco(CLAVE_HORAS);
             if (guardado && typeof guardado === 'object') horasEf = guardado;
             const x = ((horasEf[mes] || (horasEf[mes] = {}))[pl] || (horasEf[mes][pl] = {}));
             if (valor === null) delete x[k]; else x[k] = valor;
@@ -14672,7 +14951,7 @@ async function maybeAutoStartTour() {
         // ---------- Estatus de las caracterizaciones ----------
         // Se vuelve a leer lo guardado justo antes de escribir, para no pisar lo que otra persona cambió mientras tanto.
         async function guardarEstatus(id, cambio) {
-            const guardado = await storeGet('val_estatus_caracterizacion');
+            const guardado = await storeGetFresco('val_estatus_caracterizacion');
             if (guardado && typeof guardado === 'object') estatusCar = conEstatusVigente(guardado);
             const nuevo = Object.assign({}, estatusCar[id] || {}, cambio, { f: new Date().toISOString() });
             if (nuevo.e !== ESTATUS_CC) delete nuevo.r;
