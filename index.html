@@ -15108,7 +15108,7 @@ async function maybeAutoStartTour() {
         //    del mes» (regla 3).
         // La fecha de suspensión sale de la Trazabilidad (desde 2026) o, para los suspendidos de la decisión del equipo, de su
         // Excel (DECISION_EQUIPO). Una versión anterior suspendida sin fecha conocida se suspendió antes de 2026.
-        function datosBacklogMes(filas, traz, corte) {
+        function datosBacklogMes(filas, traz, corte, precisos) {
             const cab = ['codigo', 'solicitud', 'version', 'estado', 'codigoPorDefecto', 'descripcion', 'etapa', 'fechaRegistro', 'fechaAutorizacion', 'fechaSolicitud', 'planta', 'observacion', 'produccionEstado'];
             const rows = [cab, ...filas.map((f) => cab.map((k) => f[k]))], i = (k) => cab.indexOf(k);
             const versiones = versionesDesdeFilas(rows, { codigo: i('codigo'), solicitud: i('solicitud'), version: i('version'), estado: i('estado'), codigoPorDefecto: i('codigoPorDefecto'),
@@ -15152,8 +15152,26 @@ async function maybeAutoStartTour() {
                 pend.push({ tipo: esSol ? 'Solicitado' : 'Ingresado', v, m, cuando: vigente(m), ant, fS, porque });
             });
             // Última versión de cada master (Autorizado, Ingresado o Suspendido): ninguna versión registrada más nueva en su línea.
+            // Última versión de cada master, como «Última versión de cada master» del portal (11/11/2026, para que el Resumen
+            // cuadre con ese Excel): el master une las versiones por su linaje (código de la versión principal, que llega con
+            // «Enviar a Status RMD» en los datos precisos) y por descripción + planta + etapa. La última es la de versión más alta
+            // (y, a igual versión, la registrada después) entre Autorizado, Ingresado y Suspendido.
             const ULT = new Set([...ES_REGISTRADO, 'INACTIVO']);
-            const esUltima = (v) => ULT.has(v.estado) && !linea(v).some((w) => ULT.has(w.estado) && w.version > v.version);
+            const linajeDe = new Map();
+            ((precisos && precisos.filas) || []).forEach((f) => { const c = String(f[0] || '').trim(), l = String(f[1] || '').trim(); if (c && l) linajeDe.set(c, l); });
+            const padre = new Map(), raiz = (k) => { let r = k; while (padre.get(r) !== r) r = padre.get(r); let c = k; while (c !== r) { const nx = padre.get(c); padre.set(c, r); c = nx; } return r; };
+            const unirUF = (a, b) => { [a, b].forEach((k) => { if (!padre.has(k)) padre.set(k, k); }); const ra = raiz(a), rb = raiz(b); if (ra !== rb) padre.set(ra < rb ? rb : ra, ra < rb ? ra : rb); };
+            const nodoV = (v) => `${v.planta}|c:${String(v.codigo || `S${v.sol}`).trim()}`;
+            versiones.forEach((v) => {
+                const c = nodoV(v), l = v.codigo && linajeDe.get(String(v.codigo).trim()); unirUF(c, c);
+                if (l) unirUF(c, `${v.planta}|c:${l}`);
+                if (v.desc) unirUF(c, `${v.planta}|d:${String(v.desc).normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toUpperCase().replace(/\s+/g, ' ')}|${etapaDe(v)}`);
+            });
+            const masters = new Map();
+            versiones.forEach((v) => { if (!ULT.has(v.estado)) return; const k = raiz(nodoV(v)); if (!masters.has(k)) masters.set(k, []); masters.get(k).push(v); });
+            const ultimas = new Set();
+            masters.forEach((vs) => { vs.sort((a, b) => (b.version - a.version) || ((b.fReg ? b.fReg.valueOf() : 0) - (a.fReg ? a.fReg.valueOf() : 0))); ultimas.add(vs[0]); });
+            const esUltima = (v) => ultimas.has(v);
             // Suspendidos de hoy en SAP (sin los INACTIVO), última versión y sin otra versión nueva ya iniciada.
             const susp = [], omitidos = [];
             versiones.forEach((v) => {
@@ -15191,13 +15209,13 @@ async function maybeAutoStartTour() {
             const dec = [];
             ['P1', 'P2'].forEach((pl) => DECISION_EQUIPO[pl].forEach((d, cod) => { if (d.c !== 'I') return; const f = sap.get(`${pl}|${cod}`);
                 dec.push({ pl, cod, c: 'I', d, fS: d.fSusp ? dTxt(d.fSusp) : null, v: f ? { desc: f.descripcion || '', etapa: f.etapa || '', estado: normalizeEstadoRmd(f.estado), version: Number(f.version) || '' } : null }); }));
-            // Resumen: status de hoy de la última versión de cada master; los INACTIVO son los del análisis (no cambian) y sus
-            // códigos no se cuentan en otro status.
-            const resumen = { P1: { AUTORIZADO: 0, INGRESADO: 0, SUSPENDIDO: 0, INACTIVO: RMD_INACTIVOS.P1.size }, P2: { AUTORIZADO: 0, INGRESADO: 0, SUSPENDIDO: 0, INACTIVO: RMD_INACTIVOS.P2.size } };
-            const contados = new Set();
-            versiones.forEach((v) => {
-                if (!resumen[v.planta] || !esUltima(v) || esInactivo(v) || v.estado === 'INACTIVO') return;
-                const k = `${v.planta}|${v.codigo || v.sol}|${v.version}`; if (contados.has(k)) return; contados.add(k);
+            // Resumen: status de hoy de la última versión de cada master (como el Excel «Última versión» del portal). INACTIVO =
+            // la última versión Suspendida que está en el análisis de suspendidos; los INACTIVO del análisis que ya tienen una
+            // versión más nueva cuentan con el status de esa versión (decisión de Carlos, 11/11/2026).
+            const resumen = { P1: { AUTORIZADO: 0, INGRESADO: 0, SUSPENDIDO: 0, INACTIVO: 0 }, P2: { AUTORIZADO: 0, INGRESADO: 0, SUSPENDIDO: 0, INACTIVO: 0 } };
+            ultimas.forEach((v) => {
+                if (!resumen[v.planta]) return;
+                if (v.estado === 'INACTIVO' || (v.estado === 'SUSPENDIDO' && esInactivo(v))) { resumen[v.planta].INACTIVO += 1; return; }
                 resumen[v.planta][v.estado] += 1;
                 if (v.estado === 'SUSPENDIDO') dec.push({ pl: v.planta, cod: String(v.codigo || '').trim(), c: 'S', d: decision(v) || {}, fS: suspDe(v), v: { desc: v.desc || '', etapa: v.etapa || '', estado: v.estado, version: v.version } });
             });
@@ -15555,7 +15573,7 @@ async function maybeAutoStartTour() {
             const corte = dayjs(res.value + 'T00:00:00');
             let traz = trazabilidadSap;
             if (!traz) { try { traz = await storeGet('val_rmd_trazabilidad'); } catch (err) { traz = null; } }
-            const wb = libroBacklogMes(datosBacklogMes(filas, traz, corte));
+            const wb = libroBacklogMes(datosBacklogMes(filas, traz, corte, rmdPrecisoDatos));
             const nombre = `Backlog_RMD_${corte.format('YYYY-MM')}_corte_${corte.format('YYYY-MM-DD')}.xlsx`;
             try {
                 const blob = new Blob([bytesLibroBacklog(XLSX, wb)], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
