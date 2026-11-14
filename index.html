@@ -3091,8 +3091,8 @@
         // conexión. Supabase es siempre la fuente de verdad cuando está disponible.
         const dbStore = localforage.createInstance({ name: 'programaProduccionDB', storeName: 'datos_app' });
 
-        const SUPABASE_URL = 'https://mlmsympewmxfcqoyowxs.supabase.co';
-        const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1sbXN5bXBld214ZmNxb3lvd3hzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk3Njk0MDEsImV4cCI6MjEwNTM0NTQwMX0.G4D-QkugQ5rMP_rXj4WGf2SaE8mv305QHjPe-171Srg';
+        const SUPABASE_URL = 'https://govkmqahpvnlmllboqsh.supabase.co';
+        const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdvdmttcWFocHZubG1sbGJvcXNoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU1NTQzMDQsImV4cCI6MjEwMTEzMDMwNH0.eQF54dInVtjsIVZvWQuKmroy9eOmPbGo3pq_qGJJEJE';
         const SUPABASE_KV_TABLE = 'rmd_dashboard_kv';
 
         function supabaseHeaders(extra) {
@@ -3146,6 +3146,9 @@ alter publication supabase_realtime add table public.rmd_dashboard_kv;`;
                         <pre style="margin:0;font-family:monospace;font-size:11px;line-height:1.6;color:#c8e6d4;white-space:pre-wrap;word-break:break-word;max-height:200px;overflow-y:auto;">${SUPABASE_KV_SETUP_SQL}</pre>
                     </div>
                     <button type="button" id="copiarSqlKvBtn" style="margin-top:6px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.14);color:#e7ebf0;font-size:11px;font-weight:600;padding:6px 12px;border-radius:5px;cursor:pointer;">Copiar SQL (tabla principal)</button>
+                    <p style="margin:14px 0 6px;">Recuperar datos: sube a Supabase lo que este navegador tiene guardado y allá falta (no pisa nada que ya esté).</p>
+                    <button type="button" id="restaurarCopiaBtn" style="background:rgba(16,185,129,0.15);border:1px solid rgba(16,185,129,0.45);color:#a7f3d0;font-size:11px;font-weight:600;padding:6px 12px;border-radius:5px;cursor:pointer;">Restaurar la copia de este equipo</button>
+                    <button type="button" id="respaldoLocalBtn" style="margin-left:6px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.14);color:#e7ebf0;font-size:11px;font-weight:600;padding:6px 12px;border-radius:5px;cursor:pointer;">Descargar respaldo (.json)</button>
                 </div>`,
                 width: 'min(600px, 94vw)',
                 showConfirmButton: true,
@@ -3164,6 +3167,10 @@ alter publication supabase_realtime add table public.rmd_dashboard_kv;`;
                     };
                     const btnKv = document.getElementById('copiarSqlKvBtn');
                     if (btnKv) btnKv.addEventListener('click', () => copiar(SUPABASE_KV_SETUP_SQL));
+                    const btnRest = document.getElementById('restaurarCopiaBtn');
+                    if (btnRest) btnRest.addEventListener('click', () => restaurarCopiaLocalEnSupabase());
+                    const btnResp = document.getElementById('respaldoLocalBtn');
+                    if (btnResp) btnResp.addEventListener('click', () => descargarRespaldoLocal());
                 }
             });
         }
@@ -3281,6 +3288,117 @@ alter publication supabase_realtime add table public.rmd_dashboard_kv;`;
             return null;
         }
 
+        // ==================== Proyecto de Supabase nuevo (14/11/2026) ====================
+        // El proyecto anterior (mlmsympewmxfcqoyowxs) se borró por error el 13/11/2026 y Supabase no guarda copia de un proyecto
+        // borrado. Los datos se recuperan desde la copia que cada navegador guarda en IndexedDB:
+        //  - Mientras dure la recuperación, si una clave todavía no existe en Supabase pero sí en este navegador, se muestra la copia
+        //    local (solo lectura: no se sube sola, para que una PC con datos viejos no se adelante a la buena).
+        //  - «Restaurar la copia de este equipo» (en la ventana del puntito de la nube) sube las claves que falten en Supabase, y
+        //    «Descargar respaldo» baja un .json con toda la copia local por si acaso.
+        const RECUPERACION_HASTA = Date.parse('2026-12-31T23:59:59-05:00');
+        async function copiaLocalSiFaltaEnSupabase(key) {
+            if (!(Date.now() < RECUPERACION_HASTA)) return null;
+            try {
+                const v = await dbStore.getItem(key);
+                return v === null || v === undefined ? null : await descomprimirValor(v);
+            } catch (e) { return null; }
+        }
+        const CLAVES_SOLO_LOCALES = new Set(['__pending_kv_keys__', 'acuerdos_cache']);
+        // Junta la copia local como claves de Supabase: { key: { valor, guardado (ms) } }.
+        async function copiaLocalComoClaves() {
+            const out = new Map();
+            let llaves = [];
+            try { llaves = await dbStore.keys(); } catch (e) { return out; }
+            for (const k of llaves) {
+                if (k.startsWith(META_PREFIJO) || k.startsWith(BASE_PREFIJO) || CLAVES_SOLO_LOCALES.has(k)) continue;
+                let v = null, meta = null;
+                try { v = await dbStore.getItem(k); meta = await dbStore.getItem(META_PREFIJO + k); } catch (e) { continue; }
+                if (v === null || v === undefined) continue;
+                try { v = await descomprimirValor(v); } catch (e) { continue; }
+                out.set(k, { valor: v, guardado: (meta && meta.l) || 0 });
+            }
+            // Los acuerdos se guardan en Supabase uno por clave, pero en este navegador están juntos en «acuerdos_cache».
+            try {
+                const acuerdos = (await dbStore.getItem('acuerdos_cache')) || [];
+                (Array.isArray(acuerdos) ? acuerdos : []).forEach((a) => {
+                    if (a && a.id && !out.has('acuerdo:' + a.id)) out.set('acuerdo:' + a.id, { valor: a, guardado: msFecha(a.actualizadoEn) });
+                });
+            } catch (e) { /* sin acuerdos */ }
+            return out;
+        }
+        function tamanoLegible(valor) {
+            const n = JSON.stringify(valor).length;
+            return n > 1048576 ? (n / 1048576).toFixed(1) + ' MB' : n > 1024 ? Math.round(n / 1024) + ' KB' : n + ' B';
+        }
+        async function descargarRespaldoLocal() {
+            const copia = await copiaLocalComoClaves();
+            const obj = {};
+            copia.forEach((c, k) => { obj[k] = c.valor; });
+            const blob = new Blob([JSON.stringify({ origen: location.href, fecha: new Date().toISOString(), claves: obj })], { type: 'application/json' });
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = 'respaldo-status-rmd-' + new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-') + '.json';
+            document.body.appendChild(a); a.click(); a.remove();
+            setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+        }
+        async function restaurarCopiaLocalEnSupabase() {
+            const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+            Swal.fire({ title: 'Revisando la copia de este equipo…', allowOutsideClick: false, didOpen: () => Swal.showLoading(), background: '#0f172a', color: '#f8fafc' });
+            const copia = await copiaLocalComoClaves();
+            versionesKv = { mapa: null, t: 0, promesa: null };
+            let remotas;
+            try { remotas = await leerVersionesKv(); }
+            catch (e) { Swal.fire({ icon: 'error', title: 'Supabase no responde', text: String(e && e.message || e), background: '#0f172a', color: '#f8fafc' }); return; }
+            const faltan = [], yaEstan = [];
+            copia.forEach((c, k) => (remotas.has(k) ? yaEstan : faltan).push(k));
+            faltan.sort();
+            if (!faltan.length) {
+                Swal.fire({ icon: 'info', title: 'Nada que restaurar', text: `Este equipo tiene ${copia.size} claves y todas ya están en Supabase.`, background: '#0f172a', color: '#f8fafc' });
+                return;
+            }
+            const fecha = (ms) => ms ? new Date(ms).toLocaleString('es-PE', { dateStyle: 'short', timeStyle: 'short' }) : '—';
+            const filas = faltan.map((k) => `<tr><td style="padding:2px 8px 2px 0;">${esc(k)}</td><td style="padding:2px 8px;white-space:nowrap;">${fecha(copia.get(k).guardado)}</td><td style="padding:2px 0;text-align:right;white-space:nowrap;">${tamanoLegible(copia.get(k).valor)}</td></tr>`).join('');
+            const ok = await Swal.fire({
+                title: 'Restaurar la copia de este equipo',
+                html: `<div style="text-align:left;font-size:12px;color:var(--slate-300);">
+                    <p style="margin-bottom:8px;">Se subirán a Supabase <b>${faltan.length}</b> claves que faltan allá${yaEstan.length ? ` (otras ${yaEstan.length} ya están y no se tocan)` : ''}. «Copia del» es cuándo este navegador las recibió por última vez.</p>
+                    <div style="max-height:260px;overflow:auto;background:#1c2128;border-radius:8px;padding:8px 10px;">
+                    <table style="width:100%;font-size:11px;"><thead><tr><th style="text-align:left;">Clave</th><th style="text-align:left;padding:0 8px;">Copia del</th><th style="text-align:right;">Tamaño</th></tr></thead><tbody>${filas}</tbody></table></div>
+                </div>`,
+                width: 'min(640px, 94vw)', showCancelButton: true, confirmButtonText: `Subir ${faltan.length} claves`, cancelButtonText: 'Cancelar',
+                background: '#0f172a', color: '#f8fafc'
+            });
+            if (!ok.isConfirmed) return;
+            const errores = [];
+            let hechas = 0;
+            Swal.fire({ title: 'Subiendo…', html: `<span id="restaurarAvance">0 de ${faltan.length}</span>`, allowOutsideClick: false, didOpen: () => Swal.showLoading(), background: '#0f172a', color: '#f8fafc' });
+            for (const k of faltan) {
+                try {
+                    const fechaIso = new Date().toISOString();
+                    ultimoGuardadoPropio.set(k, { t: Date.now(), u: msFecha(fechaIso) });
+                    const u = await subirKv(k, copia.get(k).valor, fechaIso);
+                    ultimoGuardadoPropio.set(k, { t: Date.now(), u });
+                    anotarVersionKv(k, u);
+                    if (!k.startsWith('acuerdo:')) {
+                        try { await dbStore.setItem(META_PREFIJO + k, { u, l: Date.now() }); } catch (e) { /* no crítico */ }
+                        anotarBaseCompartida(k, copia.get(k).valor);
+                    }
+                    await storePendingClear(k);
+                } catch (e) { errores.push(k + ': ' + (e && e.message || e)); }
+                hechas++;
+                const el = document.getElementById('restaurarAvance');
+                if (el) el.textContent = `${hechas} de ${faltan.length}`;
+            }
+            supabaseKvReachable = !errores.length || errores.length < faltan.length;
+            actualizarIndicadorSupabase();
+            Swal.fire({
+                icon: errores.length ? 'warning' : 'success',
+                title: errores.length ? `Subidas ${faltan.length - errores.length} de ${faltan.length}` : `Listo: ${faltan.length} claves restauradas`,
+                html: errores.length ? `<div style="text-align:left;font-size:11px;max-height:200px;overflow:auto;">${errores.map(esc).join('<br>')}</div>` : 'Recarga la página para ver todo desde Supabase.',
+                background: '#0f172a', color: '#f8fafc'
+            });
+        }
+
         // storeGet: lo de Supabase (fuente de verdad), pero sin bajarlo si la copia local ya es esa misma versión.
         const lecturasEnCurso = new Map();
         async function storeGet(key) {
@@ -3306,7 +3424,7 @@ alter publication supabase_realtime add table public.rmd_dashboard_kv;`;
                 const u = versiones.get(key);
                 // No estaba en la lista: si la lista es de recién (la carga inicial), no existe; si ya tiene unos segundos, pudo
                 // crearse después (y el aviso de Realtime perderse), así que se pregunta directo.
-                if (u === undefined && Date.now() - versionesKv.t < 3000) { supabaseKvReachable = true; actualizarIndicadorSupabase(); return null; }
+                if (u === undefined && Date.now() - versionesKv.t < 3000) { supabaseKvReachable = true; actualizarIndicadorSupabase(); return await copiaLocalSiFaltaEnSupabase(key); }
                 const copia = await copiaLocalSiVigente(key, u);
                 if (copia !== undefined) {
                     supabaseKvReachable = true; actualizarIndicadorSupabase();
@@ -3331,7 +3449,7 @@ alter publication supabase_realtime add table public.rmd_dashboard_kv;`;
                     return value;
                 }
                 anotarVersionKv(key, 0);
-                return null;
+                return await copiaLocalSiFaltaEnSupabase(key);
             } catch (err) {
                 console.error('Supabase get error, usando caché local:', key, err);
                 supabaseKvReachable = false;
