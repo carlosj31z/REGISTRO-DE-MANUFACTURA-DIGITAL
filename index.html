@@ -15570,18 +15570,19 @@ async function maybeAutoStartTour() {
             const dec = [];
             ['P1', 'P2'].forEach((pl) => DECISION_EQUIPO[pl].forEach((d, cod) => { if (d.c !== 'I') return; const f = sap.get(`${pl}|${cod}`);
                 dec.push({ pl, cod, c: 'I', d, fS: d.fSusp ? dTxt(d.fSusp) : null, v: f ? { desc: f.descripcion || '', etapa: f.etapa || '', estado: normalizeEstadoRmd(f.estado), version: Number(f.version) || '' } : null }); }));
-            // Resumen (fórmula de Carlos, 11/11/2026): Autorizados e Ingresados = todos los RMD con ese status hoy (en general, no
-            // solo la última versión de cada master); INACTIVO = los del análisis de suspendidos, fijos (892 ATE / 436 LIMA);
+            // Resumen (fórmula de Carlos, 11/11/2026; Autorizados cambiados el 14/11/2026): Autorizados = la última versión de cada
+            // master que hoy está Autorizada (sin los masters INACTIVO); Ingresados = todos los RMD con ese status hoy; INACTIVO = los del análisis de suspendidos, fijos (892 ATE / 436 LIMA);
             // SUSPENDIDOS = suspendidos de la última versión de cada master (todos) menos los INACTIVO.
             const resumen = { P1: { AUTORIZADO: 0, INGRESADO: 0, SUSPENDIDO: 0, INACTIVO: 0 }, P2: { AUTORIZADO: 0, INGRESADO: 0, SUSPENDIDO: 0, INACTIVO: 0 } };
             ultimas.forEach((v) => {
                 if (!resumen[v.planta]) return;
                 if (v.estado === 'SUSPENDIDO' || v.estado === 'INACTIVO') resumen[v.planta].SUSPENDIDO += 1;
+                if (v.estado === 'AUTORIZADO' && !ultInactivo.has(v)) resumen[v.planta].AUTORIZADO += 1;
                 if (v.estado === 'SUSPENDIDO' && !esInactivo(v) && !ultInactivo.has(v)) dec.push({ pl: v.planta, cod: String(v.codigo || '').trim(), c: 'S', d: decision(v) || {}, fS: suspDe(v), v: { desc: v.desc || '', etapa: v.etapa || '', estado: v.estado, version: v.version } });
             });
             const vistosR = new Set();
             versiones.forEach((v) => {
-                if (!resumen[v.planta] || (v.estado !== 'AUTORIZADO' && v.estado !== 'INGRESADO')) return;
+                if (!resumen[v.planta] || v.estado !== 'INGRESADO') return;
                 const k = `${v.planta}|${String(v.codigo || `S${v.sol}`).trim()}|${v.version}`;
                 if (vistosR.has(k)) return; vistosR.add(k); resumen[v.planta][v.estado] += 1;
             });
