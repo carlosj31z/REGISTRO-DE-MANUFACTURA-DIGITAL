@@ -1793,6 +1793,12 @@
                             <span class="gooey-nav-label">INDICADORES</span>
                         </a>
                     </li>
+                    <li data-tab="backlog" title="Backlog">
+                        <a href="#" onclick="return false;">
+                            <svg class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6.5h16"/><path d="M4 12h10"/><path d="M4 17.5h6"/><path d="M15.5 15.5l2 2 3.5-4"/></svg>
+                            <span class="gooey-nav-label">BACKLOG</span>
+                        </a>
+                    </li>
                     <li data-tab="caract" title="Caracterización">
                         <a href="#" onclick="return false;">
                             <svg class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 3.5h6"/><path d="M10 3.5v5.2L4.8 17.6A2 2 0 0 0 6.5 20.5h11a2 2 0 0 0 1.7-2.9L14 8.7V3.5"/><path d="M7.2 14.5h9.6"/></svg>
@@ -2548,6 +2554,191 @@
         </div>
     </div>
 
+    <!-- ==================== BACKLOG (pedido de Carlos, 14/11/2026) ====================
+         Los RMD que siguen pendientes, para atacarlos en orden: Ingresados por autorizar, Solicitudes por ingresar y Suspendidos
+         sin versión nueva (sin los INACTIVO), con las mismas reglas del Excel «Backlog del mes» (StatusRmd._datosBacklogMes).
+         Backlog = lo que venía de meses anteriores + lo que entró este mes (etiqueta NUEVO). Los que Producción necesita en su
+         programa llevan la etiqueta PROGRAMA DE PRODUCCIÓN (Ruta 1 de INDICADORES). Cada pendiente se anota con por qué sigue
+         pendiente (val_backlog_notas, compartida). Código en el bloque BacklogRmd al final. -->
+    <div class="tab-content" id="tab-backlog">
+        <div class="card bkl-card opacity-0">
+            <div class="bkl-cabecera">
+                <div class="bkl-marca">
+                    <span class="bkl-marca-icono" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6.5h16"/><path d="M4 12h10"/><path d="M4 17.5h6"/><path d="M15.5 15.5l2 2 3.5-4"/></svg>
+                    </span>
+                    <div>
+                        <h2 class="bkl-titulo">Backlog de RMD</h2>
+                        <p class="bkl-sub" id="bklSub">Pendientes por atender · Plantas Ate y Lima</p>
+                    </div>
+                </div>
+                <div class="bkl-acciones">
+                    <button type="button" class="sts-btn sts-btn-icono" onclick="BacklogRmd.actualizar()" title="Volver a calcular con los datos guardados" aria-label="Actualizar">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 11a8 8 0 0 0-14.6-4.5L4 8"/><path d="M4 3.5V8h4.5"/><path d="M4 13a8 8 0 0 0 14.6 4.5L20 16"/><path d="M20 20.5V16h-4.5"/></svg>
+                    </button>
+                    <button type="button" class="sts-btn sts-btn-primario" onclick="BacklogRmd.exportar()" title="Descarga la lista (con los filtros de ahora) y las notas en Excel">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11"/><path d="M7.5 10.5 12 15l4.5-4.5"/><path d="M5 19.5h14"/></svg>
+                        <span>Exportar Excel</span>
+                    </button>
+                </div>
+            </div>
+            <div id="bklContenido" aria-live="polite"><p class="bkl-vacio">Cargando…</p></div>
+        </div>
+    </div>
+
+    <style>
+        /* ---------- Backlog de RMD ---------- */
+        #tab-backlog .bkl-card { padding:22px 24px 26px; }
+        #tab-backlog .bkl-cabecera { display:flex; justify-content:space-between; align-items:center; gap:16px 24px; flex-wrap:wrap; padding-bottom:18px; margin-bottom:18px; border-bottom:1px solid var(--card-border-highlight); }
+        #tab-backlog .bkl-marca { display:flex; align-items:center; gap:14px; min-width:0; }
+        #tab-backlog .bkl-marca-icono { width:44px; height:44px; flex-shrink:0; display:grid; place-items:center; border-radius:12px; background:rgba(var(--copper-rgb) / .16); color:rgb(var(--copper-rgb)); border:1px solid rgba(var(--copper-rgb) / .3); }
+        #tab-backlog .bkl-marca-icono svg { width:22px; height:22px; }
+        #tab-backlog .bkl-titulo { font-size:20px; font-weight:700; letter-spacing:-.01em; color:var(--app-text); line-height:1.2; }
+        #tab-backlog .bkl-sub { font-size:12.5px; color:var(--slate-400); margin-top:2px; }
+        #tab-backlog .bkl-acciones { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+        #tab-backlog .bkl-vacio { font-size:13px; color:var(--slate-400); padding:28px 0; text-align:center; }
+        #tab-backlog .bkl-leer { font-size:13px; line-height:1.55; color:var(--slate-300); margin:0 0 16px; max-width:96ch; }
+        #tab-backlog .bkl-leer b { color:var(--app-text); font-weight:600; }
+        #tab-backlog .bkl-sec { font-size:11px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--slate-400); margin:22px 0 10px; }
+
+        /* Ecuación: venía + nuevos − atendidos = pendientes hoy */
+        #tab-backlog .bkl-ecuaciones { display:grid; gap:10px; }
+        #tab-backlog .bkl-ec { display:grid; grid-template-columns:72px repeat(4, minmax(0, 1fr)); align-items:stretch; gap:8px 18px; }
+        #tab-backlog .bkl-ec-planta { display:flex; align-items:center; font-size:13px; font-weight:700; color:var(--app-text); }
+        #tab-backlog .bkl-ec-caja { position:relative; text-align:left; font:inherit; color:inherit; padding:10px 12px 10px; border-radius:10px; border:1px solid var(--card-border-highlight); background:var(--surface-1-faint); min-width:0; }
+        #tab-backlog button.bkl-ec-caja { cursor:pointer; transition:border-color .15s, background .15s; }
+        #tab-backlog button.bkl-ec-caja:hover { border-color:var(--accent); }
+        #tab-backlog button.bkl-ec-caja:focus-visible { outline:2px solid var(--focus-ring); outline-offset:2px; }
+        #tab-backlog .bkl-ec-caja .n { display:block; font-size:24px; font-weight:700; line-height:1.1; color:var(--app-text); font-variant-numeric:tabular-nums; }
+        #tab-backlog .bkl-ec-caja .l { display:block; font-size:11.5px; color:var(--slate-400); margin-top:3px; }
+        #tab-backlog .bkl-ec-caja .s { display:block; font-size:11px; color:var(--slate-500); margin-top:2px; }
+        #tab-backlog .bkl-ec-caja .op { position:absolute; left:-9px; top:50%; transform:translate(-50%, -50%); font-size:14px; font-weight:700; color:var(--slate-400); }
+        #tab-backlog .bkl-ec-caja.nuevo { border-color:rgba(var(--copper-rgb) / .45); background:rgba(var(--copper-rgb) / .08); }
+        #tab-backlog .bkl-ec-caja.nuevo .n { color:rgb(var(--copper-rgb)); }
+        #tab-backlog .bkl-ec-caja.atendido .n { color:rgb(var(--ok-rgb)); }
+        #tab-backlog .bkl-ec-caja.hoy { border-color:rgba(var(--accent-rgb) / .5); background:rgba(var(--accent-rgb) / .1); }
+        #tab-backlog .bkl-ec-caja.hoy .n { color:var(--accent-strong); }
+        #tab-backlog .bkl-ec.total .bkl-ec-caja { background:var(--surface-1); }
+
+        /* Control del backlog y motivos */
+        #tab-backlog .bkl-dos { display:grid; grid-template-columns:minmax(0, 1fr) minmax(0, 1.25fr); gap:14px; }
+        #tab-backlog .bkl-panel { border:1px solid var(--card-border-highlight); border-radius:12px; padding:14px 16px; background:var(--surface-1-faint); min-width:0; }
+        #tab-backlog .bkl-panel h3 { font-size:13px; font-weight:700; color:var(--app-text); margin:0 0 10px; }
+        #tab-backlog .bkl-control { display:grid; gap:9px; }
+        #tab-backlog .bkl-ctl { display:grid; grid-template-columns:minmax(0, 1fr) auto; gap:4px 10px; align-items:center; font-size:12.5px; color:var(--slate-300); }
+        #tab-backlog .bkl-ctl b { color:var(--app-text); font-variant-numeric:tabular-nums; }
+        #tab-backlog .bkl-ctl button { font:inherit; color:inherit; background:none; border:0; padding:0; text-align:left; cursor:pointer; text-decoration:underline; text-decoration-color:color-mix(in srgb, currentColor 35%, transparent); text-underline-offset:3px; }
+        #tab-backlog .bkl-pista { grid-column:1 / -1; height:6px; border-radius:99px; background:var(--surface-1); overflow:hidden; }
+        #tab-backlog .bkl-pista i { display:block; height:100%; border-radius:99px; background:rgb(var(--ok-rgb)); }
+        #tab-backlog .bkl-motivos { display:grid; gap:6px; }
+        #tab-backlog .bkl-mot { display:grid; grid-template-columns:minmax(0, 15.5em) minmax(0, 1fr) 2.6em; gap:10px; align-items:center; font:inherit; font-size:12.5px; color:var(--slate-300); background:none; border:0; padding:3px 4px; border-radius:6px; cursor:pointer; text-align:left; }
+        #tab-backlog .bkl-mot:hover, #tab-backlog .bkl-mot.activo { background:var(--surface-1); color:var(--app-text); }
+        #tab-backlog .bkl-mot:focus-visible { outline:2px solid var(--focus-ring); outline-offset:1px; }
+        #tab-backlog .bkl-mot .nom { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+        #tab-backlog .bkl-mot .barra { height:10px; border-radius:3px; background:var(--surface-1); overflow:hidden; display:flex; }
+        #tab-backlog .bkl-mot .barra i { display:block; height:100%; background:rgb(var(--info-rgb)); }
+        #tab-backlog .bkl-mot .barra i.sug { background:repeating-linear-gradient(135deg, rgba(var(--info-rgb) / .55) 0 3px, rgba(var(--info-rgb) / .22) 3px 6px); }
+        #tab-backlog .bkl-mot .n { text-align:right; font-weight:600; color:var(--app-text); font-variant-numeric:tabular-nums; }
+        #tab-backlog .bkl-leyenda { display:flex; gap:14px; flex-wrap:wrap; font-size:11px; color:var(--slate-400); margin-top:10px; }
+        #tab-backlog .bkl-leyenda i { display:inline-block; width:10px; height:10px; border-radius:2px; margin-right:5px; vertical-align:-1px; background:rgb(var(--info-rgb)); }
+        #tab-backlog .bkl-leyenda i.sug { background:repeating-linear-gradient(135deg, rgba(var(--info-rgb) / .55) 0 3px, rgba(var(--info-rgb) / .22) 3px 6px); }
+
+        /* Filtros */
+        #tab-backlog .bkl-filtros { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin:4px 0 12px; }
+        #tab-backlog .bkl-seg { display:inline-flex; border:1px solid var(--field-border); border-radius:9px; overflow:hidden; }
+        #tab-backlog .bkl-seg button { font:inherit; font-size:12.5px; height:34px; padding:0 12px; background:var(--surface-1); color:var(--slate-300); border:0; cursor:pointer; }
+        #tab-backlog .bkl-seg button + button { border-left:1px solid var(--field-border); }
+        #tab-backlog .bkl-seg button[aria-pressed="true"] { background:var(--nav-pill-bg); color:var(--app-text); font-weight:600; }
+        #tab-backlog .bkl-campo { font:inherit; font-size:12.5px; height:34px; padding:0 10px; border-radius:9px; border:1px solid var(--field-border); background:var(--field-bg); color:var(--field-text); }
+        #tab-backlog .bkl-buscar { flex:1 1 200px; min-width:160px; }
+        #tab-backlog .bkl-toggle { font:inherit; font-size:12px; height:34px; padding:0 11px; border-radius:999px; border:1px solid var(--field-border); background:transparent; color:var(--slate-300); cursor:pointer; white-space:nowrap; }
+        #tab-backlog .bkl-toggle[aria-pressed="true"] { border-color:var(--accent); background:rgba(var(--accent-rgb) / .14); color:var(--app-text); font-weight:600; }
+        #tab-backlog .bkl-seg button:focus-visible, #tab-backlog .bkl-campo:focus-visible, #tab-backlog .bkl-toggle:focus-visible { outline:2px solid var(--focus-ring); outline-offset:2px; }
+        #tab-backlog .bkl-conteo { font-size:12px; color:var(--slate-400); margin:0 0 8px; }
+        #tab-backlog .bkl-conteo button { font:inherit; color:var(--accent); background:none; border:0; padding:0; cursor:pointer; text-decoration:underline; text-underline-offset:3px; }
+
+        /* Etiquetas adhesivas */
+        #tab-backlog .bkl-sticker { position:relative; display:inline-flex; align-items:center; font-size:10px; font-weight:800; letter-spacing:.07em; text-transform:uppercase; line-height:1; padding:5px 9px 5px 8px; border-radius:3px 3px 3px 3px; white-space:nowrap; box-shadow:0 1px 0 rgba(0,0,0,.08), 0 2px 5px -2px rgba(0,0,0,.35); }
+        #tab-backlog .bkl-sticker::after { content:""; position:absolute; right:0; bottom:0; width:7px; height:7px; background:linear-gradient(315deg, var(--card-bg-1) 50%, rgba(0,0,0,.22) 50%); border-top-left-radius:2px; }
+        #tab-backlog .bkl-sticker.nuevo { background:rgb(var(--copper-rgb)); color:#fff; transform:rotate(-2deg); }
+        #tab-backlog .bkl-sticker.prog { background:#f3d36b; color:#3b2f06; transform:rotate(1.2deg); }
+        html[data-theme="light"] #tab-backlog .bkl-sticker.prog { background:#f6dc7c; }
+        #tab-backlog .bkl-tipo { display:inline-flex; align-items:center; font-size:11px; font-weight:600; padding:2px 8px; border-radius:999px; border:1px solid var(--card-border-highlight); color:var(--slate-300); white-space:nowrap; }
+        #tab-backlog .bkl-tipo.ing { color:rgb(var(--info-rgb)); border-color:rgba(var(--info-rgb) / .4); }
+        #tab-backlog .bkl-tipo.sol { color:rgb(var(--plum-rgb)); border-color:rgba(var(--plum-rgb) / .4); }
+        #tab-backlog .bkl-tipo.sus { color:rgb(var(--danger-rgb)); border-color:rgba(var(--danger-rgb) / .4); }
+
+        /* Lista */
+        #tab-backlog .bkl-lista { display:grid; gap:8px; }
+        #tab-backlog .bkl-item { border:1px solid var(--card-border-highlight); border-radius:12px; background:var(--surface-1-faint); }
+        #tab-backlog .bkl-item.es-nuevo { border-left:3px solid rgb(var(--copper-rgb)); }
+        #tab-backlog .bkl-item.abierto { border-color:rgba(var(--accent-rgb) / .55); background:var(--surface-1-soft); }
+        #tab-backlog .bkl-fila { display:grid; grid-template-columns:2.2em minmax(0, 1.5fr) minmax(0, 1.6fr) auto; gap:6px 14px; align-items:start; width:100%; font:inherit; color:inherit; text-align:left; background:none; border:0; padding:12px 14px; cursor:pointer; border-radius:12px; }
+        #tab-backlog .bkl-fila:focus-visible { outline:2px solid var(--focus-ring); outline-offset:-2px; }
+        #tab-backlog .bkl-orden { font-size:12px; font-weight:700; color:var(--slate-400); font-variant-numeric:tabular-nums; padding-top:2px; }
+        #tab-backlog .bkl-etiquetas { display:flex; flex-wrap:wrap; gap:6px 8px; align-items:center; margin-bottom:6px; }
+        #tab-backlog .bkl-prod { font-size:13.5px; font-weight:600; color:var(--app-text); line-height:1.3; }
+        #tab-backlog .bkl-meta { font-size:11.5px; color:var(--slate-400); margin-top:3px; line-height:1.45; }
+        #tab-backlog .bkl-meta b { color:var(--slate-300); font-weight:600; }
+        #tab-backlog .bkl-porque { font-size:12.5px; line-height:1.45; color:var(--slate-300); min-width:0; }
+        #tab-backlog .bkl-porque .mot { display:inline-block; font-weight:600; color:var(--app-text); margin-right:4px; }
+        #tab-backlog .bkl-porque .sug { display:inline-block; font-size:10.5px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:var(--slate-500); border:1px dashed var(--slate-500); border-radius:4px; padding:1px 5px; margin-right:6px; }
+        #tab-backlog .bkl-porque .txt { display:block; color:var(--slate-300); margin-top:2px; overflow-wrap:anywhere; }
+        #tab-backlog .bkl-porque .pie { display:block; font-size:11px; color:var(--slate-500); margin-top:3px; }
+        #tab-backlog .bkl-lado { display:flex; flex-direction:column; align-items:flex-end; gap:6px; text-align:right; }
+        #tab-backlog .bkl-seg-est { font-size:11px; font-weight:600; padding:2px 8px; border-radius:999px; background:var(--surface-1); color:var(--slate-300); white-space:nowrap; }
+        #tab-backlog .bkl-seg-est.curso { background:rgba(var(--info-rgb) / .16); color:rgb(var(--info-rgb)); }
+        #tab-backlog .bkl-seg-est.bloq { background:rgba(var(--danger-rgb) / .16); color:rgb(var(--danger-rgb)); }
+        #tab-backlog .bkl-comp { font-size:11px; color:var(--slate-400); white-space:nowrap; }
+        #tab-backlog .bkl-comp.vencido { color:rgb(var(--danger-rgb)); font-weight:700; }
+        #tab-backlog .bkl-anotar { font-size:11.5px; font-weight:600; color:var(--accent); white-space:nowrap; }
+        #tab-backlog .bkl-mas { display:flex; justify-content:center; margin-top:10px; }
+
+        /* Nota inteligente */
+        #tab-backlog .bkl-nota { border-top:1px solid var(--card-border-highlight); padding:14px 16px 16px; display:grid; grid-template-columns:minmax(0, 1.4fr) minmax(0, 1fr); gap:16px 22px; }
+        #tab-backlog .bkl-nota h4 { font-size:11px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--slate-400); margin:0 0 6px; }
+        #tab-backlog .bkl-nota label.lbl { display:block; font-size:11.5px; font-weight:600; color:var(--slate-300); margin:12px 0 5px; }
+        #tab-backlog .bkl-nota label.lbl:first-of-type { margin-top:0; }
+        #tab-backlog .bkl-chips { display:flex; flex-wrap:wrap; gap:6px; }
+        #tab-backlog .bkl-chip { font:inherit; font-size:12px; padding:5px 10px; border-radius:999px; border:1px solid var(--field-border); background:var(--surface-1); color:var(--slate-300); cursor:pointer; }
+        #tab-backlog .bkl-chip[aria-pressed="true"] { border-color:var(--accent); background:rgba(var(--accent-rgb) / .18); color:var(--app-text); font-weight:600; }
+        #tab-backlog .bkl-chip.sugerido { border-style:dashed; border-color:rgba(var(--info-rgb) / .7); }
+        #tab-backlog .bkl-chip:focus-visible { outline:2px solid var(--focus-ring); outline-offset:2px; }
+        #tab-backlog .bkl-nota textarea, #tab-backlog .bkl-nota input[type="text"], #tab-backlog .bkl-nota input[type="date"], #tab-backlog .bkl-nota select { width:100%; font:inherit; font-size:12.5px; padding:8px 10px; border-radius:9px; border:1px solid var(--field-border); background:var(--field-bg); color:var(--field-text); }
+        #tab-backlog .bkl-nota textarea { min-height:72px; resize:vertical; line-height:1.45; }
+        #tab-backlog .bkl-nota :is(textarea, input, select):focus-visible { outline:2px solid var(--focus-ring); outline-offset:1px; }
+        #tab-backlog .bkl-dos-campos { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+        #tab-backlog .bkl-detecto { font-size:12px; color:var(--slate-300); margin-top:7px; min-height:1.2em; }
+        #tab-backlog .bkl-detecto button { font:inherit; font-size:12px; font-weight:600; color:var(--accent); background:none; border:0; padding:0; cursor:pointer; text-decoration:underline; text-underline-offset:3px; }
+        #tab-backlog .bkl-guardar { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-top:14px; }
+        #tab-backlog .bkl-guardar .est { font-size:12px; color:var(--slate-400); }
+        #tab-backlog .bkl-pistas { font-size:12px; line-height:1.5; color:var(--slate-300); display:grid; gap:7px; }
+        #tab-backlog .bkl-pistas p { margin:0; }
+        #tab-backlog .bkl-pistas b { color:var(--app-text); font-weight:600; }
+        #tab-backlog .bkl-obs { font-size:11.5px; color:var(--slate-400); background:var(--surface-1); border-radius:8px; padding:7px 9px; overflow-wrap:anywhere; }
+        #tab-backlog .bkl-hist { list-style:none; margin:0; padding:0; display:grid; gap:6px; font-size:11.5px; color:var(--slate-400); }
+        #tab-backlog .bkl-hist li { padding-left:12px; border-left:2px solid var(--card-border-highlight); }
+        #tab-backlog .bkl-hist b { color:var(--slate-300); font-weight:600; }
+
+        @media (max-width: 900px) {
+            #tab-backlog .bkl-dos, #tab-backlog .bkl-nota { grid-template-columns:minmax(0, 1fr); }
+            #tab-backlog .bkl-fila { grid-template-columns:2em minmax(0, 1fr) auto; }
+            #tab-backlog .bkl-porque { grid-column:2 / -1; grid-row:2; }
+        }
+        @media (max-width: 640px) {
+            #tab-backlog .bkl-card { padding:16px; }
+            #tab-backlog .bkl-ec { grid-template-columns:repeat(2, minmax(0, 1fr)); }
+            #tab-backlog .bkl-ec-planta { grid-column:1 / -1; }
+            #tab-backlog .bkl-ec-caja .op { display:none; }
+            #tab-backlog .bkl-fila { grid-template-columns:minmax(0, 1fr); padding:12px; }
+            #tab-backlog .bkl-orden { display:none; }
+            #tab-backlog .bkl-porque { grid-column:auto; grid-row:auto; }
+            #tab-backlog .bkl-lado { flex-direction:row; flex-wrap:wrap; align-items:center; justify-content:flex-start; text-align:left; }
+            #tab-backlog .bkl-dos-campos { grid-template-columns:minmax(0, 1fr); }
+            #tab-backlog .bkl-mot { grid-template-columns:minmax(0, 1fr) 5em 2.4em; }
+        }
+        @media (prefers-reduced-motion: reduce) { #tab-backlog .bkl-sticker { transform:none; } }
+    </style>
     <!-- ==================== TAB 5: ACUERDOS ==================== -->
     <!-- Acuerdos de configuración de RMD (reemplazan los Word «TODAS LAS ETAPAS» y
          «CAMBIOS DE CALIDAD DE OPERACIONES»). Cada acuerdo se guarda en Supabase
@@ -3511,7 +3702,8 @@ alter publication supabase_realtime add table public.rmd_dashboard_kv;`;
             val_estatus_etapa: 'pares', val_responsables_etapa: 'pares',
             val_manual_autorizados: 'lista', val_manual_autorizados_meta: 'objeto',
             val_manual_autorizados_forecast: 'lista', val_manual_autorizados_forecast_meta: 'objeto',
-            val_fecha_inicio_manual: 'objeto'
+            val_fecha_inicio_manual: 'objeto',
+            val_backlog_notas: 'objeto'
         };
         function compartidoAMapa(formato, valor) {
             const m = new Map();
@@ -3611,6 +3803,7 @@ alter publication supabase_realtime add table public.rmd_dashboard_kv;`;
                     case 'val_manual_autorizados_forecast': ponSet(manualAutorizadosForecast, k, v); break;
                     case 'val_manual_autorizados_forecast_meta': ponMeta(manualAutorizadosForecastMeta, k, v); break;
                     case 'val_fecha_inicio_manual': pon(fechasInicioManual, k, /^\d{4}-\d{2}-\d{2}$/.test(String(v || '')) ? v : undefined); break;
+                    case 'val_backlog_notas': BacklogRmd.recargarNotas(); break;
                 }
             });
             refrescarVistasPronto();
@@ -3740,7 +3933,8 @@ alter publication supabase_realtime add table public.rmd_dashboard_kv;`;
             // aquí (recargar a media fusión borraría de la memoria lo que se acaba de elegir).
             if (CLAVES_COMPARTIDAS[key] && colasCompartidas.has(key)) return;
             // La foto diaria la guarda otra persona: no hace falta recalcular aquí.
-            if (!key.startsWith('acuerdo:') && key !== 'ind_fotos_flujo') StatusRmd.recargarPronto();
+            if (key === 'val_backlog_notas') { BacklogRmd.recargarNotas(); return; }
+            if (!key.startsWith('acuerdo:') && key !== 'ind_fotos_flujo') { StatusRmd.recargarPronto(); BacklogRmd.recargarPronto(); }
             if (key.startsWith('acuerdo:')) {
                 Acuerdos.recargarPronto();
             } else if (key === 'dashboard_products_rmd') {
@@ -4379,9 +4573,9 @@ alter publication supabase_realtime add table public.rmd_dashboard_kv;`;
         // ==================== TAB SWITCHING ====================
         let tabSwitchTimeline = null;
         const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-        const TAB_ORDER = ['produccion', 'status', 'caract', 'forecast', 'rmd', 'acuerdos'];
+        const TAB_ORDER = ['produccion', 'status', 'backlog', 'caract', 'forecast', 'rmd', 'acuerdos'];
 // índice de cada pestaña dentro de la lista visual del gooey nav (mismo orden que los <li> de #gooeyNavList)
-const TAB_TO_GOOEY_INDEX = { produccion: 0, status: 1, caract: 2, forecast: 3, rmd: 4, acuerdos: 5 };
+const TAB_TO_GOOEY_INDEX = { produccion: 0, status: 1, backlog: 2, caract: 3, forecast: 4, rmd: 5, acuerdos: 6 };
 let gooeyActiveIndex = 0; // arranca en "produccion" (pestaña activa por defecto), el primer <li> del nav
 
         function switchTab(tab) {
@@ -4403,6 +4597,7 @@ let gooeyActiveIndex = 0; // arranca en "produccion" (pestaña activa por defect
                 forecast: 'radial-gradient(circle, rgba(244, 63, 94, 0.15) 0%, rgba(249, 115, 22, 0.1) 40%, rgba(0, 0, 0, 0) 70%)',
                 acuerdos: 'radial-gradient(circle, rgba(160, 123, 187, 0.15) 0%, rgba(224, 168, 156, 0.1) 40%, rgba(0, 0, 0, 0) 70%)',
                 status: 'radial-gradient(circle, rgba(106, 92, 188, 0.16) 0%, rgba(224, 136, 58, 0.1) 40%, rgba(0, 0, 0, 0) 70%)',
+                backlog: 'radial-gradient(circle, rgba(217, 130, 79, 0.16) 0%, rgba(106, 92, 188, 0.1) 40%, rgba(0, 0, 0, 0) 70%)',
                 caract: 'radial-gradient(circle, rgba(160, 123, 187, 0.16) 0%, rgba(16, 185, 129, 0.1) 40%, rgba(0, 0, 0, 0) 70%)'
             };
             const targetGlow = glowByTab[tab] || glowByTab.produccion;
@@ -4423,6 +4618,8 @@ let gooeyActiveIndex = 0; // arranca en "produccion" (pestaña activa por defect
                     Acuerdos.alEntrar();
                 } else if (tab === 'status') {
                     StatusRmd.alEntrar();
+                } else if (tab === 'backlog') {
+                    BacklogRmd.alEntrar();
                 } else if (tab === 'caract') {
                     Caracterizacion.alEntrar();
                 }
@@ -10844,6 +11041,7 @@ const TOUR_STEPS = [
 
     // ---- Pestaña Indicadores (antes Status RMD) ----
     { tab: 'status', selector: '#tab-status .sts-card', title: 'Indicadores', text: 'Los indicadores de RMD de Programa y Caracterizaciones por planta, como el PowerPoint del status: solicitados, backlog y autorizados del mes (del mes y del backlog), y los pendientes por etapa y responsable. «Descargar PowerPoint» baja la plantilla ya llena.' },
+    { tab: 'backlog', selector: '#tab-backlog .bkl-card', title: 'Backlog', text: 'Los RMD que siguen pendientes (Ingresados, Solicitudes y Suspendidos sin versión nueva), con la etiqueta NUEVO para lo que entró este mes y PROGRAMA DE PRODUCCIÓN para lo que Producción necesita. Cada pendiente se anota con por qué sigue pendiente, quién lo mueve y para cuándo.' },
 
     // ---- Pestaña Acuerdos ----
     { tab: 'acuerdos', selector: '#tab-acuerdos .acu-card', title: 'Acuerdos', text: 'Los acuerdos de configuración de RMD (qué paso va en qué sección y etapa), por planta o para ambas. Lo que anota uno lo ven todos, y se pueden exportar a Excel e importar en otra PC.' },
@@ -10929,6 +11127,7 @@ if (activeLi && container && pillEl) {
         forecast: 'radial-gradient(circle, rgba(244, 63, 94, 0.15) 0%, rgba(249, 115, 22, 0.1) 40%, rgba(0, 0, 0, 0) 70%)',
         acuerdos: 'radial-gradient(circle, rgba(160, 123, 187, 0.15) 0%, rgba(224, 168, 156, 0.1) 40%, rgba(0, 0, 0, 0) 70%)',
                 status: 'radial-gradient(circle, rgba(106, 92, 188, 0.16) 0%, rgba(224, 136, 58, 0.1) 40%, rgba(0, 0, 0, 0) 70%)',
+                backlog: 'radial-gradient(circle, rgba(217, 130, 79, 0.16) 0%, rgba(106, 92, 188, 0.1) 40%, rgba(0, 0, 0, 0) 70%)',
                 caract: 'radial-gradient(circle, rgba(160, 123, 187, 0.16) 0%, rgba(16, 185, 129, 0.1) 40%, rgba(0, 0, 0, 0) 70%)'
     };
     if (glowOrb) glowOrb.style.background = glowByTab[tab] || glowByTab.produccion;
@@ -10945,6 +11144,8 @@ if (activeLi && container && pillEl) {
         Acuerdos.alEntrar();
     } else if (tab === 'status') {
         StatusRmd.alEntrar();
+    } else if (tab === 'backlog') {
+        BacklogRmd.alEntrar();
     } else if (tab === 'caract') {
         Caracterizacion.alEntrar();
     }
@@ -15956,7 +16157,7 @@ async function maybeAutoStartTour() {
 
         return {
             alEntrar: () => actualizar(), actualizar, recargarPronto, pintarAcumuladoProduccion, descargarPpt, indicadoresDesdeFilas, caracterizacionesDesdeFilas, plantaDe,
-            abrirDetalle, exportarTodo, exportarBacklogMes, _datosBacklogMes: datosBacklogMes, _libroBacklogMes: libroBacklogMes, _construirDetalle: construirDetalle,
+            abrirDetalle, exportarTodo, exportarBacklogMes, _datosBacklogMes: datosBacklogMes, _calcularRuta1: calcularRuta1, _libroBacklogMes: libroBacklogMes, _construirDetalle: construirDetalle,
             setEstatus: (id, valor) => guardarEstatus(id, { e: valor }),
             setResponsable: (id, valor) => guardarEstatus(id, { r: valor }),
             filtrar: (campo, valor) => { vista[campo] = valor; if (ultimo) pintar(); },
@@ -16286,6 +16487,557 @@ async function maybeAutoStartTour() {
             buscar: (q) => { vista.busqueda = q || ''; pintar(); },
             limpiar: () => { Object.assign(fx, { etapa: '', sap: '', edad: '', estatus: '', aut: '', area: '' }); Object.assign(vista, { planta: '', origen: '', programa: '' }); pintar(); },
             _filas: () => filasUltimas
+        };
+    })();
+    </script>
+    <script>
+    // ================= Backlog de RMD (pedido de Carlos, 14/11/2026) =================
+    // Pestaña BACKLOG: los RMD que siguen pendientes, para atacarlos en orden y que se entienda de un vistazo (el lector es
+    // David). Qué cuenta (las mismas reglas del Excel «Backlog del mes», StatusRmd._datosBacklogMes, con corte hoy):
+    //  - Ingresados (por autorizar) y Solicitados (por ingresar): el mes en que cuentan es el de su registro / solicitud, o el
+    //    de la suspensión de su versión anterior si esa sigue suspendida desde un mes anterior.
+    //  - Suspendidos de hoy en SAP, última versión de su master, sin versión nueva ya iniciada y que no son INACTIVO: cuentan en
+    //    el mes de su suspensión.
+    // Backlog = lo que venía de meses anteriores (sigue pendiente) + lo que entró este mes (etiqueta NUEVO). La ecuación de
+    // arriba suma también los autorizados del mes: venía + nuevos − atendidos = pendientes hoy.
+    // PROGRAMA DE PRODUCCIÓN: el RMD (o la solicitud) es el pendiente de una etapa de un producto del Programa de Producción
+    // cargado (Ruta 1 de INDICADORES), o tiene el mismo código por defecto y etapa.
+    // Notas: val_backlog_notas (clave compartida, formato objeto): { «P1|R<código>» o «P1|S<solicitud>»: { m: motivo,
+    // r: responsable, a: próxima acción, c: compromiso AAAA-MM-DD, s: seguimiento, t: nota, u: quién, f: ISO, h: [[ISO, quién,
+    // qué cambió]] } }. La nota sigue al RMD aunque cambie de mes o de estado. El motivo «sugerido» sale de SAP (estado,
+    // Observación, flujo de Producción), del Estatus elegido en Producción y de la fecha de suspensión, y no se guarda hasta
+    // que alguien lo confirma.
+    const BacklogRmd = (() => {
+        const CLAVE_NOTAS = 'val_backlog_notas';
+        const CLAVE_AUTOR = 'bkl_autor'; // localStorage: quién anota en este navegador (solo comodidad)
+        const PLANTA_NOMBRE = { P1: 'ATE', P2: 'LIMA' };
+        const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'setiembre', 'octubre', 'noviembre', 'diciembre'];
+        const MOTIVOS = [
+            { id: 'BORRADOR', txt: 'Falta borrador de Producción', resp: 'PRO' },
+            { id: 'VERSION', txt: 'Falta versión nueva', resp: 'PRO' },
+            { id: 'INGRESAR', txt: 'Por ingresar en SAP', resp: 'DOC' },
+            { id: 'REVISION', txt: 'En revisión de DOC', resp: 'DOC' },
+            { id: 'FLUJO', txt: 'Aprobación en SAP (jefe / gerente)', resp: 'PRO' },
+            { id: 'CC', txt: 'Control de cambio', resp: 'ASC' },
+            { id: 'CALIDAD', txt: 'Esperando información de Calidad', resp: 'CAL' },
+            { id: 'SAP', txt: 'Receta o dato maestro en SAP', resp: 'TI' },
+            { id: 'MASIVO', txt: 'Cambio masivo pendiente', resp: 'DOC' },
+            { id: 'DEMANDA', txt: 'Sin demanda: evaluar INACTIVO', resp: 'DOC' },
+            { id: 'OTRO', txt: 'Otro', resp: '' }
+        ];
+        const MOTIVO = Object.fromEntries(MOTIVOS.map((m) => [m.id, m]));
+        const RESPONSABLES = ['DOC', 'PRO', 'ASC', 'CAL', 'TI'];
+        const SEGUIMIENTO = { '': 'Por atacar', curso: 'En curso', bloq: 'Bloqueado' };
+        // Palabras de la nota que apuntan a un motivo (para proponerlo mientras se escribe).
+        const PALABRAS = [
+            [/\bmasiv/i, 'MASIVO'], [/\bc\.?\s?c\b|control\s+de\s+cambio/i, 'CC'], [/borrador|producci[oó]n\s+(no|a[uú]n)|falta.*producci[oó]n/i, 'BORRADOR'],
+            [/jefe|gerent|aprobaci[oó]n|aprobar/i, 'FLUJO'], [/receta|dato\s+maestro|lista\s+de\s+materiales|\bti\b|sistemas/i, 'SAP'],
+            [/forecast|demanda|no\s+se\s+(fabrica|produce)|inactiv|descontinu/i, 'DEMANDA'], [/calidad|especificaci|m[eé]todo|ensayo|\bcal\b/i, 'CALIDAD'],
+            [/versi[oó]n\s+nueva|nueva\s+versi[oó]n|actualizar/i, 'VERSION'], [/revis/i, 'REVISION'], [/ingres/i, 'INGRESAR']
+        ];
+        const RX_JEFE = /\bPEND(?:IENTE|\.)?\s*(?:DE\s+)?(?:APROB(?:ACI[OÓ]N)?\s+(?:DEL?\s+)?)?(?:JEF|GER)/i;
+        const RX_CC = /\bPEND(?:IENTE|\.)?\s*(?:DE\s+)?(?:APROB(?:ACI[OÓ]N)?\s+(?:DEL?\s+)?)?(?:CC\b|C\.C|CALIDAD|CONTROL\s+DE\s+CAMBIO)/i;
+        const ESTATUS_A_MOTIVO = { 'BORRADOR': 'BORRADOR', 'INGRESAR': 'INGRESAR', 'FLUJO SAP': 'FLUJO', 'POR REVISIÓN': 'REVISION', 'POR REVISION': 'REVISION', 'CONTROL DE CAMBIO': 'CC', 'PEND CC': 'CC' };
+        const POR_PAGINA = 60;
+
+        let modelo = null;          // { corte, items, aut, sinRmdProg }
+        let notas = {};
+        let calculando = null;
+        let visitado = false;
+        let abierto = '';           // clave del pendiente con la nota abierta
+        let recargaTimer = null;
+        const vista = { planta: '', tipo: '', nuevo: false, arrastre: false, prog: false, sinNota: false, vencidos: false, motivo: '', q: '', orden: 'sugerido', mostrar: POR_PAGINA };
+
+        const esc = (t) => String(t === null || t === undefined ? '' : t).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+        const hoy = () => dayjs().startOf('day');
+        const fmt = (d) => (d && d.isValid && d.isValid() ? d.format('DD/MM/YYYY') : '');
+        const nombreMes = (m) => { if (m === 'sin fecha') return 'antes de 2026'; if (!/^\d{4}-\d{2}$/.test(m || '')) return m || 'antes de 2026'; return `${MESES[Number(m.slice(5)) - 1]} ${m.slice(0, 4)}`; };
+        const plural = (n, a, b) => `${n} ${n === 1 ? a : b}`;
+        const leerAutor = () => { try { return localStorage.getItem(CLAVE_AUTOR) || ''; } catch (e) { return ''; } };
+        const ponerAutor = (v) => { try { localStorage.setItem(CLAVE_AUTOR, v || ''); } catch (e) { /* sin almacenamiento */ } };
+        const etapaDe = (v) => mapEtapaAFija(normalizeEtapa(v.etapa || '')) || v.etapa || '';
+        const claveDe = (v) => `${v.planta}|${v.codigo ? 'R' + String(v.codigo).trim() : 'S' + String(v.sol || '').trim()}`;
+        const notaDe = (it) => notas[it.k] || (it.kSol && notas[it.kSol]) || null;
+
+        // ---------- Programa de Producción (Ruta 1) ----------
+        async function indicePrograma() {
+            const idx = new Map(), sinRmd = { P1: 0, P2: 0 };
+            let r1 = null;
+            try { r1 = await StatusRmd._calcularRuta1(); } catch (err) { console.warn('Backlog: sin Programa de Producción', err); }
+            if (!r1 || r1.error) return { idx, sinRmd, error: r1 && r1.error };
+            ['P1', 'P2'].forEach((pl) => {
+                ((r1[pl] && r1[pl].items) || []).forEach((it) => {
+                    if (!it.d || !Array.isArray(it.d.candidatos)) return;
+                    const inicio = it.inicio ? dayjs(it.inicio) : null;
+                    const info = { producto: it.producto || '', etapa: it.etapa || '', estatus: it.estatus || '', resp: it.resp || '', inicio: inicio && inicio.isValid() ? inicio : null,
+                        productos: (it.productos || []).map((p) => p.material).filter(Boolean) };
+                    const pend = it.d.candidatos.filter((c) => c.pendiente);
+                    if (pend.length && pend.every((c) => c.sinRmd)) sinRmd[pl]++;
+                    pend.forEach((c) => {
+                        const ks = [];
+                        if (c.rmd) ks.push(`${pl}|R${String(c.rmd).trim()}`);
+                        if (c.sol) ks.push(`${pl}|S${String(c.sol).trim()}`);
+                        if (c.material && it.etapa) ks.push(`${pl}|M${normalizeMaterialCode(c.material)}|${it.etapa}`);
+                        ks.forEach((k) => { const prev = idx.get(k); if (!prev || (info.inicio && (!prev.inicio || info.inicio.isBefore(prev.inicio)))) idx.set(k, info); });
+                    });
+                });
+            });
+            return { idx, sinRmd };
+        }
+
+        // ---------- Motivo sugerido ----------
+        function sugerir(it) {
+            const v = it.v, obs = v.obs || '';
+            if (it.prog && it.prog.estatus && ESTATUS_A_MOTIVO[String(it.prog.estatus).toUpperCase()]) {
+                const m = ESTATUS_A_MOTIVO[String(it.prog.estatus).toUpperCase()];
+                return { m, por: `Estatus «${it.prog.estatus}» elegido en Producción.` };
+            }
+            if (it.tipo === 'Ingresado') {
+                if (/ENVIAD/i.test(v.prodEstado || '') || RX_JEFE.test(obs)) return { m: 'FLUJO', por: 'En SAP está en el flujo de Producción sin aprobar (jefe / gerente).' };
+                if (RX_CC.test(obs) || v.fAutSap) return { m: 'CC', por: v.fAutSap ? 'Ya estuvo autorizado y se reabrió: va por control de cambio.' : 'La Observación de SAP dice PEND CC.' };
+                return { m: 'REVISION', por: 'Ingresado en SAP: falta la revisión y autorización de DOC.' };
+            }
+            if (it.tipo === 'Solicitado') return { m: 'INGRESAR', por: 'La solicitud está abierta y el RMD aún no se ingresa.' };
+            if (/MASIV/i.test(obs)) return { m: 'MASIVO', por: 'La Observación de SAP menciona un cambio masivo.' };
+            if (it.prog) return { m: 'VERSION', por: 'Está en el Programa de Producción y su RMD sigue suspendido: hace falta la versión nueva.' };
+            return { m: 'VERSION', por: 'Suspendido sin versión nueva.' };
+        }
+
+        // ---------- Orden sugerido ----------
+        // Primero lo que Producción necesita (por fecha de inicio), luego los compromisos vencidos, lo bloqueado y lo más cercano a
+        // terminar (Ingresado → Solicitado → Suspendido); a igualdad, lo más antiguo.
+        function puntaje(it) {
+            const n = notaDe(it), h = hoy();
+            let p = 0, por = '';
+            if (it.prog) {
+                const dias = it.prog.inicio ? it.prog.inicio.diff(h, 'day') : 30;
+                p += 1000 - Math.max(-30, Math.min(dias, 60)) * 5;
+                por = it.prog.inicio ? `Está en el Programa de producción (inicia ${fmt(it.prog.inicio)}).` : 'Está en el Programa de producción.';
+            }
+            const c = n && n.c ? dayjs(n.c + 'T00:00:00') : null;
+            if (c && c.isValid() && c.isBefore(h)) { p += 500; por = por || `El compromiso venció el ${fmt(c)}.`; }
+            else if (c && c.isValid() && c.diff(h, 'day') <= 3) { p += 200; por = por || `El compromiso vence el ${fmt(c)}.`; }
+            if (n && n.s === 'bloq') { p += 80; por = por || 'Está bloqueado: hay que destrabarlo.'; }
+            p += it.tipo === 'Ingresado' ? 60 : it.tipo === 'Solicitado' ? 30 : 0;
+            p += Math.min(it.dias || 0, 730) / 20;
+            if (!por) por = it.tipo === 'Ingresado' ? 'Ya está en SAP: es el que menos falta para autorizar.' : it.tipo === 'Solicitado' ? 'Solicitud abierta: falta ingresarla.' : 'Suspendido sin versión nueva.';
+            return { p, por };
+        }
+
+        // ---------- Cálculo ----------
+        async function esperarDatos() {
+            for (let i = 0; i < 120 && !window.__statusRmdAppLista; i++) await new Promise((r) => setTimeout(r, 250));
+        }
+        async function calcular() {
+            await esperarDatos();
+            const filas = Array.isArray(rmdAutorizadosDetalle) ? rmdAutorizadosDetalle : [];
+            if (!filas.some((f) => f.planta)) return { vacio: true };
+            let traz = trazabilidadSap;
+            if (!traz) { try { traz = await storeGet('val_rmd_trazabilidad'); } catch (err) { traz = null; } }
+            const corte = hoy();
+            const [bk, prog, guardadas] = await Promise.all([
+                Promise.resolve(StatusRmd._datosBacklogMes(filas, traz, corte, rmdPrecisoDatos)),
+                indicePrograma(),
+                storeGet(CLAVE_NOTAS).catch(() => null)
+            ]);
+            notas = guardadas && typeof guardadas === 'object' && !Array.isArray(guardadas) ? guardadas : {};
+            const items = bk.pend.map((x) => {
+                const v = x.v, et = etapaDe(v);
+                const base = x.tipo === 'Suspendido' ? x.fS : x.tipo === 'Solicitado' ? (v.fSol || v.fReg) : v.fReg;
+                const kSol = v.codigo && v.sol ? `${v.planta}|S${String(v.sol).trim()}` : '';
+                const cod = normalizeMaterialCode(v.codDef);
+                const pr = prog.idx.get(claveDe(v)) || (kSol && prog.idx.get(kSol)) || (cod && et ? prog.idx.get(`${v.planta}|M${cod}|${et}`) : null) || null;
+                return { k: claveDe(v), kSol, v, tipo: x.tipo, m: x.m, nuevo: x.m === bk.mes, etapa: et, fS: x.fS || null, base: base || null,
+                    dias: base ? corte.diff(base, 'day') : null, porque: x.porque, prio: x.prio || '', prog: pr };
+            });
+            items.forEach((it) => { it.sug = sugerir(it); });
+            return { corte, mes: bk.mes, items, aut: bk.aut, sinRmdProg: prog.sinRmd, progError: prog.error || '' };
+        }
+
+        // ---------- Pintar ----------
+        function motivoDe(it) { const n = notaDe(it); return n && n.m ? { m: n.m, confirmado: true } : { m: it.sug.m, confirmado: false }; }
+        function vencido(n) { if (!n || !n.c) return false; const c = dayjs(n.c + 'T00:00:00'); return c.isValid() && c.isBefore(hoy()); }
+        function pasaFiltros(it, sinMotivo) {
+            if (vista.planta && it.v.planta !== vista.planta) return false;
+            if (vista.tipo && it.tipo !== vista.tipo) return false;
+            if (vista.nuevo && !it.nuevo) return false;
+            if (vista.arrastre && it.nuevo) return false;
+            if (vista.prog && !it.prog) return false;
+            const n = notaDe(it);
+            if (vista.sinNota && n && n.m) return false;
+            if (vista.vencidos && !vencido(n)) return false;
+            if (!sinMotivo && vista.motivo && motivoDe(it).m !== vista.motivo) return false;
+            if (vista.q) {
+                const q = vista.q.normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase();
+                const t = [it.v.desc, it.v.codigo, it.v.sol, it.v.codDef, it.etapa, n && n.t, n && n.a, it.prog && it.prog.producto].join(' ').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase();
+                if (!q.split(/\s+/).every((p) => t.includes(p))) return false;
+            }
+            return true;
+        }
+        function ordenar(lista) {
+            const conP = lista.map((it) => ({ it, s: puntaje(it) }));
+            const porAnt = (a, b) => (b.it.dias || 0) - (a.it.dias || 0);
+            if (vista.orden === 'antiguo') conP.sort(porAnt);
+            else if (vista.orden === 'compromiso') conP.sort((a, b) => { const ca = (notaDe(a.it) || {}).c || '9999', cb = (notaDe(b.it) || {}).c || '9999'; return ca.localeCompare(cb) || porAnt(a, b); });
+            else conP.sort((a, b) => (b.s.p - a.s.p) || porAnt(a, b));
+            return conP;
+        }
+
+        function htmlEcuacion(pl, mesTxt, mesCorto) {
+            const items = modelo.items.filter((it) => !pl || it.v.planta === pl), aut = modelo.aut.filter((a) => !pl || a.v.planta === pl);
+            const arr = items.filter((it) => !it.nuevo).length, nue = items.filter((it) => it.nuevo).length;
+            const autBk = aut.filter((a) => a.cuenta === 'Backlog').length, autMes = aut.length - autBk;
+            const caja = (cls, op, n, l, s, accion, tip) => (accion
+                ? `<button type="button" class="bkl-ec-caja ${cls}" data-bkl-ec="${accion}" data-pl="${pl}" title="${esc(tip)}">${op ? `<span class="op" aria-hidden="true">${op}</span>` : ''}<span class="n">${n}</span><span class="l">${l}</span>${s ? `<span class="s">${s}</span>` : ''}</button>`
+                : `<div class="bkl-ec-caja ${cls}" title="${esc(tip)}">${op ? `<span class="op" aria-hidden="true">${op}</span>` : ''}<span class="n">${n}</span><span class="l">${l}</span>${s ? `<span class="s">${s}</span>` : ''}</div>`);
+            return `<div class="bkl-ec${pl ? '' : ' total'}">
+                <div class="bkl-ec-planta">${pl ? PLANTA_NOMBRE[pl] : 'Total'}</div>
+                ${caja('', '', arr + autBk, `Backlog al 1 de ${mesCorto}`, `${arr} ${arr === 1 ? 'sigue pendiente' : 'siguen pendientes'}`, 'arrastre', 'Lo que venía pendiente de meses anteriores: lo que sigue pendiente más lo que ya se autorizó este mes. Clic: ver los que siguen pendientes.')}
+                ${caja('nuevo', '+', nue + autMes, `Nuevos de ${mesCorto}`, `${nue} ${nue === 1 ? 'sigue pendiente' : 'siguen pendientes'}`, 'nuevos', 'Lo que entró este mes (etiqueta NUEVO). Clic: ver los que siguen pendientes.')}
+                ${caja('atendido', '−', autBk + autMes, `Autorizados en ${mesCorto}`, `${autBk} del backlog · ${autMes} del mes`, '', 'Autorizados del 1 del mes a hoy que siguen autorizados.')}
+                ${caja('hoy', '=', items.length, 'Pendientes hoy', 'por atacar', 'todos', 'Lo que hay que atacar. Clic: ver la lista.')}
+            </div>`;
+        }
+
+        function htmlControl(lista) {
+            const conNota = lista.filter((it) => { const n = notaDe(it); return n && n.m; }).length;
+            const prog = lista.filter((it) => it.prog).length, venc = lista.filter((it) => vencido(notaDe(it))).length;
+            const bloq = lista.filter((it) => (notaDe(it) || {}).s === 'bloq').length, curso = lista.filter((it) => (notaDe(it) || {}).s === 'curso').length;
+            const pct = lista.length ? Math.round((conNota / lista.length) * 100) : 0;
+            const pl = vista.planta ? PLANTA_NOMBRE[vista.planta] : 'Ate + Lima';
+            const sinRmd = vista.planta ? modelo.sinRmdProg[vista.planta] : modelo.sinRmdProg.P1 + modelo.sinRmdProg.P2;
+            return `<div class="bkl-panel">
+                <h3>Control del backlog · ${esc(pl)}</h3>
+                <div class="bkl-control">
+                    <div class="bkl-ctl"><span>Pendientes con el porqué anotado</span><b>${conNota} de ${lista.length} (${pct} %)</b><span class="bkl-pista"><i style="width:${pct}%"></i></span></div>
+                    <div class="bkl-ctl"><button type="button" data-bkl-filtro="prog">En el Programa de producción</button><b>${prog}</b></div>
+                    <div class="bkl-ctl"><span>En curso / bloqueados</span><b>${curso} / ${bloq}</b></div>
+                    <div class="bkl-ctl"><button type="button" data-bkl-filtro="vencidos">Compromisos vencidos</button><b>${venc}</b></div>
+                    ${sinRmd ? `<div class="bkl-ctl"><span>Etapas del programa sin RMD en SAP (no entran aquí; ver Producción)</span><b>${sinRmd}</b></div>` : ''}
+                    ${modelo.progError ? `<div class="bkl-ctl"><span>Programa de producción: ${esc(modelo.progError)}</span></div>` : ''}
+                </div>
+            </div>`;
+        }
+
+        function htmlMotivos(listaSinMotivo) {
+            const cuenta = new Map();
+            listaSinMotivo.forEach((it) => { const x = motivoDe(it), c = cuenta.get(x.m) || { a: 0, s: 0 }; if (x.confirmado) c.a++; else c.s++; cuenta.set(x.m, c); });
+            const filas = MOTIVOS.filter((m) => cuenta.has(m.id)).map((m) => ({ m, ...cuenta.get(m.id) })).sort((a, b) => (b.a + b.s) - (a.a + a.s));
+            const max = Math.max(1, ...filas.map((f) => f.a + f.s));
+            return `<div class="bkl-panel">
+                <h3>Por qué siguen pendientes</h3>
+                <div class="bkl-motivos">${filas.length ? filas.map((f) => `<button type="button" class="bkl-mot${vista.motivo === f.m.id ? ' activo' : ''}" data-bkl-motivo="${f.m.id}" aria-pressed="${vista.motivo === f.m.id}" title="${esc(`${f.m.txt}: ${f.a} anotados, ${f.s} sugeridos. Clic: filtrar`)}">
+                    <span class="nom">${esc(f.m.txt)}</span><span class="barra"><i style="width:${(f.a / max) * 100}%"></i><i class="sug" style="width:${(f.s / max) * 100}%"></i></span><span class="n">${f.a + f.s}</span></button>`).join('') : '<p class="bkl-vacio">Sin pendientes con estos filtros.</p>'}</div>
+                <div class="bkl-leyenda"><span><i></i>Anotado por el equipo</span><span><i class="sug"></i>Sugerido por la página (falta confirmar)</span></div>
+            </div>`;
+        }
+
+        function htmlFiltros() {
+            const seg = (campo, valor, txt) => `<button type="button" data-bkl-set="${campo}" data-valor="${valor}" aria-pressed="${vista[campo] === valor}">${txt}</button>`;
+            const tog = (campo, txt) => `<button type="button" class="bkl-toggle" data-bkl-toggle="${campo}" aria-pressed="${!!vista[campo]}">${txt}</button>`;
+            return `<div class="bkl-filtros" role="group" aria-label="Filtros del backlog">
+                <div class="bkl-seg" role="group" aria-label="Planta">${seg('planta', '', 'Todas')}${seg('planta', 'P1', 'ATE')}${seg('planta', 'P2', 'LIMA')}</div>
+                <select class="bkl-campo" data-bkl-select="tipo" aria-label="Tipo de pendiente">
+                    <option value="">Todos los tipos</option>
+                    ${['Ingresado', 'Solicitado', 'Suspendido'].map((t) => `<option value="${t}"${vista.tipo === t ? ' selected' : ''}>${t === 'Ingresado' ? 'Ingresados (por autorizar)' : t === 'Solicitado' ? 'Solicitudes (por ingresar)' : 'Suspendidos (sin versión nueva)'}</option>`).join('')}
+                </select>
+                ${tog('arrastre', 'Venían del backlog')}${tog('nuevo', 'Nuevos del mes')}${tog('prog', 'Programa de producción')}${tog('sinNota', 'Sin nota')}${tog('vencidos', 'Compromiso vencido')}
+                <select class="bkl-campo" data-bkl-select="orden" aria-label="Orden">
+                    <option value="sugerido"${vista.orden === 'sugerido' ? ' selected' : ''}>Orden sugerido para atacar</option>
+                    <option value="antiguo"${vista.orden === 'antiguo' ? ' selected' : ''}>Más antiguo primero</option>
+                    <option value="compromiso"${vista.orden === 'compromiso' ? ' selected' : ''}>Por fecha de compromiso</option>
+                </select>
+                <input type="search" class="bkl-campo bkl-buscar" data-bkl-buscar placeholder="Buscar producto, código o nota" value="${esc(vista.q)}" aria-label="Buscar">
+            </div>`;
+        }
+
+        function htmlItem(x, i) {
+            const it = x.it, v = it.v, n = notaDe(it), mot = motivoDe(it), M = MOTIVO[mot.m] || MOTIVO.OTRO;
+            const tipoCls = it.tipo === 'Ingresado' ? 'ing' : it.tipo === 'Solicitado' ? 'sol' : 'sus';
+            const tipoTxt = it.tipo === 'Ingresado' ? 'Ingresado · por autorizar' : it.tipo === 'Solicitado' ? 'Solicitud · por ingresar' : 'Suspendido · sin versión nueva';
+            const progTip = it.prog ? `Programa de producción: ${it.prog.producto || ''}${it.prog.inicio ? ` · inicia ${fmt(it.prog.inicio)}` : ''}${it.prog.estatus ? ` · Estatus en Producción: ${it.prog.estatus}` : ''}` : '';
+            const codigo = v.codigo ? `RMD ${esc(v.codigo)} v${esc(v.version)}` : `Solicitud ${esc(v.sol)}`;
+            const desde = it.base ? `${it.tipo === 'Suspendido' ? 'suspendido' : it.tipo === 'Solicitado' ? 'solicitado' : 'ingresado'} el ${fmt(it.base)} · ${plural(it.dias, 'día', 'días')}` : (it.tipo === 'Suspendido' ? 'suspendido antes de 2026' : '');
+            const comp = n && n.c ? dayjs(n.c + 'T00:00:00') : null, venc = vencido(n);
+            const est = n && n.s ? n.s : '';
+            const ab = abierto === it.k;
+            return `<li class="bkl-item${it.nuevo ? ' es-nuevo' : ''}${ab ? ' abierto' : ''}" data-k="${esc(it.k)}">
+                <button type="button" class="bkl-fila" data-bkl-abrir="${esc(it.k)}" aria-expanded="${ab}" title="${esc(x.s.por)}">
+                    <span class="bkl-orden" aria-label="Orden ${i + 1}">${i + 1}</span>
+                    <span>
+                        <span class="bkl-etiquetas">
+                            ${it.nuevo ? `<span class="bkl-sticker nuevo" title="Pendiente que entró este mes (${esc(nombreMes(modelo.mes))})">Nuevo</span>` : ''}
+                            ${it.prog ? `<span class="bkl-sticker prog" title="${esc(progTip)}">Programa de producción</span>` : ''}
+                            <span class="bkl-tipo ${tipoCls}">${tipoTxt}</span>
+                        </span>
+                        <span class="bkl-prod">${esc(v.desc || it.prog && it.prog.producto || '(sin descripción)')}</span>
+                        <span class="bkl-meta"><b>${PLANTA_NOMBRE[v.planta]}</b> · ${esc(it.etapa || 'sin etapa')} · ${codigo}${v.codDef ? ` · código ${esc(v.codDef)}` : ''}<br>Pendiente desde ${esc(nombreMes(it.m))}${desde ? ` · ${esc(desde)}` : ''}${it.prog && it.prog.inicio ? ` · <b>inicia producción ${fmt(it.prog.inicio)}</b>` : ''}</span>
+                    </span>
+                    <span class="bkl-porque">
+                        ${mot.confirmado ? `<span class="mot">${esc(M.txt)}</span>` : `<span class="sug" title="Sugerido por la página: abre la nota para confirmarlo">Sugerido</span><span class="mot">${esc(M.txt)}</span>`}
+                        ${n && n.r ? `<span class="bkl-tipo">${esc(n.r)}</span>` : ''}
+                        ${n && n.a ? `<span class="txt"><b>Siguiente paso:</b> ${esc(n.a)}</span>` : ''}
+                        ${n && n.t ? `<span class="txt">${esc(n.t)}</span>` : (!mot.confirmado ? `<span class="txt">${esc(it.sug.por)}</span>` : '')}
+                        ${n && n.u ? `<span class="pie">${esc(n.u)} · ${esc(dayjs(n.f).format('DD/MM/YYYY HH:mm'))}</span>` : ''}
+                    </span>
+                    <span class="bkl-lado">
+                        <span class="bkl-seg-est ${est}">${SEGUIMIENTO[est] || 'Por atacar'}</span>
+                        ${comp && comp.isValid() ? `<span class="bkl-comp${venc ? ' vencido' : ''}">${venc ? 'Venció' : 'Compromiso'} ${fmt(comp)}</span>` : ''}
+                        <span class="bkl-anotar">${ab ? 'Cerrar' : (n && n.m ? 'Ver nota' : 'Anotar')}</span>
+                    </span>
+                </button>
+                ${ab ? htmlNota(it) : ''}
+            </li>`;
+        }
+
+        function htmlNota(it) {
+            const n = notaDe(it) || {}, v = it.v, sel = n.m || it.sug.m, resp = n.r || (MOTIVO[sel] || {}).resp || '';
+            const autor = leerAutor(), nombres = Object.values(DNI_DIRECTORIO || {});
+            const pistas = [
+                `<p><b>Sugerencia:</b> ${esc((MOTIVO[it.sug.m] || MOTIVO.OTRO).txt)}. ${esc(it.sug.por)}</p>`,
+                `<p><b>Por qué cuenta en ${esc(nombreMes(it.m))}:</b> ${esc(it.porque || '')}</p>`,
+                it.prog ? `<p><b>Programa de producción:</b> ${esc(it.prog.producto || '')}${it.prog.etapa ? ` · ${esc(it.prog.etapa)}` : ''}${it.prog.inicio ? ` · inicia ${fmt(it.prog.inicio)}` : ''}${it.prog.estatus ? ` · Estatus en Producción: ${esc(it.prog.estatus)}${it.prog.resp ? ` (${esc(it.prog.resp)})` : ''}` : ''}</p>` : '',
+                it.prio ? `<p><b>Prioridad del equipo:</b> ${esc(it.prio)}</p>` : '',
+                v.obs ? `<p><b>Observación en SAP:</b></p><p class="bkl-obs">${esc(v.obs)}</p>` : ''
+            ].join('');
+            const hist = Array.isArray(n.h) ? n.h.slice().reverse() : [];
+            return `<div class="bkl-nota" data-bkl-nota="${esc(it.k)}">
+                <div>
+                    <h4>¿Por qué está pendiente?</h4>
+                    <label class="lbl" id="bklLblMot">Motivo</label>
+                    <div class="bkl-chips" role="group" aria-labelledby="bklLblMot">${MOTIVOS.map((m) => `<button type="button" class="bkl-chip${!n.m && m.id === it.sug.m ? ' sugerido' : ''}" data-bkl-mot="${m.id}" aria-pressed="${m.id === sel}"${!n.m && m.id === it.sug.m ? ' title="Sugerido por la página"' : ''}>${esc(m.txt)}</button>`).join('')}</div>
+                    <label class="lbl" for="bklTxt">Nota</label>
+                    <textarea id="bklTxt" data-bkl-campo="t" placeholder="Qué falta, con quién se habló, qué se espera…">${esc(n.t || '')}</textarea>
+                    <p class="bkl-detecto" data-bkl-detecto aria-live="polite"></p>
+                    <label class="lbl" for="bklAcc">Siguiente paso</label>
+                    <input type="text" id="bklAcc" data-bkl-campo="a" value="${esc(n.a || '')}" placeholder="Ej.: pedir el borrador a Producción">
+                    <div class="bkl-dos-campos">
+                        <div><label class="lbl" id="bklLblResp">Responsable</label>
+                            <div class="bkl-chips" role="group" aria-labelledby="bklLblResp">${RESPONSABLES.map((r) => `<button type="button" class="bkl-chip" data-bkl-resp="${r}" aria-pressed="${r === resp}">${r}</button>`).join('')}</div></div>
+                        <div><label class="lbl" for="bklComp">Fecha de compromiso</label>
+                            <input type="date" id="bklComp" data-bkl-campo="c" value="${esc(n.c || '')}"></div>
+                    </div>
+                    <div class="bkl-dos-campos">
+                        <div><label class="lbl" id="bklLblSeg">Seguimiento</label>
+                            <div class="bkl-chips" role="group" aria-labelledby="bklLblSeg">${Object.entries(SEGUIMIENTO).map(([k, t]) => `<button type="button" class="bkl-chip" data-bkl-seg="${k}" aria-pressed="${(n.s || '') === k}">${t}</button>`).join('')}</div></div>
+                        <div><label class="lbl" for="bklAutor">Quién anota</label>
+                            <select id="bklAutor" data-bkl-campo="u"><option value="">Elegir…</option>${nombres.map((x) => `<option${x === autor ? ' selected' : ''}>${esc(x)}</option>`).join('')}</select></div>
+                    </div>
+                    <div class="bkl-guardar">
+                        <button type="button" class="sts-btn sts-btn-primario" data-bkl-guardar>Guardar nota</button>
+                        <button type="button" class="sts-btn" data-bkl-cerrar>Cancelar</button>
+                        ${n.m ? '<button type="button" class="sts-btn" data-bkl-borrar title="Quita la nota de este RMD">Borrar nota</button>' : ''}
+                        <span class="est" data-bkl-estado aria-live="polite"></span>
+                    </div>
+                </div>
+                <div>
+                    <h4>Contexto</h4>
+                    <div class="bkl-pistas">${pistas}</div>
+                    ${hist.length ? `<h4 style="margin-top:14px">Historial</h4><ul class="bkl-hist">${hist.map((h) => `<li><b>${esc(h[1] || '—')}</b> · ${esc(dayjs(h[0]).format('DD/MM/YYYY HH:mm'))}<br>${esc(h[2] || '')}</li>`).join('')}</ul>` : ''}
+                </div>
+            </div>`;
+        }
+
+        function pintar() {
+            const cont = document.getElementById('bklContenido');
+            if (!cont) return;
+            if (!modelo) { cont.innerHTML = '<p class="bkl-vacio">Calculando el backlog…</p>'; return; }
+            if (modelo.vacio) { cont.innerHTML = '<p class="bkl-vacio">Aún no hay RMD de SAP. Usa «Enviar a Status RMD» desde el portal y vuelve a esta pestaña.</p>'; return; }
+            const mesTxt = nombreMes(modelo.mes), mesCorto = mesTxt.split(' ')[0];
+            const sub = document.getElementById('bklSub');
+            if (sub) sub.textContent = `Pendientes por atender · Plantas Ate y Lima · corte ${fmt(modelo.corte)}`;
+            const sinMotivo = modelo.items.filter((it) => pasaFiltros(it, true));
+            const lista = sinMotivo.filter((it) => pasaFiltros(it, false));
+            const orden = ordenar(lista), vis = orden.slice(0, vista.mostrar);
+            const hayFiltro = vista.tipo || vista.nuevo || vista.arrastre || vista.prog || vista.sinNota || vista.vencidos || vista.motivo || vista.q;
+            const foco = document.activeElement && document.activeElement.matches && document.activeElement.matches('[data-bkl-buscar]');
+            cont.innerHTML = `
+                <p class="bkl-leer"><b>Backlog</b> = RMD que siguen pendientes: <b>Ingresados</b> por autorizar, <b>Solicitudes</b> por ingresar y <b>Suspendidos</b> sin versión nueva (sin los INACTIVO). Lo que entró en ${esc(mesTxt)} lleva la etiqueta <b>NUEVO</b>; lo que Producción necesita para su programa lleva <b>PROGRAMA DE PRODUCCIÓN</b>. Cada pendiente se anota con por qué sigue pendiente y quién lo mueve.</p>
+                <div class="bkl-sec">Cómo va el mes</div>
+                <div class="bkl-ecuaciones">${htmlEcuacion('P1', mesTxt, mesCorto)}${htmlEcuacion('P2', mesTxt, mesCorto)}${htmlEcuacion('', mesTxt, mesCorto)}</div>
+                <div class="bkl-sec">Para atacarlo en orden</div>
+                <div class="bkl-dos">${htmlControl(sinMotivo)}${htmlMotivos(sinMotivo)}</div>
+                <div class="bkl-sec">Pendientes</div>
+                ${htmlFiltros()}
+                <p class="bkl-conteo">${plural(lista.length, 'pendiente', 'pendientes')}${hayFiltro ? ` con estos filtros · <button type="button" data-bkl-limpiar>Quitar filtros</button>` : ''}${vista.orden === 'sugerido' ? ' · primero lo del Programa de producción y los compromisos vencidos' : ''}</p>
+                ${vis.length ? `<ol class="bkl-lista" role="list">${vis.map(htmlItem).join('')}</ol>` : '<p class="bkl-vacio">Nada con estos filtros.</p>'}
+                ${orden.length > vis.length ? `<div class="bkl-mas"><button type="button" class="sts-btn" data-bkl-mas>Ver ${Math.min(POR_PAGINA, orden.length - vis.length)} más (quedan ${orden.length - vis.length})</button></div>` : ''}`;
+            if (foco) { const b = cont.querySelector('[data-bkl-buscar]'); if (b) { b.focus(); b.setSelectionRange(b.value.length, b.value.length); } }
+        }
+
+        // ---------- Nota: editar y guardar ----------
+        function leerEditor(caja) {
+            const val = (sel) => { const el = caja.querySelector(sel); return el ? el.value.trim() : ''; };
+            const pres = (attr) => { const b = caja.querySelector(`[${attr}][aria-pressed="true"]`); return b ? b.getAttribute(attr) : ''; };
+            return { m: pres('data-bkl-mot'), r: pres('data-bkl-resp'), s: pres('data-bkl-seg'), t: val('[data-bkl-campo="t"]'), a: val('[data-bkl-campo="a"]'), c: val('[data-bkl-campo="c"]'), u: val('[data-bkl-campo="u"]') };
+        }
+        function resumenCambio(antes, nueva) {
+            const p = [];
+            if ((antes.m || '') !== nueva.m) p.push(`Motivo: ${(MOTIVO[nueva.m] || MOTIVO.OTRO).txt}`);
+            if ((antes.r || '') !== nueva.r && nueva.r) p.push(`Responsable: ${nueva.r}`);
+            if ((antes.s || '') !== nueva.s) p.push(`Seguimiento: ${SEGUIMIENTO[nueva.s]}`);
+            if ((antes.c || '') !== nueva.c) p.push(nueva.c ? `Compromiso: ${dayjs(nueva.c + 'T00:00:00').format('DD/MM/YYYY')}` : 'Sin compromiso');
+            if ((antes.a || '') !== nueva.a && nueva.a) p.push(`Siguiente paso: ${nueva.a}`);
+            if ((antes.t || '') !== nueva.t && nueva.t) p.push(`Nota: ${nueva.t.length > 140 ? nueva.t.slice(0, 140) + '…' : nueva.t}`);
+            return p.join(' · ') || 'Sin cambios';
+        }
+        async function guardar(k, caja) {
+            const it = modelo && modelo.items.find((x) => x.k === k);
+            if (!it) return;
+            const e = leerEditor(caja), estado = caja.querySelector('[data-bkl-estado]');
+            if (!e.m) { estado.textContent = 'Elige un motivo.'; return; }
+            if (!e.u) { estado.textContent = 'Elige quién anota.'; caja.querySelector('[data-bkl-campo="u"]').focus(); return; }
+            ponerAutor(e.u);
+            estado.textContent = 'Guardando…';
+            const antes = notaDe(it) || {};
+            const ahora = new Date().toISOString();
+            const h = (Array.isArray(antes.h) ? antes.h : []).concat([[ahora, e.u, resumenCambio(antes, e)]]).slice(-20);
+            const nueva = { m: e.m, r: e.r, a: e.a, c: e.c, s: e.s, t: e.t, u: e.u, f: ahora, h };
+            Object.keys(nueva).forEach((x) => { if (nueva[x] === '') delete nueva[x]; });
+            notas = Object.assign({}, notas, { [it.k]: nueva });
+            if (it.kSol && it.kSol !== it.k && notas[it.kSol]) { notas = Object.assign({}, notas); delete notas[it.kSol]; }
+            const ok = await storeSet(CLAVE_NOTAS, notas);
+            abierto = '';
+            pintar();
+            if (!ok) Swal.fire({ icon: 'warning', title: 'Guardado solo en este equipo', text: 'No se pudo subir a la nube; se reintentará solo.', background: '#0f172a', color: '#e2e8f0' });
+        }
+        async function borrar(k) {
+            const it = modelo && modelo.items.find((x) => x.k === k);
+            if (!it) return;
+            const r = await Swal.fire({ title: '¿Borrar la nota?', text: 'Se quita la nota y su historial de este RMD.', icon: 'question', showCancelButton: true, confirmButtonText: 'Borrar', cancelButtonText: 'Cancelar', background: '#0f172a', color: '#e2e8f0' });
+            if (!r.isConfirmed) return;
+            notas = Object.assign({}, notas); delete notas[it.k]; if (it.kSol) delete notas[it.kSol];
+            await storeSet(CLAVE_NOTAS, notas);
+            abierto = '';
+            pintar();
+        }
+        // Mientras se escribe la nota, propone el motivo que sugieren las palabras (si no es el elegido).
+        function detectar(caja) {
+            const t = (caja.querySelector('[data-bkl-campo="t"]') || {}).value || '', out = caja.querySelector('[data-bkl-detecto]');
+            if (!out) return;
+            const hit = PALABRAS.find(([rx]) => rx.test(t)), sel = (caja.querySelector('[data-bkl-mot][aria-pressed="true"]') || {}).dataset;
+            if (!hit || (sel && sel.bklMot === hit[1])) { out.innerHTML = ''; return; }
+            out.innerHTML = `Por lo que escribes, ¿el motivo es <button type="button" data-bkl-aplicar="${hit[1]}">${esc(MOTIVO[hit[1]].txt)}</button>?`;
+        }
+        function marcar(caja, attr, valor) {
+            caja.querySelectorAll(`[${attr}]`).forEach((b) => b.setAttribute('aria-pressed', String(b.getAttribute(attr) === valor)));
+        }
+
+        // ---------- Eventos ----------
+        let buscarTimer = null;
+        function iniciar() {
+            const cont = document.getElementById('bklContenido');
+            if (!cont) return;
+            cont.addEventListener('click', (ev) => {
+                const t = ev.target.closest('button');
+                if (!t || !cont.contains(t)) return;
+                const caja = t.closest('[data-bkl-nota]');
+                if (t.dataset.bklAbrir !== undefined) { abierto = abierto === t.dataset.bklAbrir ? '' : t.dataset.bklAbrir; pintar(); const li = cont.querySelector(`.bkl-item[data-k="${CSS.escape(t.dataset.bklAbrir)}"] .bkl-fila`); if (li) li.focus(); if (abierto) { const c2 = cont.querySelector('[data-bkl-nota]'); if (c2) detectar(c2); } return; }
+                if (t.dataset.bklMot && caja) { marcar(caja, 'data-bkl-mot', t.dataset.bklMot); const r = (MOTIVO[t.dataset.bklMot] || {}).resp; if (r && !caja.querySelector('[data-bkl-resp][aria-pressed="true"]')) marcar(caja, 'data-bkl-resp', r); detectar(caja); return; }
+                if (t.dataset.bklAplicar && caja) { marcar(caja, 'data-bkl-mot', t.dataset.bklAplicar); detectar(caja); return; }
+                if (t.dataset.bklResp && caja) { marcar(caja, 'data-bkl-resp', t.getAttribute('aria-pressed') === 'true' ? '' : t.dataset.bklResp); return; }
+                if (t.dataset.bklSeg !== undefined && caja) { marcar(caja, 'data-bkl-seg', t.dataset.bklSeg); return; }
+                if (t.dataset.bklGuardar !== undefined && caja) { guardar(caja.dataset.bklNota, caja); return; }
+                if (t.dataset.bklCerrar !== undefined) { abierto = ''; pintar(); return; }
+                if (t.dataset.bklBorrar !== undefined && caja) { borrar(caja.dataset.bklNota); return; }
+                if (t.dataset.bklSet) { vista[t.dataset.bklSet] = t.dataset.valor; vista.mostrar = POR_PAGINA; pintar(); return; }
+                if (t.dataset.bklToggle) { const f = t.dataset.bklToggle; vista[f] = !vista[f]; if (vista[f] && f === 'nuevo') vista.arrastre = false; if (vista[f] && f === 'arrastre') vista.nuevo = false; vista.mostrar = POR_PAGINA; pintar(); return; }
+                if (t.dataset.bklFiltro) { vista[t.dataset.bklFiltro] = true; vista.mostrar = POR_PAGINA; pintar(); return; }
+                if (t.dataset.bklMotivo) { vista.motivo = vista.motivo === t.dataset.bklMotivo ? '' : t.dataset.bklMotivo; vista.mostrar = POR_PAGINA; pintar(); return; }
+                if (t.dataset.bklEc) {
+                    Object.assign(vista, { planta: t.dataset.pl || '', tipo: '', nuevo: t.dataset.bklEc === 'nuevos', arrastre: t.dataset.bklEc === 'arrastre', prog: false, sinNota: false, vencidos: false, motivo: '', mostrar: POR_PAGINA });
+                    pintar();
+                    const l = cont.querySelector('.bkl-filtros'); if (l) l.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    return;
+                }
+                if (t.dataset.bklLimpiar !== undefined) { Object.assign(vista, { tipo: '', nuevo: false, arrastre: false, prog: false, sinNota: false, vencidos: false, motivo: '', q: '', mostrar: POR_PAGINA }); pintar(); return; }
+                if (t.dataset.bklMas !== undefined) { vista.mostrar += POR_PAGINA; pintar(); }
+            });
+            cont.addEventListener('change', (ev) => {
+                const s = ev.target.closest('[data-bkl-select]');
+                if (s) { vista[s.dataset.bklSelect] = s.value; vista.mostrar = POR_PAGINA; pintar(); }
+            });
+            cont.addEventListener('input', (ev) => {
+                if (ev.target.matches('[data-bkl-buscar]')) { clearTimeout(buscarTimer); const v = ev.target.value; buscarTimer = setTimeout(() => { vista.q = v.trim(); vista.mostrar = POR_PAGINA; pintar(); }, 250); return; }
+                const caja = ev.target.closest('[data-bkl-nota]');
+                if (caja && ev.target.matches('[data-bkl-campo="t"]')) detectar(caja);
+            });
+        }
+        if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', iniciar); else iniciar();
+
+        async function actualizar() {
+            if (calculando) return calculando;
+            calculando = (async () => {
+                try {
+                    if (!modelo) pintar();
+                    modelo = await calcular();
+                    pintar();
+                } catch (err) {
+                    console.error('Backlog:', err);
+                    const cont = document.getElementById('bklContenido');
+                    if (cont) cont.innerHTML = `<p class="bkl-vacio">No se pudo calcular el backlog: ${esc(err.message)}</p>`;
+                } finally { calculando = null; }
+            })();
+            return calculando;
+        }
+        // Cambios de otra persona: las notas se repintan solas (sin cerrar la nota que se está escribiendo); los datos de SAP o
+        // del programa se recalculan si la pestaña ya se abrió.
+        async function recargarNotas() {
+            try { const g = await storeGet(CLAVE_NOTAS); notas = g && typeof g === 'object' && !Array.isArray(g) ? g : {}; } catch (e) { return; }
+            if (modelo && currentTab === 'backlog' && !abierto) pintar();
+        }
+        function recargarPronto() {
+            if (!visitado) return;
+            clearTimeout(recargaTimer);
+            recargaTimer = setTimeout(() => { if (currentTab === 'backlog' && !abierto) actualizar(); }, 1500);
+        }
+
+        // ---------- Excel ----------
+        function exportar() {
+            if (!modelo || modelo.vacio) { Swal.fire({ icon: 'info', title: 'Sin datos', text: 'Abre la pestaña cuando haya RMD de SAP («Enviar a Status RMD»).', background: '#0f172a', color: '#e2e8f0' }); return; }
+            const lista = ordenar(modelo.items.filter((it) => pasaFiltros(it, false)));
+            const cab = ['Orden', 'Planta', 'Tipo', 'Nuevo', 'Programa de producción', 'Inicio producción', 'Producto', 'Etapa', 'RMD', 'Versión', 'Solicitud', 'Código por defecto',
+                'Pendiente desde (mes)', 'Fecha', 'Días', 'Por qué está pendiente', 'Motivo confirmado', 'Responsable', 'Siguiente paso', 'Compromiso', 'Seguimiento', 'Nota', 'Anotado por', 'Fecha de la nota',
+                'Motivo sugerido', 'Por qué se sugiere', 'Por qué cuenta en ese mes', 'Observación SAP', 'Por qué va en ese orden'];
+            const d = (x) => (x && x.isValid && x.isValid() ? new Date(Date.UTC(x.year(), x.month(), x.date())) : '');
+            const filas = lista.map((x, i) => {
+                const it = x.it, v = it.v, n = notaDe(it) || {}, mot = motivoDe(it);
+                return [i + 1, PLANTA_NOMBRE[v.planta], it.tipo, it.nuevo ? 'NUEVO' : '', it.prog ? 'PROGRAMA DE PRODUCCIÓN' : '', it.prog && it.prog.inicio ? d(it.prog.inicio) : '',
+                    v.desc || '', it.etapa || '', v.codigo || '', v.version || '', v.sol || '', v.codDef || '', nombreMes(it.m), d(it.base), it.dias === null ? '' : it.dias,
+                    (MOTIVO[mot.m] || MOTIVO.OTRO).txt, mot.confirmado ? 'Sí' : 'No (sugerido)', n.r || '', n.a || '', n.c ? d(dayjs(n.c + 'T00:00:00')) : '', SEGUIMIENTO[n.s || ''], n.t || '', n.u || '',
+                    n.f ? dayjs(n.f).format('DD/MM/YYYY HH:mm') : '', (MOTIVO[it.sug.m] || MOTIVO.OTRO).txt, it.sug.por, it.porque || '', v.obs || '', x.s.por];
+            });
+            const ws = XLSX.utils.aoa_to_sheet([cab, ...filas], { cellDates: true });
+            const azul = '1F3864';
+            cab.forEach((_, j) => { const c = ws[XLSX.utils.encode_cell({ r: 0, c: j })]; if (c) c.s = { font: { bold: true, color: { rgb: 'FFFFFF' } }, fill: { patternType: 'solid', fgColor: { rgb: azul } }, alignment: { vertical: 'center', wrapText: true } }; });
+            filas.forEach((f, i) => f.forEach((val, j) => {
+                const c = ws[XLSX.utils.encode_cell({ r: i + 1, c: j })];
+                if (!c) return;
+                if (val instanceof Date) c.z = 'dd/mm/yyyy';
+                if (j === 3 && val) c.s = { font: { bold: true, color: { rgb: 'FFFFFF' } }, fill: { patternType: 'solid', fgColor: { rgb: 'C2652E' } } };
+                if (j === 4 && val) c.s = { font: { bold: true, color: { rgb: '3B2F06' } }, fill: { patternType: 'solid', fgColor: { rgb: 'F3D36B' } } };
+            }));
+            ws['!cols'] = cab.map((h) => ({ wch: /Producto|Nota|Observaci|Por qué/.test(h) ? 42 : /Siguiente/.test(h) ? 30 : Math.max(9, Math.min(22, h.length + 2)) }));
+            ws['!autofilter'] = { ref: XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: filas.length, c: cab.length - 1 } }) };
+            const wb = XLSX.utils.book_new();
+            const res = [['Backlog de RMD', `corte ${fmt(modelo.corte)}`], [], ['Planta', `Backlog al 1 de ${nombreMes(modelo.mes)}`, 'Nuevos del mes', 'Autorizados en el mes', 'Pendientes hoy', 'Con nota', 'En Programa de producción']];
+            [['P1'], ['P2'], ['']].forEach(([pl]) => {
+                const its = modelo.items.filter((it) => !pl || it.v.planta === pl), aut = modelo.aut.filter((a) => !pl || a.v.planta === pl), autBk = aut.filter((a) => a.cuenta === 'Backlog').length;
+                res.push([pl ? PLANTA_NOMBRE[pl] : 'Total', its.filter((it) => !it.nuevo).length + autBk, its.filter((it) => it.nuevo).length + (aut.length - autBk), aut.length, its.length,
+                    its.filter((it) => (notaDe(it) || {}).m).length, its.filter((it) => it.prog).length]);
+            });
+            res.push([], ['Backlog al 1 del mes + Nuevos del mes − Autorizados en el mes = Pendientes hoy.'], ['Backlog = Ingresados por autorizar + Solicitudes por ingresar + Suspendidos sin versión nueva (sin los INACTIVO).']);
+            const wr = XLSX.utils.aoa_to_sheet(res);
+            wr['!cols'] = [{ wch: 12 }, { wch: 26 }, { wch: 16 }, { wch: 20 }, { wch: 16 }, { wch: 11 }, { wch: 26 }];
+            XLSX.utils.book_append_sheet(wb, wr, 'Resumen');
+            XLSX.utils.book_append_sheet(wb, ws, 'Backlog');
+            XLSX.writeFile(wb, `Backlog_RMD_${modelo.corte.format('YYYY-MM-DD')}.xlsx`, { cellStyles: true });
+        }
+
+        return {
+            alEntrar: () => { visitado = true; return actualizar(); },
+            actualizar, exportar, recargarNotas, recargarPronto,
+            _modelo: () => modelo, _notas: () => notas, _vista: vista, _sugerir: sugerir
         };
     })();
     </script>
