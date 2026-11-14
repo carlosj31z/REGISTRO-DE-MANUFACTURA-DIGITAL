@@ -15730,10 +15730,6 @@ async function maybeAutoStartTour() {
             const ultimas = new Set();
             masters.forEach((vs) => { vs.sort((a, b) => (b.version - a.version) || ((b.fReg ? b.fReg.valueOf() : 0) - (a.fReg ? a.fReg.valueOf() : 0))); ultimas.add(vs[0]); });
             const esUltima = (v) => ultimas.has(v);
-            // Masters con un código de los INACTIVO del análisis (pedido de Carlos, 11/11/2026: «que cuadre 892 en ATE y 436 en
-            // LIMA»): el master cuenta como INACTIVO aunque ya tenga una versión más nueva, y no suma como suspendido.
-            const ultInactivo = new Set();
-            masters.forEach((vs) => { if (vs.some(esInactivo)) ultInactivo.add(vs[0]); });
             // Suspendidos de hoy en SAP (sin los INACTIVO), última versión y sin otra versión nueva ya iniciada.
             const susp = [], omitidos = [];
             versiones.forEach((v) => {
@@ -15744,7 +15740,9 @@ async function maybeAutoStartTour() {
                 const nueva = linea(v).find((w) => w.version > v.version && (w.estado === 'INGRESADO' || w.estado === 'SOLICITADO') && (w.fReg || w.fSol) && !(w.fReg || w.fSol).isAfter(fin));
                 if (nueva) { omitidos.push({ v, nueva }); return; }
                 // Con una versión más nueva (Autorizada, Suspendida…) no es la última: no es pendiente.
-                if (!esUltima(v) || ultInactivo.has(v)) return;
+                // Desde el 14/11/2026 (pedido de Carlos: «que cuadre con la hoja Última versión») un suspendido que es la última
+                // versión cuenta aunque su master tenga otro código en la lista de INACTIVO, como en ese Excel del portal.
+                if (!esUltima(v)) return;
                 const m = fS ? mesDe(fS) : 'sin fecha';
                 const d = decision(v);
                 const x = { tipo: 'Suspendido', v, m, cuando: vigente(m), fS, d, porque: `Suspendido sin versión nueva: cuenta en el mes de su suspensión${fS ? `, ${dd(fS)}` : ''}.` };
@@ -15771,23 +15769,20 @@ async function maybeAutoStartTour() {
             const dec = [];
             ['P1', 'P2'].forEach((pl) => DECISION_EQUIPO[pl].forEach((d, cod) => { if (d.c !== 'I') return; const f = sap.get(`${pl}|${cod}`);
                 dec.push({ pl, cod, c: 'I', d, fS: d.fSusp ? dTxt(d.fSusp) : null, v: f ? { desc: f.descripcion || '', etapa: f.etapa || '', estado: normalizeEstadoRmd(f.estado), version: Number(f.version) || '' } : null }); }));
-            // Resumen (fórmula de Carlos, 11/11/2026; Autorizados cambiados el 14/11/2026): Autorizados = la última versión de cada
-            // master que hoy está Autorizada (sin los masters INACTIVO); Ingresados = todos los RMD con ese status hoy; INACTIVO = los del análisis de suspendidos, fijos (892 ATE / 436 LIMA);
-            // SUSPENDIDOS = suspendidos de la última versión de cada master (todos) menos los INACTIVO.
             const resumen = { P1: { AUTORIZADO: 0, INGRESADO: 0, SUSPENDIDO: 0, INACTIVO: 0 }, P2: { AUTORIZADO: 0, INGRESADO: 0, SUSPENDIDO: 0, INACTIVO: 0 } };
+            // 14/11/2026 (pedido de Carlos, con su Excel «RMD última versión»): Autorizados, Ingresados y Suspendidos son los de la
+            // hoja «Última versión» del portal, es decir, el status de hoy de la última versión de cada master (un Suspendido cuyo
+            // código está en la lista de INACTIVO allí sale como INACTIVO, así que no cuenta como Suspendido). INACTIVOS siguen
+            // fijos con la lista del análisis (892 ATE / 436 LIMA). Por eso el TOTAL puede pasar al del Excel en los masters de la
+            // lista cuya última versión hoy es otra (en ese Excel salen con su status de hoy y aquí además cuentan como INACTIVO).
             ultimas.forEach((v) => {
                 if (!resumen[v.planta]) return;
-                if (v.estado === 'SUSPENDIDO' || v.estado === 'INACTIVO') resumen[v.planta].SUSPENDIDO += 1;
-                if (v.estado === 'AUTORIZADO' && !ultInactivo.has(v)) resumen[v.planta].AUTORIZADO += 1;
-                if (v.estado === 'SUSPENDIDO' && !esInactivo(v) && !ultInactivo.has(v)) dec.push({ pl: v.planta, cod: String(v.codigo || '').trim(), c: 'S', d: decision(v) || {}, fS: suspDe(v), v: { desc: v.desc || '', etapa: v.etapa || '', estado: v.estado, version: v.version } });
+                if (v.estado === 'AUTORIZADO') resumen[v.planta].AUTORIZADO += 1;
+                if (v.estado === 'INGRESADO') resumen[v.planta].INGRESADO += 1;
+                if ((v.estado === 'SUSPENDIDO' || v.estado === 'INACTIVO') && !esInactivo(v)) resumen[v.planta].SUSPENDIDO += 1;
+                if (v.estado === 'SUSPENDIDO' && !esInactivo(v)) dec.push({ pl: v.planta, cod: String(v.codigo || '').trim(), c: 'S', d: decision(v) || {}, fS: suspDe(v), v: { desc: v.desc || '', etapa: v.etapa || '', estado: v.estado, version: v.version } });
             });
-            const vistosR = new Set();
-            versiones.forEach((v) => {
-                if (!resumen[v.planta] || v.estado !== 'INGRESADO') return;
-                const k = `${v.planta}|${String(v.codigo || `S${v.sol}`).trim()}|${v.version}`;
-                if (vistosR.has(k)) return; vistosR.add(k); resumen[v.planta][v.estado] += 1;
-            });
-            ['P1', 'P2'].forEach((pl) => { const n = RMD_INACTIVOS[pl].size; resumen[pl].SUSPENDIDO = Math.max(0, resumen[pl].SUSPENDIDO - n); resumen[pl].INACTIVO = n; });
+            ['P1', 'P2'].forEach((pl) => { resumen[pl].INACTIVO = RMD_INACTIVOS[pl].size; });
             return { corte, mes, pend, susp, aut, dec, resumen, omitidos };
         }
         const NOMBRE_PLANTA_BK = { P1: 'ATE', P2: 'LIMA' };
