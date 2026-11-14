@@ -3550,10 +3550,13 @@ alter publication supabase_realtime add table public.rmd_dashboard_kv;`;
                     const remoto = filas.length ? filas[0].value : null;
                     const mRemoto = compartidoAMapa(formato, remoto);
                     const mFinal = new Map(mRemoto);
+                    // Si la clave no existe en Supabase (proyecto nuevo, o restaurando un respaldo) no hay nada con qué fusionar: sube
+                    // todo lo de aquí. Antes, con una base conocida igual a lo local, se subía vacío y además se vaciaba la copia local.
+                    const mB = filas.length ? mBase : null;
                     // Lo cambiado aquí (o todo lo de aquí, si no se conoce la base) pisa lo de Supabase.
-                    mLocal.forEach((v, k) => { if (!mBase || mBase.get(k) !== v) mFinal.set(k, v); });
+                    mLocal.forEach((v, k) => { if (!mB || mB.get(k) !== v) mFinal.set(k, v); });
                     // Lo quitado aquí se quita, salvo que otra persona lo haya cambiado mientras tanto.
-                    if (mBase) mBase.forEach((v, k) => { if (!mLocal.has(k) && mRemoto.get(k) === v) mFinal.delete(k); });
+                    if (mB) mB.forEach((v, k) => { if (!mLocal.has(k) && mRemoto.get(k) === v) mFinal.delete(k); });
                     const final = compartidoDesdeMapa(formato, mFinal);
                     const fecha = new Date().toISOString();
                     ultimoGuardadoPropio.set(key, { t: Date.now(), u: msFecha(fecha) });
