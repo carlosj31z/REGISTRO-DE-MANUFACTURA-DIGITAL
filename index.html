@@ -2778,6 +2778,34 @@
         #tab-backlog .bkl-grupo-cab .flecha { width:1em; color:var(--slate-400); }
         #tab-backlog .bkl-grupo .bkl-lista { padding:0 10px 10px; }
         #tab-backlog .bkl-ecuaciones + .bkl-panel { margin-top:14px; }
+        /* CC pendientes (por qué siguen pendientes) */
+        #tab-backlog .bkl-cc { font:inherit; font-size:11px; font-weight:600; line-height:1; padding:4px 7px; border-radius:4px; border:1px solid var(--field-border); background:var(--surface-1); color:var(--app-text); white-space:nowrap; }
+        #tab-backlog button.bkl-cc { cursor:pointer; }
+        #tab-backlog button.bkl-cc:hover, #tab-backlog .bkl-cc.activo { border-color:var(--accent); }
+        #tab-backlog button.bkl-cc:focus-visible, #tab-backlog .bkl-ccsit:focus-visible { outline:2px solid var(--focus-ring); outline-offset:2px; }
+        #tab-backlog .bkl-cc.e-claro { border-color:rgba(var(--ok-rgb) / .6); color:rgb(var(--ok-rgb)); }
+        #tab-backlog .bkl-cc.e-dato { border-color:rgba(var(--info-rgb) / .6); color:rgb(var(--info-rgb)); }
+        #tab-backlog .bkl-cc.e-espera { border-color:var(--slate-400); color:var(--slate-300); }
+        #tab-backlog .bkl-cc.e-no { border-color:rgba(var(--danger-rgb) / .6); color:rgb(var(--danger-rgb)); }
+        #tab-backlog .bkl-ccsec { margin-top:14px; border:1px solid var(--card-border-highlight); border-radius:12px; background:var(--surface-1-faint); }
+        #tab-backlog .bkl-ccsec > .bkl-leer { margin:0 14px 10px; font-size:12.5px; }
+        #tab-backlog .bkl-ccsits { display:flex; flex-wrap:wrap; gap:6px; margin:0 14px 6px; }
+        #tab-backlog .bkl-ccsit { font:inherit; font-size:12px; height:30px; padding:0 11px; border-radius:8px; border:1px solid var(--field-border); background:transparent; color:var(--slate-300); cursor:pointer; }
+        #tab-backlog .bkl-ccsit[aria-pressed="true"] { border-color:var(--accent); background:rgba(var(--accent-rgb) / .14); color:var(--app-text); font-weight:600; }
+        #tab-backlog .bkl-cc-h { font-size:12px; font-weight:700; color:var(--app-text); margin:14px 14px 6px; }
+        #tab-backlog .bkl-cc-scroll { overflow-x:auto; margin:0 0 6px; padding:0 14px 8px; }
+        #tab-backlog .bkl-cc-tabla { width:100%; min-width:980px; border-collapse:collapse; font-size:12px; line-height:1.45; color:var(--slate-300); }
+        #tab-backlog .bkl-cc-tabla th { text-align:left; font-size:11px; font-weight:700; color:var(--slate-400); padding:6px 8px; border-bottom:1px solid var(--card-border-highlight); white-space:nowrap; }
+        #tab-backlog .bkl-cc-tabla td { vertical-align:top; padding:8px; border-bottom:1px solid var(--card-border-highlight); }
+        #tab-backlog .bkl-cc-tabla td b { color:var(--app-text); font-weight:600; }
+        #tab-backlog .bkl-cc-tabla tr.activo td { background:rgba(var(--accent-rgb) / .08); }
+        #tab-backlog .bkl-cc-tabla td.cod { white-space:nowrap; }
+        #tab-backlog .bkl-cc-tabla td.cod .pl, #tab-backlog .bkl-cc-tabla td.n span, #tab-backlog .bkl-cc-tabla td.ref .pie { display:block; font-size:11px; color:var(--slate-400); }
+        #tab-backlog .bkl-cc-tabla td.n { white-space:nowrap; }
+        #tab-backlog .bkl-cc-tabla td.n b { font-size:15px; }
+        #tab-backlog .bkl-cc-tabla td.n .bkl-mini { flex:none; margin-top:6px; height:26px; }
+        #tab-backlog .bkl-cc-tabla td.ref span { display:block; white-space:nowrap; font-variant-numeric:tabular-nums; }
+        #tab-backlog .bkl-cc-tabla th:nth-child(3), #tab-backlog .bkl-cc-tabla th:nth-child(4) { min-width:220px; }
         #tab-backlog .sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
         @media (max-width: 900px) { #tab-backlog .bkl-fila { grid-template-columns:2em minmax(0, 1fr); } #tab-backlog .bkl-control-fila { grid-column:2; } }
         @media (max-width: 640px) { #tab-backlog .bkl-fila { grid-template-columns:minmax(0, 1fr); } #tab-backlog .bkl-control-fila { grid-column:auto; } }
@@ -16548,6 +16576,57 @@ async function maybeAutoStartTour() {
     // ok: { f: ISO, u: quién, firma: «estado|versión» } (autorizado a mano), h: [[ISO, quién, qué cambió]] } }.
     // Sin Estatus elegido, la página sugiere uno con lo que dice SAP (estado, Observación, flujo de Producción) y el Estatus de
     // Producción; no se guarda hasta que alguien lo confirma.
+    // ---------- CC pendientes del backlog (15/11/2026) ----------
+    // Por qué sigue pendiente cada RMD: CC o NC de su observación (o un motivo general) y cómo se aplica.
+    // Fichas armadas con el Excel «1.-CC-NC-DES Para actualizar RMD», los correos de cada CC y los RMD autorizados
+    // cuya línea de Observaciones empieza con el CC (referencias). Solo lectura: no escribe en SAP.
+    const CcBacklog = (() => {
+        const CATALOGO = [{"k":"26-315-CC","pl":"P2","t":"Retiro del cinturón de calentamiento (10001672) y del apilador Marchesini (10100612)","q":"FAB de sólidos (Paracetamol 500, Mejoral Flex, Gaseovet, Furoxona, Dequazol, Simeticona, etc.): quitar el cinturón. ENV (Gravamin 50, Clorfenamina 4, Simeticona 40/80 B10, Naproxeno 550, etc.): quitar el apilador.","c":"ENV: quitar el apilador Marchesini de la lista de equipos y de los pasos que lo nombran. FAB: quitar el cinturón y poner lo que Producción indique en su lugar (en Dequazol pidieron el tanque con agitador y calentamiento 80 L SOL-E163).","e":"dato","f":"FAB: borrador o correo de Producción con el equipo que reemplaza al cinturón en cada producto (Vanessa lo pidió el 16/10).","ref":[{"cod":"2202609268","v":4,"d":"AC FOLICO 0.5mg TAB B10 (Marchesini)","e":"ENVASE"}],"n":3},{"k":"26-259-CC","pl":"P2","t":"Cambio de termómetros en Semisólidos","q":"FAB N°1: SEM-TER-24 pasa a SEM-TER-28. FAB N°2: SEM-TER-27 pasa a SEM-TER-29. ENV N°2: SEM-TER-20 pasa a SEM-TER-30.","c":"Cambiar el instrumento en la lista y en los pasos. En FAB N°1 aplicar junto con 26-353-CC: el termómetro final es SEM-TER-31. Hay autorizados de referencia (Metrozol NF OVU ya se hizo).","e":"claro","f":"","ref":[{"cod":"2202609225","v":4,"d":"MEDIVEL NF 0.75% GEL VAGINAL","e":"FABRICACION"},{"cod":"2202608836","v":6,"d":"CRESULEN 90 mg OVU - SALA 2","e":"FABRICACION"}],"n":16},{"k":"26-353-CC","pl":"P2","t":"Termómetro SEM-TER-28 pasa a SEM-TER-31 (FAB N°1, línea cremas)","q":"Reemplaza el SEM-TER-28 que había puesto 26-259-CC.","c":"Cambiar SEM-TER-28 (o SEM-TER-24 si aún no tenía 26-259) por SEM-TER-31 en FAB N°1.","e":"claro","f":"","ref":[{"cod":"2202609317","v":5,"d":"ENCIGELMED 5% GEL GINGIVAL","e":"FABRICACION"},{"cod":"2202609393","v":10,"d":"ARGENTAMICINA CRM","e":"FABRICACION"}],"n":6},{"k":"26-103-CC","pl":"P2","t":"Cambio de pistolas atomizadoras de bombo SOL-E101 / SOL-E170","q":"RECUBRIMIENTO: pistolas nuevas en los bombos SOL-E101 y SOL-E170.","c":"Copiar el cambio del autorizado de referencia (equipos y pasos de atomización).","e":"dato","f":"Códigos de las pistolas nuevas: se sacan comparando el autorizado de referencia con su versión anterior.","ref":[{"cod":"2202609168","v":3,"d":"LIBBERA 5mg TAB REC","e":"RECUBRIMIENTO"},{"cod":"2202609189","v":5,"d":"LEVODANTINA 750 mg TAB REC - 23.647 kg","e":"RECUBRIMIENTO"}],"n":17},{"k":"26-407-CC","pl":"P2","t":"Traslado de la bomba peristáltica SOL-E171 a Sólidos 4 (reemplaza a SOL-E195)","q":"RECUBIERTA de Pyridium 100, Azo Cefasabal 100, Pyridium X Forte 200 y Uropol Forte F 200: SOL-E195 pasa a SOL-E171 (Watson Marlow 530S, SAP 10100056).","c":"Cambiar SOL-E195 por SOL-E171 en esos cuatro. Ciprolin 500, Naproxeno 550 y Gemfibrozilo 600 (recubierta de Sólidos 2) quedan suspendidos hasta que llegue la bomba nueva: no se aplica.","e":"claro","f":"","ref":[{"cod":"2202609391","v":2,"d":"PYRIDIUM 100 TAB REC-M","e":"RECUBRIMIENTO"}],"n":1},{"k":"26-416-CC","pl":"P2","t":"Modificación del ACO de Betaver 16 y 24 mg (venta y MM)","q":"Notas: PDSG-202 pasa a PDOC-207. 4.4.2, 4.4.15 y 4.4.45: despeje registrado en FPRO-250. Velocidades de fajas en 4.4.20. 4.4.33: Calidad en Operaciones. 4.4.35 y 4.5.3: «cantidad muestreada».","c":"Aplicar el texto del CC paso por paso con los códigos vigentes del maestro.","e":"dato","f":"El CC pide quitar la casilla V°B° en 4.4.2/4/15/21/23/24/34/45 y la regla de esta campaña es no quitar ningún V°B°: ¿cuál manda?","ref":[],"n":0},{"k":"26-371-CC","pl":"P2","t":"Chaqueta de calentamiento N°1 MEN-E034 pasa a N°6 MEN-E059","q":"FAB de Mentholatum UNG y Mentholatum NF UNG (todas las versiones).","c":"Cambiar MEN-E034 por MEN-E059 (SAP 10106286) en equipos y pasos.","e":"claro","f":"","ref":[{"cod":"2202609280","v":2,"d":"MENTHOLATUM NF UNG (L)","e":"FABRICACION"},{"cod":"2202609279","v":3,"d":"MENTHOLATUM NF UNG (P)","e":"FABRICACION"}],"n":2},{"k":"26-396-CC","pl":"P2","t":"Ajuste de cantidades de material de envase de Pyridium 100, Pyridium X F 200 y Uropol F 200","q":"Baja la cantidad de ALU y PVC en la Lista de Materiales de envase.","c":"Primero la Lista de Materiales (no se edita en el RMD); luego versión nueva de ENV asociando la receta nueva.","e":"dato","f":"Confirmar que la Lista de Materiales ya tiene las cantidades nuevas.","ref":[],"n":0},{"k":"26-202-CC","pl":"P2","t":"Baja de la codificadora Domino A200 N°2 (COS-E37)","q":"ACO de Cosméticos (Anexo 01).","c":"Quitar COS-E37 (10001845). Quedan COS-E17, COS-E62 y COS-E69.","e":"claro","f":"","ref":[{"cod":"2202608729","v":4,"d":"LOCION REPELENTE DE INSECTOS ZZZCUDO 7mL DIS ","e":"ACONDICIONADO"},{"cod":"2202608725","v":3,"d":"LOCION REPELENTE DE INSECTOS ZZZCUDO FCO100mL","e":"ENVASE"}],"n":12},{"k":"26-355-CC","pl":"P2","t":"Unicat MM pasa a Salicat MM","q":"FAB de Quitoso Plus shampoo, Acnomel Junior gránulos y Acnomel gel exfoliante. La Lista de Materiales ya se cambió el 16/10.","c":"Versión nueva asociando la receta nueva; el insumo de los pasos pasa de 1000000054 a 1000005110.","e":"claro","f":"","ref":[{"cod":"2202608888","v":5,"d":"QUITOSO PLUS CHAMPU","e":"FABRICACION"}],"n":1},{"k":"26-161-CC","pl":"P2","t":"Reubicación, baja e inclusión de balanzas e instrumentos en Sólidos 4","q":"Pyridium 100 REC: balanza nueva Mettler ME204 en la sala de recubrimiento. Reubicación de SOL-BAL-31/46/48.","c":"Agregar la balanza con su código SAP; resto según la tabla del CC.","e":"dato","f":"Código SAP de la balanza Mettler ME204 (en mayo aún no existía).","ref":[{"cod":"2202608601","v":9,"d":"ANDREWS TRIPLE ACCION PVO GRANULADO - SALA 2","e":"FABRICACION"},{"cod":"2202609110","v":6,"d":"GLYCOLAX PVO 200kg","e":"FABRICACION"}],"n":9},{"k":"25-495-CC","pl":"P2","t":"Impresora flexográfica rotativa pasa a llamarse rebobinadora flexográfica (ACO-E53)","q":"ENV de Paldolor Migraña, Efer C, Gravergol, Rynatan NF, Mejoral Antigripal/Migraña, Antigrip-T, Ulceran 40, etc.","c":"Cambiar el nombre del equipo en la lista y en los pasos.","e":"dato","f":"¿El nombre sale del maestro de equipos de SAP (ya cambiado) o hay que cambiar el texto del paso?","ref":[{"cod":"2202609328","v":5,"d":"EFER-C 1g PVO EFERVES SAC5g","e":"ENVASE"},{"cod":"2202507318","v":5,"d":"ANTIGRIP - T ANTIGRIPAL PVO ORAL SOB 5g","e":"ENVASE"}],"n":5},{"k":"26-244-CC","pl":"","t":"Fecha de elaboración (E) en el rotulado de productos para Ecuador","q":"ACO (y etapas que codifican) de productos para Ecuador.","c":"Según el borrador de Producción: L.Rosales mandó el de ACO el 23/10.","e":"dato","f":"Borrador de INH (E.Durand) para Idelle 0.1% CRM EC y Soluna 5.","ref":[{"cod":"2202608873","v":4,"d":"TRAMEDIF COMPUESTO TAB B10 CJA x 10","e":"ACONDICIONADO"},{"cod":"2202608999","v":5,"d":"GASEOVET 80mg/mL SUS ANIS 15mL CJA x1 - AC02","e":"ACONDICIONADO"}],"n":23},{"k":"26-159-CC","pl":"P2","t":"Reemplazo del autoclave Hogner INH-E003","q":"Inyectables hormonales.","c":"No se aplica todavía: el reemplazo será en la reestructuración de INH (E.Durand, 23/10).","e":"espera","f":"Que llegue el equipo nuevo.","ref":[],"n":0},{"k":"26-154-CC","pl":"P2","t":"Traslado de la licuadora APIN SOL-E196 de Sólidos 4 a Sólidos 2","q":"RECUBRIMIENTO de Naproxeno sódico 550.","c":"Agregar SOL-E196 como en el autorizado de referencia (Gemfibrozilo 600 REC).","e":"claro","f":"","ref":[{"cod":"2202608995","v":9,"d":"GEMFIBROZILO 600mg TAB REC","e":"RECUBRIMIENTO"}],"n":1},{"k":"25-317-CC","pl":"P2","t":"Variador de velocidad en la foliadora Hassia N°1 ACO-E07","q":"ENV de Gravergol F2 MM.","c":"Copiar el paso del variador del autorizado de referencia (Rynatan NF F2 MM).","e":"claro","f":"","ref":[{"cod":"2202609364","v":3,"d":"RYNATAN NF 10mg+4mg TAB F2 MM","e":"ENVASE"}],"n":1},{"k":"26-294-CC","pl":"P2","t":"Cambio de especificaciones técnicas y tabla de análisis de Tri Azit 200 mg/5 mL","q":"ENV de Tri Azit.","c":"Copiar las especificaciones del autorizado de referencia (FAB y ENV de Tri Azit ya autorizados).","e":"claro","f":"","ref":[{"cod":"2202609061","v":8,"d":"TRI AZIT 200mg/5mL PVO SUS-FSOLFA04","e":"FABRICACION"},{"cod":"2202609130","v":6,"d":"TRI AZIT 200mg/5mL PVO SUS FCO30mL","e":"ENVASE"}],"n":3},{"k":"25-368-CC","pl":"P2","t":"Ajuste del peso del tamaño de lote de Macrodantina XR 100","q":"Cambia la cantidad en la receta.","c":"Receta nueva en la Lista de Materiales y versión nueva asociándola.","e":"dato","f":"También espera la corrección del instructivo de flexográfica.","ref":[{"cod":"2202609367","v":11,"d":"MACRODANTINA XR 100 CAP","e":"FABRICACION"}],"n":1},{"k":"24-096-CC","pl":"P2","t":"Ajuste del peso del tamaño de lote de Tramedif 50 mg cápsula","q":"FAB de Tramedif.","c":"Vanessa anotó «ver si aplica»; el correo discute el rango de peso (120 mg ± 5 %).","e":"no","f":"Confirmar con Calidad si el CC sigue vigente y qué cambia en el RMD.","ref":[],"n":0},{"k":"26-390-CC","pl":"P2","t":"Etiqueta de papel couché pasa a etiqueta adhesiva en Furacin 0.2% pomada","q":"ACO de Furacin pomada 500 g.","c":"Necesita el código nuevo de la etiqueta en la Lista de Materiales; luego versión nueva.","e":"espera","f":"Código nuevo de la etiqueta adhesiva.","ref":[],"n":0},{"k":"25-307-CC","pl":"P2","t":"Cambio de termómetros en recubierta","q":"RECUBRIMIENTO de Levodantina 750.","c":"No hay correo ni autorizado de referencia.","e":"no","f":"Qué termómetro sale y cuál entra.","ref":[],"n":0},{"k":"21-354-CC","pl":"P2","t":"Inclusión de la flexográfica","q":"ENV de Macrodantina 100 F4 MM.","c":"No hay correo ni referencia.","e":"no","f":"Correo del CC o borrador.","ref":[],"n":0},{"k":"24-224-CC","pl":"P2","t":"Inclusión de lotizado en PEF (ACO)","q":"ACO de Antigrip-T.","c":"No hay correo ni referencia.","e":"no","f":"Correo del CC o borrador con el paso del lotizado.","ref":[],"n":3},{"k":"24-257-CC","pl":"P2","t":"Lotizado de frascos y cajas de Tri Azit","q":"ACO de Tri Azit.","c":"No hay correo ni referencia.","e":"no","f":"Correo del CC o borrador con el paso del lotizado.","ref":[],"n":0},{"k":"23-224-CC","pl":"P2","t":"Cambio de código de material (Mentholatum UNG lata 5 g)","q":"ACO, suspendido desde 01/2024.","c":"Es de 2024; puede que ya no aplique.","e":"no","f":"Confirmar si sigue vigente.","ref":[],"n":0},{"k":"26-275-CC","pl":"P1","t":"Encintadora de cajas Kuresa en la línea 5 de ACO","q":"ACO de PV1 línea 5 (Cloruro de sodio 20%, Dextrosa 33.3%, Kalyum, etc.).","c":"Copiar el equipo y el paso del autorizado de referencia (Dextrosa 33.3% AC05, Suero fisiológico AC05).","e":"claro","f":"","ref":[{"cod":"2202609389","v":4,"d":"DEXTROSA 33.3% INY PEBD AMP x 20 mL CJA x 50 ","e":"ACONDICIONADO"},{"cod":"2202609433","v":3,"d":"SUERO FISIOLOG 9% INY PEBD 20mL CJA x25 - AC0","e":"ACONDICIONADO"}],"n":2},{"k":"26-208-CC","pl":"P1","t":"Muestras de análisis de control de calidad en ENV y ACO de GV1","q":"ENV: cantidad muestreada para volumen al inicio; «personal de control de calidad» pasa a «personal de control de productos en proceso»; se quitan los muestreos por carga. ACO: muestreo por carga con «Realizado por».","c":"Igual que 26-280-CC (GV2), que ya tiene autorizados y el texto de los pasos.","e":"dato","f":"Confirmar que GV1 usa el mismo texto que 26-280-CC y ver el Anexo N°1 (no hay autorizado de GV1).","ref":[],"n":0},{"k":"26-280-CC","pl":"P1","t":"Muestras de análisis de control de calidad en ENV y ACO de GV2 (Electroral)","q":"ENV: se quitan los muestreos por carga esterilizada. ACO: muestreo por carga tras el etiquetado con cantidad muestreada, realizado por y fecha/hora. «Esterilización terminal (autoclavado)» pasa a «Tratamiento térmico».","c":"Paso por carga (E.Ibañez): «EL PERSONAL DE CALIDAD EN OPERACIONES REALIZA EL MUESTREO DE LA CARGA N°X PARA LOS ANALISIS CORRESPONDIENTES SEGUN POE PCPR-202 VIGENTE» + Realizado por, cantidad muestreada (fcos) y fecha/hora; en 4.4.25 el formato FPRO-251 pasa a FCPR-239.","e":"claro","f":"","ref":[{"cod":"2202609008","v":6,"d":"ELECTRORAL NF FRESA SOL FCO1000mL FCO x 1-N","e":"ACONDICIONADO"},{"cod":"2202609076","v":7,"d":"ELECTRORAL PEDIATRICO NF FRESA SOL FCO1000mL","e":"ENVASE"}],"n":7},{"k":"26-108-CC","pl":"P1","t":"Túnel de paso (passbox dinámico) en SEL (10106191)","q":"ENV/FAB de SEL (Xilonest, Kenadol, Rocubron, etc.).","c":"Agregar el túnel 10106191 como en los autorizados de referencia (Vecubrom, Xilonest VTE 2).","e":"claro","f":"Kenadol dice además «pendiente BPM».","ref":[{"cod":"2202608694","v":7,"d":"VECUBROM 4 mg/mL INY VIA 8 mL","e":"ENVASE"},{"cod":"2202608679","v":5,"d":"XILONEST AL 2% INY VIA 20mL VTE 2","e":"ENVASE"}],"n":8},{"k":"26-258-CC","pl":"P1","t":"Tolva y selladoras al vacío en PV2/GV3","q":"ENV/ACO (Travopak Free, Sorbamin, Cloruro de sodio 9% bolsa).","c":"Copiar del autorizado de referencia (Agua estéril para irrigación).","e":"dato","f":"Travopak dice «pendiente adenda».","ref":[{"cod":"2202609080","v":9,"d":"AGUA ESTERIL PARA IRRIGACION BOL 3000 mL","e":"ENVASE"}],"n":1},{"k":"26-037-CC","pl":"P1","t":"Reemplazo de la balanza OHAUS en GV2 líneas 1 y 2","q":"ENV de Kessler-Dial.","c":"Incluir la balanza GV2-BAL-12 como en los autorizados de referencia.","e":"claro","f":"","ref":[{"cod":"2202607888","v":11,"d":"BICARDIAL-B NF SOL P/HEMOD GLN x4.9L","e":"ENVASE"},{"cod":"2202608010","v":11,"d":"BICARDIAL-A NF-1 SOL P/HEMOD GLN4L","e":"ENVASE"}],"n":4},{"k":"25-426-CC","pl":"P1","t":"Modificación de procesos de la línea 5 de PV1 (inspección, etiquetado, ACO)","q":"ACO de Lidocaína 1%, Medicort, reacondicionado genérico.","c":"Copiar de los autorizados de referencia (Suero fisiológico, Amikacina).","e":"dato","f":"No hay correo: el cambio exacto sale de comparar la referencia.","ref":[{"cod":"2202609410","v":5,"d":"SUERO FISIOLOG 9‰ INY PEBD AMP20mL","e":"ENVASE"},{"cod":"2202608279","v":3,"d":"AMIKACINA 500mg INY PEBD AMP2mL","e":"ENVASE"}],"n":2},{"k":"26-033-CC","pl":"P1","t":"Codificadora Domino PL1-BEB-E010 pasa a impresora láser CO2","q":"ACO de todas las presentaciones de Electrolight.","c":"Cambiar el equipo como en los autorizados de referencia.","e":"claro","f":"","ref":[{"cod":"2202608673","v":2,"d":"ELECTROLIGHT FRESA SOL FCO 800mL PACK X 12 06","e":"ACONDICIONADO"},{"cod":"2202608431","v":2,"d":"ELECTROLIGHT MANZANA SOL FCO 475mL B33 PACK x","e":"ACONDICIONADO"}],"n":16},{"k":"25-265-CC","pl":"P1","t":"«Volumen» pasa a «llenado mínimo» en oftálmicos de PV2","q":"ENV de oftálmicos.","c":"Cambiar el paso como en los autorizados de referencia.","e":"claro","f":"","ref":[{"cod":"2202507443","v":5,"d":"MEDICORTIL 10mg+1mg SOF FCO2.5mL (S/IMP)","e":"ENVASE"},{"cod":"2202608390","v":4,"d":"AKWA TEARS 1.4% SOF FCO x 15 mL","e":"ENVASE"}],"n":38},{"k":"26-306-CC","pl":"P1","t":"Bomba de transvase nueva en GV2","q":"FAB de Electroral Plus Fresa.","c":"Copiar de los autorizados de referencia (Electroral Pediátrico).","e":"claro","f":"","ref":[{"cod":"2202609076","v":7,"d":"ELECTRORAL PEDIATRICO NF FRESA SOL FCO1000mL","e":"ENVASE"},{"cod":"2202609357","v":6,"d":"ELECTRORAL PEDIATRICO NF ANIS SOL","e":"FABRICACION"}],"n":5},{"k":"26-190-CC","pl":"P1","t":"Línea 5: etiquetadora Crenteria de inspección pasa a ACO","q":"ACO de Cefacrol IM 1000.","c":"Copiar de los autorizados de referencia.","e":"claro","f":"","ref":[{"cod":"2202608614","v":3,"d":"DEXTROSA 33.3% INY PEBD AMP x 20 mL  INS","e":"INSPECCIÓN"},{"cod":"2202608753","v":3,"d":"MEDICORT 4mg/2ml INY PEBD 2ml INS","e":"INSPECCIÓN"}],"n":8},{"k":"25-505-CC","pl":"P1","t":"Utensilios y accesorios de PV2","q":"FAB de Sorbamin 30 NF.","c":"Actualizar los códigos de utensilios como en los autorizados de referencia.","e":"claro","f":"","ref":[{"cod":"2202507443","v":5,"d":"MEDICORTIL 10mg+1mg SOF FCO2.5mL (S/IMP)","e":"ENVASE"},{"cod":"2202608390","v":4,"d":"AKWA TEARS 1.4% SOF FCO x 15 mL","e":"ENVASE"}],"n":47},{"k":"26-297-CC","pl":"P1","t":"Cambio de especificación de Amoxidin CL 400","q":"ENV de Amoxidin CL 400.","c":"Copiar las especificaciones de los autorizados de referencia (FAB y ENV).","e":"claro","f":"","ref":[{"cod":"2202608951","v":7,"d":"AMOXIDIN CL 400 PVO SUS","e":"FABRICACION"},{"cod":"2202608953","v":5,"d":"AMOXIDIN CL 400 SUS FCO x 105 mL","e":"ENVASE"}],"n":2},{"k":"24-320-CC","pl":"P1","t":"«Tanque presurizador» pasa a «presurizador» (mismo código)","q":"FAB de la línea de polvos estériles PEN.","c":"Cambiar el nombre como en los autorizados de referencia.","e":"claro","f":"","ref":[{"cod":"2202607626","v":4,"d":"TIDORZAK FREE 20mg/mL+5mg/mL SOF","e":"FABRICACION"},{"cod":"2202607645","v":2,"d":"AMIKABIOT 250mg INY","e":"FABRICACION"}],"n":14},{"k":"25-481-CC","pl":"P1","t":"Sala nueva de FAB y ACO en GV2 línea 2","q":"FAB de Bicardial-A.","c":"Copiar de la referencia (Kessler-Dial B FAB).","e":"dato","f":"Aplicar junto con 25-515-CC.","ref":[{"cod":"2202607607","v":3,"d":"KESSLER-DIAL 36.83X B SOL P/HEMD","e":"FABRICACION"}],"n":1},{"k":"25-515-CC","pl":"P1","t":"Actualización del túnel de la línea 1 de FAB en GV2","q":"FAB de Bicardial-A.","c":"Copiar de la referencia (Kessler-Dial B FAB).","e":"dato","f":"Aplicar junto con 25-481-CC.","ref":[{"cod":"2202607607","v":3,"d":"KESSLER-DIAL 36.83X B SOL P/HEMD","e":"FABRICACION"}],"n":1},{"k":"24-013-CC","pl":"P1","t":"Pesado de la caja de embalaje con la balanza CEF-BAL-14 (PEN)","q":"ACO de productos PEN (Bronco Amoxidin, Trifamox, Medimox, etc.).","c":"Agregar el paso de pesado de caja como en los autorizados de referencia (Cefacrol IM 250).","e":"dato","f":"Esos RMD dicen además «23-258-CC (balanzas PEN)» y «verificar fajas»: ver 23-258-CC.","ref":[{"cod":"2202505109","v":2,"d":"CEFACROL IM 250 INY CJA x 1(V+S)","e":"ACONDICIONADO"},{"cod":"2202608060","v":2,"d":"IMIPENEM 500 mg + CILASTATINA 500 mg INY VIAL","e":"ACONDICIONADO"}],"n":3},{"k":"23-258-CC","pl":"P1","t":"«23-258-CC balanzas PEN» (código dudoso)","q":"Anotado junto a 24-013-CC en 7 RMD de PEN.","c":"Probablemente es 23-358-CC (balanzas PEN).","e":"no","f":"Confirmar si es 23-358-CC y qué es «verificar fajas».","ref":[],"n":0},{"k":"23-358-CC","pl":"P1","t":"Balanzas PEN (núcleo área controlada, recubierta, suspensiones)","q":"ENV de Amoxidin CL 600.","c":"Copiar del autorizado de referencia (Amoxicilina 250 mg/5 mL ACO).","e":"dato","f":"Solo hay una referencia y la línea no detalla el cambio.","ref":[{"cod":"2202506836","v":5,"d":"AMOXICILINA 250mg/5mL PVO SUS FCO60mL CJAx1","e":"ACONDICIONADO"}],"n":1},{"k":"24-044-CC","pl":"P1","t":"Detector de metales, friabilizador y durómetro (PEN, si hay compresión)","q":"FAB de Dicloxacilina 500 cap.","c":"Copiar de los autorizados de referencia (Bronco Trifamox 500 cap).","e":"dato","f":"Dice «verificar rendimiento».","ref":[{"cod":"2202504675","v":5,"d":"BRONCO TRIFAMOX 500 CAP","e":"FABRICACION"}],"n":2},{"k":"24-232-CC","pl":"P1","t":"Codificación de utensilios y accesorios GV2 (2024)","q":"ENV de Electroral NF Hierba Luisa.","c":"Probablemente ya lo cubre 25-505-CC.","e":"no","f":"Confirmar si 25-505-CC lo reemplaza.","ref":[],"n":0},{"k":"24-273-CC","pl":"P1","t":"Ajuste de cantidad teórica de Iopamidol (ENV, INSP, ACO)","q":"ACO de Iopamidol.","c":"Cambio en la Lista de Materiales y versión nueva.","e":"no","f":"Sin correo: confirmar las cantidades.","ref":[],"n":0},{"k":"23-1447-DES","pl":"P1","t":"Desviación: volumen bajo; control de volumen cada 30 min en vez de 60 (Strunk)","q":"ENV de Mejoralito infantil.","c":"Cambiar la frecuencia del control de volumen de 60 a 30 min.","e":"dato","f":"Confirmar que el cambio es solo la frecuencia.","ref":[],"n":0},{"k":"MASIVO","pl":"","t":"Fase 1 / cambio masivo (homologación)","q":"Los cambios de la lista de Carlos (CC de Mentholatum NF): «hagan» pasa a «realicen», Control de Calidad pasa a Calidad en Operaciones, contramuestra pasa a cantidad muestreada, PDSG-202 pasa a PDOC-207 y el paso nuevo del conteo con «Y/O PERSONAL DESIGNADO».","c":"Cambiar cada paso por el código vigente del maestro (docs/homologacion_rmd.md): 161493/1655 pasa a 182341; 31840 pasa a 62221 (ATE) o 166452 (LIMA); conteo LIMA 185192. No se quita ningún V°B°, tampoco el del despeje.","e":"dato","f":"ATE no tiene código vigente para el paso nuevo del conteo.","ref":[],"n":0,"otro":1},{"k":"FASE2","pl":"","t":"Fase 2","q":"Acuerdos de fase 2: despejes 184004 (FAB), 184008 (ENV), 184495/184497 (ACO); Calidad en Operaciones.","c":"Aplicar los acuerdos y la homologación.","e":"dato","f":"Los despejes de fase 2 vienen sin V°B° y la regla de esta campaña es no quitar ninguno: ¿cuál manda?","ref":[],"n":0,"otro":1},{"k":"GV1MOD","pl":"P1","t":"«CC de modificaciones GV1» (sin código)","q":"ATE, GV1.","c":"No se sabe qué CC es.","e":"no","f":"Código del CC.","ref":[],"n":0,"otro":1},{"k":"TANQUES","pl":"P1","t":"«Implementación de tanques» (sin código)","q":"ATE.","c":"No se sabe qué CC es.","e":"no","f":"Código del CC.","ref":[],"n":0,"otro":1},{"k":"FLEXO","pl":"P2","t":"Instructivo de la flexográfica","q":"LIMA ENV.","c":"Espera la corrección del instructivo (IACO-E237).","e":"espera","f":"Instructivo corregido.","ref":[],"n":0,"otro":1},{"k":"CONTROLADO","pl":"P2","t":"Producto controlado: pesaje","q":"LIMA.","c":"No hay CC ni detalle.","e":"no","f":"Qué cambia en el pesaje y de qué CC sale.","ref":[],"n":0,"otro":1},{"k":"LOTIZADO","pl":"","t":"Lotizado pendiente","q":"Varios.","c":"Depende del CC de lotizado de cada producto.","e":"no","f":"Correo o borrador con el paso del lotizado.","ref":[],"n":0,"otro":1},{"k":"MIGRACION","pl":"P1","t":"Migración","q":"ATE.","c":"RMD que vienen de la migración; necesitan versión nueva completa.","e":"dato","f":"Borrador de Producción.","ref":[],"n":0,"otro":1},{"k":"CARACT","pl":"","t":"Caracterización","q":"Pendiente borrador de caracterización.","c":"Espera el borrador de caracterización de Producción.","e":"espera","f":"Borrador de Producción.","ref":[],"n":0,"otro":1},{"k":"PUESTO","pl":"P1","t":"Puesto de trabajo","q":"ATE.","c":"No hay CC ni detalle.","e":"no","f":"Qué puesto de trabajo cambia y por qué.","ref":[],"n":0,"otro":1},{"k":"MATERIAL","pl":"","t":"Material, receta, lote o Lista de Materiales","q":"Cambio de código de material, cantidad, tamaño de lote o etiqueta.","c":"Primero la Lista de Materiales en SAP; luego versión nueva asociando la receta.","e":"dato","f":"Confirmar que la Lista de Materiales ya está cambiada.","ref":[],"n":0,"otro":1},{"k":"NC","pl":"","t":"No conformidad, auditoría o desviación","q":"Cada caso es distinto.","c":"Leer la NC/desviación de cada RMD.","e":"no","f":"Correo de la NC.","ref":[],"n":0,"otro":1},{"k":"MUESTRAS","pl":"P1","t":"Muestras para análisis (26-208 / 26-280 sin código en la línea)","q":"GV1/GV2.","c":"Ver 26-208-CC y 26-280-CC.","e":"dato","f":"Ver 26-208-CC.","ref":[],"n":0,"otro":1},{"k":"EQUIPOS","pl":"","t":"Equipo o instrumento sin código de CC","q":"Cambio de equipo o instrumento sin CC anotado.","c":"Hay que identificar el CC.","e":"no","f":"Código del CC.","ref":[],"n":0,"otro":1},{"k":"ECUADOR","pl":"P2","t":"Fecha de elaboración para Ecuador (26-244 sin código en la línea)","q":"LIMA.","c":"Ver 26-244-CC.","e":"dato","f":"Borrador de Producción.","ref":[],"n":0,"otro":1},{"k":"PENDCC","pl":"","t":"«Pendiente CC» sin código","q":"Dice que espera un CC pero no dice cuál.","c":"Revisar la observación de la versión anterior o preguntar a ASC.","e":"no","f":"Código del CC.","ref":[],"n":0,"otro":1},{"k":"INGRESADO","pl":"","t":"Ingresado sin pendiente anotado","q":"Ya está ingresado y no anota que falte nada.","c":"Revisar y autorizar (o anotar qué falta).","e":"claro","f":"","ref":[],"n":0,"otro":1},{"k":"INGOTRO","pl":"","t":"Ingresado con otro pendiente","q":"Está ingresado y la observación anota algo pendiente que no es un CC.","c":"Ver la observación de cada uno.","e":"no","f":"Leer qué falta en cada uno.","ref":[],"n":0,"otro":1},{"k":"SOLICITUD","pl":"","t":"Solicitud por ingresar","q":"La versión nueva está solicitada.","c":"Ingresar la versión nueva.","e":"claro","f":"","ref":[],"n":0,"otro":1},{"k":"SUSPOTRO","pl":"","t":"Suspendido por otro motivo","q":"La observación dice el motivo, sin CC.","c":"Ver la observación.","e":"no","f":"Leer el motivo de cada uno.","ref":[],"n":0,"otro":1},{"k":"SUSPSIN","pl":"","t":"Suspendido sin motivo claro","q":"No hay línea de suspensión clara.","c":"Ver la observación.","e":"no","f":"Por qué se suspendió.","ref":[],"n":0,"otro":1}];
+        const FICHA = Object.fromEntries(CATALOGO.map((x) => [x.k, x]));
+        const SITUACION = { claro: 'Claro', dato: 'Falta un dato', espera: 'En espera', no: 'No sé cómo aplicarlo' };
+        const N = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase();
+        const CATS = [
+            ['FASE2', /FASE\s*(2|II\b|DOS)/], ['MASIVO', /FASE\s*(1|I\b|UNO)|MASIVO/], ['GV1MOD', /MODIFICACIONES GV1/],
+            ['TANQUES', /IMPLEMENTACION DE TANQUES/], ['FLEXO', /FLEXOGRAF/], ['CONTROLADO', /CONTROLADO/], ['LOTIZADO', /LOTIZADO/],
+            ['MIGRACION', /MIGRACI/], ['CARACT', /CARACTERIZ/], ['PUESTO', /PUESTO DE TRABAJO|\bPT\b/],
+            ['MATERIAL', /MATERIAL|RECETA|TAMANO DE LOTE|LISTA DE MATERIALES|\bLM\b|LMAT|FICHA LOGIST|MERMA|ETIQUETA|CAJA DE EMBALAJE|MASTER/],
+            ['NC', /\bNC\b|NO CONFORMIDAD|AUDITORI|DESVIACI|\bEPP/], ['MUESTRAS', /MUESTRAS? (PARA|DE) (ANALISIS|CONTROL)/],
+            ['EQUIPOS', /BALANZA|TERMOMETRO|EQUIPO|CHAQUETA|PISTOLA|CODIFICADORA|APILADOR|TANQUE|BOMBA|SELLADORA|AUTOCLAVE|ENCINTADORA|ETIQUETADORA|SARTOCHECK|UTENSILIO/],
+            ['ECUADOR', /ECUADOR|FECHA (DE )?ELAB/]
+        ];
+        const RX_PENDCC = /PEND\w*\s+(DE\s+)?(CC|C\.C|CONTROL DE CAMBIO|ADENDA)|NO HAY CC|PENDIENTE CC|ESPERA DE CC|CC PEND/;
+        function codigos(s) {
+            const r = new Set(), re = /(?<!\d)(2[0-6])\s*-\s*(\d{3,4})(?:\s*-\s*(CC|DES|D|OOT))?/g;
+            let m;
+            while ((m = re.exec(N(s)))) { let t = m[3] || (m[2].length === 4 ? 'DES' : 'CC'); if (t === 'D') t = 'DES'; r.add(`${m[1]}-${m[2]}-${t}`); }
+            return [...r].sort();
+        }
+        // Línea de la observación que dice por qué está pendiente.
+        function motivoDe(v, tipo) {
+            const lineas = N(v && v.obs).split(/\n|\|/).map((l) => l.trim()).filter(Boolean);
+            if (tipo === 'Suspendido') { const s = lineas.filter((l) => /SUSPEN|SUPEN|SSUPEN|^SUS\b|\bSUS[ -]/.test(l)); return s.length ? s[s.length - 1] : ''; }
+            return lineas.filter((l) => /PEND|FALTA|SUSPEN/.test(l)).slice(-2).join(' / ');
+        }
+        // Claves de ficha (CC o motivo general) de un pendiente.
+        function motivos(v, tipo) {
+            const mot = motivoDe(v, tipo);
+            let cc = codigos(mot.replace(/\d{8}[A-Z]{2}/g, ''));
+            if (!cc.length && tipo === 'Suspendido') cc = codigos(v && v.obs).filter((c) => mot.includes(c.split('-')[1]));
+            if (cc.length) return cc;
+            const cat = CATS.find(([, rx]) => rx.test(mot));
+            if (cat) return [cat[0]];
+            if (RX_PENDCC.test(N(v && v.obs))) return ['PENDCC'];
+            if (tipo === 'Ingresado') return [mot ? 'INGOTRO' : 'INGRESADO'];
+            if (tipo === 'Solicitado') return ['SOLICITUD'];
+            return [mot ? 'SUSPOTRO' : 'SUSPSIN'];
+        }
+        function ficha(k) {
+            return FICHA[k] || { k, pl: '', t: `${k} (sin ficha)`, q: 'No está en el listado de CC estudiado.', c: 'Hay que leer el CC.', e: 'no', f: 'Correo o detalle del CC.', ref: [], n: 0, nueva: 1 };
+        }
+        const esCc = (k) => /^\d{2}-\d{3,4}-/.test(k);
+        return { motivos, motivoDe, ficha, esCc, SITUACION, catalogo: CATALOGO, _codigos: codigos };
+    })();
+
     const BacklogRmd = (() => {
         const CLAVE_NOTAS = 'val_backlog_notas';
         const CLAVE_AUTOR = 'bkl_autor'; // localStorage: quién anota en este navegador (solo comodidad)
@@ -16591,7 +16670,8 @@ async function maybeAutoStartTour() {
         let abierto = '';           // clave del pendiente con la nota abierta
         let recargaTimer = null;
         const grupos = { prog: false, manual: false };
-        const vista = { planta: '', tipo: '', nuevo: false, arrastre: false, sinNota: false, vencidos: false, estado: '', q: '', mostrar: POR_PAGINA };
+        const vista = { planta: '', tipo: '', nuevo: false, arrastre: false, sinNota: false, vencidos: false, estado: '', cc: '', q: '', mostrar: POR_PAGINA };
+        let ccAbierto = true;      // tabla de CC pendientes desplegada
 
         const esc = (t) => String(t === null || t === undefined ? '' : t).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
         const hoy = () => dayjs().startOf('day');
@@ -16699,7 +16779,7 @@ async function maybeAutoStartTour() {
                 return { k: claveDe(v), kSol, v, tipo: x.tipo, m: x.m, nuevo: x.m === bk.mes, etapa: et, fS: x.fS || null, base: base || null,
                     dias: base ? corte.diff(base, 'day') : null, porque: x.porque, prio: x.prio || '', prog: pr };
             });
-            items.forEach((it) => { it.sug = sugerir(it); });
+            items.forEach((it) => { it.sug = sugerir(it); it.cc = CcBacklog.motivos(it.v, it.tipo); });
             return { corte, mes: bk.mes, items, aut: bk.aut, sinRmdProg: prog.sinRmd, progError: prog.error || '' };
         }
 
@@ -16713,9 +16793,10 @@ async function maybeAutoStartTour() {
             if (vista.sinNota && n && n.m) return false;
             if (vista.vencidos && !vencido(n)) return false;
             if (!sinEstado && vista.estado && estadoDe(it).m !== vista.estado) return false;
+            if (vista.cc && !(it.cc || []).includes(vista.cc)) return false;
             if (vista.q) {
                 const q = vista.q.normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase();
-                const t = [it.v.desc, it.v.codigo, it.v.sol, it.v.codDef, it.etapa, n && n.t, n && n.a, it.prog && it.prog.producto].join(' ').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase();
+                const t = [it.v.desc, it.v.codigo, it.v.sol, it.v.codDef, it.etapa, n && n.t, n && n.a, it.prog && it.prog.producto, ...(it.cc || []).filter(CcBacklog.esCc)].join(' ').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase();
                 if (!q.split(/\s+/).every((p) => t.includes(p))) return false;
             }
             return true;
@@ -16733,6 +16814,7 @@ async function maybeAutoStartTour() {
                 ${dato(pl('P1'), 'ATE', 'P1')}${dato(pl('P2'), 'LIMA', 'P2')}
                 ${dato(pend.length - nue, 'backlog', 'arrastre', 'bk')}${dato(nue, 'nuevos del mes', 'nuevos', 'nuevo')}
                 ${dato(prog, 'en el Programa de producción', 'prog', 'prog')}
+                ${dato(pend.filter((it) => (it.cc || []).some(CcBacklog.esCc)).length, 'esperan un CC o NC con código', 'cc', 'cc')}
                 ${dato(`${conEst}`, 'con estatus elegido', 'sinNota')}${venc ? dato(venc, 'compromisos vencidos', 'vencidos', 'venc') : ''}
             </div>`;
         }
@@ -16750,6 +16832,7 @@ async function maybeAutoStartTour() {
                     ${ESTADOS.map((e) => `<option value="${esc(e.id)}"${vista.estado === e.id ? ' selected' : ''}>${esc(e.txt)}</option>`).join('')}
                 </select>
                 ${tog('arrastre', 'Backlog')}${tog('nuevo', 'Nuevos')}${tog('sinNota', 'Sin estatus elegido')}${tog('vencidos', 'Compromiso vencido')}
+                ${vista.cc ? `<button type="button" class="bkl-toggle" data-bkl-cc-ver="${esc(vista.cc)}" aria-pressed="true" title="Quitar este filtro">Motivo: ${esc(ccNombre(vista.cc))} ✕</button>` : ''}
                 <input type="search" class="bkl-campo bkl-buscar" data-bkl-buscar placeholder="Buscar producto, código o nota" value="${esc(vista.q)}" aria-label="Buscar">
             </div>`;
         }
@@ -16772,6 +16855,7 @@ async function maybeAutoStartTour() {
                             ${it.nuevo ? `<span class="bkl-sticker nuevo" title="Pendiente que entró este mes (${esc(nombreMes(modelo.mes))})">Nuevo</span>` : `<span class="bkl-sticker bk" title="Pendiente desde ${esc(nombreMes(it.m))}">Backlog</span>`}
                             ${it.prog ? `<span class="bkl-sticker prog" title="${esc(progTip)}">Programa de producción</span>` : ''}
                             <span class="bkl-tipo ${tipoCls}">${tipoTxt}</span>
+                            ${htmlChipsCc(it)}
                         </div>
                         <button type="button" class="bkl-prod" data-bkl-abrir="${esc(it.k)}" aria-expanded="${ab}">${esc(v.desc || (it.prog && it.prog.producto) || '(sin descripción)')}</button>
                         <div class="bkl-meta"><b>${PLANTA_NOMBRE[v.planta]}</b> · ${esc(it.etapa || 'sin etapa')} · ${codigo} · pendiente desde ${esc(nombreMes(it.m))}${desde ? ` · ${esc(desde)}` : ''}${it.prog && it.prog.inicio ? ` · <b>inicia producción ${fmt(it.prog.inicio)}</b>` : ''}</div>
@@ -16800,6 +16884,7 @@ async function maybeAutoStartTour() {
                 `<p><b>Por qué cuenta en ${esc(nombreMes(it.m))}:</b> ${esc(it.porque || '')}</p>`,
                 it.prog ? `<p><b>Programa de producción:</b> ${esc(it.prog.producto || '')}${it.prog.etapa ? ` · ${esc(it.prog.etapa)}` : ''}${it.prog.inicio ? ` · inicia ${fmt(it.prog.inicio)}` : ''}${it.prog.estatus ? ` · Estatus en Producción: ${esc(it.prog.estatus)}${it.prog.resp ? ` (${esc(it.prog.resp)})` : ''}` : ''}</p>` : '',
                 it.prio ? `<p><b>Prioridad del equipo:</b> ${esc(it.prio)}</p>` : '',
+                (it.cc || []).map((k) => { const f = CcBacklog.ficha(k); return `<p><b>${esc(CcBacklog.esCc(k) ? k : 'Motivo')}:</b> ${esc(f.t)}. <b>Cómo se aplica:</b> ${esc(f.c)}${f.f ? ` <b>Falta:</b> ${esc(f.f)}` : ''}</p>`; }).join(''),
                 v.obs ? `<p><b>Observación en SAP:</b></p><p class="bkl-obs">${esc(v.obs)}</p>` : ''
             ].join('');
             const hist = Array.isArray(n.h) ? n.h.slice().reverse() : [];
@@ -16876,6 +16961,59 @@ async function maybeAutoStartTour() {
             </div>`;
         }
 
+        // ---------- CC pendientes ----------
+        const CC_CORTO = { MASIVO: 'Fase 1 / masivo', FASE2: 'Fase 2', GV1MOD: 'CC GV1 sin código', TANQUES: 'Tanques sin código', FLEXO: 'Instructivo flexográfica',
+            CONTROLADO: 'Controlado: pesaje', LOTIZADO: 'Lotizado', MIGRACION: 'Migración', CARACT: 'Caracterización', PUESTO: 'Puesto de trabajo', MATERIAL: 'Material / LM',
+            NC: 'NC / auditoría', MUESTRAS: 'Muestras GV1/GV2', EQUIPOS: 'Equipo sin CC', ECUADOR: 'Fecha elab. Ecuador', PENDCC: 'Pendiente CC sin código',
+            INGOTRO: 'Otro pendiente', SUSPOTRO: 'Otro motivo', SUSPSIN: 'Sin motivo claro' };
+        const ccNombre = (k) => (CcBacklog.esCc(k) ? k : (CC_CORTO[k] || CcBacklog.ficha(k).t));
+        function htmlChipsCc(it) {
+            return (it.cc || []).filter((k) => k !== 'INGRESADO' && k !== 'SOLICITUD').map((k) => {
+                const f = CcBacklog.ficha(k);
+                const tip = `${f.t}. Cómo se aplica: ${f.c}${f.f ? ` Falta: ${f.f}` : ''} (clic: ver todos los RMD con este motivo)`;
+                return `<button type="button" class="bkl-cc e-${esc(f.e)}${vista.cc === k ? ' activo' : ''}" data-bkl-cc-ver="${esc(k)}" title="${esc(tip)}">${esc(ccNombre(k))}</button>`;
+            }).join('');
+        }
+        let ccSit = '';
+        function htmlCcPendientes(pend) {
+            const base = pend.filter((it) => !vista.planta || it.v.planta === vista.planta);
+            const cuenta = new Map();
+            base.forEach((it) => (it.cc || []).forEach((k) => { const c = cuenta.get(k) || { n: 0, P1: 0, P2: 0 }; c.n++; c[it.v.planta] = (c[it.v.planta] || 0) + 1; cuenta.set(k, c); }));
+            const filas = [...cuenta.entries()].map(([k, c]) => ({ k, c, f: CcBacklog.ficha(k) })).sort((a, b) => b.c.n - a.c.n || a.k.localeCompare(b.k));
+            const cc = filas.filter((x) => CcBacklog.esCc(x.k)), otros = filas.filter((x) => !CcBacklog.esCc(x.k));
+            const rmdCc = base.filter((it) => (it.cc || []).some(CcBacklog.esCc)).length;
+            const porSit = (lista) => Object.keys(CcBacklog.SITUACION).map((e) => [e, lista.filter((x) => x.f.e === e).length]);
+            const sitBtn = (e, txt, n) => `<button type="button" class="bkl-ccsit${e ? ` e-${e}` : ''}" data-bkl-cc-sit="${e}" aria-pressed="${ccSit === e}">${esc(txt)}${n === null ? '' : ` <b>${n}</b>`}</button>`;
+            const tabla = (lista, titulo) => {
+                const vis = lista.filter((x) => !ccSit || x.f.e === ccSit);
+                if (!vis.length) return '';
+                return `<h4 class="bkl-cc-h">${esc(titulo)}</h4>
+                <div class="bkl-cc-scroll"><table class="bkl-cc-tabla">
+                    <thead><tr><th>CC / motivo</th><th>RMD pendientes</th><th>Qué pide</th><th>Cómo se aplica</th><th>Situación</th><th>Qué falta</th><th>Referencias autorizadas</th></tr></thead>
+                    <tbody>${vis.map(({ k, c, f }) => `<tr class="${vista.cc === k ? 'activo' : ''}">
+                        <td class="cod"><b>${esc(ccNombre(k))}</b>${f.pl ? `<span class="pl">${PLANTA_NOMBRE[f.pl]}</span>` : ''}${f.nueva ? '<span class="pl">sin ficha</span>' : ''}</td>
+                        <td class="n"><b>${c.n}</b><span>${[['P1', 'ATE'], ['P2', 'LIMA']].filter(([p]) => c[p]).map(([p, t]) => `${t} ${c[p]}`).join(' · ')}</span>
+                            <button type="button" class="bkl-mini" data-bkl-cc-ver="${esc(k)}" aria-pressed="${vista.cc === k}">${vista.cc === k ? 'Quitar filtro' : 'Ver RMD'}</button></td>
+                        <td><b>${esc(f.t)}</b>${f.q ? `<br>${esc(f.q)}` : ''}</td>
+                        <td>${esc(f.c)}</td>
+                        <td><span class="bkl-cc e-${esc(f.e)}">${esc(CcBacklog.SITUACION[f.e] || f.e)}</span></td>
+                        <td>${esc(f.f || '—')}</td>
+                        <td class="ref">${(f.ref || []).length ? f.ref.map((r) => `<span title="${esc(r.d || '')}${r.e ? ` · ${esc(r.e)}` : ''}">${esc(r.cod)} v${esc(r.v)}</span>`).join('') + (f.n > f.ref.length ? `<span class="pie">${f.n} en total</span>` : '') : '—'}</td>
+                    </tr>`).join('')}</tbody>
+                </table></div>`;
+            };
+            return `<section class="bkl-ccsec">
+                <button type="button" class="bkl-grupo-cab" data-bkl-cc-tabla aria-expanded="${ccAbierto}">
+                    <span class="flecha" aria-hidden="true">${ccAbierto ? '▾' : '▸'}</span><b>Por qué siguen pendientes: controles de cambio y motivos</b><span class="n">${cc.length} CC/NC</span>
+                    <span class="sub">${plural(rmdCc, 'RMD espera', 'RMD esperan')} un CC o NC con código${vista.planta ? ` en ${PLANTA_NOMBRE[vista.planta]}` : ''} · el resto, por motivos sin código · solo lectura, no escribe en SAP</span>
+                </button>
+                ${ccAbierto ? `<p class="bkl-leer">Sale de la <b>observación de SAP</b> de cada pendiente: la línea de la suspensión o la que dice qué falta. La ficha de cada CC se armó con el Excel «1.-CC-NC-DES Para actualizar RMD», los correos del CC y los RMD ya autorizados cuya observación <b>empieza</b> con el CC (referencias para copiar). <b>Situación</b>: Claro = se sabe cómo aplicarlo; Falta un dato = se sabe, pero falta algo (borrador, código, correo); En espera = depende de otra área; No sé cómo aplicarlo = hay que preguntar.</p>
+                <div class="bkl-ccsits" role="group" aria-label="Situación">${sitBtn('', 'Todas', null)}${porSit(filas).filter(([, n]) => n).map(([e, n]) => sitBtn(e, CcBacklog.SITUACION[e], n)).join('')}</div>
+                ${tabla(cc, 'Controles de cambio y no conformidades con código')}
+                ${tabla(otros, 'Motivos sin código de CC')}` : ''}
+            </section>`;
+        }
+
         function pintar() {
             const cont = document.getElementById('bklContenido');
             if (!cont) return;
@@ -16889,7 +17027,7 @@ async function maybeAutoStartTour() {
             const bk = filtrados.filter((it) => !it.prog), prog = filtrados.filter((it) => it.prog);
             const man = modelo.items.filter(manual).filter((it) => pasaFiltros(it, false));
             const orden = ordenar(bk), vis = orden.slice(0, vista.mostrar);
-            const hayFiltro = vista.planta || vista.tipo || vista.nuevo || vista.arrastre || vista.sinNota || vista.vencidos || vista.estado || vista.q;
+            const hayFiltro = vista.planta || vista.tipo || vista.nuevo || vista.arrastre || vista.sinNota || vista.vencidos || vista.estado || vista.cc || vista.q;
             const foco = document.activeElement && document.activeElement.matches && document.activeElement.matches('[data-bkl-buscar]');
             const sinRmd = modelo.sinRmdProg.P1 + modelo.sinRmdProg.P2;
             cont.innerHTML = `
@@ -16901,6 +17039,7 @@ async function maybeAutoStartTour() {
                 ${orden.length > vis.length ? `<div class="bkl-mas"><button type="button" class="sts-btn" data-bkl-mas>Ver ${Math.min(POR_PAGINA, orden.length - vis.length)} más (quedan ${orden.length - vis.length})</button></div>` : ''}
                 ${htmlGrupo('prog', 'Programa de producción', `también son pendientes; ordenados por fecha de inicio de producción${sinRmd ? ` · ${plural(sinRmd, 'etapa del programa no tiene', 'etapas del programa no tienen')} RMD en SAP (ver Producción)` : ''}`, prog, true)}
                 ${htmlGrupo('manual', 'Autorizados a mano', 'ya no cuentan como pendientes; vuelven si SAP cambia el estado o la versión sin autorizarlo', man, false)}
+                ${htmlCcPendientes(pendTodos)}
                 <div class="bkl-sec">Cómo va el mes</div>
                 <div class="bkl-ecuaciones">${htmlEcuacion('P1', mesCorto)}${htmlEcuacion('P2', mesCorto)}${htmlEcuacion('', mesCorto)}</div>
                 ${htmlEstados(pendTodos.filter((it) => pasaFiltros(it, true)))}`;
@@ -17014,7 +17153,7 @@ async function maybeAutoStartTour() {
 
         // ---------- Eventos ----------
         let buscarTimer = null;
-        const limpiarFiltros = () => Object.assign(vista, { planta: '', tipo: '', nuevo: false, arrastre: false, sinNota: false, vencidos: false, estado: '', q: '', mostrar: POR_PAGINA });
+        const limpiarFiltros = () => Object.assign(vista, { planta: '', tipo: '', nuevo: false, arrastre: false, sinNota: false, vencidos: false, estado: '', cc: '', q: '', mostrar: POR_PAGINA });
         function iniciar() {
             const cont = document.getElementById('bklContenido');
             if (!cont) return;
@@ -17037,10 +17176,14 @@ async function maybeAutoStartTour() {
                 if (d.bklGuardar !== undefined && caja) { guardar(caja.dataset.bklNota, caja); return; }
                 if (d.bklCerrar !== undefined) { abierto = ''; pintar(); return; }
                 if (d.bklBorrar !== undefined && caja) { borrar(caja.dataset.bklNota); return; }
+                if (d.bklCcVer) { vista.cc = vista.cc === d.bklCcVer ? '' : d.bklCcVer; vista.mostrar = POR_PAGINA; pintar(); const l = cont.querySelector('.bkl-filtros'); if (l) l.scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
+                if (d.bklCcSit !== undefined) { ccSit = d.bklCcSit; pintar(); return; }
+                if (d.bklCcTabla !== undefined) { ccAbierto = !ccAbierto; pintar(); return; }
                 if (d.bklGrupo) { grupos[d.bklGrupo] = !grupos[d.bklGrupo]; pintar(); return; }
                 if (d.bklSet) { vista[d.bklSet] = d.valor; vista.mostrar = POR_PAGINA; pintar(); return; }
                 if (d.bklToggle) { const f = d.bklToggle; vista[f] = !vista[f]; if (vista[f] && f === 'nuevo') vista.arrastre = false; if (vista[f] && f === 'arrastre') vista.nuevo = false; vista.mostrar = POR_PAGINA; pintar(); return; }
                 if (d.bklMotivo) { vista.estado = vista.estado === d.bklMotivo ? '' : d.bklMotivo; vista.mostrar = POR_PAGINA; pintar(); const l = cont.querySelector('.bkl-filtros'); if (l) l.scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
+                if (d.bklDato === 'cc') { ccAbierto = true; pintar(); const l = cont.querySelector('.bkl-ccsec'); if (l) l.scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
                 if (d.bklDato) {
                     const a = d.bklDato; limpiarFiltros();
                     if (a === 'P1' || a === 'P2') vista.planta = a; else if (a === 'arrastre') vista.arrastre = true; else if (a === 'nuevos') vista.nuevo = true;
@@ -17100,14 +17243,16 @@ async function maybeAutoStartTour() {
             const lista = [...ordenar(filt.filter((it) => !it.prog && !manual(it))), ...ordenar(filt.filter((it) => it.prog && !manual(it)), true), ...ordenar(filt.filter(manual))];
             const cab = ['Orden', 'Grupo', 'Planta', 'Tipo', 'Backlog / Nuevo', 'Programa de producción', 'Inicio producción', 'Producto', 'Etapa', 'RMD', 'Versión', 'Solicitud', 'Código por defecto',
                 'Pendiente desde (mes)', 'Fecha', 'Días', 'Estatus', 'Estatus elegido', 'Responsable', 'Siguiente paso', 'Compromiso', 'Seguimiento', 'Nota', 'Anotado por', 'Fecha de la nota',
-                'Autorizado a mano', 'Estatus sugerido', 'Por qué se sugiere', 'Por qué cuenta en ese mes', 'Observación SAP'];
+                'Autorizado a mano', 'Estatus sugerido', 'Por qué se sugiere', 'Por qué cuenta en ese mes', 'CC / motivo', 'Situación del CC', 'Cómo aplicarlo', 'Qué falta', 'Observación SAP'];
             const d = (x) => (x && x.isValid && x.isValid() ? new Date(Date.UTC(x.year(), x.month(), x.date())) : '');
             const filas = lista.map((x, i) => {
                 const it = x.it, v = it.v, n = notaDe(it) || {}, est = estadoDe(it), man = manual(it);
                 return [i + 1, man ? 'Autorizado a mano' : it.prog ? 'Programa de producción' : 'Backlog', PLANTA_NOMBRE[v.planta], it.tipo, it.nuevo ? 'NUEVO' : 'BACKLOG', it.prog ? 'PROGRAMA DE PRODUCCIÓN' : '', it.prog && it.prog.inicio ? d(it.prog.inicio) : '',
                     v.desc || '', it.etapa || '', v.codigo || '', v.version || '', v.sol || '', v.codDef || '', nombreMes(it.m), d(it.base), it.dias === null ? '' : it.dias,
                     (ESTADO[est.m] || ESTADO.OTRO).txt, est.confirmado ? 'Sí' : 'No (sugerido)', n.r || (ESTADO[est.m] || {}).resp || '', n.a || '', n.c ? d(dayjs(n.c + 'T00:00:00')) : '', SEGUIMIENTO[n.s || ''], n.t || '', n.u || '',
-                    n.f ? dayjs(n.f).format('DD/MM/YYYY HH:mm') : '', man ? `${n.ok.u || ''} ${dayjs(n.ok.f).format('DD/MM/YYYY')}` : '', (ESTADO[it.sug.m] || ESTADO.OTRO).txt, it.sug.por, it.porque || '', v.obs || ''];
+                    n.f ? dayjs(n.f).format('DD/MM/YYYY HH:mm') : '', man ? `${n.ok.u || ''} ${dayjs(n.ok.f).format('DD/MM/YYYY')}` : '', (ESTADO[it.sug.m] || ESTADO.OTRO).txt, it.sug.por, it.porque || '',
+                    ...(() => { const fs = (it.cc || []).map((k) => [k, CcBacklog.ficha(k)]); return [fs.map(([k]) => ccNombre(k)).join(' · '), fs.map(([, f]) => CcBacklog.SITUACION[f.e] || '').join(' · '), fs.map(([k, f]) => `${fs.length > 1 ? `${ccNombre(k)}: ` : ''}${f.c}`).join(' | '), fs.map(([, f]) => f.f || '').filter(Boolean).join(' | ')]; })(),
+                    v.obs || ''];
             });
             const ws = XLSX.utils.aoa_to_sheet([cab, ...filas], { cellDates: true });
             cab.forEach((_, j) => { const c = ws[XLSX.utils.encode_cell({ r: 0, c: j })]; if (c) c.s = { font: { bold: true, color: { rgb: 'FFFFFF' } }, fill: { patternType: 'solid', fgColor: { rgb: '1F3864' } }, alignment: { vertical: 'center', wrapText: true } }; });
@@ -17118,7 +17263,7 @@ async function maybeAutoStartTour() {
                 if (j === 4) c.s = val === 'NUEVO' ? { font: { bold: true, color: { rgb: 'FFFFFF' } }, fill: { patternType: 'solid', fgColor: { rgb: 'C2652E' } } } : { font: { bold: true, color: { rgb: 'FFFFFF' } }, fill: { patternType: 'solid', fgColor: { rgb: '5B5F97' } } };
                 if (j === 5 && val) c.s = { font: { bold: true, color: { rgb: '3B2F06' } }, fill: { patternType: 'solid', fgColor: { rgb: 'F3D36B' } } };
             }));
-            ws['!cols'] = cab.map((h) => ({ wch: /Producto|Nota|Observaci|Por qué/.test(h) ? 42 : /Siguiente/.test(h) ? 30 : Math.max(9, Math.min(22, h.length + 2)) }));
+            ws['!cols'] = cab.map((h) => ({ wch: /Producto|Nota|Observaci|Por qué|Cómo aplicarlo|Qué falta/.test(h) ? 42 : /Siguiente/.test(h) ? 30 : Math.max(9, Math.min(22, h.length + 2)) }));
             ws['!autofilter'] = { ref: XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: filas.length, c: cab.length - 1 } }) };
             const res = [['Backlog de RMD', `corte ${fmt(modelo.corte)}`], [], ['Planta', `Backlog al 1 de ${nombreMes(modelo.mes)}`, 'Nuevos del mes', 'Autorizados en el mes', 'Pendientes hoy', 'Con estatus elegido', 'En Programa de producción', 'Autorizados a mano']];
             ['P1', 'P2', ''].forEach((pl) => {
@@ -17133,6 +17278,20 @@ async function maybeAutoStartTour() {
             const wb = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(wb, wr, 'Resumen');
             XLSX.utils.book_append_sheet(wb, ws, 'Backlog');
+            const pendCc = modelo.items.filter((it) => !manual(it)), cuentaCc = new Map();
+            pendCc.forEach((it) => (it.cc || []).forEach((k) => { const c = cuentaCc.get(k) || { n: 0, P1: 0, P2: 0 }; c.n++; c[it.v.planta]++; cuentaCc.set(k, c); }));
+            const cabCc = ['CC / motivo', 'Tipo', 'Planta del CC', 'RMD pendientes', 'ATE', 'LIMA', 'Qué pide', 'Detalle', 'Cómo se aplica', 'Situación', 'Qué falta', 'Referencias autorizadas', 'RMD pendientes (código v)'];
+            const filasCc = [...cuentaCc.entries()].sort((a, b) => (CcBacklog.esCc(b[0]) - CcBacklog.esCc(a[0])) || b[1].n - a[1].n).map(([k, c]) => {
+                const f = CcBacklog.ficha(k);
+                return [ccNombre(k), CcBacklog.esCc(k) ? 'CC / NC con código' : 'Motivo sin código', f.pl ? PLANTA_NOMBRE[f.pl] : '', c.n, c.P1, c.P2, f.t, f.q || '', f.c || '', CcBacklog.SITUACION[f.e] || '', f.f || '',
+                    (f.ref || []).map((r) => `${r.cod} v${r.v}`).join(', ') + (f.n > (f.ref || []).length ? ` (${f.n} en total)` : ''),
+                    pendCc.filter((it) => (it.cc || []).includes(k)).map((it) => (it.v.codigo ? `${it.v.codigo} v${it.v.version}` : `Sol. ${it.v.sol}`)).join(', ')];
+            });
+            const wc = XLSX.utils.aoa_to_sheet([cabCc, ...filasCc]);
+            cabCc.forEach((_, j) => { const c = wc[XLSX.utils.encode_cell({ r: 0, c: j })]; if (c) c.s = { font: { bold: true, color: { rgb: 'FFFFFF' } }, fill: { patternType: 'solid', fgColor: { rgb: '1F3864' } }, alignment: { vertical: 'center', wrapText: true } }; });
+            wc['!cols'] = cabCc.map((h) => ({ wch: /Qué pide|Detalle|Cómo|Qué falta|RMD pendientes \(/.test(h) ? 50 : /Referencias/.test(h) ? 30 : Math.max(8, h.length + 2) }));
+            wc['!autofilter'] = { ref: XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: filasCc.length, c: cabCc.length - 1 } }) };
+            XLSX.utils.book_append_sheet(wb, wc, 'CC pendientes');
             XLSX.writeFile(wb, `Backlog_RMD_${modelo.corte.format('YYYY-MM-DD')}.xlsx`, { cellStyles: true });
         }
 
