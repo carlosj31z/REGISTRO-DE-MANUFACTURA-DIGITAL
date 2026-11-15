@@ -403,25 +403,24 @@ Arma lo mismo que la plantilla **STATUS ACTUALIZACIONES RMD – PROGRAMA Y CARAC
 - **La plantilla** va dentro de `index.html` (`STATUS_RMD_PLANTILLA_B64`). Desde el 14/11/2026 (pedido de Carlos: «que tome esta forma», su `STATUS_RMD_2026-11-13_final.pptx`) tiene 7 láminas: 1 portada con la fecha de corte; 2 **status general** (tarjetas RMD autorizados, backlog pendiente y autorizados del mes; tabla de status por planta; pendientes del backlog y del mes), con los mismos números del Excel «Backlog del mes» (`datosBacklogMes`) a la fecha de corte; 3 y 4 **Ruta 1** de P1 y de P2, cada una con su flujo y las tablas de **borradores** y **controles de cambio** pendientes (producto, etapa, responsable e inicio de producción del programa, en naranja si ya pasó; las arma `laminaRuta1`: con 0 o 1 borrador, el borrador va en la misma línea y los controles de cambio usan todo el ancho, en dos tablas si son más de 9; lo que no cabe queda como «… y N más»); 5 y 6 **Ruta 2** de P1 y de P2 con su gráfico de tendencia, que es un gráfico de PowerPoint (editable) llenado con datos literales (`llenarGrafico`); 7 cierre. Los marcadores son `{{…}}`; un marcador sin valor sale como «—». La plantilla se arma con `herramientas/plantilla-ppt/construir_plantilla.py` desde el PPTX de referencia (`python3 construir_plantilla.py referencia.pptx plantilla.pptx` y luego pasarla a base64). JSZip se carga de cdnjs solo al descargar.
 - **Ruta 2 desde el Excel CARACTERIZACIÓN LISTADO** (pedido de Carlos, 14/11/2026): hojas PLA1 (P1) y PLA2 (P2) del Excel de SharePoint (04.-RMD › 10.- RMD DE CARACTERIZACION). ESTATUS DOC TEC: PENDIENTE-PRO = Borrador, POR INGRESAR = Ingresar, FLUJO SAP, PEND CC = Control de cambio (ASC si la fila lo dice en ÁREA RESPONSABLE u OBSERVACIÓN; si no, PRO), PEND RMD OFICIAL = Por revisión, AUTORIZADO; DESESTIMADO no cuenta. La tendencia cuenta los AUTORIZADO por mes de FECHA ESTATUS. Se guarda en `val_caract_listado_excel` y lo usan la Ruta 2 de la página y del PowerPoint (sin él, la Ruta 2 sale de SAP como antes). Lo trae el script del portal SAP (con la sesión de SharePoint): con «Enviar a Status RMD» (`msg.caracterizacionExcel`) o con el botón **Traer Excel de caracterización** de la Ruta 2, que se lo pide al portal que abrió la pestaña (`STATUS_RMD_PEDIR_CARACT` → `RMD_CARACT_EXCEL`). El PowerPoint ya no pide nada.
 
-## 15. Pestaña Backlog (pendientes para atacar en orden)
+## 15. Pestaña Backlog (pendientes por atender)
 
 Pedido de Carlos (14/11/2026), pensado para que David lo lea de un vistazo. Código: bloque `BacklogRmd` al final de `index.html`.
 
 - **Qué entra**: las mismas reglas del Excel «Backlog del mes» (`StatusRmd._datosBacklogMes`, corte hoy): Ingresados (por autorizar),
   Solicitados (por ingresar) y Suspendidos de hoy en SAP que son la última versión de su master, sin versión nueva ya iniciada y que no
-  son INACTIVO. El mes en que cuenta cada uno es el de esas reglas.
-- **Cómo va el mes** (por planta y total): Backlog al 1 del mes + Nuevos del mes − Autorizados en el mes = Pendientes hoy. «Backlog al 1»
-  y «Nuevos» incluyen lo que ya se autorizó en el mes (autorizados del backlog / del mes), así la ecuación cuadra.
-- **Etiquetas**: NUEVO = cuenta en el mes vigente. PROGRAMA DE PRODUCCIÓN = el RMD o la solicitud es el pendiente de una etapa de un
-  producto del Programa de Producción cargado (Ruta 1 de INDICADORES, `StatusRmd._calcularRuta1`), o tiene el mismo código por defecto
-  y etapa. Las etapas del programa sin RMD en SAP no entran a la lista (se cuentan aparte).
-- **Notas** (`val_backlog_notas`, clave compartida formato objeto, se fusiona con lo de otras personas): por RMD (`P1|R<código>` o
-  `P1|S<solicitud>`) motivo, responsable, siguiente paso, fecha de compromiso, seguimiento (Por atacar / En curso / Bloqueado), nota
-  libre, quién y cuándo, e historial de cambios (últimos 20). Quién anota se elige de la lista de `DNI_DIRECTORIO` y se recuerda en el
-  navegador.
-- **Motivo sugerido**: si no hay nota, la página sugiere uno con el Estatus elegido en Producción (si está en el programa), el estado y
-  la Observación de SAP (PEND CC, PEND JEFE, flujo de Producción «Enviado», masivo). Se muestra como «Sugerido» hasta que alguien lo
-  confirma. Mientras se escribe la nota, propone el motivo que sugieren las palabras.
-- **Orden sugerido**: primero lo del Programa de producción (por fecha de inicio), luego compromisos vencidos o por vencer, lo bloqueado,
-  y Ingresado → Solicitado → Suspendido; a igualdad, lo más antiguo.
-- **Exportar Excel**: hoja Resumen (la ecuación por planta) y hoja Backlog con la lista y los filtros de ese momento.
+  son INACTIVO.
+- **Orden de la pestaña**: franja de datos (pendientes, ATE, LIMA, backlog, nuevos, programa) → filtros → lista del backlog → grupo
+  «Programa de producción» (plegable, por fecha de inicio) → grupo «Autorizados a mano» → «Cómo va el mes» (Backlog al 1 + Nuevos −
+  Autorizados = Pendientes hoy) → «Por estatus».
+- **Etiquetas**: NUEVO = cuenta en el mes vigente; BACKLOG = viene de meses anteriores; PROGRAMA DE PRODUCCIÓN = pendiente de una etapa
+  del Programa cargado (Ruta 1, `StatusRmd._calcularRuta1`) por RMD, solicitud o código por defecto + etapa.
+- **Estatus** (como en Producción): BORRADOR, INGRESAR, FLUJO SAP, CONTROL DE CAMBIO, POR REVISIÓN, más FALTA VERSIÓN NUEVA, NO
+  CONFORMIDAD, RECETA / DATO EN SAP, CAMBIO MASIVO, SIN DEMANDA y OTRO. Se elige en la fila o en la nota; sin elegir, la página sugiere
+  uno (Estatus de Producción, Observación de SAP: PEND CC, PEND JEFE, flujo «Enviado», masivo).
+- **Autorizar a mano** (como en Producción, sin fecha de producción): deja de contar como pendiente y suma a «Autorizados en el mes»
+  mientras SAP siga igual (firma estado|versión); si SAP cambia, manda SAP. Se puede deshacer.
+- **Guardado** (`val_backlog_notas`, clave compartida formato objeto): por RMD (`P1|R<código>` o `P1|S<solicitud>`) estatus `m`,
+  responsable, siguiente paso, compromiso, seguimiento (Por atender / En curso / Bloqueado), nota, quién y cuándo, `ok` (autorizado a
+  mano) e historial (últimos 20). Quién anota se elige de `DNI_DIRECTORIO` y se recuerda en el navegador.
+- **Exportar Excel**: hoja Resumen y hoja Backlog (backlog, luego programa, luego autorizados a mano) con los filtros de ese momento.
