@@ -17589,7 +17589,20 @@ async function maybeAutoStartTour() {
         // Los 11 RMD del PPT de octubre siempre salen (pedido de Carlos, 16/11/2026): si SAP RMD trae ese producto actualizado en octubre
         // (misma planta, mismo primer nombre) vale lo de SAP; si no, entra la fila del PPT original.
         const llaveOct = (r) => `${r.planta}|${String(r.producto || r.descripcionSap || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim().split(/\s+/)[0].replace(/[^a-z0-9]/g, '')}`;
+        // Un RMD del PPT de octubre que SAP pone en otro mes (Agua estéril EN03: la v3 se volvió a autorizar el 05/11) va en octubre, como en el PPT,
+        // con los datos de SAP; así no sale dos veces (misma planta, etapa y primer nombre).
+        const llaveOctEt = (r) => `${llaveOct(r)}|${r.etapa}`;
         function completarOctubre(rmd) {
+            const enOct = new Set(rmd.filter((r) => r.mes === '2026-10' && r.despues !== '' && r.despues !== null && r.despues !== undefined).map(llaveOctEt)), mover = new Set();
+            INICIAL.rmd.forEach((p) => {
+                const k = llaveOctEt(p);
+                if (enOct.has(k)) return;
+                // Uno solo por fila del PPT: el que tiene los mismos V°B° de antes, o si no el de más V°B°.
+                const cands = rmd.filter((r) => r.origen === 'sap' && r.mes > '2026-10' && r.despues !== '' && r.despues !== null && r.despues !== undefined && llaveOctEt(r) === k && !mover.has(r));
+                const elegido = cands.find((r) => Number(r.antes) === p.antes) || cands.sort((a, b) => b.antes - a.antes)[0];
+                if (elegido) mover.add(elegido);
+            });
+            rmd = rmd.map((r) => (mover.has(r) ? { ...r, mesSap: r.mes, mes: '2026-10' } : r));
             const hay = new Set(rmd.filter((r) => r.mes === '2026-10' && r.despues !== '' && r.despues !== null && r.despues !== undefined).flatMap((r) => [llaveOct(r), llaveOct({ planta: r.planta, producto: r.descripcionSap })]));
             const faltan = INICIAL.rmd.filter((r) => !hay.has(llaveOct(r))).map((r) => ({ ...r }));
             return [...faltan, ...rmd];
@@ -17846,7 +17859,7 @@ async function maybeAutoStartTour() {
             const extra = Object.fromEntries(Object.entries(r).filter(([k]) => !CAMPOS_VENTANA.includes(k)));
             const porAct = r.despues === '' || r.despues === null;
             const lotesTxt = r.origen === 'sap' && !porAct && r.lotes !== undefined ? (r.lotes ? ` · lotes: ${r.lotesCerrados} de ${r.lotes} cerrados` : ' · sin lotes') : '';
-            const origen = r.origen === 'sap' ? `Portal: v${esc(r.versionAnt)} → v${esc(r.version)}${porAct ? ` (${esc(r.estado || 'sin autorizar')}${r.previsto !== undefined ? `, quedaría en ${esc(r.previsto)}` : ''})` : ''}${lotesTxt}` : r.origen === 'ppt' ? 'PPT de octubre' : 'A mano';
+            const origen = r.origen === 'sap' ? `Portal: v${esc(r.versionAnt)} → v${esc(r.version)}${r.mesSap ? ` (en SAP autorizado en ${esc(mesNombre(r.mesSap))}; va en octubre como en el PPT)` : ''}${porAct ? ` (${esc(r.estado || 'sin autorizar')}${r.previsto !== undefined ? `, quedaría en ${esc(r.previsto)}` : ''})` : ''}${lotesTxt}` : r.origen === 'ppt' ? 'PPT de octubre' : 'A mano';
             const loteAuto = r.origen === 'sap' && r.lotes !== undefined, tituloLote = loteAuto ? esc(r.lotesDetalle ? `Lotes de la versión ${r.version}: ${r.lotesDetalle}` : 'La versión actualizada aún no tiene lotes en el portal') : '';
             return `<tr data-i="${i}" data-extra="${esc(JSON.stringify(extra))}">
                 <td><input type="month" data-k="mes" value="${esc(r.mes)}" style="width:128px"></td>
