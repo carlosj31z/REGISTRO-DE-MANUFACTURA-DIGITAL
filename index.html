@@ -17688,6 +17688,8 @@ async function maybeAutoStartTour() {
             let v = null;
             try { v = await storeGet(CLAVE); } catch (e) { /* sin conexión: se parte de lo guardado en la caché o del PPT de Carlos */ }
             datos = v && Array.isArray(v.rmd) ? v : JSON.parse(JSON.stringify(INICIAL));
+            // Todo sale de SAP RMD (pedido de Carlos, 16/11/2026): las filas precargadas del PPT de octubre no se muestran ni cuentan.
+            datos.rmd = datos.rmd.filter((r) => r.origen !== 'ppt');
             datos.cortes = datos.cortes || {}; datos.porActualizar = datos.porActualizar || {};
             return datos;
         }
@@ -17774,6 +17776,7 @@ async function maybeAutoStartTour() {
                     <table><thead><tr><th>Mes</th><th>Código RMD</th><th>Producto</th><th>Planta</th><th>Etapa</th><th>V°B° antes</th><th>V°B° después</th><th>Status de lote</th><th>Origen</th><th></th></tr></thead>
                     <tbody>${datos.rmd.map(filaHtml).join('')}</tbody></table>
                 </div>
+                ${datos.rmd.length ? '' : '<p class="vb-nota" style="color:#fbbf24">Aún no llegan datos del portal. En el portal SAP: Exportar → «V°B° última vs. penúltima» → «Enviar a Status RMD».</p>'}
                 <div class="vb-fila"><button type="button" id="vbAgregar">Agregar RMD</button></div>
                 <div style="display:none"><span id="vbPend"></span></div>
                 <div class="vb-fila" style="border-top:1px solid #334155;padding-top:10px">
