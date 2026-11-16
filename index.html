@@ -15757,25 +15757,28 @@ async function maybeAutoStartTour() {
         // Igual al del equipo, pero la lámina 2 es un resumen sencillo: Autorizados + Pendientes = Total y, dentro de los
         // pendientes (backlog + mes vigente), cuánto es Programa de producción, cuánto caracterizaciones y cuánto lo demás, cada
         // uno con su parte del backlog y del mes. Sin estados internos (Ingresado, Suspendido, Solicitado…).
-        function datosJefatura(d, g) {
-            if (!g) return null;
-            const VIG = 'Mes vigente', R = g.resumen;
+        // ¿La versión es una caracterización? (RMD con Motivo CARACTERIZACIÓN de la pestaña CARACTERIZACIÓN, por código o solicitud).
+        function esCaractDe(items) {
             const car = new Set();
-            ((d.car && d.car.items) || []).forEach((it) => {
-                if (normalizeEstadoRmd(it.estado) === 'AUTORIZADO' && !it.pendBorrador) return;
+            (items || []).forEach((it) => {
                 if (it.codigo) car.add(`${it.planta}|R${String(it.codigo).trim()}`);
                 if (it.sol) car.add(`${it.planta}|S${String(it.sol).trim()}`);
             });
-            const esCar = (v) => (v.codigo && car.has(`${v.planta}|R${String(v.codigo).trim()}`)) || (v.sol && car.has(`${v.planta}|S${String(v.sol).trim()}`));
+            return (v) => !!((v.codigo && car.has(`${v.planta}|R${String(v.codigo).trim()}`)) || (v.sol && car.has(`${v.planta}|S${String(v.sol).trim()}`)));
+        }
+        function datosJefatura(d, g) {
+            if (!g) return null;
+            const VIG = 'Mes vigente', R = g.resumen;
+            const esCar = esCaractDe(d.car && d.car.items);
             const esProg = (v) => typeof g.programa === 'function' && !!g.programa(v);
-            const grupo = () => ({ n: 0, bk: 0, mes: 0, P1: 0, P2: 0 });
-            const gr = { prog: grupo(), car: grupo(), otr: grupo() }, tot = grupo();
-            let ambos = 0;
+            // Pedido de Carlos (16/11/2026): las caracterizaciones pueden estar en el Programa o fuera de él: se muestra el cruce.
+            const grupo = () => ({ n: 0, bk: 0, mes: 0, P1: 0, P2: 0, car: { n: 0, bk: 0, mes: 0 } });
+            const gr = { prog: grupo(), no: grupo() }, tot = grupo();
             g.pend.forEach((x) => {
-                const p = esProg(x.v), c = esCar(x.v), k = p ? 'prog' : c ? 'car' : 'otr', vig = x.cuando === VIG;
-                if (p && c) ambos++;
-                [gr[k], tot].forEach((o) => { o.n++; o[vig ? 'mes' : 'bk']++; o[x.v.planta] = (o[x.v.planta] || 0) + 1; });
+                const k = esProg(x.v) ? 'prog' : 'no', c = esCar(x.v), q = x.cuando === VIG ? 'mes' : 'bk';
+                [gr[k], tot].forEach((o) => { o.n++; o[q]++; o[x.v.planta] = (o[x.v.planta] || 0) + 1; if (c) { o.car.n++; o.car[q]++; } });
             });
+            const ambos = gr.prog.car.n;
             const r2 = d.r2 && !d.r2.error ? d.r2 : null;
             const fueraSap = r2 ? ['P1', 'P2'].reduce((n, pl) => n + ((r2[pl] && r2[pl].bor) || 0) + ((r2[pl] && r2[pl].ing) || 0), 0) : null;
             const aut = { n: R.P1.AUTORIZADO + R.P2.AUTORIZADO, P1: R.P1.AUTORIZADO, P2: R.P2.AUTORIZADO };
@@ -15795,8 +15798,8 @@ async function maybeAutoStartTour() {
                     + `<p:txBody><a:bodyPr wrap="square" lIns="${ins}" tIns="0" rIns="${ins}" bIns="0" anchor="${o.anchor || 't'}"/><a:lstStyle/>${o.pars || '<a:p><a:endParaRPr/></a:p>'}</p:txBody></p:sp>`;
             };
             const AZUL = '4A3F8C', NAR = 'E0883A', MES = '9C8FE0', LAV = 'F1EFFB';
-            const COL = { prog: 'E9B730', car: '6A5CBC', otr: 'C9C3EC' };
-            const NOM = { prog: 'Programa de producción', car: 'Caracterizaciones', otr: 'Otros pendientes' };
+            const COL = { prog: 'E9B730', car: '6A5CBC', no: 'C9C3EC' };
+            const NOM = { prog: 'Programa de producción', no: 'No son del Programa' };
             const S = [];
             const mesTxt = MESES[d.per.hasta.month()].toLowerCase(), t = j.tot;
             S.push(forma(548640, 320040, 10515600, 457200, { txt: 1, name: 'Titulo', pars: par(run('STATUS GENERAL RMD – Plantas Ate y Lima', { sz: 2600, b: 1, c: AZUL })) }));
@@ -15818,42 +15821,51 @@ async function maybeAutoStartTour() {
             const yP = 2520000, hP = 3950000, xP = 548640, wP = 11094720;
             S.push(forma(xP, yP, wP, hP, { geo: 'roundRect', fill: LAV, adj: 5000, name: 'Panel pendientes' }));
             S.push(forma(xP + 300000, yP + 170000, wP - 600000, 300000, { txt: 1, pars: par(run(`¿Qué hay dentro de los ${n(t.n)} pendientes?`, { sz: 1600, b: 1, c: AZUL })) }));
-            // Barra 100 %: Programa | Caracterizaciones | Otros
-            const xB = xP + 300000, wB = wP - 600000, yB = yP + 600000, hB = 480000;
-            const orden = ['prog', 'car', 'otr'];
+            // Barra 100 %: Programa | No programa, y debajo la franja de caracterizaciones de cada uno (el cruce)
+            const xB = xP + 300000, wB = wP - 600000, yB = yP + 620000, hB = 440000, hF = 200000;
+            const orden = ['prog', 'no'];
             let xx = xB;
             orden.forEach((k) => {
-                const w = t.n ? (wB * j.gr[k].n) / t.n : 0;
+                const o = j.gr[k], w = t.n ? (wB * o.n) / t.n : 0;
                 if (w <= 0) return;
-                const etq = w > 900000 ? par(run(`${n(j.gr[k].n)} · ${pct(j.gr[k].n, t.n)}`, { sz: 1200, b: 1, c: k === 'otr' ? AZUL : 'FFFFFF' }), 'ctr') : null;
+                const etq = w > 1400000 ? par(run(`${NOM[k]}: ${n(o.n)} · ${pct(o.n, t.n)}`, { sz: 1200, b: 1, c: k === 'no' ? AZUL : '3B2F06' }), 'ctr') : null;
                 S.push(forma(xx, yB, w, hB, { fill: COL[k], anchor: 'ctr', name: `Barra ${NOM[k]}`, pars: etq || undefined }));
+                const wc = o.n ? (w * o.car.n) / o.n : 0;
+                if (wc > 0) S.push(forma(xx, yB + hB + 40000, wc, hF, { fill: COL.car, name: `Caracterizaciones en ${NOM[k]}` }));
                 xx += w;
             });
-            // Tarjetas de cada grupo con su parte del backlog y del mes
-            const yC = yB + hB + 260000, hC = 1950000, gap = 228600, wC = (wB - 2 * gap) / 3;
-            orden.forEach((k, i) => {
-                const o = j.gr[k], x = xB + i * (wC + gap);
-                S.push(forma(x, yC, wC, hC, { geo: 'roundRect', fill: 'FFFFFF', name: `Tarjeta ${NOM[k]}` }));
-                S.push(forma(x + 180000, yC + 170000, 200000, 200000, { fill: COL[k], geo: 'roundRect', adj: 20000 }));
-                S.push(forma(x + 450000, yC + 140000, wC - 600000, 260000, { txt: 1, pars: par(run(NOM[k], { sz: 1300, b: 1, c: AZUL })) }));
-                S.push(forma(x + 180000, yC + 460000, wC - 360000, 480000, { txt: 1, pars: par([run(n(o.n), { sz: 2800, b: 1, c: AZUL }), run(`   ${pct(o.n, t.n)} de los pendientes`, { sz: 1100, c: '4D4D4D' })]) }));
-                const yb = yC + 1050000, wb = wC - 360000, wk = o.n ? (wb * o.bk) / o.n : 0;
-                if (o.n) {
-                    if (wk > 0) S.push(forma(x + 180000, yb, wk, 220000, { fill: NAR }));
-                    if (wb - wk > 0) S.push(forma(x + 180000 + wk, yb, wb - wk, 220000, { fill: MES }));
-                } else S.push(forma(x + 180000, yb, wb, 220000, { fill: 'E4E0F6' }));
-                S.push(forma(x + 180000, yb + 300000, wb, 230000, { txt: 1, pars: par([run(`Backlog ${n(o.bk)}`, { sz: 1150, b: 1, c: NAR }), run('   ·   ', { sz: 1150 }), run(`De ${mesTxt} ${n(o.mes)}`, { sz: 1150, b: 1, c: '6A5CBC' })]) }));
-                const extra = k === 'car' && Number.isFinite(j.fueraSap) && j.fueraSap ? `Además ${n(j.fueraSap)} aún en borrador o por ingresar (todavía no están en SAP).`
-                    : k === 'prog' && j.sinProg ? 'Sin datos del Programa de producción.' : `Ate ${n(o.P1)} · Lima ${n(o.P2)}`;
-                S.push(forma(x + 180000, yb + 580000, wb, 300000, { txt: 1, pars: par(run(extra, { sz: 1000, c: '4D4D4D' })) }));
-            });
-            // Leyenda y nota
-            const yL = yC + hC + 150000;
+            S.push(forma(xB, yB + hB + hF + 70000, wB, 200000, { txt: 1, pars: par([run('■ ', { sz: 1000, c: COL.car }), run(`Caracterizaciones: ${n(t.car.n)} en total → ${n(j.gr.prog.car.n)} dentro del Programa y ${n(j.gr.no.car.n)} fuera de él`, { sz: 1050, b: 1, c: '6A5CBC' })]) }));
+            // Tarjetas: Programa, No programa y el total de caracterizaciones
+            const yC = yB + hB + hF + 380000, hC = 1800000, gap = 228600, wC = (wB - 2 * gap) / 3;
+            const barraBkMes = (x, y, w, o) => {
+                const wk = o.n ? (w * o.bk) / o.n : 0;
+                if (!o.n) { S.push(forma(x, y, w, 200000, { fill: 'E4E0F6' })); return; }
+                if (wk > 0) S.push(forma(x, y, wk, 200000, { fill: NAR }));
+                if (w - wk > 0) S.push(forma(x + wk, y, w - wk, 200000, { fill: MES }));
+            };
+            const lineaBkMes = (o, sz) => [run(`Backlog ${n(o.bk)}`, { sz, b: 1, c: NAR }), run('   ·   ', { sz }), run(`De ${mesTxt} ${n(o.mes)}`, { sz, b: 1, c: '6A5CBC' })];
+            const tarjetaGrupo = (i, color, titulo, o, pie) => {
+                const x = xB + i * (wC + gap), wb = wC - 360000;
+                S.push(forma(x, yC, wC, hC, { geo: 'roundRect', fill: 'FFFFFF', name: `Tarjeta ${titulo}` }));
+                S.push(forma(x + 180000, yC + 160000, 200000, 200000, { fill: color, geo: 'roundRect', adj: 20000 }));
+                S.push(forma(x + 450000, yC + 130000, wC - 600000, 260000, { txt: 1, pars: par(run(titulo, { sz: 1300, b: 1, c: AZUL })) }));
+                S.push(forma(x + 180000, yC + 430000, wb, 460000, { txt: 1, pars: par([run(n(o.n), { sz: 2600, b: 1, c: AZUL }), run(`   ${pct(o.n, t.n)} de los pendientes`, { sz: 1050 })]) }));
+                barraBkMes(x + 180000, yC + 960000, wb, o);
+                S.push(forma(x + 180000, yC + 1200000, wb, 220000, { txt: 1, pars: par(lineaBkMes(o, 1100)) }));
+                S.push(forma(x + 180000, yC + 1450000, wb, 300000, { txt: 1, pars: pie }));
+            };
+            const pieCar = (o) => par([run('■ ', { sz: 950, c: COL.car }), run(`Caracterizaciones ${n(o.car.n)}`, { sz: 950, b: 1, c: '6A5CBC' }), run(`: ${n(o.car.bk)} backlog · ${n(o.car.mes)} del mes`, { sz: 950 })]);
+            tarjetaGrupo(0, COL.prog, NOM.prog, j.gr.prog, j.sinProg ? par(run('Sin datos del Programa de producción.', { sz: 1000 })) : pieCar(j.gr.prog));
+            tarjetaGrupo(1, COL.no, NOM.no, j.gr.no, pieCar(j.gr.no));
+            tarjetaGrupo(2, COL.car, 'Caracterizaciones (en ambos)', Object.assign({ n: t.car.n }, t.car),
+                par(run(`En Programa ${n(j.gr.prog.car.n)} · fuera ${n(j.gr.no.car.n)}${Number.isFinite(j.fueraSap) && j.fueraSap ? `. Además ${n(j.fueraSap)} en borrador o por ingresar (aún no en SAP).` : '.'}`, { sz: 1000 })));
+            // Leyenda
+            const yL = yC + hC + 140000;
             S.push(forma(xB, yL, 160000, 160000, { fill: NAR }));
             S.push(forma(xB + 220000, yL - 20000, 3300000, 200000, { txt: 1, pars: par(run('Backlog: pendiente desde meses anteriores', { sz: 1000 })) }));
             S.push(forma(xB + 3700000, yL, 160000, 160000, { fill: MES }));
             S.push(forma(xB + 3920000, yL - 20000, 3000000, 200000, { txt: 1, pars: par(run(`Del mes: entró en ${mesTxt}`, { sz: 1000 })) }));
-            S.push(forma(xB + 6300000, yL - 20000, wB - 6300000, 200000, { txt: 1, pars: par(run(`Programa = lo que Producción necesita en las próximas semanas.${j.ambos ? ` ${n(j.ambos)} son programa y caracterización: cuentan en Programa.` : ''}`, { sz: 900, c: '4D4D4D' }), 'r') }));
+            S.push(forma(xB + 6300000, yL - 20000, wB - 6300000, 200000, { txt: 1, pars: par(run('Programa = lo que Producción necesita en las próximas semanas.', { sz: 900 }), 'r') }));
             const ini = base.indexOf('<p:spTree>'), fin = base.indexOf('</p:spTree>');
             const cab = '<p:spTree><p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/><a:chOff x="0" y="0"/><a:chExt cx="0" cy="0"/></a:xfrm></p:grpSpPr>';
             return base.slice(0, ini) + cab + S.join('') + base.slice(fin);
@@ -16300,6 +16312,7 @@ async function maybeAutoStartTour() {
                 if (/^Mes vigente/.test(s)) return 'FFF2CC';
                 if (s === 'PROGRAMA DE PRODUCCIÓN') return 'F3D36B';
                 if (s === 'Fuera del programa') return 'EDEDED';
+                if (s === 'CARACTERIZACIÓN') return 'D9D3F5';
                 return null;
             };
             [m.pend, m.dec, m.prio, m.aut].forEach((d) => hojaDet(d, tinte));
@@ -16348,6 +16361,8 @@ async function maybeAutoStartTour() {
             const antTxt = (w) => (w ? `${w.codigo || w.sol || ''} v${w.version} · hoy ${w.estado.toLowerCase()}` : '');
             const n = (xs, f) => xs.filter(f).length, VIG = 'Mes vigente';
             const progDe = typeof r.programa === 'function' ? r.programa : () => null;
+            const carDe = typeof r.caract === 'function' ? r.caract : () => false;
+            const nCarProg = r.pend.filter((x) => carDe(x.v) && progDe(x.v)).length, nCar = r.pend.filter((x) => carDe(x.v)).length;
             const nProg = r.pend.filter((x) => progDe(x.v)).length;
             const notaSusExcel = `${notaSuspendidos(r)} «En los pendientes»: si el suspendido cuenta en el backlog o en el mes vigente (o por qué no).`;
             const progAut = r.progAut instanceof Set ? r.progAut : null, nAutProg = progAut ? r.aut.filter((x) => progAut.has(claveAutProg(x.v))).length : 0;
@@ -16366,11 +16381,12 @@ async function maybeAutoStartTour() {
                 rangoAut: `del 01/${r.corte.format('MM')} al ${corte}`, rangoAutCorto: `del 01/${r.corte.format('MM')} al ${r.corte.format('DD/MM')}`,
                 notaInactivo: 'Se colocarán como INACTIVOS una vez creado el nuevo status en SAP.',
                 pend: { nombre: '1-2 Pendientes', titulo: `Pendientes de ${nomMes.toLowerCase()} (tablas 1 y 2) · corte ${corte}`,
-                    nota: typeof r.programa === 'function' ? `«Programa de producción»: ${nProg} pendientes están en el Programa de Producción (pestaña Producción, Ruta 1), como en la pestaña BACKLOG.` : 'Sin datos del Programa de Producción: la columna «Programa de producción» va vacía.',
+                    nota: (typeof r.programa === 'function' ? `«Programa de producción»: ${nProg} pendientes están en el Programa de Producción (pestaña Producción, Ruta 1), como en la pestaña BACKLOG.` : 'Sin datos del Programa de Producción: la columna «Programa de producción» va vacía.')
+                        + ` «Caracterización»: ${nCar} pendientes son caracterizaciones (${nCarProg} dentro del Programa y ${nCar - nCarProg} fuera).`,
                     claves: { planta: 'Planta', tipo: 'Tipo', cuando: 'Meses anteriores / Mes vigente' },
-                    cols: [['Planta', 7], ['Tipo', 11], ['Meses anteriores / Mes vigente', 16], ['Mes al que pertenece', 10], ['Programa de producción', 14], ['Inicio producción', 11], ['Código RMD', 13], ['Versión', 8], ['Descripción', 46], ['Etapa', 15], ['Código de solicitud', 13],
+                    cols: [['Planta', 7], ['Tipo', 11], ['Meses anteriores / Mes vigente', 16], ['Mes al que pertenece', 10], ['Programa de producción', 14], ['Inicio producción', 11], ['Caracterización', 13], ['Código RMD', 13], ['Versión', 8], ['Descripción', 46], ['Etapa', 15], ['Código de solicitud', 13],
                         ['Fecha de solicitud', 11], ['Fecha de registro', 11], ['Versión anterior (estado hoy)', 26], ['Fecha de suspensión (versión anterior, o la propia si es Suspendido)', 14], ['Explicación', 70]],
-                    filas: pend.map((x) => [NOMBRE_PLANTA_BK[x.v.planta], x.tipo, x.cuando, x.m, progDe(x.v) ? 'PROGRAMA DE PRODUCCIÓN' : '', progDe(x.v) && progDe(x.v).inicio ? fx(progDe(x.v).inicio) : '', x.v.codigo || '(sin código aún)', x.v.version, x.v.desc || '', x.v.etapa || '', x.v.sol || '', fx(x.v.fSol), fx(x.v.fReg), antTxt(x.ant), fx(x.fS), x.porque]) },
+                    filas: pend.map((x) => [NOMBRE_PLANTA_BK[x.v.planta], x.tipo, x.cuando, x.m, progDe(x.v) ? 'PROGRAMA DE PRODUCCIÓN' : '', progDe(x.v) && progDe(x.v).inicio ? fx(progDe(x.v).inicio) : '', carDe(x.v) ? 'CARACTERIZACIÓN' : '', x.v.codigo || '(sin código aún)', x.v.version, x.v.desc || '', x.v.etapa || '', x.v.sol || '', fx(x.v.fSol), fx(x.v.fReg), antTxt(x.ant), fx(x.fS), x.porque]) },
                 dec: { nombre: '3 Suspendidos vs INACTIVOS', titulo: `Los ${r.dec.length} suspendidos: ${inact} pasan a INACTIVO y ${mant} se mantienen SUSPENDIDOS (tabla 3)`,
                     nota: notaSusExcel,
                     claves: { planta: 'Planta', decision: 'Decisión del equipo' },
@@ -16385,17 +16401,17 @@ async function maybeAutoStartTour() {
                 prio: { nombre: '4 Prioridades', titulo: `Los ${r.susp.length} suspendidos que se mantienen, por prioridad (tabla 4)`,
                     nota: '',
                     claves: { planta: 'Planta', prio: 'Prioridad' },
-                    cols: [['Planta', 7], ['Prioridad', 18], ['Orden sugerido', 9], ['Meses anteriores / Mes vigente', 16], ['Programa de producción', 14], ['Código RMD', 13], ['Versión', 8], ['Descripción', 46], ['Etapa', 15], ['Con forecast', 9], ['Con OP asociada', 9], ['Suspendido desde', 11],
+                    cols: [['Planta', 7], ['Prioridad', 18], ['Orden sugerido', 9], ['Meses anteriores / Mes vigente', 16], ['Programa de producción', 14], ['Caracterización', 13], ['Código RMD', 13], ['Versión', 8], ['Descripción', 46], ['Etapa', 15], ['Con forecast', 9], ['Con OP asociada', 9], ['Suspendido desde', 11],
                         ['Fecha del último lote', 11], ['Lotes en 48 meses', 9], ['Forecast nov-26 a oct-27 (unid)', 12]],
                     filas: susp.map((x) => { const k = x.v.planta + x.prio; cont[k] = (cont[k] || 0) + 1; const d = x.d || {};
-                        return [NOMBRE_PLANTA_BK[x.v.planta], x.prio, cont[k], x.cuando, progDe(x.v) ? 'PROGRAMA DE PRODUCCIÓN' : '', x.v.codigo, x.v.version, x.v.desc || '', x.v.etapa || '', d.fc > 0 ? 'Sí' : 'No', d.op ? 'Sí' : 'No', fx(x.fS),
+                        return [NOMBRE_PLANTA_BK[x.v.planta], x.prio, cont[k], x.cuando, progDe(x.v) ? 'PROGRAMA DE PRODUCCIÓN' : '', carDe(x.v) ? 'CARACTERIZACIÓN' : '', x.v.codigo, x.v.version, x.v.desc || '', x.v.etapa || '', d.fc > 0 ? 'Sí' : 'No', d.op ? 'Sí' : 'No', fx(x.fS),
                             fTxt(d.fLote), d.lotes === undefined ? '' : d.lotes, d.fc === undefined ? '' : d.fc]; }) },
                 aut: { nombre: '5 Autorizados', titulo: `Autorizados del 01/${r.corte.format('MM/YYYY')} al ${corte} (tabla 5)`,
                     nota: progAut ? `«Programa de producción»: ${nAutProg} de los ${r.aut.length} autorizados son etapas del Programa de Producción autorizadas en el mes (Ruta 1); ${r.aut.length - nAutProg} están fuera del programa.` : 'Sin datos del Programa de Producción: la columna «Programa de producción» va vacía.',
                     claves: { planta: 'Planta', cuenta: 'Cuenta como' },
-                    cols: [['Planta', 7], ['Cuenta como', 16], ['Programa de producción', 14], ['Código RMD', 13], ['Versión', 8], ['Descripción', 46], ['Etapa', 15], ['Fecha de registro', 11], ['Fecha de autorización', 11], ['Versión anterior (estado hoy)', 26],
+                    cols: [['Planta', 7], ['Cuenta como', 16], ['Programa de producción', 14], ['Caracterización', 13], ['Código RMD', 13], ['Versión', 8], ['Descripción', 46], ['Etapa', 15], ['Fecha de registro', 11], ['Fecha de autorización', 11], ['Versión anterior (estado hoy)', 26],
                         ['Suspensión de la versión anterior', 12], ['Explicación', 70]],
-                    filas: aut.map((x) => [NOMBRE_PLANTA_BK[x.v.planta], x.cuenta, progAut ? (progAut.has(claveAutProg(x.v)) ? 'PROGRAMA DE PRODUCCIÓN' : 'Fuera del programa') : '', x.v.codigo, x.v.version, x.v.desc || '', x.v.etapa || '', fx(x.v.fReg), fx(x.v.fAut), antTxt(x.ant), fx(x.fS), x.porque]) },
+                    filas: aut.map((x) => [NOMBRE_PLANTA_BK[x.v.planta], x.cuenta, progAut ? (progAut.has(claveAutProg(x.v)) ? 'PROGRAMA DE PRODUCCIÓN' : 'Fuera del programa') : '', carDe(x.v) ? 'CARACTERIZACIÓN' : '', x.v.codigo, x.v.version, x.v.desc || '', x.v.etapa || '', fx(x.v.fReg), fx(x.v.fAut), antTxt(x.ant), fx(x.fS), x.porque]) },
                 reglas: [
                     ['1. Pendientes', ['Ingresados + solicitados + suspendidos. No entran los INACTIVO, las Solicitudes Rechazadas, las Canceladas, los Autorizados ni las Solicitudes Aprobadas.']],
                     ['2. Composición (mes de cada pendiente)', [
@@ -16430,6 +16446,7 @@ async function maybeAutoStartTour() {
             let traz = trazabilidadSap;
             if (!traz) { try { traz = await storeGet('val_rmd_trazabilidad'); } catch (err) { traz = null; } }
             const datos = datosBacklogMes(filas, traz, corte, rmdPrecisoDatos);
+            try { const cl = (ultimo && ultimo.car && ultimo.car.items) || ((await storeGet('val_rmd_caracterizaciones')) || {}).items; datos.caract = esCaractDe(cl); } catch (err) { console.warn('Backlog del mes: sin caracterizaciones', err); }
             try { datos.programa = await BacklogRmd.programaParaExcel(); datos.progAut = datos.programa.autorizados; } catch (err) { console.warn('Backlog del mes: sin Programa de producción', err); }
             const wb = libroBacklogMes(datos);
             const nombre = `Backlog_RMD_${corte.format('YYYY-MM')}_corte_${corte.format('YYYY-MM-DD')}.xlsx`;
