@@ -2548,6 +2548,9 @@
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11"/><path d="M7.5 10.5 12 15l4.5-4.5"/><path d="M5 19.5h14"/></svg>
                         <span>Descargar PowerPoint</span>
                     </button>
+                    <button type="button" class="sts-btn" id="stsBtnPptJef" onclick="StatusRmd.descargarPpt(true)" title="El mismo PowerPoint con la lámina 2 resumida para jefatura: Autorizados + Pendientes = Total y, dentro de los pendientes, Programa de producción, caracterizaciones y lo demás (backlog y del mes)">
+                        <span>PPT para jefatura</span>
+                    </button>
                     <button type="button" class="sts-btn" id="stsBtnPptVb" onclick="VbRmd.abrir()" title="PowerPoint «Seguimiento de V°B° en RMD»: disminución de vistos buenos de los RMD actualizados (registro por RMD, antes y después)">
                         <span>PPT de V°B°</span>
                     </button>
@@ -15750,10 +15753,120 @@ async function maybeAutoStartTour() {
                 .replace('<!--VAL-->', `<c:numLit><c:formatCode>General</c:formatCode><c:ptCount val="${meses.length}"/>${pts((mm) => mm.n)}</c:numLit>`)
                 .replace('<!--MAX-->', `<c:max val="${tope}"/>`));
         }
-        async function zipPpt(d, g) {
+        // ---------- PowerPoint para jefatura (pedido de Carlos, 16/11/2026) ----------
+        // Igual al del equipo, pero la lámina 2 es un resumen sencillo: Autorizados + Pendientes = Total y, dentro de los
+        // pendientes (backlog + mes vigente), cuánto es Programa de producción, cuánto caracterizaciones y cuánto lo demás, cada
+        // uno con su parte del backlog y del mes. Sin estados internos (Ingresado, Suspendido, Solicitado…).
+        function datosJefatura(d, g) {
+            if (!g) return null;
+            const VIG = 'Mes vigente', R = g.resumen;
+            const car = new Set();
+            ((d.car && d.car.items) || []).forEach((it) => {
+                if (normalizeEstadoRmd(it.estado) === 'AUTORIZADO' && !it.pendBorrador) return;
+                if (it.codigo) car.add(`${it.planta}|R${String(it.codigo).trim()}`);
+                if (it.sol) car.add(`${it.planta}|S${String(it.sol).trim()}`);
+            });
+            const esCar = (v) => (v.codigo && car.has(`${v.planta}|R${String(v.codigo).trim()}`)) || (v.sol && car.has(`${v.planta}|S${String(v.sol).trim()}`));
+            const esProg = (v) => typeof g.programa === 'function' && !!g.programa(v);
+            const grupo = () => ({ n: 0, bk: 0, mes: 0, P1: 0, P2: 0 });
+            const gr = { prog: grupo(), car: grupo(), otr: grupo() }, tot = grupo();
+            let ambos = 0;
+            g.pend.forEach((x) => {
+                const p = esProg(x.v), c = esCar(x.v), k = p ? 'prog' : c ? 'car' : 'otr', vig = x.cuando === VIG;
+                if (p && c) ambos++;
+                [gr[k], tot].forEach((o) => { o.n++; o[vig ? 'mes' : 'bk']++; o[x.v.planta] = (o[x.v.planta] || 0) + 1; });
+            });
+            const r2 = d.r2 && !d.r2.error ? d.r2 : null;
+            const fueraSap = r2 ? ['P1', 'P2'].reduce((n, pl) => n + ((r2[pl] && r2[pl].bor) || 0) + ((r2[pl] && r2[pl].ing) || 0), 0) : null;
+            const aut = { n: R.P1.AUTORIZADO + R.P2.AUTORIZADO, P1: R.P1.AUTORIZADO, P2: R.P2.AUTORIZADO };
+            return { aut, tot, gr, ambos, fueraSap, sinProg: typeof g.programa !== 'function', inactivos: R.P1.INACTIVO + R.P2.INACTIVO };
+        }
+        function laminaJefatura(base, d, j) {
+            const E = (s) => xml(s), n = (x) => nEn(x), pct = (a, b) => (b ? `${Math.round((a / b) * 100)} %` : '0 %');
+            let id = 2;
+            const run = (t, o = {}) => `<a:r><a:rPr lang="es-PE" sz="${o.sz || 1200}" b="${o.b ? 1 : 0}"><a:solidFill><a:srgbClr val="${o.c || '4D4D4D'}"/></a:solidFill><a:latin typeface="Raleway"/></a:rPr><a:t>${E(t)}</a:t></a:r>`;
+            const par = (runs, al = 'l') => `<a:p><a:pPr algn="${al}"/>${[].concat(runs).join('')}</a:p>`;
+            const forma = (x, y, w, h, o = {}) => {
+                const geo = o.geo || 'rect', relleno = o.fill ? `<a:solidFill><a:srgbClr val="${o.fill}"/></a:solidFill>` : '<a:noFill/>';
+                const borde = o.ln ? `<a:ln w="12700"><a:solidFill><a:srgbClr val="${o.ln}"/></a:solidFill></a:ln>` : '<a:ln><a:noFill/></a:ln>';
+                const adj = geo === 'roundRect' ? `<a:avLst><a:gd name="adj" fmla="val ${o.adj || 8000}"/></a:avLst>` : '<a:avLst/>';
+                const ins = o.ins === undefined ? 0 : o.ins;
+                return `<p:sp><p:nvSpPr><p:cNvPr id="${id++}" name="${E(o.name || 'Forma')}"/><p:cNvSpPr${o.txt ? ' txBox="1"' : ''}/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="${Math.round(x)}" y="${Math.round(y)}"/><a:ext cx="${Math.max(1, Math.round(w))}" cy="${Math.round(h)}"/></a:xfrm><a:prstGeom prst="${geo}">${adj}</a:prstGeom>${relleno}${borde}</p:spPr>`
+                    + `<p:txBody><a:bodyPr wrap="square" lIns="${ins}" tIns="0" rIns="${ins}" bIns="0" anchor="${o.anchor || 't'}"/><a:lstStyle/>${o.pars || '<a:p><a:endParaRPr/></a:p>'}</p:txBody></p:sp>`;
+            };
+            const AZUL = '4A3F8C', NAR = 'E0883A', MES = '9C8FE0', LAV = 'F1EFFB';
+            const COL = { prog: 'E9B730', car: '6A5CBC', otr: 'C9C3EC' };
+            const NOM = { prog: 'Programa de producción', car: 'Caracterizaciones', otr: 'Otros pendientes' };
+            const S = [];
+            const mesTxt = MESES[d.per.hasta.month()].toLowerCase(), t = j.tot;
+            S.push(forma(548640, 320040, 10515600, 457200, { txt: 1, name: 'Titulo', pars: par(run('STATUS GENERAL RMD – Plantas Ate y Lima', { sz: 2600, b: 1, c: AZUL })) }));
+            S.push(forma(548640, 786384, 10515600, 220000, { txt: 1, name: 'Subtitulo', pars: par(run(`corte ${d.per.hasta.date()} ${capital(MESES_CORTOS[d.per.hasta.month()])} ${d.per.hasta.year()}`, { sz: 1300 })) }));
+            // Encabezado: Autorizados + Pendientes = Total
+            const yK = 1170000, hK = 1150000, wK = 3297000, wS = 600000;
+            const tarjeta = (k, x, tit, num, det, o) => {
+                S.push(forma(x, yK, wK, hK, { geo: 'roundRect', fill: o.fill, ln: o.ln, name: `Encabezado ${k}` }));
+                S.push(forma(x + 228600, yK + 150000, wK - 457200, 200000, { txt: 1, pars: par(run(tit, { sz: 1100, b: 1, c: o.tc })) }));
+                S.push(forma(x + 228600, yK + 380000, wK - 457200, 480000, { txt: 1, pars: par(run(num, { sz: 3200, b: 1, c: o.nc })) }));
+                S.push(forma(x + 228600, yK + 880000, wK - 457200, 200000, { txt: 1, pars: par(run(det, { sz: 1050, c: o.dc })) }));
+            };
+            const x1 = 548640, x2 = x1 + wK + wS, x3 = x2 + wK + wS;
+            tarjeta(1, x1, 'RMD AUTORIZADOS', n(j.aut.n), `Ate ${n(j.aut.P1)} · Lima ${n(j.aut.P2)}`, { fill: AZUL, tc: 'FFFFFF', nc: 'FFFFFF', dc: 'E4E0F6' });
+            tarjeta(2, x2, 'PENDIENTES', n(t.n), `Backlog ${n(t.bk)} · de ${mesTxt} ${n(t.mes)}`, { fill: 'FFFFFF', ln: 'C9C3EC', tc: AZUL, nc: NAR, dc: '4D4D4D' });
+            tarjeta(3, x3, 'TOTAL', n(j.aut.n + t.n), `Sin los ${n(j.inactivos)} inactivos`, { fill: LAV, ln: 'C9C3EC', tc: AZUL, nc: AZUL, dc: '4D4D4D' });
+            [['+', x1 + wK], ['=', x2 + wK]].forEach(([s, x]) => S.push(forma(x, yK, wS, hK, { txt: 1, anchor: 'ctr', pars: par(run(s, { sz: 3600, b: 1, c: AZUL }), 'ctr') })));
+            // Panel: qué hay dentro de los pendientes
+            const yP = 2520000, hP = 3950000, xP = 548640, wP = 11094720;
+            S.push(forma(xP, yP, wP, hP, { geo: 'roundRect', fill: LAV, adj: 5000, name: 'Panel pendientes' }));
+            S.push(forma(xP + 300000, yP + 170000, wP - 600000, 300000, { txt: 1, pars: par(run(`¿Qué hay dentro de los ${n(t.n)} pendientes?`, { sz: 1600, b: 1, c: AZUL })) }));
+            // Barra 100 %: Programa | Caracterizaciones | Otros
+            const xB = xP + 300000, wB = wP - 600000, yB = yP + 600000, hB = 480000;
+            const orden = ['prog', 'car', 'otr'];
+            let xx = xB;
+            orden.forEach((k) => {
+                const w = t.n ? (wB * j.gr[k].n) / t.n : 0;
+                if (w <= 0) return;
+                const etq = w > 900000 ? par(run(`${n(j.gr[k].n)} · ${pct(j.gr[k].n, t.n)}`, { sz: 1200, b: 1, c: k === 'otr' ? AZUL : 'FFFFFF' }), 'ctr') : null;
+                S.push(forma(xx, yB, w, hB, { fill: COL[k], anchor: 'ctr', name: `Barra ${NOM[k]}`, pars: etq || undefined }));
+                xx += w;
+            });
+            // Tarjetas de cada grupo con su parte del backlog y del mes
+            const yC = yB + hB + 260000, hC = 1950000, gap = 228600, wC = (wB - 2 * gap) / 3;
+            orden.forEach((k, i) => {
+                const o = j.gr[k], x = xB + i * (wC + gap);
+                S.push(forma(x, yC, wC, hC, { geo: 'roundRect', fill: 'FFFFFF', name: `Tarjeta ${NOM[k]}` }));
+                S.push(forma(x + 180000, yC + 170000, 200000, 200000, { fill: COL[k], geo: 'roundRect', adj: 20000 }));
+                S.push(forma(x + 450000, yC + 140000, wC - 600000, 260000, { txt: 1, pars: par(run(NOM[k], { sz: 1300, b: 1, c: AZUL })) }));
+                S.push(forma(x + 180000, yC + 460000, wC - 360000, 480000, { txt: 1, pars: par([run(n(o.n), { sz: 2800, b: 1, c: AZUL }), run(`   ${pct(o.n, t.n)} de los pendientes`, { sz: 1100, c: '4D4D4D' })]) }));
+                const yb = yC + 1050000, wb = wC - 360000, wk = o.n ? (wb * o.bk) / o.n : 0;
+                if (o.n) {
+                    if (wk > 0) S.push(forma(x + 180000, yb, wk, 220000, { fill: NAR }));
+                    if (wb - wk > 0) S.push(forma(x + 180000 + wk, yb, wb - wk, 220000, { fill: MES }));
+                } else S.push(forma(x + 180000, yb, wb, 220000, { fill: 'E4E0F6' }));
+                S.push(forma(x + 180000, yb + 300000, wb, 230000, { txt: 1, pars: par([run(`Backlog ${n(o.bk)}`, { sz: 1150, b: 1, c: NAR }), run('   ·   ', { sz: 1150 }), run(`De ${mesTxt} ${n(o.mes)}`, { sz: 1150, b: 1, c: '6A5CBC' })]) }));
+                const extra = k === 'car' && Number.isFinite(j.fueraSap) && j.fueraSap ? `Además ${n(j.fueraSap)} aún en borrador o por ingresar (todavía no están en SAP).`
+                    : k === 'prog' && j.sinProg ? 'Sin datos del Programa de producción.' : `Ate ${n(o.P1)} · Lima ${n(o.P2)}`;
+                S.push(forma(x + 180000, yb + 580000, wb, 300000, { txt: 1, pars: par(run(extra, { sz: 1000, c: '4D4D4D' })) }));
+            });
+            // Leyenda y nota
+            const yL = yC + hC + 150000;
+            S.push(forma(xB, yL, 160000, 160000, { fill: NAR }));
+            S.push(forma(xB + 220000, yL - 20000, 3300000, 200000, { txt: 1, pars: par(run('Backlog: pendiente desde meses anteriores', { sz: 1000 })) }));
+            S.push(forma(xB + 3700000, yL, 160000, 160000, { fill: MES }));
+            S.push(forma(xB + 3920000, yL - 20000, 3000000, 200000, { txt: 1, pars: par(run(`Del mes: entró en ${mesTxt}`, { sz: 1000 })) }));
+            S.push(forma(xB + 6300000, yL - 20000, wB - 6300000, 200000, { txt: 1, pars: par(run(`Programa = lo que Producción necesita en las próximas semanas.${j.ambos ? ` ${n(j.ambos)} son programa y caracterización: cuentan en Programa.` : ''}`, { sz: 900, c: '4D4D4D' }), 'r') }));
+            const ini = base.indexOf('<p:spTree>'), fin = base.indexOf('</p:spTree>');
+            const cab = '<p:spTree><p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/><a:chOff x="0" y="0"/><a:chExt cx="0" cy="0"/></a:xfrm></p:grpSpPr>';
+            return base.slice(0, ini) + cab + S.join('') + base.slice(fin);
+        }
+        async function zipPpt(d, g, jefatura) {
             const JSZip = await cargarJsZip();
             const zip = await JSZip.loadAsync(STATUS_RMD_PLANTILLA_B64, { base64: true });
             const v = valoresPpt(d, g);
+            if (jefatura) {
+                const j = datosJefatura(d, g);
+                if (!j) throw new Error('faltan los RMD de SAP para la lámina 2 (usa «Enviar a Status RMD»)');
+                zip.file('ppt/slides/slide2.xml', laminaJefatura(await zip.file('ppt/slides/slide2.xml').async('string'), d, j));
+            }
             for (const [lamina, pl] of [['slide3', 'P1'], ['slide4', 'P2']]) {
                 const n = `ppt/slides/${lamina}.xml`;
                 zip.file(n, laminaRuta1(await zip.file(n).async('string'), d, pl, v));
@@ -15765,8 +15878,8 @@ async function maybeAutoStartTour() {
             for (const [lamina, pl] of [['slide5', 'P1'], ['slide6', 'P2']]) await llenarGrafico(zip, lamina, d.listado ? tendenciaListado(d.listado, pl, d.per.hasta) : tendenciaRuta2(d, pl));
             return zip.generateAsync({ type: 'blob', mimeType: 'application/vnd.openxmlformats-officedocument.presentationml.presentation', compression: 'DEFLATE' });
         }
-        async function descargarPpt() {
-            const btn = document.getElementById('stsBtnPpt'), lbl = btn.querySelector('span');
+        async function descargarPpt(jefatura) {
+            const btn = document.getElementById(jefatura ? 'stsBtnPptJef' : 'stsBtnPpt'), lbl = btn.querySelector('span');
             btn.disabled = true; const txt = lbl.textContent; lbl.textContent = 'Generando…';
             try {
                 await actualizar();
@@ -15774,10 +15887,10 @@ async function maybeAutoStartTour() {
                 let g = null;
                 try { g = datosGeneralesPpt(ultimo); } catch (err) { console.error('PowerPoint, lámina 2:', err); }
                 if (g) { try { g.programa = await BacklogRmd.programaParaExcel(); } catch (err) { console.warn('PowerPoint, lámina 2: sin Programa de producción', err); } }
-                const blob = await zipPpt(ultimo, g);
+                const blob = await zipPpt(ultimo, g, jefatura);
                 const a = document.createElement('a');
                 a.href = URL.createObjectURL(blob);
-                a.download = `STATUS_RMD_${ultimo.per.hasta.format('YYYY-MM-DD')}.pptx`;
+                a.download = `STATUS_RMD_${jefatura ? 'JEFATURA_' : ''}${ultimo.per.hasta.format('YYYY-MM-DD')}.pptx`;
                 document.body.appendChild(a); a.click(); a.remove();
                 setTimeout(() => URL.revokeObjectURL(a.href), 4000);
             } catch (err) {
