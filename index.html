@@ -15830,13 +15830,10 @@ async function maybeAutoStartTour() {
                 if (w <= 0) return;
                 const etq = w > 1400000 ? par(run(`${NOM[k]}: ${n(o.n)} · ${pct(o.n, t.n)}`, { sz: 1200, b: 1, c: k === 'no' ? AZUL : '3B2F06' }), 'ctr') : null;
                 S.push(forma(xx, yB, w, hB, { fill: COL[k], anchor: 'ctr', name: `Barra ${NOM[k]}`, pars: etq || undefined }));
-                const wc = o.n ? (w * o.car.n) / o.n : 0;
-                if (wc > 0) S.push(forma(xx, yB + hB + 40000, wc, hF, { fill: COL.car, name: `Caracterizaciones en ${NOM[k]}` }));
                 xx += w;
             });
-            S.push(forma(xB, yB + hB + hF + 70000, wB, 200000, { txt: 1, pars: par([run('■ ', { sz: 1000, c: COL.car }), run(`Caracterizaciones: ${n(t.car.n)} en total → ${n(j.gr.prog.car.n)} dentro del Programa y ${n(j.gr.no.car.n)} fuera de él`, { sz: 1050, b: 1, c: '6A5CBC' })]) }));
-            // Tarjetas: Programa, No programa y el total de caracterizaciones
-            const yC = yB + hB + hF + 380000, hC = 1800000, gap = 228600, wC = (wB - 2 * gap) / 3;
+            // Tarjetas: Programa y No programa (16/11/2026: sin caracterizaciones en esta lámina, para no mezclar)
+            const yC = yB + hB + 380000, hC = 1800000, gap = 300000, wC = (wB - gap) / 2;
             const barraBkMes = (x, y, w, o) => {
                 const wk = o.n ? (w * o.bk) / o.n : 0;
                 if (!o.n) { S.push(forma(x, y, w, 200000, { fill: 'E4E0F6' })); return; }
@@ -15854,11 +15851,9 @@ async function maybeAutoStartTour() {
                 S.push(forma(x + 180000, yC + 1200000, wb, 220000, { txt: 1, pars: par(lineaBkMes(o, 1100)) }));
                 S.push(forma(x + 180000, yC + 1450000, wb, 300000, { txt: 1, pars: pie }));
             };
-            const pieCar = (o) => par([run('■ ', { sz: 950, c: COL.car }), run(`Caracterizaciones ${n(o.car.n)}`, { sz: 950, b: 1, c: '6A5CBC' }), run(`: ${n(o.car.bk)} backlog · ${n(o.car.mes)} del mes`, { sz: 950 })]);
-            tarjetaGrupo(0, COL.prog, NOM.prog, j.gr.prog, j.sinProg ? par(run('Sin datos del Programa de producción.', { sz: 1000 })) : pieCar(j.gr.prog));
-            tarjetaGrupo(1, COL.no, NOM.no, j.gr.no, pieCar(j.gr.no));
-            tarjetaGrupo(2, COL.car, 'Caracterizaciones (en ambos)', Object.assign({ n: t.car.n }, t.car),
-                par(run(`En Programa ${n(j.gr.prog.car.n)} · fuera ${n(j.gr.no.car.n)}${Number.isFinite(j.fueraSap) && j.fueraSap ? `. Además ${n(j.fueraSap)} en borrador o por ingresar (aún no en SAP).` : '.'}`, { sz: 1000 })));
+            const piePlanta = (o) => par(run(`Ate ${n(o.P1)} · Lima ${n(o.P2)}`, { sz: 1000 }));
+            tarjetaGrupo(0, COL.prog, NOM.prog, j.gr.prog, j.sinProg ? par(run('Sin datos del Programa de producción.', { sz: 1000 })) : piePlanta(j.gr.prog));
+            tarjetaGrupo(1, COL.no, NOM.no, j.gr.no, piePlanta(j.gr.no));
             // Leyenda
             const yL = yC + hC + 140000;
             S.push(forma(xB, yL, 160000, 160000, { fill: NAR }));
