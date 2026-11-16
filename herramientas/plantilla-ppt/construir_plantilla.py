@@ -42,18 +42,14 @@ runs(sh(s, 'KPI detalle 2'), ['P1 Ate ', '{{G_BK_P1}}', ' · P2 Lima ', '{{G_BK_
 runs(sh(s, 'KPI etiqueta 3'), ['AUTORIZADOS EN {{MES_CORTO}} ({{RANGO_AUT}})'])
 runs(sh(s, 'KPI valor 3'), ['{{G_AUTMES_T}}'])
 runs(sh(s, 'KPI detalle 3'), ['{{G_AUTMES_BK}} del backlog · {{G_AUTMES_MES}} del ', 'mes'])
-# Segunda línea: cuántos autorizados del mes son del Programa de producción (pedido de Carlos, 16/11/2026).
-_d3 = sh(s, 'KPI detalle 3'); _d3.top = 2185416
-_par = copy.deepcopy(_d3.text_frame.paragraphs[0]._p); _d3.text_frame._txBody.append(_par)
-for _r in _par.findall(A + 'r')[1:]: _par.remove(_r)
-_r0 = _par.find(A + 'r'); _r0.find(A + 't').text = 'Programa de producción: {{G_AUTMES_PROG}} · fuera: {{G_AUTMES_NOPROG}}'
-_r0.find(A + 'rPr').set('sz', '1000'); _r0.find(A + 'rPr').find(A + 'solidFill')[0].set('val', '7F6A12')
-# Nota debajo de los paneles: cómo cuadran los Suspendidos (pedido de Carlos, 16/11/2026).
-_n = s.shapes.add_textbox(548640, 6510528, 11100816, 228600); _n.name = 'Nota suspendidos'
-_tf = _n.text_frame; _tf.margin_left = _tf.margin_right = _tf.margin_top = _tf.margin_bottom = 0
-_rr = _tf.paragraphs[0].add_run(); _rr.text = '{{G_SUS_NOTA}}'
+# Programa / otros al lado del número de autorizados del mes, como el PPT de Carlos del 16/11/2026.
+sh(s, 'KPI valor 3').width = 780000
+_pg = s.shapes.add_textbox(9108831, 1731115, 2300000, 338554); _pg.name = 'KPI programa 3'
 from pptx.util import Pt; from pptx.dml.color import RGBColor
-_rr.font.size = Pt(10); _rr.font.name = 'Raleway'; _rr.font.color.rgb = RGBColor(0x4D, 0x4D, 0x4D)
+_tf = _pg.text_frame; _tf.margin_left = _tf.margin_right = _tf.margin_top = _tf.margin_bottom = 0
+for _k, _t in enumerate(['PROGRAMA: {{G_AUTMES_PROG}}', 'OTROS: {{G_AUTMES_NOPROG}}']):
+    _pp = _tf.paragraphs[0] if _k == 0 else _tf.add_paragraph(); _rr = _pp.add_run(); _rr.text = _t
+    _rr.font.size = Pt(11); _rr.font.bold = True; _rr.font.name = 'Raleway'; _rr.font.color.rgb = RGBColor(0x6A, 0x5C, 0xBC)
 runs(sh(s, 'Panel backlog titulo'), ['Pendientes: backlog vs. {{MES_MIN}} ({{G_PEND_T}})'])
 t = sh(s, 'Tabla status').table
 for i, k in enumerate(['AUT', 'ING', 'SUS', 'INA', 'TOT'], 1):
