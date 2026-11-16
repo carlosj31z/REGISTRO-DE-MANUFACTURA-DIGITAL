@@ -13381,7 +13381,7 @@ async function maybeAutoStartTour() {
                 if (!fa) return;
                 const dAut = dayjs(fa.ms);
                 if (dAut.isBefore(iniMes) || dAut.isAfter(finHoy)) return;
-                let fIng = null;
+                let fIng = null, rmd = '';
                 if (f.estado === 'sap' && f.d && Array.isArray(f.d.candidatos)) {
                     let fila = null, t0 = -Infinity;
                     f.d.candidatos.forEach((cn) => {
@@ -13390,11 +13390,11 @@ async function maybeAutoStartTour() {
                         const t = Number.isFinite(h) ? h : fechaSapDiaMs(x.fechaAutorizacion);
                         if (t !== null && t > t0) { t0 = t; fila = x; }
                     });
-                    if (fila) { fIng = fechaIngresoReal(fila.observacion); if (!fIng) { const r = fechaSapDiaMs(fila.fechaRegistro); fIng = r === null ? null : dayjs(r); } }
+                    if (fila) { rmd = String(fila.codigo || '').trim(); fIng = fechaIngresoReal(fila.observacion); if (!fIng) { const r = fechaSapDiaMs(fila.fechaRegistro); fIng = r === null ? null : dayjs(r); } }
                 }
                 const bk = !fIng || fIng.format('YYYY-MM') < dAut.format('YYYY-MM');
                 if (bk) c.autBk++; else c.autMes++;
-                c.items.push({ pl, m: f.codigo, producto: f.descripcion || '', etapa: f.fija || '', d: f.d, cat: 'aut', manual: f.estado === 'autorizado', bk, fAut: dAut.format('YYYY-MM-DD') });
+                c.items.push({ pl, m: f.codigo, producto: f.descripcion || '', etapa: f.fija || '', d: f.d, cat: 'aut', manual: f.estado === 'autorizado', bk, rmd, fAut: dAut.format('YYYY-MM-DD') });
             });
             c.autProd = c.autBk + c.autMes;
             return c;
@@ -13875,6 +13875,24 @@ async function maybeAutoStartTour() {
             const programa = cuadroPrograma(indicadores, per, traz);
             // Autorizados de la Ruta 1: los del mes en la tabla de Producción (antes, los del cuadro del mes de toda la planta).
             if (!r1.error) ['P1', 'P2'].forEach((pl) => { r1[pl].aut = r1[pl].autProd || 0; r1[pl].autSinDato = false; });
+            // Del backlog / del mes con la misma clasificación que «Autorizados en el mes» de la lámina 2 (pedido de Carlos,
+            // 16/11/2026: lo del mes de la lámina 2 no puede ser menor que la suma de las láminas 3 y 4). Cada etapa toma la
+            // cuenta de su RMD en esa lista; si su RMD no está ahí (autorizada a mano, o hoy ya no está Autorizado), va al backlog.
+            if (!r1.error) {
+                let g = null;
+                try { g = datosGeneralesPpt({ per }); } catch (err) { console.warn('Ruta 1: sin la lista de autorizados del mes', err); }
+                if (g && Array.isArray(g.aut)) {
+                    const cuentaDe = new Map(g.aut.map((x) => [`${x.v.planta}|${String(x.v.codigo || '').trim()}`, x.cuenta]));
+                    ['P1', 'P2'].forEach((pl) => {
+                        const c = r1[pl]; c.autBk = 0; c.autMes = 0;
+                        (c.items || []).filter((it) => it.cat === 'aut').forEach((it) => {
+                            const k = it.rmd ? cuentaDe.get(`${pl}|${it.rmd}`) : undefined;
+                            it.bk = k !== 'Solicitados del mes';
+                            if (it.bk) c.autBk++; else c.autMes++;
+                        });
+                    });
+                }
+            }
             // Ruta 2 (pedido de Carlos, 14/11/2026): del Excel CARACTERIZACIÓN LISTADO de SharePoint si ya se trajo; si no, de SAP.
             const listado = lst && Array.isArray(lst.filas) && lst.filas.length ? lst : null;
             return { per, programa, r1, acu, listado, r2: listado ? ruta2DesdeListado(listado) : ruta2(items), car: { items, sinDatos: !car, generado: car && car.generado } };
@@ -15099,7 +15117,7 @@ async function maybeAutoStartTour() {
             const nombre = k === 'todo' ? (ruta === 'r1' ? 'Etapas pendientes' : 'Todos los RMD') : NOMBRES_RUTA[k];
             return { tipo: ruta, pl, titulo: `${nombre} · ${ruta === 'r1' ? 'Ruta 1, programa' : 'Ruta 2, caracterizaciones'}`,
                 sub: pl === 'ambas' ? 'P1 y P2 · Plantas Ate y Lima' : PLANTAS[pl], numero, filas: items.map(ruta === 'r1' ? filaRuta1 : filaRuta2).sort(orden),
-                explica: ruta === 'r1' ? 'Cada etapa pendiente de los productos programados, contada como en Producción (una vez aunque la compartan varias presentaciones), con su Estatus y responsable. El RMD es el que deja pendiente la etapa. Los autorizados de la Ruta 1 son las etapas autorizadas en el mes, como los grupos por día de Producción (del backlog si el RMD tiene su ingreso real o registro en un mes anterior al de la autorización).'
+                explica: ruta === 'r1' ? 'Cada etapa pendiente de los productos programados, contada como en Producción (una vez aunque la compartan varias presentaciones), con su Estatus y responsable. El RMD es el que deja pendiente la etapa. Los autorizados de la Ruta 1 son las etapas autorizadas en el mes, como los grupos por día de Producción; del backlog o del mes según su RMD en «Autorizados en el mes» del status general (autorizadas a mano: del backlog).'
                     : 'RMD de SAP con Motivo CARACTERIZACION. Autorizado o Suspendido en SAP cuenta como autorizado; el resto, como pendiente, con el Estatus elegido en la tabla de caracterizaciones.' };
         }
 
