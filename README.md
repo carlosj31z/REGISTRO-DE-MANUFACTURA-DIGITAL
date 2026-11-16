@@ -414,7 +414,7 @@ PPT de Carlos**.
 - **Todo viene del portal** (userscript 1.145.0): Exportar → «V°B° última vs. penúltima» → «Enviar a Status RMD» manda `RMD_VB_SEGUIMIENTO`
   con `alcance: 'seguimiento'` y `desde` (12/10/2026 por defecto). V°B° = pasos activos de PROCEDIMIENTO con la casilla «V.B.» marcada.
   **Actualizado** = la versión Autorizada más alta de un RMD, autorizada desde esa fecha, con menos V°B° que la versión anterior (va en el mes de su
-  autorización). **Por actualizar** = última versión Ingresada con menos V°B° que la anterior (va en el mes de los datos).
+  autorización). **Por actualizar** = última versión Ingresada, registrada desde esa fecha, con menos V°B° que la anterior (va en el mes de los datos).
 - **Status de lote**: los lotes son los registros de producción (entidad `RMD`) hechos con la versión actualizada. «Conforme» si al menos uno está
   en estado Cerrado (478, `LOTE_CERRADO`); «En proceso» si no hay lotes o ninguno se cerró. En la ventana sale de solo lectura, con el detalle de los lotes.
 - Se guarda en `ind_vb_seguimiento`. Cada envío del portal reemplaza todas las filas del portal y las del PPT de octubre precargadas; quedan las

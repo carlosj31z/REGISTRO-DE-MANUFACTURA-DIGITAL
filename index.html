@@ -17886,7 +17886,7 @@ async function maybeAutoStartTour() {
         const loteDe = (ls) => ((ls || []).some(cerrado) ? 'Conforme' : 'En proceso');
         // Seguimiento desde el inicio (v2, userscript 1.145.0): una foto completa del portal. Actualizado = versión Autorizada desde el inicio con
         // menos casillas «V.B.» que la anterior (va en el mes de su autorización); por actualizar = última versión Ingresada con menos casillas
-        // «V.B.» (va en el mes de los datos).
+        // «V.B.» registrada desde el inicio (va en el mes de los datos).
         function filasSeguimiento(msg) {
             const mesHoy = msg.generado ? dayjs(msg.generado).format('YYYY-MM') : hoyIso().slice(0, 7), out = [];
             (msg.filas || []).forEach((x) => {
@@ -17899,7 +17899,8 @@ async function maybeAutoStartTour() {
                     antes: cp, version: u.version, versionAnt: p.version, codigoAnt: p.codigo || '', estado: u.estado || '', origen: 'sap', lotes: lotes.length, lotesCerrados: lotes.filter(cerrado).length,
                     lotesDetalle: lotes.slice(0, 20).map((l) => `${l.lote || l.orden || '?'}: ${l.estado || 'sin estado'}${l.activo === false ? ' (inactivo)' : ''}`).join('; ') };
                 if (x.tipo === 'actualizado' && /^\d{4}-\d{2}/.test(u.autorizacion || '')) out.push({ ...base, mes: u.autorizacion.slice(0, 7), despues: cu, lote: loteDe(lotes) });
-                else if (x.tipo === 'por actualizar') out.push({ ...base, mes: mesHoy, despues: '', previsto: cu, lote: 'En proceso' });
+                // Por actualizar: solo las versiones Ingresadas registradas desde el inicio del seguimiento (las de antes no son de esta actualización).
+                else if (x.tipo === 'por actualizar' && !(msg.desde && /^\d{4}-\d{2}-\d{2}/.test(u.registro || '') && u.registro < msg.desde)) out.push({ ...base, mes: mesHoy, despues: '', previsto: cu, lote: 'En proceso' });
             });
             return out;
         }
