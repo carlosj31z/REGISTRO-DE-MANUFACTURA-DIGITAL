@@ -17929,7 +17929,8 @@ async function maybeAutoStartTour() {
             const quedan = d.rmd.filter((r) => r.origen !== 'sap' && r.origen !== 'ppt');
             const pend = (r) => (r.despues === '' || r.despues === null || r.despues === undefined ? 1 : 0);
             d.rmd = [...quedan, ...nuevas].sort((a, b) => String(a.mes).localeCompare(String(b.mes)) || pend(a) - pend(b) || ((Number(b.antes) - Number(b.despues || 0)) - (Number(a.antes) - Number(a.despues || 0))));
-            if (/^\d{4}-\d{2}-\d{2}$/.test(msg.desde || '')) d.inicio = msg.desde;
+            // La línea de tiempo sigue con su inicio (12/10/2026, POE de validaciones) aunque el portal mande desde una fecha anterior (p. ej. 01/10).
+            if (!d.inicio && /^\d{4}-\d{2}-\d{2}$/.test(msg.desde || '')) d.inicio = msg.desde;
             d.porActualizar = {};
             d.recibido = { ...(d.recibido || {}), seguimiento: { generado: msg.generado, desde: msg.desde, por: (msg.usuarioSap && (msg.usuarioSap.nombre || msg.usuarioSap.email)) || '', rmd: (msg.filas || []).length } };
             const act = nuevas.filter((r) => r.despues !== '');
