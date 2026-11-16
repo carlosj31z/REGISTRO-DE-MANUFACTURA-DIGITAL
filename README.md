@@ -408,7 +408,7 @@ Arma lo mismo que la plantilla **STATUS ACTUALIZACIONES RMD – PROGRAMA Y CARAC
 PowerPoint con la forma del «SEGUIMIENTO DE VB EN RMD_2026-11-11.pptx» de Carlos (va embebido tal cual en `VB_PLANTILLA_B64`; el módulo `VbRmd`
 al final de `index.html` cambia textos, tablas y gráficos): 1 portada · 2 disminución del mes (V°B° antes → después, %, línea de tiempo desde el
 inicio del POE de validaciones) · 3 detalle por producto (una barra por RMD con su status de lote; 12 por lámina, se agregan láminas) · 4 resultados
-por etapa · 5 seguimiento mensual (por mes: RMD actualizados / por actualizar, V°B° antes, eliminados en Ate y Lima y acumulado) · 6 cierre.
+por etapa · 5 seguimiento mensual y 6 cierre: **quedan tal cual el PPT de Carlos** (pidió no tocarlas, 16/11/2026).
 
 - **Los V°B° vienen del portal** (userscript v1.144.0): Exportar → «V°B° última vs. penúltima» → mes → «Enviar a Status RMD» manda
   `RMD_VB_SEGUIMIENTO`. V°B° = pasos activos de PROCEDIMIENTO con la casilla «V.B.» marcada, en la penúltima y la última versión. Por RMD con
@@ -416,7 +416,6 @@ por etapa · 5 seguimiento mensual (por mes: RMD actualizados / por actualizar, 
 - Se guarda en `ind_vb_seguimiento` ({ inicio, inicioTexto, cortes por mes, porActualizar por mes, rmd: [...] }). Al recibir un mes se reemplazan
   las filas del portal de ese mes (y las del PPT de octubre que venían precargadas); el status de lote y el nombre corto corregido se conservan.
 - En la ventana se anota el **status de lote** (Conforme / En proceso), se corrige el nombre corto de la barra y se pueden agregar RMD a mano.
-- «Acumulado» de la lámina 5 = suma de los V°B° eliminados desde el primer mes.
 
 ## 15. Pestaña Backlog (pendientes por atender)
 

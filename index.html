@@ -17394,7 +17394,7 @@ async function maybeAutoStartTour() {
     // disminución de vistos buenos (V°B°) de los RMD actualizados con el POE de validaciones (criterio Crítico / Clave / No clave):
     //  1 portada · 2 disminución del mes (antes → después, línea de tiempo desde el inicio) · 3 detalle por producto (barra por
     //  RMD con el status de lote; 12 RMD por lámina, se agregan láminas si hay más) · 4 resultados por etapa · 5 seguimiento
-    //  mensual · 6 cierre.
+    //  mensual y 6 cierre, que quedan tal cual el PPT de Carlos (no se tocan, pedido suyo del 16/11/2026).
     // Los V°B° los cuenta el portal (v1.144.0: «V°B° última vs. penúltima» → «Enviar a Status RMD», casilla «V.B.» de los pasos de
     // PROCEDIMIENTO de la última y la penúltima versión) y llegan con recibirDesdeSap; el status de lote se anota a mano. Todo queda en
     // el registro de esta ventana (ind_vb_seguimiento, Supabase), que también se puede corregir a mano. Un RMD sin «después» cuenta como
@@ -17548,24 +17548,6 @@ async function maybeAutoStartTour() {
                 .replace(/<c:max val="[^"]*"\/>/, () => (j++ ? '' : `<c:max val="${Math.round(Math.max(1, ...E.map((e) => e.antes)) * 1.25 * 10) / 10}"/>`));
             return { x, chart };
         }
-        function laminaMensual(x, d) {
-            return cambiarBloque(x, 'p:graphicFrame', 'Tabla seguimiento', (t) => {
-                const trs = filas(t), cab = trs[0], hecho = trs[1], enCurso = trs[2], futuro = trs[3];
-                const sinResalte = (r) => r.replace(/<a:solidFill><a:srgbClr val="F1EEF8"\/><\/a:solidFill><\/a:tcPr>/g, '<a:noFill/></a:tcPr>');
-                const conResalte = (r) => r.replace(/<a:noFill\/><\/a:tcPr>/g, '<a:solidFill><a:srgbClr val="F1EEF8"/></a:solidFill></a:tcPr>');
-                const primera = (r) => r.replace(/<a:lnT w="12700"([^>]*)><a:solidFill><a:srgbClr val="E0E0E0"\/>/g, '<a:lnT w="19050"$1><a:solidFill><a:srgbClr val="6B3AA0"/>');
-                const resto = (r) => r.replace(/<a:lnT w="19050"([^>]*)><a:solidFill><a:srgbClr val="6B3AA0"\/>/g, '<a:lnT w="12700"$1><a:solidFill><a:srgbClr val="E0E0E0"/>');
-                const nuevas = d.mensual.map((m, i) => {
-                    const r = m.pend
-                        ? ponerRuns(enCurso, [m.nombre, `Actualizados: ${m.act}`, `Por actualizar: ${m.pend}`, m.vb, menos(m.p1), menos(m.p2), menos(m.acu)])
-                        : ponerRuns(hecho, [m.nombre, m.act, m.vb, menos(m.p1), menos(m.p2), menos(m.acu)]);
-                    return (i ? resto : primera)(m.mes === d.resaltar ? conResalte(r) : sinResalte(r));
-                });
-                nuevas.push(resto(ponerRuns(futuro, [capital(mesNombre(d.siguiente)), '—', '—', '—', '—', '—'])));
-                const h = Math.min(609600, (6250000 - 1494971 - 609600) / nuevas.length);
-                return ponerExt(ponerTabla(t, [cab, ...nuevas.map((r) => altoFila(r, h))]), 609600 + h * nuevas.length);
-            });
-        }
         async function rutaGrafico(zip, lamina) {
             const rels = await zip.file(`ppt/slides/_rels/${lamina}.xml.rels`).async('string');
             const m = rels.match(/Target="\.\.\/charts\/(chart\d+\.xml)"/);
@@ -17626,13 +17608,12 @@ async function maybeAutoStartTour() {
             const c4 = await rutaGrafico(zip, 'slide4');
             const r4 = laminaEtapas(await leer('ppt/slides/slide4.xml'), await leer(c4), d);
             zip.file('ppt/slides/slide4.xml', r4.x); zip.file(c4, r4.chart);
-            // 5 seguimiento mensual
-            zip.file('ppt/slides/slide5.xml', laminaMensual(await leer('ppt/slides/slide5.xml'), d));
+            // 5 seguimiento mensual y 6 cierre: quedan tal cual el PPT de Carlos (pedido suyo, 16/11/2026: «no toques lámina 5 o 6»).
             // Números de página en el orden final.
             const pres = await leer('ppt/presentation.xml'), prels = await leer('ppt/_rels/presentation.xml.rels');
             const orden = [...pres.matchAll(/<p:sldId id="\d+" r:id="(rId\d+)"\/>/g)].map((m) => (prels.match(new RegExp(`Id="${m[1]}"[^>]*Target="slides/(slide\\d+)\\.xml"`)) || [])[1]);
             for (const [i, lam] of orden.entries()) {
-                if (!lam) continue;
+                if (!lam || lam === 'slide5' || lam === 'slide6') continue;
                 const n = `ppt/slides/${lam}.xml`; let x = await leer(n);
                 for (const nombre of ['Text 25', 'Texto 307']) { try { x = textos(x, nombre, [String(i + 1)]); } catch (e) { /* lámina sin número */ } }
                 zip.file(n, x);
@@ -17735,7 +17716,7 @@ async function maybeAutoStartTour() {
                     <tbody>${datos.rmd.map(filaHtml).join('')}</tbody></table>
                 </div>
                 <div class="vb-fila"><button type="button" id="vbAgregar">Agregar RMD</button></div>
-                <div class="vb-fila"><span>RMD por actualizar sin anotar uno por uno:</span><span id="vbPend"></span></div>
+                <div style="display:none"><span id="vbPend"></span></div>
                 <div class="vb-fila" style="border-top:1px solid #334155;padding-top:10px">
                     <label>Mes del PowerPoint <select id="vbMes"></select></label>
                     <label>Fecha de corte (línea de tiempo) <input type="date" id="vbCorte"></label>
