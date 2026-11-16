@@ -15801,6 +15801,9 @@ async function maybeAutoStartTour() {
             const ultimas = new Set();
             masters.forEach((vs) => { vs.sort((a, b) => (b.version - a.version) || ((b.fReg ? b.fReg.valueOf() : 0) - (a.fReg ? a.fReg.valueOf() : 0))); ultimas.add(vs[0]); });
             const esUltima = (v) => ultimas.has(v);
+            // Ingresados pendientes: solo la última versión de su master (pedido de Carlos, 16/11/2026), para que backlog + mes
+            // vigente sumen lo mismo que los Ingresados del Resumen y de la hoja «Última versión» del portal.
+            for (let i = pend.length - 1; i >= 0; i--) if (pend[i].tipo === 'Ingresado' && !esUltima(pend[i].v)) pend.splice(i, 1);
             // Suspendidos de hoy en SAP (sin los INACTIVO), última versión y sin otra versión nueva ya iniciada.
             const susp = [], omitidos = [];
             versiones.forEach((v) => {
