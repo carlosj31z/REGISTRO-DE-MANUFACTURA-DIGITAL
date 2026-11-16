@@ -17586,6 +17586,15 @@ async function maybeAutoStartTour() {
             ].map(([producto, planta, etapa, antes, despues, lote]) => ({ mes: '2026-10', codigo: '', producto, planta, etapa, antes, despues, lote, origen: 'ppt' }))
         };
 
+        // Los 11 RMD del PPT de octubre siempre salen (pedido de Carlos, 16/11/2026): si SAP RMD trae ese producto actualizado en octubre
+        // (misma planta, mismo primer nombre) vale lo de SAP; si no, entra la fila del PPT original.
+        const llaveOct = (r) => `${r.planta}|${String(r.producto || r.descripcionSap || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim().split(/\s+/)[0].replace(/[^a-z0-9]/g, '')}`;
+        function completarOctubre(rmd) {
+            const hay = new Set(rmd.filter((r) => r.mes === '2026-10' && r.despues !== '' && r.despues !== null && r.despues !== undefined).flatMap((r) => [llaveOct(r), llaveOct({ planta: r.planta, producto: r.descripcionSap })]));
+            const faltan = INICIAL.rmd.filter((r) => !hay.has(llaveOct(r))).map((r) => ({ ...r }));
+            return [...faltan, ...rmd];
+        }
+
         // ---------- Cálculo ----------
         const num = (v) => (v === '' || v === null || v === undefined || !Number.isFinite(Number(v)) ? null : Number(v));
         const mesNombre = (m) => { const [a, k] = m.split('-').map(Number); return `${MESES[k - 1]} ${a}`; };
@@ -17813,8 +17822,8 @@ async function maybeAutoStartTour() {
             let v = null;
             try { v = await storeGet(CLAVE); } catch (e) { /* sin conexión: se parte de lo guardado en la caché o del PPT de Carlos */ }
             datos = v && Array.isArray(v.rmd) ? v : JSON.parse(JSON.stringify(INICIAL));
-            // Todo sale de SAP RMD (pedido de Carlos, 16/11/2026): las filas precargadas del PPT de octubre no se muestran ni cuentan.
-            datos.rmd = datos.rmd.filter((r) => r.origen !== 'ppt');
+            // Las filas del PPT de octubre guardadas antes se descartan; completarOctubre pone las que SAP RMD no trae (los 11 de octubre siempre salen).
+            datos.rmd = completarOctubre(datos.rmd.filter((r) => r.origen !== 'ppt'));
             datos.cortes = datos.cortes || {}; datos.porActualizar = datos.porActualizar || {};
             return datos;
         }
@@ -18053,7 +18062,7 @@ async function maybeAutoStartTour() {
             nuevas.forEach((r) => { if (nombrePorRmd.has(r.principal)) r.producto = nombrePorRmd.get(r.principal); });
             const quedan = d.rmd.filter((r) => r.origen !== 'sap' && r.origen !== 'ppt');
             const pend = (r) => (r.despues === '' || r.despues === null || r.despues === undefined ? 1 : 0);
-            d.rmd = [...quedan, ...nuevas].sort((a, b) => String(a.mes).localeCompare(String(b.mes)) || pend(a) - pend(b) || ((Number(b.antes) - Number(b.despues || 0)) - (Number(a.antes) - Number(a.despues || 0))));
+            d.rmd = completarOctubre([...quedan, ...nuevas]).sort((a, b) => String(a.mes).localeCompare(String(b.mes)) || pend(a) - pend(b) || ((Number(b.antes) - Number(b.despues || 0)) - (Number(a.antes) - Number(a.despues || 0))));
             // La línea de tiempo sigue con su inicio (12/10/2026, POE de validaciones) aunque el portal mande desde una fecha anterior (p. ej. 01/10).
             if (!d.inicio && /^\d{4}-\d{2}-\d{2}$/.test(msg.desde || '')) d.inicio = msg.desde;
             d.porActualizar = {};
