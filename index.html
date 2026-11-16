@@ -13370,6 +13370,33 @@ async function maybeAutoStartTour() {
                 c.items.push({ pl, m: f.codigo, producto: f.descripcion || '', etapa: f.fija || '', d: f.d, cat: 'pend', estatus, resp: clasePendiente(estatus, resp).resp, inicio: f.fechaProxima || null,
                     productos: f.productos, revisar: f.fija ? undefined : (f.revisar || true) });
             });
+            // Autorizados de la Ruta 1 (pedido de Carlos, 16/11/2026): las etapas de los productos programados autorizadas en el
+            // mes en curso, como los grupos por día de la tabla de Producción. Del backlog si el RMD que la autorizó tiene su
+            // ingreso real (o registro) en un mes anterior al de la autorización, o si se autorizó a mano; si no, del mes.
+            const iniMes = dayjs().startOf('month'), finHoy = dayjs().endOf('day');
+            c.autBk = 0; c.autMes = 0;
+            filas.forEach((f) => {
+                if (f.estado !== 'autorizado' && f.estado !== 'sap') return;
+                const fa = fechaAutorizacionDeFila(f, 'produccion');
+                if (!fa) return;
+                const dAut = dayjs(fa.ms);
+                if (dAut.isBefore(iniMes) || dAut.isAfter(finHoy)) return;
+                let fIng = null;
+                if (f.estado === 'sap' && f.d && Array.isArray(f.d.candidatos)) {
+                    let fila = null, t0 = -Infinity;
+                    f.d.candidatos.forEach((cn) => {
+                        if (cn.sinRmd || cn.pendiente) return;
+                        const x = filaDetalleDeEntrada(cn) || {}, h = x.fechaAutorizacionHora ? Date.parse(x.fechaAutorizacionHora) : NaN;
+                        const t = Number.isFinite(h) ? h : fechaSapDiaMs(x.fechaAutorizacion);
+                        if (t !== null && t > t0) { t0 = t; fila = x; }
+                    });
+                    if (fila) { fIng = fechaIngresoReal(fila.observacion); if (!fIng) { const r = fechaSapDiaMs(fila.fechaRegistro); fIng = r === null ? null : dayjs(r); } }
+                }
+                const bk = !fIng || fIng.format('YYYY-MM') < dAut.format('YYYY-MM');
+                if (bk) c.autBk++; else c.autMes++;
+                c.items.push({ pl, m: f.codigo, producto: f.descripcion || '', etapa: f.fija || '', d: f.d, cat: 'aut', manual: f.estado === 'autorizado', bk, fAut: dAut.format('YYYY-MM-DD') });
+            });
+            c.autProd = c.autBk + c.autMes;
             return c;
         }
         async function calcularRuta1() {
@@ -13846,7 +13873,8 @@ async function maybeAutoStartTour() {
             horasEf = horas && typeof horas === 'object' ? horas : {};
             estimadoCfg = (est2 && typeof est2 === 'object') ? est2 : {};
             const programa = cuadroPrograma(indicadores, per, traz);
-            if (!r1.error) ['P1', 'P2'].forEach((pl) => { const a = programa[pl].aut[2]; r1[pl].aut = Number.isFinite(a) ? a : 0; r1[pl].autSinDato = !Number.isFinite(a); });
+            // Autorizados de la Ruta 1: los del mes en la tabla de Producción (antes, los del cuadro del mes de toda la planta).
+            if (!r1.error) ['P1', 'P2'].forEach((pl) => { r1[pl].aut = r1[pl].autProd || 0; r1[pl].autSinDato = false; });
             // Ruta 2 (pedido de Carlos, 14/11/2026): del Excel CARACTERIZACIÓN LISTADO de SharePoint si ya se trajo; si no, de SAP.
             const listado = lst && Array.isArray(lst.filas) && lst.filas.length ? lst : null;
             return { per, programa, r1, acu, listado, r2: listado ? ruta2DesdeListado(listado) : ruta2(items), car: { items, sinDatos: !car, generado: car && car.generado } };
@@ -14025,8 +14053,8 @@ async function maybeAutoStartTour() {
             const pct = (a, p) => (a + p ? Math.round((a / (a + p)) * 100) : 0);
             const mes = d.per.hasta.format('YYYY-MM');
             return `<div class="sts-resumen">
-                <div class="sts-res ok"><small>Autorizados P1</small><b>${r1 ? nDet(r1.P1.aut, `cuadro|P1|${mes}|aut`) : '—'}</b><span>Programa · Planta Ate · ${esc(d.per.mesNombre.toLowerCase())}</span></div>
-                <div class="sts-res ok"><small>Autorizados P2</small><b>${r1 ? nDet(r1.P2.aut, `cuadro|P2|${mes}|aut`) : '—'}</b><span>Programa · Planta Lima · ${esc(d.per.mesNombre.toLowerCase())}</span></div>
+                <div class="sts-res ok"><small>Autorizados P1</small><b>${r1 ? nDet(r1.P1.aut, 'r1|P1|aut') : '—'}</b><span>Programa · Planta Ate · ${esc(d.per.mesNombre.toLowerCase())}</span></div>
+                <div class="sts-res ok"><small>Autorizados P2</small><b>${r1 ? nDet(r1.P2.aut, 'r1|P2|aut') : '—'}</b><span>Programa · Planta Lima · ${esc(d.per.mesNombre.toLowerCase())}</span></div>
                 <div class="sts-res plum"><small>Pendientes Programa</small><b>${r1 ? nDet(pend1, 'r1|ambas|pend') : '—'}</b><span>${r1 ? `${pct(aut1, pend1)}% de avance` : 'sin datos'}</span></div>
                 <div class="sts-res copper"><small>Pendientes Caracterización</small><b>${nDet(pend2, 'r2|ambas|pend')}</b><span>${pct(aut2, pend2)}% de avance</span></div>
             </div>`;
@@ -14272,7 +14300,7 @@ async function maybeAutoStartTour() {
                             ${etapa('Control de cambio', c.cc, 'cc', `${tagResp('PRO')}<b>${nD(c.ccPro, det('ccPro'))}</b>${tagResp('ASC')}<b>${nD(c.ccAsc, det('ccAsc'))}</b>`, 'cc', 'cc')}
                         </div>
                         ${etapa('Por revisión', c.rev, 'doc', tagResp('DOC'), 'rev', 'rev')}
-                        ${etapa('Autorizado', c.aut, 'ok', '', autKey || 'aut', 'aut')}
+                        ${etapa('Autorizado', c.aut, 'ok', ruta === 'r1' && Number.isFinite(c.autBk) ? `${c.autBk} del backlog · ${c.autMes} del mes` : '', autKey || 'aut', 'aut')}
                     </div>
                     ${debajo}
                 </div>
@@ -14524,7 +14552,7 @@ async function maybeAutoStartTour() {
             const extra = (pl) => (r1[pl].sinDatos ? ' <span class="sts-chip">sin Programa de Producción cargado</span>' : ` <span class="sts-chip">${plural(r1[pl].productos, 'producto programado', 'productos programados')}${r1[pl].horizonte ? ` · cargado el ${esc(r1[pl].horizonte.carga.format('DD/MM'))}` : ''}</span>`);
             const cuerpo = r1.error ? `<div class="sts-aviso"><span>${esc(r1.error)}</span></div>`
                 : (r1.sinArbol ? '<div class="sts-aviso"><span>No se pudo cargar el árbol de materiales de SAP: solo se cuenta el RMD del propio código de cada producto.</span></div>' : '')
-                  + ['P1', 'P2'].map((pl) => htmlRuta(r1[pl], pl, 'r1', { autKey: `cuadro|${pl}|${mes}|aut`, extra: extra(pl),
+                  + ['P1', 'P2'].map((pl) => htmlRuta(r1[pl], pl, 'r1', { extra: extra(pl),
                       backlog: Object.assign(backlogRuta1(d, pl), { mes: d.per.mesAnterior.toLowerCase(), key: `cuadro|${pl}|${mes}|${claveBacklog(d.programa && d.programa[pl])}` }) })).join('');
             return `<section class="sts-seccion">
                 <div class="sts-seccion-cab"><div>
@@ -15065,13 +15093,13 @@ async function maybeAutoStartTour() {
             if (!R || R.error || !NOMBRES_RUTA[k]) return null;
             const plantas = pl === 'ambas' ? ['P1', 'P2'] : [pl];
             const items = plantas.flatMap((x) => (R[x] && R[x].items) || []).filter((it) => enCasilla(it, k));
-            // En la Ruta 1 «todo» son las etapas pendientes: sus autorizados son los del cuadro del mes (su propio detalle).
+            // En la Ruta 1 «todo» son las etapas pendientes: sus autorizados tienen su propio detalle.
             const numero = plantas.reduce((t, x) => t + (R[x] ? (k === 'todo' ? (ruta === 'r1' ? 0 : R[x].aut) + R[x].pend : R[x][k]) : 0), 0);
             const orden = (a, b) => a.planta.localeCompare(b.planta) || String(a.m || a.codigo).localeCompare(String(b.m || b.codigo)) || String(a.etapa).localeCompare(String(b.etapa));
             const nombre = k === 'todo' ? (ruta === 'r1' ? 'Etapas pendientes' : 'Todos los RMD') : NOMBRES_RUTA[k];
             return { tipo: ruta, pl, titulo: `${nombre} · ${ruta === 'r1' ? 'Ruta 1, programa' : 'Ruta 2, caracterizaciones'}`,
                 sub: pl === 'ambas' ? 'P1 y P2 · Plantas Ate y Lima' : PLANTAS[pl], numero, filas: items.map(ruta === 'r1' ? filaRuta1 : filaRuta2).sort(orden),
-                explica: ruta === 'r1' ? 'Cada etapa pendiente de los productos programados, contada como en Producción (una vez aunque la compartan varias presentaciones), con su Estatus y responsable. El RMD es el que deja pendiente la etapa. Los autorizados de la Ruta 1 son los del cuadro del mes.'
+                explica: ruta === 'r1' ? 'Cada etapa pendiente de los productos programados, contada como en Producción (una vez aunque la compartan varias presentaciones), con su Estatus y responsable. El RMD es el que deja pendiente la etapa. Los autorizados de la Ruta 1 son las etapas autorizadas en el mes, como los grupos por día de Producción (del backlog si el RMD tiene su ingreso real o registro en un mes anterior al de la autorización).'
                     : 'RMD de SAP con Motivo CARACTERIZACION. Autorizado o Suspendido en SAP cuenta como autorizado; el resto, como pendiente, con el Estatus elegido en la tabla de caracterizaciones.' };
         }
 
@@ -15577,9 +15605,9 @@ async function maybeAutoStartTour() {
                 });
             });
             ruta('R1', d.r1.error ? {} : d.r1);
-            // Debajo de AUTORIZADO (pedido de Carlos, 16/11/2026): los autorizados del mes del cuadro, separados en del backlog y del mes.
+            // Debajo de AUTORIZADO (pedido de Carlos, 16/11/2026): los autorizados del mes de Producción, separados en del backlog y del mes.
             ['P1', 'P2'].forEach((pl) => {
-                const p = d.programa && d.programa[pl], bk = p && p.autBk ? p.autBk[2] : null, ms = p && p.autMes ? p.autMes[2] : null;
+                const c = d.r1 && !d.r1.error ? d.r1[pl] : null, bk = c ? c.autBk : null, ms = c ? c.autMes : null;
                 v[`R1_${pl}_AUT_BK`] = Number.isFinite(bk) ? bk : '—'; v[`R1_${pl}_AUT_MES`] = Number.isFinite(ms) ? ms : '—';
             });
             ruta('R2', d.r2);
@@ -16704,7 +16732,7 @@ async function maybeAutoStartTour() {
             if (!r1 || r1.error) return { idx, sinRmd, error: r1 && r1.error };
             ['P1', 'P2'].forEach((pl) => {
                 ((r1[pl] && r1[pl].items) || []).forEach((it) => {
-                    if (!it.d || !Array.isArray(it.d.candidatos)) return;
+                    if (it.cat === 'aut' || !it.d || !Array.isArray(it.d.candidatos)) return;
                     const inicio = it.inicio ? dayjs(it.inicio) : null;
                     const info = { producto: it.producto || '', etapa: it.etapa || '', estatus: it.estatus || '', resp: it.resp || '', inicio: inicio && inicio.isValid() ? inicio : null };
                     const pend = it.d.candidatos.filter((c) => c.pendiente);
