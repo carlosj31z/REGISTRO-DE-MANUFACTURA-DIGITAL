@@ -16140,6 +16140,7 @@ async function maybeAutoStartTour() {
                 if (/^Prioridad 2/.test(s)) return 'FFF2CC';
                 if (/^Prioridad 3/.test(s)) return 'E2EFDA';
                 if (/^Mes vigente/.test(s)) return 'FFF2CC';
+                if (s === 'PROGRAMA DE PRODUCCIÓN') return 'F3D36B';
                 return null;
             };
             [m.pend, m.dec, m.prio, m.aut].forEach((d) => hojaDet(d, tinte));
@@ -16187,6 +16188,8 @@ async function maybeAutoStartTour() {
             const fTxt = (s) => (s ? new Date(Date.UTC(+s.slice(0, 4), +s.slice(4, 6) - 1, +s.slice(6, 8))) : '');
             const antTxt = (w) => (w ? `${w.codigo || w.sol || ''} v${w.version} · hoy ${w.estado.toLowerCase()}` : '');
             const n = (xs, f) => xs.filter(f).length, VIG = 'Mes vigente';
+            const progDe = typeof r.programa === 'function' ? r.programa : () => null;
+            const nProg = r.pend.filter((x) => progDe(x.v)).length;
             const P = (pl) => n(r.pend, (x) => x.v.planta === pl), D = (pl, c) => n(r.dec, (x) => x.pl === pl && (!c || x.c === c)), A = (pl) => n(r.aut, (x) => x.v.planta === pl);
             const oT = { Ingresado: 0, Solicitado: 1, Suspendido: 2 };
             const pend = r.pend.slice().sort((a, b) => a.v.planta.localeCompare(b.v.planta) || oT[a.tipo] - oT[b.tipo] || (a.cuando === VIG ? 0 : 1) - (b.cuando === VIG ? 0 : 1) || a.m.localeCompare(b.m));
@@ -16202,11 +16205,11 @@ async function maybeAutoStartTour() {
                 rangoAut: `del 01/${r.corte.format('MM')} al ${corte}`, rangoAutCorto: `del 01/${r.corte.format('MM')} al ${r.corte.format('DD/MM')}`,
                 notaInactivo: 'Se colocarán como INACTIVOS una vez creado el nuevo status en SAP.',
                 pend: { nombre: '1-2 Pendientes', titulo: `Pendientes de ${nomMes.toLowerCase()} (tablas 1 y 2) · corte ${corte}`,
-                    nota: '',
+                    nota: typeof r.programa === 'function' ? `«Programa de producción»: ${nProg} pendientes están en el Programa de Producción (pestaña Producción, Ruta 1), como en la pestaña BACKLOG.` : 'Sin datos del Programa de Producción: la columna «Programa de producción» va vacía.',
                     claves: { planta: 'Planta', tipo: 'Tipo', cuando: 'Meses anteriores / Mes vigente' },
-                    cols: [['Planta', 7], ['Tipo', 11], ['Meses anteriores / Mes vigente', 16], ['Mes al que pertenece', 10], ['Código RMD', 13], ['Versión', 8], ['Descripción', 46], ['Etapa', 15], ['Código de solicitud', 13],
+                    cols: [['Planta', 7], ['Tipo', 11], ['Meses anteriores / Mes vigente', 16], ['Mes al que pertenece', 10], ['Programa de producción', 14], ['Inicio producción', 11], ['Código RMD', 13], ['Versión', 8], ['Descripción', 46], ['Etapa', 15], ['Código de solicitud', 13],
                         ['Fecha de solicitud', 11], ['Fecha de registro', 11], ['Versión anterior (estado hoy)', 26], ['Fecha de suspensión (versión anterior, o la propia si es Suspendido)', 14], ['Explicación', 70]],
-                    filas: pend.map((x) => [NOMBRE_PLANTA_BK[x.v.planta], x.tipo, x.cuando, x.m, x.v.codigo || '(sin código aún)', x.v.version, x.v.desc || '', x.v.etapa || '', x.v.sol || '', fx(x.v.fSol), fx(x.v.fReg), antTxt(x.ant), fx(x.fS), x.porque]) },
+                    filas: pend.map((x) => [NOMBRE_PLANTA_BK[x.v.planta], x.tipo, x.cuando, x.m, progDe(x.v) ? 'PROGRAMA DE PRODUCCIÓN' : '', progDe(x.v) && progDe(x.v).inicio ? fx(progDe(x.v).inicio) : '', x.v.codigo || '(sin código aún)', x.v.version, x.v.desc || '', x.v.etapa || '', x.v.sol || '', fx(x.v.fSol), fx(x.v.fReg), antTxt(x.ant), fx(x.fS), x.porque]) },
                 dec: { nombre: '3 Suspendidos vs INACTIVOS', titulo: `Los ${r.dec.length} suspendidos: ${inact} pasan a INACTIVO y ${mant} se mantienen SUSPENDIDOS (tabla 3)`,
                     nota: '',
                     claves: { planta: 'Planta', decision: 'Decisión del equipo' },
@@ -16262,7 +16265,9 @@ async function maybeAutoStartTour() {
             const corte = dayjs(res.value + 'T00:00:00');
             let traz = trazabilidadSap;
             if (!traz) { try { traz = await storeGet('val_rmd_trazabilidad'); } catch (err) { traz = null; } }
-            const wb = libroBacklogMes(datosBacklogMes(filas, traz, corte, rmdPrecisoDatos));
+            const datos = datosBacklogMes(filas, traz, corte, rmdPrecisoDatos);
+            try { datos.programa = await BacklogRmd.programaParaExcel(); } catch (err) { console.warn('Backlog del mes: sin Programa de producción', err); }
+            const wb = libroBacklogMes(datos);
             const nombre = `Backlog_RMD_${corte.format('YYYY-MM')}_corte_${corte.format('YYYY-MM-DD')}.xlsx`;
             try {
                 const blob = new Blob([bytesLibroBacklog(XLSX, wb)], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
@@ -16766,6 +16771,11 @@ async function maybeAutoStartTour() {
             });
             return { idx, sinRmd };
         }
+        // Programa de Producción de una versión (mismas llaves que la pestaña: RMD, solicitud o material + etapa).
+        function programaDe(idx, v) {
+            const et = etapaDe(v), kSol = v.codigo && v.sol ? `${v.planta}|S${String(v.sol).trim()}` : '', cod = normalizeMaterialCode(v.codDef);
+            return idx.get(claveDe(v)) || (kSol && idx.get(kSol)) || (cod && et ? idx.get(`${v.planta}|M${cod}|${et}`) : null) || null;
+        }
 
         // ---------- Estatus sugerido ----------
         function sugerir(it) {
@@ -16828,8 +16838,7 @@ async function maybeAutoStartTour() {
                 const v = x.v, et = etapaDe(v);
                 const base = x.tipo === 'Suspendido' ? x.fS : x.tipo === 'Solicitado' ? (v.fSol || v.fReg) : v.fReg;
                 const kSol = v.codigo && v.sol ? `${v.planta}|S${String(v.sol).trim()}` : '';
-                const cod = normalizeMaterialCode(v.codDef);
-                const pr = prog.idx.get(claveDe(v)) || (kSol && prog.idx.get(kSol)) || (cod && et ? prog.idx.get(`${v.planta}|M${cod}|${et}`) : null) || null;
+                const pr = programaDe(prog.idx, v);
                 return { k: claveDe(v), kSol, v, tipo: x.tipo, m: x.m, nuevo: x.m === bk.mes, etapa: et, fS: x.fS || null, base: base || null,
                     dias: base ? corte.diff(base, 'day') : null, porque: x.porque, prio: x.prio || '', prog: pr };
             });
@@ -17352,6 +17361,8 @@ async function maybeAutoStartTour() {
         return {
             alEntrar: () => { visitado = true; return actualizar(); },
             actualizar, exportar, recargarNotas, recargarPronto,
+            // Para el Excel «Backlog del mes» de StatusRmd: devuelve (v) => info del Programa de producción o null.
+            programaParaExcel: async () => { const p = await indicePrograma(); return (v) => programaDe(p.idx, v); },
             _modelo: () => modelo, _notas: () => notas, _vista: vista, _grupos: grupos, _sugerir: sugerir
         };
     })();
