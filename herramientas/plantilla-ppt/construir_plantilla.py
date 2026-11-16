@@ -42,6 +42,12 @@ runs(sh(s, 'KPI detalle 2'), ['P1 Ate ', '{{G_BK_P1}}', ' · P2 Lima ', '{{G_BK_
 runs(sh(s, 'KPI etiqueta 3'), ['AUTORIZADOS EN {{MES_CORTO}} ({{RANGO_AUT}})'])
 runs(sh(s, 'KPI valor 3'), ['{{G_AUTMES_T}}'])
 runs(sh(s, 'KPI detalle 3'), ['{{G_AUTMES_BK}} del backlog · {{G_AUTMES_MES}} del ', 'mes'])
+# Segunda línea: cuántos autorizados del mes son del Programa de producción (pedido de Carlos, 16/11/2026).
+_d3 = sh(s, 'KPI detalle 3'); _d3.top = 2185416
+_par = copy.deepcopy(_d3.text_frame.paragraphs[0]._p); _d3.text_frame._txBody.append(_par)
+for _r in _par.findall(A + 'r')[1:]: _par.remove(_r)
+_r0 = _par.find(A + 'r'); _r0.find(A + 't').text = 'Programa de producción: {{G_AUTMES_PROG}} · fuera: {{G_AUTMES_NOPROG}}'
+_r0.find(A + 'rPr').set('sz', '1000'); _r0.find(A + 'rPr').find(A + 'solidFill')[0].set('val', '7F6A12')
 runs(sh(s, 'Panel backlog titulo'), ['Pendientes: backlog vs. {{MES_MIN}} ({{G_PEND_T}})'])
 t = sh(s, 'Tabla status').table
 for i, k in enumerate(['AUT', 'ING', 'SUS', 'INA', 'TOT'], 1):
