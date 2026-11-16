@@ -403,6 +403,21 @@ Arma lo mismo que la plantilla **STATUS ACTUALIZACIONES RMD – PROGRAMA Y CARAC
 - **La plantilla** va dentro de `index.html` (`STATUS_RMD_PLANTILLA_B64`). Desde el 14/11/2026 (pedido de Carlos: «que tome esta forma», su `STATUS_RMD_2026-11-13_final.pptx`) tiene 7 láminas: 1 portada con la fecha de corte; 2 **status general** (tarjetas RMD autorizados, backlog pendiente y autorizados del mes; tabla de status por planta; pendientes del backlog y del mes), con los mismos números del Excel «Backlog del mes» (`datosBacklogMes`) a la fecha de corte; 3 y 4 **Ruta 1** de P1 y de P2, cada una con su flujo y las tablas de **borradores** y **controles de cambio** pendientes (producto, etapa, responsable e inicio de producción del programa, en naranja si ya pasó; las arma `laminaRuta1`: con 0 o 1 borrador, el borrador va en la misma línea y los controles de cambio usan todo el ancho, en dos tablas si son más de 9; lo que no cabe queda como «… y N más»); 5 y 6 **Ruta 2** de P1 y de P2 con su gráfico de tendencia, que es un gráfico de PowerPoint (editable) llenado con datos literales (`llenarGrafico`); 7 cierre. Los marcadores son `{{…}}`; un marcador sin valor sale como «—». La plantilla se arma con `herramientas/plantilla-ppt/construir_plantilla.py` desde el PPTX de referencia (`python3 construir_plantilla.py referencia.pptx plantilla.pptx` y luego pasarla a base64). JSZip se carga de cdnjs solo al descargar.
 - **Ruta 2 desde el Excel CARACTERIZACIÓN LISTADO** (pedido de Carlos, 14/11/2026): hojas PLA1 (P1) y PLA2 (P2) del Excel de SharePoint (04.-RMD › 10.- RMD DE CARACTERIZACION). ESTATUS DOC TEC: PENDIENTE-PRO = Borrador, POR INGRESAR = Ingresar, FLUJO SAP, PEND CC = Control de cambio (ASC si la fila lo dice en ÁREA RESPONSABLE u OBSERVACIÓN; si no, PRO), PEND RMD OFICIAL = Por revisión, AUTORIZADO; DESESTIMADO no cuenta. La tendencia cuenta los AUTORIZADO por mes de FECHA ESTATUS. Se guarda en `val_caract_listado_excel` y lo usan la Ruta 2 de la página y del PowerPoint (sin él, la Ruta 2 sale de SAP como antes). Lo trae el script del portal SAP (con la sesión de SharePoint): con «Enviar a Status RMD» (`msg.caracterizacionExcel`) o con el botón **Traer Excel de caracterización** de la Ruta 2, que se lo pide al portal que abrió la pestaña (`STATUS_RMD_PEDIR_CARACT` → `RMD_CARACT_EXCEL`). El PowerPoint ya no pide nada.
 
+### 14.1 PPT «Seguimiento de V°B° en RMD» (botón «PPT de V°B°», 16/11/2026)
+
+PowerPoint con la forma del «SEGUIMIENTO DE VB EN RMD_2026-11-11.pptx» de Carlos (va embebido tal cual en `VB_PLANTILLA_B64`; el módulo `VbRmd`
+al final de `index.html` cambia textos, tablas y gráficos): 1 portada · 2 disminución del mes (V°B° antes → después, %, línea de tiempo desde el
+inicio del POE de validaciones) · 3 detalle por producto (una barra por RMD con su status de lote; 12 por lámina, se agregan láminas) · 4 resultados
+por etapa · 5 seguimiento mensual (por mes: RMD actualizados / por actualizar, V°B° antes, eliminados en Ate y Lima y acumulado) · 6 cierre.
+
+- **Los V°B° vienen del portal** (userscript v1.143.0): Exportar → «V°B° última vs. penúltima» → mes → «Enviar a Status RMD» manda
+  `RMD_VB_SEGUIMIENTO`. V°B° = pasos activos de PROCEDIMIENTO con la casilla «V.B.» marcada, en la penúltima y la última versión. Por RMD con
+  menos V°B° en la última: **actualizado** si la última está Autorizada con fecha de autorización en el mes; **por actualizar** si aún no se autoriza.
+- Se guarda en `ind_vb_seguimiento` ({ inicio, inicioTexto, cortes por mes, porActualizar por mes, rmd: [...] }). Al recibir un mes se reemplazan
+  las filas del portal de ese mes (y las del PPT de octubre que venían precargadas); el status de lote y el nombre corto corregido se conservan.
+- En la ventana se anota el **status de lote** (Conforme / En proceso), se corrige el nombre corto de la barra y se pueden agregar RMD a mano.
+- «Acumulado» de la lámina 5 = suma de los V°B° eliminados desde el primer mes.
+
 ## 15. Pestaña Backlog (pendientes por atender)
 
 Pedido de Carlos (14/11/2026), pensado para que David lo lea de un vistazo. Código: bloque `BacklogRmd` al final de `index.html`.
