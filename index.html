@@ -17428,11 +17428,11 @@ async function maybeAutoStartTour() {
     // disminución de vistos buenos (V°B°) de los RMD actualizados con el POE de validaciones (criterio Crítico / Clave / No clave):
     //  1 portada · 2 disminución del mes (antes → después, línea de tiempo desde el inicio) · 3 detalle por producto (barra por
     //  RMD con el status de lote; 12 RMD por lámina, se agregan láminas si hay más) · 4 resultados por etapa · 5 seguimiento
-    //  mensual y 6 cierre, que quedan tal cual el PPT de Carlos (no se tocan, pedido suyo del 16/11/2026).
-    // Los V°B° los cuenta el portal (v1.144.0: «V°B° última vs. penúltima» → «Enviar a Status RMD», casilla «V.B.» de los pasos de
-    // PROCEDIMIENTO de la última y la penúltima versión) y llegan con recibirDesdeSap; el status de lote se anota a mano. Todo queda en
-    // el registro de esta ventana (ind_vb_seguimiento, Supabase), que también se puede corregir a mano. Un RMD sin «después» cuenta como
-    // «por actualizar» de su mes.
+    //  mensual (actualizados y por actualizar por mes) · 6 cierre, que queda tal cual el PPT de Carlos.
+    // Todo sale del portal (userscript 1.145.0: «V°B° última vs. penúltima» → «Enviar a Status RMD», seguimiento desde el 12/10/2026, casilla
+    // «V.B.» de los pasos de PROCEDIMIENTO): actualizados = Autorizados desde el inicio con menos V°B° que su versión anterior; por actualizar =
+    // Ingresados con menos V°B°; status de lote = «Conforme» si al menos un lote de la versión actualizada se cerró, si no «En proceso».
+    // Queda en ind_vb_seguimiento (Supabase). La lámina 2 por defecto suma todo desde el inicio hasta la fecha de los datos.
     const VbRmd = (() => {
         const CLAVE = 'ind_vb_seguimiento';
         const ETAPAS = ['Acondicionado', 'Inspección', 'Fabricación', 'Envase'];
@@ -17582,6 +17582,25 @@ async function maybeAutoStartTour() {
                 .replace(/<c:max val="[^"]*"\/>/, () => (j++ ? '' : `<c:max val="${Math.round(Math.max(1, ...E.map((e) => e.antes)) * 1.25 * 10) / 10}"/>`));
             return { x, chart };
         }
+        // Lámina 5 (pedido de Carlos 16/11/2026): por mes, actualizados (Autorizados con menos V°B°) y por actualizar (Ingresados con menos V°B°).
+        function laminaMensual(x, d) {
+            return cambiarBloque(x, 'p:graphicFrame', 'Tabla seguimiento', (t) => {
+                const trs = filas(t), cab = trs[0], hecho = trs[1], enCurso = trs[2], futuro = trs[3];
+                const sinResalte = (r) => r.replace(/<a:solidFill><a:srgbClr val="F1EEF8"\/><\/a:solidFill><\/a:tcPr>/g, '<a:noFill/></a:tcPr>');
+                const conResalte = (r) => r.replace(/<a:noFill\/><\/a:tcPr>/g, '<a:solidFill><a:srgbClr val="F1EEF8"/></a:solidFill></a:tcPr>');
+                const primera = (r) => r.replace(/<a:lnT w="12700"([^>]*)><a:solidFill><a:srgbClr val="E0E0E0"\/>/g, '<a:lnT w="19050"$1><a:solidFill><a:srgbClr val="6B3AA0"/>');
+                const resto = (r) => r.replace(/<a:lnT w="19050"([^>]*)><a:solidFill><a:srgbClr val="6B3AA0"\/>/g, '<a:lnT w="12700"$1><a:solidFill><a:srgbClr val="E0E0E0"/>');
+                const nuevas = d.mensual.map((m, i) => {
+                    const r = m.pend
+                        ? ponerRuns(enCurso, [m.nombre, `Actualizados: ${m.act}`, `Por actualizar: ${m.pend}`, m.vb, menos(m.p1), menos(m.p2), menos(m.acu)])
+                        : ponerRuns(hecho, [m.nombre, m.act, m.vb, menos(m.p1), menos(m.p2), menos(m.acu)]);
+                    return (i ? resto : primera)(m.mes === d.resaltar ? conResalte(r) : sinResalte(r));
+                });
+                nuevas.push(resto(ponerRuns(futuro, [capital(mesNombre(d.siguiente)), '—', '—', '—', '—', '—'])));
+                const h = Math.min(609600, (6250000 - 1494971 - 609600) / nuevas.length);
+                return ponerExt(ponerTabla(t, [cab, ...nuevas.map((r) => altoFila(r, h))]), 609600 + h * nuevas.length);
+            });
+        }
         async function rutaGrafico(zip, lamina) {
             const rels = await zip.file(`ppt/slides/_rels/${lamina}.xml.rels`).async('string');
             const m = rels.match(/Target="\.\.\/charts\/(chart\d+\.xml)"/);
@@ -17642,12 +17661,13 @@ async function maybeAutoStartTour() {
             const c4 = await rutaGrafico(zip, 'slide4');
             const r4 = laminaEtapas(await leer('ppt/slides/slide4.xml'), await leer(c4), d);
             zip.file('ppt/slides/slide4.xml', r4.x); zip.file(c4, r4.chart);
-            // 5 seguimiento mensual y 6 cierre: quedan tal cual el PPT de Carlos (pedido suyo, 16/11/2026: «no toques lámina 5 o 6»).
+            // 5 seguimiento mensual (actualizados y por actualizar del portal); 6 cierre queda tal cual el PPT de Carlos.
+            zip.file('ppt/slides/slide5.xml', laminaMensual(await leer('ppt/slides/slide5.xml'), d));
             // Números de página en el orden final.
             const pres = await leer('ppt/presentation.xml'), prels = await leer('ppt/_rels/presentation.xml.rels');
             const orden = [...pres.matchAll(/<p:sldId id="\d+" r:id="(rId\d+)"\/>/g)].map((m) => (prels.match(new RegExp(`Id="${m[1]}"[^>]*Target="slides/(slide\\d+)\\.xml"`)) || [])[1]);
             for (const [i, lam] of orden.entries()) {
-                if (!lam || lam === 'slide5' || lam === 'slide6') continue;
+                if (!lam || lam === 'slide6') continue;
                 const n = `ppt/slides/${lam}.xml`; let x = await leer(n);
                 for (const nombre of ['Text 25', 'Texto 307']) { try { x = textos(x, nombre, [String(i + 1)]); } catch (e) { /* lámina sin número */ } }
                 zip.file(n, x);
@@ -17688,7 +17708,10 @@ async function maybeAutoStartTour() {
         function filaHtml(r, i) {
             // Lo que no se edita en la ventana (de dónde vino, versiones, RMD principal) viaja escondido en la fila.
             const extra = Object.fromEntries(Object.entries(r).filter(([k]) => !CAMPOS_VENTANA.includes(k)));
-            const origen = r.origen === 'sap' ? `Portal: v${esc(r.versionAnt)} → v${esc(r.version)}${r.despues === '' || r.despues === null ? ` (${esc(r.estado || 'sin autorizar')}${r.previsto !== undefined ? `, quedaría en ${esc(r.previsto)}` : ''})` : ''}` : r.origen === 'ppt' ? 'PPT de octubre' : 'A mano';
+            const porAct = r.despues === '' || r.despues === null;
+            const lotesTxt = r.origen === 'sap' && !porAct && r.lotes !== undefined ? (r.lotes ? ` · lotes: ${r.lotesCerrados} de ${r.lotes} cerrados` : ' · sin lotes') : '';
+            const origen = r.origen === 'sap' ? `Portal: v${esc(r.versionAnt)} → v${esc(r.version)}${porAct ? ` (${esc(r.estado || 'sin autorizar')}${r.previsto !== undefined ? `, quedaría en ${esc(r.previsto)}` : ''})` : ''}${lotesTxt}` : r.origen === 'ppt' ? 'PPT de octubre' : 'A mano';
+            const loteAuto = r.origen === 'sap' && r.lotes !== undefined, tituloLote = loteAuto ? esc(r.lotesDetalle ? `Lotes de la versión ${r.version}: ${r.lotesDetalle}` : 'La versión actualizada aún no tiene lotes en el portal') : '';
             return `<tr data-i="${i}" data-extra="${esc(JSON.stringify(extra))}">
                 <td><input type="month" data-k="mes" value="${esc(r.mes)}" style="width:128px"></td>
                 <td><input data-k="codigo" value="${esc(r.codigo)}" placeholder="opcional" style="width:98px"></td>
@@ -17697,7 +17720,7 @@ async function maybeAutoStartTour() {
                 <td><select data-k="etapa">${opciones(ETAPAS.map((e) => [e, e]), r.etapa, '—')}</select></td>
                 <td><input type="number" min="0" data-k="antes" value="${esc(r.antes)}" style="width:62px"></td>
                 <td><input type="number" min="0" data-k="despues" value="${esc(r.despues)}" placeholder="por act." style="width:72px"></td>
-                <td><select data-k="lote">${opciones(LOTES.map((e) => [e, e]), r.lote, '—')}</select></td>
+                <td><select data-k="lote"${loteAuto ? ` disabled title="${tituloLote}"` : ''}>${opciones(LOTES.map((e) => [e, e]), r.lote, '—')}</select></td>
                 <td class="vb-nota vb-origen" title="${origen}">${origen}</td>
                 <td><button type="button" class="vb-quitar" data-quitar="${i}">Quitar</button></td></tr>`;
         }
@@ -17718,14 +17741,16 @@ async function maybeAutoStartTour() {
             const conAct = meses.filter((m) => d.rmd.some((r) => r.mes === m && r.despues !== '' && r.despues !== null));
             const sel = cont.querySelector('#vbMes'), antes = sel.value;
             const ultimoCerrado = conAct.filter((m) => m < hoyIso().slice(0, 7)).pop() || conAct[conAct.length - 1] || '';
-            sel.innerHTML = conAct.map((m) => `<option value="${m}">${capital(mesNombre(m))}</option>`).join('') + (conAct.length > 1 ? '<option value="todo">Desde el inicio (todos los meses)</option>' : '');
-            sel.value = [...sel.options].some((o) => o.value === antes) ? antes : ultimoCerrado;
+            sel.innerHTML = (conAct.length ? `<option value="todo">Desde el inicio (${fechaCorta(d.inicio || INICIAL.inicio)})</option>` : '') + conAct.map((m) => `<option value="${m}">${capital(mesNombre(m))}</option>`).join('');
+            sel.value = [...sel.options].some((o) => o.value === antes) ? antes : conAct.length ? 'todo' : ultimoCerrado;
             cont.querySelector('#vbPend').innerHTML = meses.map((m) => `<label>${capital(mesNombre(m))} <input type="number" min="0" data-pend="${m}" value="${esc((d.porActualizar || {})[m] || '')}" style="width:62px"></label>`).join('') || '<span class="vb-nota">Agrega RMD para anotar los pendientes de cada mes.</span>';
             ponerCorte(cont);
         }
         function ponerCorte(cont) {
-            const m = cont.querySelector('#vbMes').value, ref = m === 'todo' ? (mesesConRegistro(leerVentana(cont)).pop() || hoyIso().slice(0, 7)) : m;
-            cont.querySelector('#vbCorte').value = (m && datos.cortes[m]) || (ref ? corteDefecto(ref, hoyIso()) : '');
+            const m = cont.querySelector('#vbMes').value, seg = datos.recibido && datos.recibido.seguimiento;
+            // Desde el inicio: los días con avance llegan hasta la fecha de los datos del portal (o hoy).
+            if (m === 'todo') { cont.querySelector('#vbCorte').value = seg && seg.generado ? dayjs(seg.generado).format('YYYY-MM-DD') : hoyIso(); return; }
+            cont.querySelector('#vbCorte').value = (m && datos.cortes[m]) || (m ? corteDefecto(m, hoyIso()) : '');
         }
         function cuerpo() {
             return `<style>
@@ -17742,7 +17767,7 @@ async function maybeAutoStartTour() {
                 .vb-ventana #vbPend label { display:inline-flex; gap:6px; align-items:center; margin-right:12px; }
             </style>
             <div class="vb-ventana">
-                <p class="vb-nota">Los V°B° llegan del portal: Exportar → «V°B° última vs. penúltima» → elige el mes → «Enviar a Status RMD» (cuenta la casilla «V.B.» de los pasos de la penúltima y la última versión). Aquí anotas el status de lote y puedes corregir o agregar RMD a mano (con el código se completan producto, planta, etapa y mes). Sin «después» cuenta como por actualizar en su mes.</p>
+                <p class="vb-nota">Todo llega del portal: Exportar → «V°B° última vs. penúltima» → «Enviar a Status RMD» (seguimiento desde el 12/10/2026; cuenta la casilla «V.B.» de los pasos). Actualizados = Autorizados con menos V°B° que su versión anterior; por actualizar = Ingresados con menos V°B° (sin «después»). Status de lote: «Conforme» si al menos un lote de la versión actualizada se cerró; si no, «En proceso». Puedes corregir el nombre corto o agregar RMD a mano.</p>
                 <div class="vb-fila"><label>Inicio <input type="date" id="vbInicio" value="${esc(datos.inicio)}"></label>
                     <label style="flex:1;display:flex;gap:6px;align-items:center">Texto <input id="vbInicioTxt" value="${esc(datos.inicioTexto)}" style="flex:1"></label></div>
                 <div style="max-height:46vh;overflow:auto;border:1px solid #1e293b;border-radius:8px">
@@ -17838,15 +17863,45 @@ async function maybeAutoStartTour() {
         // corregir en la ventana y la corrección se conserva al volver a recibir el mes.
         const SIGLAS = new Set(['INY', 'TAB', 'SUS', 'SOL', 'INH', 'CB', 'NF', 'REC', 'XR', 'UNG', 'PVO', 'OVU', 'CAP', 'D3', 'UI', 'LIQ', 'TA']);
         function nombreCorto(desc) {
-            let t = String(desc || '').replace(/\s+/g, ' ').trim();
+            let t = String(desc || '').replace(/\s+/g, ' ').trim().replace(/^REAC\s*-\s*/i, '');
             t = t.split(/ - | \(|\s+-\s*\d/)[0];
-            t = t.replace(/\s+(CJA|AMP\d*|FCO\d*|INS|POT|SOB|BOL|PEBD|BLANDA|B\d+|F\d+|T\d+|X ?\d+|MM|P-C|BLIPACK|DIS|SALA|V\d+|IN\d+|AC\d+|EN\d+)\b.*$/i, '');
-            t = t.split(' ').map((p) => p.split('-').map((w) => (/^[A-ZÁÉÍÓÚÑ]{4,}$/.test(w) && !SIGLAS.has(w) ? w.charAt(0) + w.slice(1).toLowerCase() : w)).join('-')).join(' ');
+            // Sin la presentación (envase, empaque, sala): antes de la concentración el término se salta («AGUA ESTERIL P/INYECCION PEBD FCO
+            // 1000 mL» → «… 1000 mL»); después de la concentración, ahí termina el nombre («MEDICORT 4mg/2mL INY CJA x 100» → «… INY»).
+            const EMPAQUE = /^(CJA\S*|AMP\d*|FCO\d*|INS|POT|BOL|PEBD|PEAD|BLANDA|BLIPACK|DIS|SALA|TA|TA-\S*|X|X\d+|B\d+|F\d+|T\d+|V\d+|IN\d+|AC\d+|EN\d+|MM|P-C)$/i;
+            const pal = []; let conNum = false;
+            for (const w of t.split(' ')) { if (EMPAQUE.test(w)) { if (conNum) break; continue; } pal.push(w); if (/\d/.test(w)) conNum = true; }
+            t = pal.join(' ');
+            t = t.split(' ').map((p) => p.split(/([-/])/).map((w) => (/^[A-ZÁÉÍÓÚÑ]{4,}$/.test(w) && !SIGLAS.has(w) ? w.charAt(0) + w.slice(1).toLowerCase() : w)).join('')).join(' ');
             // Hasta la forma farmacéutica que sigue a la concentración («… 4mg/2mL INY 2mL» → «… 4mg/2mL INY»); sin «CAP» al final.
             const ps = t.split(' '), iNum = ps.findIndex((w) => /\d/.test(w)), iForma = ps.findIndex((w, i) => i > iNum && iNum >= 0 && /^(INY|TAB|SUS|SOL|CB|PVO|UNG|OVU|CAP|SOB)$/i.test(w));
             if (iForma > 0) t = ps.slice(0, iForma + 1).join(' ');
             t = t.replace(/\s+CAP$/i, '');
             return t.length > 34 ? t.slice(0, 33).trim() + '…' : t;
+        }
+        // Status de lote (pedido de Carlos, 16/11/2026): «Conforme» si al menos un lote hecho con la versión actualizada se cerró; «En proceso»
+        // si no tiene lotes o ninguno se cerró. Los lotes son los registros de producción (RMD) de esa versión, con su estado en el portal.
+        // Estado del registro en el portal (catálogo tipo 44): 474 Habilitado, 475 En Proceso, 476 Parada, 477 Reaperturado, 478 Cerrado.
+        const LOTE_CERRADO = 478;
+        const cerrado = (l) => !!l && l.activo !== false && (Number(l.estadoId) === LOTE_CERRADO || (l.estadoId == null && /^CERRAD/i.test(l.estado || '')));
+        const loteDe = (ls) => ((ls || []).some(cerrado) ? 'Conforme' : 'En proceso');
+        // Seguimiento desde el inicio (v2, userscript 1.145.0): una foto completa del portal. Actualizado = versión Autorizada desde el inicio con
+        // menos casillas «V.B.» que la anterior (va en el mes de su autorización); por actualizar = última versión Ingresada con menos casillas
+        // «V.B.» (va en el mes de los datos).
+        function filasSeguimiento(msg) {
+            const mesHoy = msg.generado ? dayjs(msg.generado).format('YYYY-MM') : hoyIso().slice(0, 7), out = [];
+            (msg.filas || []).forEach((x) => {
+                const u = x.ult, p = x.pen;
+                if (!u || !p) return;
+                const cu = u.casVb !== null && u.casVb !== undefined ? u.casVb : u.vb, cp = p.casVb !== null && p.casVb !== undefined ? p.casVb : p.vb;
+                if (!(Number.isFinite(cu) && Number.isFinite(cp) && cu < cp)) return;
+                const lotes = Array.isArray(x.lotes) ? x.lotes : [];
+                const base = { codigo: u.codigo || '', principal: x.principal || '', producto: nombreCorto(x.producto), descripcionSap: x.producto || '', planta: PLANTA_SAP[x.planta] || x.planta || '', etapa: ETAPA_SAP(x.etapa),
+                    antes: cp, version: u.version, versionAnt: p.version, codigoAnt: p.codigo || '', estado: u.estado || '', origen: 'sap', lotes: lotes.length, lotesCerrados: lotes.filter(cerrado).length,
+                    lotesDetalle: lotes.slice(0, 20).map((l) => `${l.lote || l.orden || '?'}: ${l.estado || 'sin estado'}${l.activo === false ? ' (inactivo)' : ''}`).join('; ') };
+                if (x.tipo === 'actualizado' && /^\d{4}-\d{2}/.test(u.autorizacion || '')) out.push({ ...base, mes: u.autorizacion.slice(0, 7), despues: cu, lote: loteDe(lotes) });
+                else if (x.tipo === 'por actualizar') out.push({ ...base, mes: mesHoy, despues: '', previsto: cu, lote: 'En proceso' });
+            });
+            return out;
         }
         function filasDesdeSap(msg) {
             const mes = msg.mes, out = [];
@@ -17862,7 +17917,22 @@ async function maybeAutoStartTour() {
             });
             return out;
         }
+        // Seguimiento: reemplaza todo lo que vino del portal y las filas del PPT de octubre; quedan las filas a mano y los nombres cortos corregidos.
+        function mezclarSeguimiento(d, msg) {
+            const nuevas = filasSeguimiento(msg), nombrePorRmd = new Map();
+            d.rmd.forEach((r) => { if (r.origen === 'sap' && r.principal && r.producto && r.producto !== nombreCorto(r.descripcionSap)) nombrePorRmd.set(r.principal, r.producto); });
+            nuevas.forEach((r) => { if (nombrePorRmd.has(r.principal)) r.producto = nombrePorRmd.get(r.principal); });
+            const quedan = d.rmd.filter((r) => r.origen !== 'sap' && r.origen !== 'ppt');
+            const pend = (r) => (r.despues === '' || r.despues === null || r.despues === undefined ? 1 : 0);
+            d.rmd = [...quedan, ...nuevas].sort((a, b) => String(a.mes).localeCompare(String(b.mes)) || pend(a) - pend(b) || ((Number(b.antes) - Number(b.despues || 0)) - (Number(a.antes) - Number(a.despues || 0))));
+            if (/^\d{4}-\d{2}-\d{2}$/.test(msg.desde || '')) d.inicio = msg.desde;
+            d.porActualizar = {};
+            d.recibido = { ...(d.recibido || {}), seguimiento: { generado: msg.generado, desde: msg.desde, por: (msg.usuarioSap && (msg.usuarioSap.nombre || msg.usuarioSap.email)) || '', rmd: (msg.filas || []).length } };
+            const act = nuevas.filter((r) => r.despues !== '');
+            return { act: act.length, pend: nuevas.length - act.length, conforme: act.filter((r) => r.lote === 'Conforme').length };
+        }
         function mezclar(d, msg) {
+            if (msg.alcance === 'seguimiento') return mezclarSeguimiento(d, msg);
             const nuevas = filasDesdeSap(msg), mes = msg.mes;
             const lotePorRmd = new Map(), lotePorProd = new Map(), nombrePorRmd = new Map();
             d.rmd.forEach((r) => { if (r.origen === 'sap' && r.principal && r.producto && r.producto !== nombreCorto(r.descripcionSap)) nombrePorRmd.set(r.principal, r.producto); });
@@ -17878,20 +17948,22 @@ async function maybeAutoStartTour() {
         async function recibirDesdeSap(msg, fuente, origen) {
             const responder = (r) => { try { fuente.postMessage(Object.assign({ type: 'STATUS_RMD_RECIBIDO' }, r), origen); } catch (e) { /* pestaña del portal cerrada */ } };
             try {
-                if (!msg || !/^\d{4}-\d{2}$/.test(msg.mes || '') || !Array.isArray(msg.filas)) { responder({ ok: false, motivo: 'no llegaron datos de V°B°' }); return; }
+                const seg = msg && msg.alcance === 'seguimiento';
+                if (!msg || !Array.isArray(msg.filas) || (seg ? !/^\d{4}-\d{2}-\d{2}$/.test(msg.desde || '') : !/^\d{4}-\d{2}$/.test(msg.mes || ''))) { responder({ ok: false, motivo: 'no llegaron datos de V°B°' }); return; }
                 // Se relee lo guardado justo antes de mezclar, para no pisar lo que otro anotó.
                 let v = null; try { v = typeof storeGetFresco === 'function' ? await storeGetFresco(CLAVE) : await storeGet(CLAVE); } catch (e) { /* sin conexión */ }
                 const d = v && Array.isArray(v.rmd) ? v : (datos || JSON.parse(JSON.stringify(INICIAL)));
                 d.cortes = d.cortes || {}; d.porActualizar = d.porActualizar || {};
                 const r = mezclar(d, msg);
                 await guardar(d);
-                const resumen = `PPT de V°B° de ${mesNombre(msg.mes)}: ${r.act} RMD actualizados con menos V°B° y ${r.pend} por actualizar.`;
+                const resumen = seg ? `PPT de V°B° desde el ${fechaCorta(msg.desde)}: ${r.act} RMD actualizados (${r.conforme} con lote conforme) y ${r.pend} por actualizar.`
+                    : `PPT de V°B° de ${mesNombre(msg.mes)}: ${r.act} RMD actualizados con menos V°B° y ${r.pend} por actualizar.`;
                 responder({ ok: true, resumen });
-                if (typeof Swal !== 'undefined' && !Swal.isVisible()) abrir(msg.mes);
+                if (typeof Swal !== 'undefined' && !Swal.isVisible()) abrir(seg ? 'todo' : msg.mes);
             } catch (err) { console.error('V°B° desde SAP:', err); responder({ ok: false, motivo: err.message }); }
         }
 
-        return { abrir, recibirDesdeSap, recargar: () => { datos = null; }, CLAVE, INICIAL, calcular, armarPpt, corteDefecto, _mezclar: mezclar, _datos: () => datos };
+        return { abrir, recibirDesdeSap, recargar: () => { datos = null; }, CLAVE, INICIAL, calcular, armarPpt, corteDefecto, _mezclar: mezclar, _datos: () => datos, _loteDe: loteDe };
     })();
     </script>
 </body>
