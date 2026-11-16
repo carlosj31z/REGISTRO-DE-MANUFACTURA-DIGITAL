@@ -3085,7 +3085,7 @@
                 // pisados por los datos guardados que todavía se estaban leyendo al abrir la página.
                 if (data.type === 'STATUS_RMD_PING') { if (window.__statusRmdAppLista) event.source.postMessage({ type: 'STATUS_RMD_LISTO' }, event.origin); return; }
                 if (!window.__statusRmdAppLista) return;
-                // V°B° del mes desde «V°B° última vs. penúltima» del portal (v1.143.0): van al registro del PPT de V°B° de INDICADORES.
+                // V°B° del mes desde «V°B° última vs. penúltima» del portal (v1.144.0): van al registro del PPT de V°B° de INDICADORES.
                 if (data.type === 'RMD_VB_SEGUIMIENTO') { VbRmd.recibirDesdeSap(data, event.source, event.origin); return; }
                 recibirMaestroDesdeSap(data, event.source, event.origin);
                 return;
@@ -17395,7 +17395,7 @@ async function maybeAutoStartTour() {
     //  1 portada · 2 disminución del mes (antes → después, línea de tiempo desde el inicio) · 3 detalle por producto (barra por
     //  RMD con el status de lote; 12 RMD por lámina, se agregan láminas si hay más) · 4 resultados por etapa · 5 seguimiento
     //  mensual · 6 cierre.
-    // Los V°B° los cuenta el portal (v1.143.0: «V°B° última vs. penúltima» → «Enviar a Status RMD», casilla «V.B.» de los pasos de
+    // Los V°B° los cuenta el portal (v1.144.0: «V°B° última vs. penúltima» → «Enviar a Status RMD», casilla «V.B.» de los pasos de
     // PROCEDIMIENTO de la última y la penúltima versión) y llegan con recibirDesdeSap; el status de lote se anota a mano. Todo queda en
     // el registro de esta ventana (ind_vb_seguimiento, Supabase), que también se puede corregir a mano. Un RMD sin «después» cuenta como
     // «por actualizar» de su mes.

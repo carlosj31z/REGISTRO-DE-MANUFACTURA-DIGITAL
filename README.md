@@ -410,7 +410,7 @@ al final de `index.html` cambia textos, tablas y gráficos): 1 portada · 2 dism
 inicio del POE de validaciones) · 3 detalle por producto (una barra por RMD con su status de lote; 12 por lámina, se agregan láminas) · 4 resultados
 por etapa · 5 seguimiento mensual (por mes: RMD actualizados / por actualizar, V°B° antes, eliminados en Ate y Lima y acumulado) · 6 cierre.
 
-- **Los V°B° vienen del portal** (userscript v1.143.0): Exportar → «V°B° última vs. penúltima» → mes → «Enviar a Status RMD» manda
+- **Los V°B° vienen del portal** (userscript v1.144.0): Exportar → «V°B° última vs. penúltima» → mes → «Enviar a Status RMD» manda
   `RMD_VB_SEGUIMIENTO`. V°B° = pasos activos de PROCEDIMIENTO con la casilla «V.B.» marcada, en la penúltima y la última versión. Por RMD con
   menos V°B° en la última: **actualizado** si la última está Autorizada con fecha de autorización en el mes; **por actualizar** si aún no se autoriza.
 - Se guarda en `ind_vb_seguimiento` ({ inicio, inicioTexto, cortes por mes, porActualizar por mes, rmd: [...] }). Al recibir un mes se reemplazan
