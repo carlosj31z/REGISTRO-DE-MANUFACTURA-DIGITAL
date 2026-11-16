@@ -52,6 +52,17 @@ for nombre, pre in (('Tabla backlog meses anteriores', 'BKA'), ('Tabla backlog n
     for i, k in enumerate(['ING', 'SOL', 'SUS', 'TOT'], 1):
         for j, c in enumerate(['P1', 'P2', 'T'], 1): celda(t.cell(i, j), '{{G_%s_%s_%s}}' % (pre, k, c))
 
+def partes_aut(s, k):
+    """Debajo de AUTORIZADO: «X del backlog · Y del mes» (pedido de Carlos, 16/11/2026)."""
+    r, et = sh(s, 'Responsable 314'), sh(s, 'Etapa 315')
+    el = copy.deepcopy(r._element); r._element.addnext(el)
+    el.find('.//{http://schemas.openxmlformats.org/presentationml/2006/main}cNvPr').set('id', str(max(x.shape_id for x in s.shapes) + 1))
+    n = [x for x in s.shapes if x._element is el][0]
+    n.name = 'Autorizados partes'; n.left, n.width, n.top = et.left - 350000, et.width + 700000, r.top
+    runs(n, ['{{%sAUT_BK}} del backlog · {{%sAUT_MES}} del mes' % (k, k)])
+    for rr in n.text_frame.paragraphs[0].runs:
+        rr.font.bold = False; rr.font.color.rgb = __import__('pptx').dml.color.RGBColor(0x4D, 0x4D, 0x4D)
+
 # Láminas 3 y 4: Ruta 1, una por planta (las tablas de borradores y controles de cambio las arma la página).
 lbl500 = copy.deepcopy(sh(S[3], 'Label 500')._element)
 for s, pl, planta in ((S[2], 'P1', 'Ate'), (S[3], 'P2', 'Lima')):
@@ -66,6 +77,7 @@ for s, pl, planta in ((S[2], 'P1', 'Ate'), (S[3], 'P2', 'Lima')):
         runs(sh(s, 'Valor %s' % n), ['{{%s%s}}' % (k, c)])
     runs(sh(s, 'Responsable 311'), ['PRO {{%sCC_PRO}} ' % k, '· ASC {{%sCC_ASC}}' % k])
     runs(sh(s, 'Avance Programa del mes'), ['{{%sAVANCE}}' % k], None)
+    partes_aut(s, k)
     # Etiquetas: la de borradores con 3 runs (título, responsables, lista en línea), como la lámina de LIMA.
     viejo = sh(s, 'Label 500')._element
     nuevo = copy.deepcopy(lbl500); viejo.addprevious(nuevo); viejo.getparent().remove(viejo)
