@@ -79,12 +79,27 @@ export async function alRegistrar(s) {
   await Promise.allSettled(tareas);
 }
 
+/** El motivo de «revisar» en palabras simples (sin el plan técnico del ejecutor). */
+export function motivoSimple(resultado) {
+  const r = String(resultado || '');
+  if (!r) return '';
+  if (/^Error al aplicar/.test(r)) return 'hubo un problema técnico al trabajar en SAP';
+  const errores = r.split('\n').filter((l) => l.includes('✗'))
+    .map((l) => l.replace(/^.*?✗\s*\d+\.\s*[\w_]+:\s*/, '').replace(/\s*\[[^\]]*\]\s*$/, '').trim()).filter(Boolean);
+  if (errores.length) return errores.join('; ');
+  const linea = r.split('\n')[0].replace(/^No se pudo aplicar solo:?\s*/, '').trim();
+  return linea.length <= 200 ? linea.replace(/\.$/, '') : '';
+}
+
 /** Lo que se le dice a quien pidió cuando el ejecutor termina (también lo muestra el chat web). */
 export function textoParaPersona(s) {
   const ok = s.estado === 'ejecutada';
   if (ok && (s.tipo === 'estado' || s.tipo === 'documento')) return `Solicitud #${s.id}. ${s.resultado || s.resumen}`;
   if (ok) return `Listo: su solicitud #${s.id} ya se aplicó en SAP${s.rmd ? ` (RMD ${s.rmd})` : ''} y se actualizó el RMD en línea. ${s.resumen}`;
-  return `Su solicitud #${s.id} necesita que la revise el analista de Documentación Técnica; le escribirá por aquí. ${s.resumen}`;
+  if (s.estado !== 'revisar') return `Su solicitud #${s.id} necesita que la revise el analista de Documentación Técnica; le escribirá por aquí. ${s.resumen}`;
+  const motivo = motivoSimple(s.resultado);
+  return `Su solicitud #${s.id} (${s.resumen}) no se pudo completar sola${motivo ? `: ${motivo}` : ''}. ` +
+    'La revisará el analista de Documentación Técnica y le escribirá por aquí.';
 }
 
 /** Mientras se atiende (lo llama el ejecutor al ubicar el RMD): el avance solo a quien pidió, para que no espere a ciegas. */
