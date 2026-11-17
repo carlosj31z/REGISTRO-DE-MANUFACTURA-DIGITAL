@@ -96,10 +96,12 @@ r = await decir('blablabla'); assert.match(r.texto, /Disculpe, no le entendí/);
 
 // Resultado para el chat web: aviso sin el detalle técnico
 Object.assign(tablas.chatbot_solicitudes[4], { estado: 'ejecutada', resultado: 'El RMD 2202609013 está en la versión 8 (Autorizado).' });
-Object.assign(tablas.chatbot_solicitudes[0], { estado: 'revisar', resultado: 'detalle técnico interno' });
+Object.assign(tablas.chatbot_solicitudes[0], { estado: 'revisar', resultado: 'No se pudo aplicar solo:\nPlan para el RMD 2202609013 — detalle técnico interno\n ✗ 1. cambiar_predecesor: no hay paso con orden 1 en PROCEDIMIENTO>FABRICACION [error]\n0 pendiente(s), 0 ya aplicado(s), 1 con error.' });
 const mis = (await llamar({ accion: 'mis_solicitudes', contacto })).body.solicitudes;
 assert.match(mis.find((m) => m.id === 5).aviso, /versión 8/);
 assert.doesNotMatch(JSON.stringify(mis), /detalle técnico interno/);
+assert.match(mis.find((m) => m.id === 1).aviso, /no se pudo completar sola: no hay paso con orden 1 en PROCEDIMIENTO>FABRICACION\. La revisará/);
+
 // Avance mientras se atiende: el RMD ubicado con su descripción, antes del enlace
 Object.assign(tablas.chatbot_solicitudes[3], { estado: 'ejecutando', resultado: 'Ubiqué el RMD 2202609407 v4 Autorizado: GLYCOLAX. Estoy preparando la plantilla.' });
 const mis2 = (await llamar({ accion: 'mis_solicitudes', contacto })).body.solicitudes;
