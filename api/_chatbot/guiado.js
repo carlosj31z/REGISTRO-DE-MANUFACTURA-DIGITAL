@@ -104,6 +104,8 @@ const PREGUNTA = {
   ordenPred: 'Escriba el número de orden del paso desde el que debe poder registrarse.',
   decimales: lista('¿Cuántos decimales necesita?', DECIMALES.map(String)),
   op: '¿Tiene el número de lote?\n1. Sí (con el lote basta)\n2. No (le pido el material y la etapa)',
+  // Plantilla y PDF del master: primero material + etapa (pedido de Carlos, 2026-11-17); el lote es la segunda opción.
+  ubicar: '¿Cómo ubico el RMD?\n1. Con el código del material y la etapa\n2. Con el número de lote',
   opNumero: 'Por favor, escriba el número de lote.',
   tema: lista('¿Qué tipo de consulta es?', TEMAS.map((t) => t[0])),
   rmdOpcional: 'Escriba el código del material, o NO si no aplica.',
@@ -270,6 +272,7 @@ export async function atender(quien, texto) {
     if (intencion === 'consulta') return responder('tema', PREGUNTA.tema, { flujo: 'consulta' });
     const r = iniciar(intencion, x);
     if (r.listo) return trasLote(r.d);
+    if (r.d.lectura === 'plantilla' || r.d.lectura === 'pdf') return responder('ubicar', `${r.intro}\n\n${PREGUNTA.ubicar}`, r.d);
     return responder('op', `${r.intro}\n\n${PREGUNTA.op}`, r.d);
   };
   // Respuesta que no encaja con la pregunta: si se entiende un pedido escrito, se atiende; si no, se repregunta.
@@ -362,6 +365,13 @@ export async function atender(quien, texto) {
       d = { ...d, op: '' };
       if (d.flujo === 'consulta') return responder('rmdOpcional', PREGUNTA.rmdOpcional, d);
       return responder('material', PREGUNTA.material, d);
+    }
+    case 'ubicar': {
+      const k = elegir(t, 2);
+      if (k === 1) return responder('material', PREGUNTA.material, { ...d, op: '' });
+      if (k === 2) return responder('opNumero', PREGUNTA.opNumero);
+      if (MATERIAL.test(t) && /\d/.test(t)) return responder('etapa', PREGUNTA.etapa, { ...d, op: '', material: t.toUpperCase() }); // escribió el material
+      return invalido(PREGUNTA.ubicar);
     }
     case 'opNumero': {
       const m = t.match(/([A-Za-z0-9-]{3,15})\s*$/);
