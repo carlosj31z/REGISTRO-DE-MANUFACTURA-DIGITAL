@@ -15774,15 +15774,41 @@ async function maybeAutoStartTour() {
             // Pedido de Carlos (16/11/2026): las caracterizaciones pueden estar en el Programa o fuera de él: se muestra el cruce.
             const grupo = () => ({ n: 0, bk: 0, mes: 0, P1: 0, P2: 0, car: { n: 0, bk: 0, mes: 0 } });
             const gr = { prog: grupo(), no: grupo() }, tot = grupo();
-            g.pend.forEach((x) => {
-                const k = esProg(x.v) ? 'prog' : 'no', c = esCar(x.v), q = x.cuando === VIG ? 'mes' : 'bk';
-                [gr[k], tot].forEach((o) => { o.n++; o[q]++; o[x.v.planta] = (o[x.v.planta] || 0) + 1; if (c) { o.car.n++; o.car[q]++; } });
-            });
+            const sumar = (o, pl, q, c) => { o.n++; o[q]++; o[pl] = (o[pl] || 0) + 1; if (c) { o.car.n++; o.car[q]++; } };
+            g.pend.forEach((x) => sumar(tot, x.v.planta, x.cuando === VIG ? 'mes' : 'bk', esCar(x.v)));
+            // Programa = etapas del Programa pendientes sin las de BORRADOR, igual que las láminas 3 y 4 (programados − autorizados −
+            // borradores), pedido de Carlos 17/11/2026. Cada etapa cuenta una vez; es del mes si todas las versiones de SAP que la
+            // tienen pendiente entraron en el mes. «No son del Programa» = los pendientes de SAP que no tiene ninguna de esas etapas.
+            const r1 = d.r1 && !d.r1.error ? d.r1 : null, usados = new Set();
+            if (r1) {
+                const porClave = new Map(), poner = (k, x) => { if (!porClave.has(k)) porClave.set(k, []); porClave.get(k).push(x); };
+                g.pend.forEach((x) => {
+                    const v = x.v, pl = v.planta, et = mapEtapaAFija(normalizeEtapa(v.etapa || '')) || v.etapa || '', cod = normalizeMaterialCode(v.codDef);
+                    if (v.codigo) poner(`${pl}|R${String(v.codigo).trim()}`, x);
+                    if (v.sol) poner(`${pl}|S${String(v.sol).trim()}`, x);
+                    if (cod && et) poner(`${pl}|M${cod}|${et}`, x);
+                });
+                ['P1', 'P2'].forEach((pl) => ((r1[pl] && r1[pl].items) || []).forEach((it) => {
+                    if (it.cat !== 'pend' || it.estatus === 'BORRADOR') return;
+                    const ver = new Set();
+                    ((it.d && it.d.candidatos) || []).filter((c) => c.pendiente).forEach((c) => {
+                        const ks = [];
+                        if (c.rmd) ks.push(`${pl}|R${String(c.rmd).trim()}`);
+                        if (c.sol) ks.push(`${pl}|S${String(c.sol).trim()}`);
+                        if (c.material && it.etapa) ks.push(`${pl}|M${normalizeMaterialCode(c.material)}|${it.etapa}`);
+                        ks.forEach((k) => (porClave.get(k) || []).forEach((x) => ver.add(x)));
+                    });
+                    ver.forEach((x) => usados.add(x));
+                    const vs = [...ver], q = vs.length && vs.every((x) => x.cuando === VIG) ? 'mes' : 'bk';
+                    sumar(gr.prog, pl, q, vs.some((x) => esCar(x.v)));
+                }));
+            }
+            g.pend.forEach((x) => { if (!usados.has(x)) sumar(gr.no, x.v.planta, x.cuando === VIG ? 'mes' : 'bk', esCar(x.v)); });
             const ambos = gr.prog.car.n;
             const r2 = d.r2 && !d.r2.error ? d.r2 : null;
             const fueraSap = r2 ? ['P1', 'P2'].reduce((n, pl) => n + ((r2[pl] && r2[pl].bor) || 0) + ((r2[pl] && r2[pl].ing) || 0), 0) : null;
             const aut = { n: R.P1.AUTORIZADO + R.P2.AUTORIZADO, P1: R.P1.AUTORIZADO, P2: R.P2.AUTORIZADO };
-            return { aut, tot, gr, ambos, fueraSap, sinProg: typeof g.programa !== 'function', inactivos: R.P1.INACTIVO + R.P2.INACTIVO };
+            return { aut, tot, gr, ambos, fueraSap, sinProg: !r1, inactivos: R.P1.INACTIVO + R.P2.INACTIVO };
         }
         function laminaJefatura(base, d, j) {
             const E = (s) => xml(s), n = (x) => nEn(x), pct = (a, b) => (b ? `${Math.round((a / b) * 100)} %` : '0 %');
@@ -15825,10 +15851,11 @@ async function maybeAutoStartTour() {
             const xB = xP + 300000, wB = wP - 600000, yB = yP + 620000, hB = 440000, hF = 200000;
             const orden = ['prog', 'no'];
             let xx = xB;
+            const tBar = j.gr.prog.n + j.gr.no.n;
             orden.forEach((k) => {
-                const o = j.gr[k], w = t.n ? (wB * o.n) / t.n : 0;
+                const o = j.gr[k], w = tBar ? (wB * o.n) / tBar : 0;
                 if (w <= 0) return;
-                const etq = w > 1400000 ? par(run(`${NOM[k]}: ${n(o.n)} · ${pct(o.n, t.n)}`, { sz: 1200, b: 1, c: k === 'no' ? AZUL : '3B2F06' }), 'ctr') : null;
+                const etq = w > 1400000 ? par(run(`${NOM[k]}: ${n(o.n)} · ${pct(o.n, tBar)}`, { sz: 1200, b: 1, c: k === 'no' ? AZUL : '3B2F06' }), 'ctr') : null;
                 S.push(forma(xx, yB, w, hB, { fill: COL[k], anchor: 'ctr', name: `Barra ${NOM[k]}`, pars: etq || undefined }));
                 xx += w;
             });
@@ -15846,7 +15873,7 @@ async function maybeAutoStartTour() {
                 S.push(forma(x, yC, wC, hC, { geo: 'roundRect', fill: 'FFFFFF', name: `Tarjeta ${titulo}` }));
                 S.push(forma(x + 180000, yC + 160000, 200000, 200000, { fill: color, geo: 'roundRect', adj: 20000 }));
                 S.push(forma(x + 450000, yC + 130000, wC - 600000, 260000, { txt: 1, pars: par(run(titulo, { sz: 1300, b: 1, c: AZUL })) }));
-                S.push(forma(x + 180000, yC + 430000, wb, 460000, { txt: 1, pars: par([run(n(o.n), { sz: 2600, b: 1, c: AZUL }), run(`   ${pct(o.n, t.n)} de los pendientes`, { sz: 1050 })]) }));
+                S.push(forma(x + 180000, yC + 430000, wb, 460000, { txt: 1, pars: par([run(n(o.n), { sz: 2600, b: 1, c: AZUL }), run(`   ${pct(o.n, j.gr.prog.n + j.gr.no.n)} de los pendientes`, { sz: 1050 })]) }));
                 barraBkMes(x + 180000, yC + 960000, wb, o);
                 S.push(forma(x + 180000, yC + 1200000, wb, 220000, { txt: 1, pars: par(lineaBkMes(o, 1100)) }));
                 S.push(forma(x + 180000, yC + 1450000, wb, 300000, { txt: 1, pars: pie }));
@@ -15860,7 +15887,7 @@ async function maybeAutoStartTour() {
             S.push(forma(xB + 220000, yL - 20000, 3300000, 200000, { txt: 1, pars: par(run('Backlog: pendiente desde meses anteriores', { sz: 1000 })) }));
             S.push(forma(xB + 3700000, yL, 160000, 160000, { fill: MES }));
             S.push(forma(xB + 3920000, yL - 20000, 3000000, 200000, { txt: 1, pars: par(run(`Del mes: entró en ${mesTxt}`, { sz: 1000 })) }));
-            S.push(forma(xB + 6300000, yL - 20000, wB - 6300000, 200000, { txt: 1, pars: par(run('Programa = lo que Producción necesita en las próximas semanas.', { sz: 900 }), 'r') }));
+            S.push(forma(xB + 6300000, yL - 20000, wB - 6300000, 300000, { txt: 1, pars: par(run(`Programa = etapas programadas pendientes sin borradores (láminas 3 y 4).${j.gr.prog.n + j.gr.no.n !== t.n ? ` Programa + No programa = ${n(j.gr.prog.n + j.gr.no.n)} porque el Programa cuenta etapas, no versiones de SAP.` : ''}`, { sz: 900 }), 'r') }));
             const ini = base.indexOf('<p:spTree>'), fin = base.indexOf('</p:spTree>');
             const cab = '<p:spTree><p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/><a:chOff x="0" y="0"/><a:chExt cx="0" cy="0"/></a:xfrm></p:grpSpPr>';
             return base.slice(0, ini) + cab + S.join('') + base.slice(fin);
