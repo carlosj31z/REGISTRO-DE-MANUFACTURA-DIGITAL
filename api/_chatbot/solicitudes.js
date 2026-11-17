@@ -57,12 +57,14 @@ export async function registrarSolicitud(input, quien, conversacion = '') {
   // El ejecutor puede atenderlo solo si es un cambio completo (habilitar paso / decimales) o un pedido de lectura.
   const tipoOk = (c) => (ACCIONES_LECTURA[c.accion] ? input.tipo === ACCIONES_LECTURA[c.accion] : input.tipo === 'cambio');
   const automatica = ubicable && cambios.length > 0 && cambios.every((c) => cambioCompleto(c) && tipoOk(c));
-  // Va directo al ejecutor si viene de un origen identificado (clave o número permitido), si es la consulta de estado,
-  // o si es la plantilla / el PDF del master pedido con el lote (pedido de Carlos, 2026-11-17: que salga sin que nadie
-  // lo apruebe; el ejecutor solo lo entrega si el lote está en «Ver OP»). Los cambios en SAP sin clave los aprueba el
-  // analista. CHATBOT_MODO=aprobacion frena los cambios.
-  const soloLectura = input.tipo === 'estado' || (input.tipo === 'documento' && Boolean(String(input.op_lote || '').trim()));
-  const estado = automatica && (soloLectura || (MODO === 'automatico' && origenConfiable(quien))) ? 'lista' : 'nueva';
+  // Va directo al ejecutor, sin supervisión (pedido de Carlos, 2026-11-17: que atienda mientras el analista hace otras
+  // cosas), si viene de un origen identificado (clave o número permitido), si es la consulta de estado, o si se pidió
+  // con el lote: el lote sirve de comprobante y el ejecutor solo actúa si está en «Ver OP» de ese RMD. Sin clave y sin
+  // lote (solo material + etapa) lo aprueba el analista. CHATBOT_MODO=aprobacion frena los cambios en SAP.
+  const conLote = Boolean(String(input.op_lote || '').trim());
+  const directo = input.tipo === 'estado' || (input.tipo === 'documento' && conLote) ||
+    (MODO === 'automatico' && (conLote || origenConfiable(quien)));
+  const estado = automatica && directo ? 'lista' : 'nueva';
   const fila = {
     canal: quien.canal,
     contacto: quien.contacto,

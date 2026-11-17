@@ -101,6 +101,10 @@ const sinClave = (texto) => new Promise((ok) => {
   chatbot({ method: 'POST', body: { accion: 'mensaje', contacto: 'web:sinclave-0001', texto }, headers: {} }, res);
 });
 assert.equal((await sinClave('hola')).status, 200);
+// habilitar un paso con el lote: sin supervisión
+for (const t of ['1', '1', 'L2611D', '6', '12', '1', '4', '1']) await sinClave(t);
+assert.equal(tablas.chatbot_solicitudes.at(-1).estado, 'lista'); assert.equal(tablas.chatbot_solicitudes.at(-1).op_lote, 'L2611D');
+// decimales solo con material + etapa: los aprueba el analista
 for (const t of ['2', '2', '3000123', '2', '10', '3', '3', '1']) await sinClave(t);
 let n = tablas.chatbot_solicitudes.length;
 assert.equal(tablas.chatbot_solicitudes[n - 1].estado, 'nueva'); assert.equal(tablas.chatbot_solicitudes[n - 1].automatica, true);
