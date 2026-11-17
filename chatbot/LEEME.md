@@ -21,10 +21,11 @@ RMD**: el ejecutor lo ubica por el lote en «Ver OP» (`/RMD`, `lote`) o, sin lo
 **Chat estilo WhatsApp**: `/chatbot/whatsapp.html` (mismo motor; las opciones numeradas salen como botones; el resultado de
 cada solicitud aparece en el chat cuando el ejecutor termina).
 
-**Clave**: el chat funciona sin clave. Sin ella, todo lo pedido **con el lote** (habilitar paso, decimales,
-plantilla, PDF del master) y el estado del RMD salen solos, sin supervisión: el ejecutor solo actúa si el lote está en
-«Ver OP» de ese RMD. Lo pedido sin clave y solo con material + etapa espera la aprobación del analista. Para que vayan directo, se reparte el enlace `https://status-rmd.vercel.app/chatbot/whatsapp.html#clave=<CHATBOT_CLAVE>`:
-la clave queda guardada en ese equipo y se quita de la barra de direcciones. En WhatsApp manda la lista
+**Sin supervisión** (decisión de Carlos, 2026-11-17, con el riesgo explicado: la página es pública): todo lo que el ejecutor
+sabe atender (habilitar paso, decimales, plantilla, PDF del master, estado) va directo, con o sin lote y sin clave. El
+ejecutor valida el RMD, el paso y el lote antes de tocar SAP y el analista recibe el aviso; las consultas libres siguen
+para el analista. `CHATBOT_MODO=aprobacion` en Vercel vuelve a frenar los cambios en SAP. La clave (`#clave=` en el
+enlace) ya no cambia nada en el chat web. En WhatsApp manda la lista
 `CHATBOT_WHATSAPP_PERMITIDOS`.
 
 ```

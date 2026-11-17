@@ -221,10 +221,10 @@ async function registrar(quien, d) {
       ? 'Lo consulto en SAP y le respondo por aquí en unos minutos.'
       : 'Lo preparo desde SAP y le envío por aquí el enlace de descarga en unos minutos.';
   } else if (d.flujo === 'lectura') {
-    sigue = 'Documentación Técnica lo revisará y se lo enviará por aquí. Si me indica el número de lote, se lo envío yo mismo en unos minutos.';
+    sigue = 'Documentación Técnica lo revisará y se lo enviará por aquí.';
   }
   else if (solicitud.estado === 'lista') sigue = 'Se aplicará en SAP en unos minutos (guardar y «Actualizar RMD en Línea»). Le aviso el resultado por aquí.';
-  else if (solicitud.automatica) sigue = 'El analista la aprobará y se aplicará sola en SAP. Si me indica el número de lote, se aplica en unos minutos sin esperar. Le aviso por aquí.';
+  else if (solicitud.automatica) sigue = 'El analista la aprobará y se aplicará sola en SAP. Le aviso por aquí.';
   else sigue = 'El analista de Documentación Técnica la revisará y le responderá por aquí.';
   return { solicitud, texto: `Gracias. Registré su solicitud #${solicitud.id}. ${sigue}\n\n0. Volver al menú` };
 }
