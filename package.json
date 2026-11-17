@@ -1,0 +1,10 @@
+{
+  "name": "status-rmd",
+  "private": true,
+  "type": "module",
+  "description": "Status RMD (index.html estático) y el asistente de configuraciones (funciones en api/).",
+  "dependencies": {
+    "@anthropic-ai/sdk": "^1.9.0",
+    "@vercel/functions": "^3.11.3"
+  }
+}
