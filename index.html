@@ -16385,7 +16385,7 @@ async function maybeAutoStartTour() {
             const progDe = typeof r.programa === 'function' ? r.programa : () => null;
             const carDe = typeof r.caract === 'function' ? r.caract : () => false;
             const nCarProg = r.pend.filter((x) => carDe(x.v) && progDe(x.v)).length, nCar = r.pend.filter((x) => carDe(x.v)).length;
-            const nProg = r.pend.filter((x) => progDe(x.v)).length;
+            const nProg = r.pend.filter((x) => progDe(x.v)).length, nEtProg = new Set(r.pend.map((x) => progDe(x.v)).filter(Boolean)).size;
             const notaSusExcel = `${notaSuspendidos(r)} «En los pendientes»: si el suspendido cuenta en el backlog o en el mes vigente (o por qué no).`;
             const progAut = r.progAut instanceof Set ? r.progAut : null, nAutProg = progAut ? r.aut.filter((x) => progAut.has(claveAutProg(x.v))).length : 0;
             const P = (pl) => n(r.pend, (x) => x.v.planta === pl), D = (pl, c) => n(r.dec, (x) => x.pl === pl && (!c || x.c === c)), A = (pl) => n(r.aut, (x) => x.v.planta === pl);
@@ -16403,7 +16403,7 @@ async function maybeAutoStartTour() {
                 rangoAut: `del 01/${r.corte.format('MM')} al ${corte}`, rangoAutCorto: `del 01/${r.corte.format('MM')} al ${r.corte.format('DD/MM')}`,
                 notaInactivo: 'Se colocarán como INACTIVOS una vez creado el nuevo status en SAP.',
                 pend: { nombre: '1-2 Pendientes', titulo: `Pendientes de ${nomMes.toLowerCase()} (tablas 1 y 2) · corte ${corte}`,
-                    nota: (typeof r.programa === 'function' ? `«Programa de producción»: ${nProg} pendientes están en el Programa de Producción (pestaña Producción, Ruta 1), como en la pestaña BACKLOG.` : 'Sin datos del Programa de Producción: la columna «Programa de producción» va vacía.')
+                    nota: (typeof r.programa === 'function' ? `«Programa de producción»: ${nProg} versiones pendientes de SAP son de ${nEtProg} etapas del Programa de Producción sin borradores (las láminas 3 y 4 cuentan etapas: programados − autorizados − borradores, incluidas las que aún no tienen versión en SAP).` : 'Sin datos del Programa de Producción: la columna «Programa de producción» va vacía.')
                         + ` «Caracterización»: ${nCar} pendientes son caracterizaciones (${nCarProg} dentro del Programa y ${nCar - nCarProg} fuera).`,
                     claves: { planta: 'Planta', tipo: 'Tipo', cuando: 'Meses anteriores / Mes vigente' },
                     cols: [['Planta', 7], ['Tipo', 11], ['Meses anteriores / Mes vigente', 16], ['Mes al que pertenece', 10], ['Programa de producción', 14], ['Inicio producción', 11], ['Caracterización', 13], ['Código RMD', 13], ['Versión', 8], ['Descripción', 46], ['Etapa', 15], ['Código de solicitud', 13],
@@ -16429,7 +16429,7 @@ async function maybeAutoStartTour() {
                         return [NOMBRE_PLANTA_BK[x.v.planta], x.prio, cont[k], x.cuando, progDe(x.v) ? 'PROGRAMA DE PRODUCCIÓN' : '', carDe(x.v) ? 'CARACTERIZACIÓN' : '', x.v.codigo, x.v.version, x.v.desc || '', x.v.etapa || '', d.fc > 0 ? 'Sí' : 'No', d.op ? 'Sí' : 'No', fx(x.fS),
                             fTxt(d.fLote), d.lotes === undefined ? '' : d.lotes, d.fc === undefined ? '' : d.fc]; }) },
                 aut: { nombre: '5 Autorizados', titulo: `Autorizados del 01/${r.corte.format('MM/YYYY')} al ${corte} (tabla 5)`,
-                    nota: progAut ? `«Programa de producción»: ${nAutProg} de los ${r.aut.length} autorizados son etapas del Programa de Producción autorizadas en el mes (Ruta 1); ${r.aut.length - nAutProg} están fuera del programa.` : 'Sin datos del Programa de Producción: la columna «Programa de producción» va vacía.',
+                    nota: progAut ? `«Programa de producción»: ${nAutProg} de los ${r.aut.length} RMD autorizados tienen una etapa del Programa de Producción autorizada en el mes; ${r.aut.length - nAutProg} están fuera. (El «AUTORIZADO» de las láminas 3 y 4 y el «PROGRAMA» de la lámina 2 cuentan etapas, no RMD.)` : 'Sin datos del Programa de Producción: la columna «Programa de producción» va vacía.',
                     claves: { planta: 'Planta', cuenta: 'Cuenta como' },
                     cols: [['Planta', 7], ['Cuenta como', 16], ['Programa de producción', 14], ['Caracterización', 13], ['Código RMD', 13], ['Versión', 8], ['Descripción', 46], ['Etapa', 15], ['Fecha de registro', 11], ['Fecha de autorización', 11], ['Versión anterior (estado hoy)', 26],
                         ['Suspensión de la versión anterior', 12], ['Explicación', 70]],
@@ -16960,7 +16960,9 @@ async function maybeAutoStartTour() {
             ['P1', 'P2'].forEach((pl) => ((r1[pl] && r1[pl].items) || []).forEach((it) => { if (it.cat === 'aut' && it.rmd) autorizados.add(`${pl}|${it.rmd}`); }));
             ['P1', 'P2'].forEach((pl) => {
                 ((r1[pl] && r1[pl].items) || []).forEach((it) => {
-                    if (it.cat === 'aut' || !it.d || !Array.isArray(it.d.candidatos)) return;
+                    // Sin las etapas en BORRADOR (pedido de Carlos, 17/11/2026): así el Programa de la pestaña BACKLOG, del Excel y de las
+                    // láminas cuadra con las láminas 3 y 4 (programados − autorizados − borradores).
+                    if (it.cat === 'aut' || it.estatus === 'BORRADOR' || !it.d || !Array.isArray(it.d.candidatos)) return;
                     const inicio = it.inicio ? dayjs(it.inicio) : null;
                     const info = { producto: it.producto || '', etapa: it.etapa || '', estatus: it.estatus || '', resp: it.resp || '', inicio: inicio && inicio.isValid() ? inicio : null };
                     const pend = it.d.candidatos.filter((c) => c.pendiente);
