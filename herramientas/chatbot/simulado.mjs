@@ -88,7 +88,7 @@ export function claudeGuionado(peticion) {
 
 export function instalar({ real = false } = {}) {
   const fetchReal = globalThis.fetch;
-  process.env.SUPABASE_ANON_KEY ||= 'simulada';
+  process.env.SUPABASE_SERVICE_ROLE_KEY ||= 'simulada';
   process.env.ANTHROPIC_API_KEY ||= 'sk-simulada';
   globalThis.fetch = async (url, init) => {
     const u = String(url);

@@ -114,12 +114,13 @@ create table if not exists public.chatbot_mensajes_vistos (
   visto timestamptz default now()
 );
 
+-- Seguridad: la clave anon es pública (va en index.html), así que estas tablas NO se le abren. Sin políticas, RLS
+-- bloquea a anon y authenticated; solo la clave service_role (backend de Vercel y ejecutor de GitHub) puede leer y escribir.
 alter table public.chatbot_solicitudes enable row level security;
 alter table public.chatbot_conversaciones enable row level security;
 alter table public.chatbot_mensajes_vistos enable row level security;
 drop policy if exists "Acceso con clave anon" on public.chatbot_solicitudes;
-create policy "Acceso con clave anon" on public.chatbot_solicitudes for all using (true) with check (true);
 drop policy if exists "Acceso con clave anon" on public.chatbot_conversaciones;
-create policy "Acceso con clave anon" on public.chatbot_conversaciones for all using (true) with check (true);
 drop policy if exists "Acceso con clave anon" on public.chatbot_mensajes_vistos;
-create policy "Acceso con clave anon" on public.chatbot_mensajes_vistos for all using (true) with check (true);
+revoke all on public.chatbot_solicitudes, public.chatbot_conversaciones, public.chatbot_mensajes_vistos from anon, authenticated;
+revoke all on sequence public.chatbot_solicitudes_id_seq from anon, authenticated;
