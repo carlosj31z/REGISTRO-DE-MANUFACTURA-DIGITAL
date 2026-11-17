@@ -67,7 +67,8 @@ export async function alRegistrar(s) {
   const tareas = [];
   if (s.estado === 'lista') tareas.push(despertarEjecutor());
   const analista = process.env.CHATBOT_WHATSAPP_ANALISTA;
-  if (analista) {
+  // La consulta de estado se responde sola: no se le avisa al analista.
+  if (analista && !(s.tipo === 'estado' && s.estado === 'lista')) {
     const pie = s.estado === 'lista'
       ? 'Se aplicará automáticamente en SAP. Te aviso el resultado.'
       : s.automatica
@@ -78,14 +79,19 @@ export async function alRegistrar(s) {
   await Promise.allSettled(tareas);
 }
 
+/** Lo que se le dice a quien pidió cuando el ejecutor termina (también lo muestra el chat web). */
+export function textoParaPersona(s) {
+  const ok = s.estado === 'ejecutada';
+  if (ok && (s.tipo === 'estado' || s.tipo === 'documento')) return `Solicitud #${s.id}. ${s.resultado || s.resumen}`;
+  if (ok) return `Listo: su solicitud #${s.id} ya se aplicó en SAP${s.rmd ? ` (RMD ${s.rmd})` : ''} y se actualizó el RMD en línea. ${s.resumen}`;
+  return `Su solicitud #${s.id} necesita que la revise el analista de Documentación Técnica; le escribirá por aquí. ${s.resumen}`;
+}
+
 /** Tras ejecutarse (lo llama el ejecutor): resultado a quien pidió y al analista. */
 export async function notificarResultado(id) {
   const [s] = await sb(`chatbot_solicitudes?id=eq.${enc(id)}&select=*`);
   if (!s) return null;
-  const ok = s.estado === 'ejecutada';
-  const aPersona = ok
-    ? `Listo: tu solicitud #${s.id} ya se aplicó en SAP${s.rmd ? ` (RMD ${s.rmd})` : ''} y se actualizó el RMD en línea. ${s.resumen}`
-    : `Tu solicitud #${s.id} necesita que la revise el analista de Documentación Técnica; te escribirá por aquí. ${s.resumen}`;
+  const aPersona = textoParaPersona(s);
   const tareas = [];
   if (s.canal === 'whatsapp') tareas.push(enviarWhatsApp(s.contacto.replace(/^wa:/, ''), aPersona));
   if (process.env.CHATBOT_WHATSAPP_ANALISTA) {

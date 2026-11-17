@@ -186,7 +186,7 @@
     d.querySelector('.tenue').textContent = `${fecha} · ${quien} · ${s.canal}${s.prioridad === 'alta' ? ' · PRIORIDAD ALTA' : ''}${s.material ? ' · Material ' + s.material + (s.etapa ? ' ' + s.etapa : '') : ''}${s.rmd ? ' · RMD ' + s.rmd : ''}${s.op_lote ? ' · Lote ' + s.op_lote : ''}`;
     d.querySelector('.det').textContent = s.detalle || '';
     d.querySelector('.cam').textContent = cambios ? 'Cambios para aplicar solo:\n' + cambios : '';
-    d.querySelector('.res').textContent = [s.resultado && 'Resultado: ' + s.resultado, s.respuesta_analista && 'Respuesta: ' + s.respuesta_analista].filter(Boolean).join('\n');
+    d.querySelector('.res').textContent = [s.aviso, s.respuesta_analista && 'Respuesta: ' + s.respuesta_analista].filter(Boolean).join('\n');
     const accion = async (cuerpo) => { try { await api({ accion: 'actualizar', id: s.id, analista: $('nombreAnalista').value.trim(), ...cuerpo }, true); cargar(); } catch (e) { alertar(e.message); } };
     d.querySelector('.enviarResp').onclick = () => { const t = d.querySelector('.resp').value.trim(); if (t) accion({ respuesta: t }); };
     d.querySelector('.aprobar')?.addEventListener('click', () => accion({ estado: 'lista' }));

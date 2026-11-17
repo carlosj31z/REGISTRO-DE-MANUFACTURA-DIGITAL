@@ -3,7 +3,7 @@
 import { atender, reiniciarConversacion, motorListo, MOTOR } from './_chatbot/motor.js';
 import { MODO } from './_chatbot/solicitudes.js';
 import { sb, enc } from './_chatbot/supabase.js';
-import { despertarEjecutor, enviarWhatsApp, notificarResultado, whatsappListo } from './_chatbot/avisos.js';
+import { despertarEjecutor, enviarWhatsApp, notificarResultado, textoParaPersona, whatsappListo } from './_chatbot/avisos.js';
 
 export const config = { maxDuration: 60 };
 
@@ -14,9 +14,11 @@ function esAnalista(req) {
   return Boolean(clave) && req.headers['x-clave-analista'] === clave;
 }
 
-function puedeChatear(req) {
+// El chat funciona sin clave (pedido de Carlos, 2026-11-17). Con la clave (enlace que la trae, recordada en el
+// equipo) el origen queda identificado y los cambios y documentos van directo al ejecutor.
+function conClave(req) {
   const clave = process.env.CHATBOT_CLAVE;
-  return !clave || req.headers['x-clave'] === clave || esAnalista(req);
+  return (Boolean(clave) && req.headers['x-clave'] === clave) || esAnalista(req);
 }
 
 export default async function handler(req, res) {
@@ -28,31 +30,38 @@ export default async function handler(req, res) {
         return res.json({
           modo: MODO,
           whatsapp: whatsappListo(),
-          requiereClave: Boolean(process.env.CHATBOT_CLAVE),
+          requiereClave: false,
+          conClave: conClave(req),
           listo: motorListo(),
           motor: MOTOR,
         });
 
       case 'mensaje': {
-        if (!puedeChatear(req)) return res.status(401).json({ error: 'Clave de acceso incorrecta.' });
         const texto = String(b.texto || '').trim().slice(0, 4000);
         const contacto = String(b.contacto || '').trim();
         if (!texto || !/^web:[\w-]{8,64}$/.test(contacto)) return res.status(400).json({ error: 'Falta el mensaje o el contacto.' });
-        const r = await atender({ canal: 'web', contacto, nombre: b.nombre, area: b.area }, texto);
+        const r = await atender({ canal: 'web', contacto, nombre: b.nombre, area: b.area, confiable: conClave(req) }, texto);
         return res.json(r);
       }
 
       case 'reiniciar':
-        if (!puedeChatear(req)) return res.status(401).json({ error: 'Clave de acceso incorrecta.' });
         await reiniciarConversacion(String(b.contacto || ''));
         return res.json({ ok: true });
 
       case 'mis_solicitudes': {
-        if (!puedeChatear(req)) return res.status(401).json({ error: 'Clave de acceso incorrecta.' });
+        // Para el chat web: al terminar, el mismo texto que recibiría por WhatsApp (sin el detalle técnico del ejecutor).
+        const contacto = String(b.contacto || '');
+        if (!/^web:[\w-]{8,64}$/.test(contacto)) return res.status(400).json({ error: 'Falta el contacto.' });
         const filas = await sb(
-          `chatbot_solicitudes?contacto=eq.${enc(String(b.contacto || ''))}&select=id,creado,resumen,estado,resultado,respuesta_analista&order=id.desc&limit=20`
+          `chatbot_solicitudes?contacto=eq.${enc(contacto)}&select=id,creado,tipo,resumen,estado,resultado,respuesta_analista&order=id.desc&limit=20`
         );
-        return res.json({ solicitudes: filas });
+        const FINALES = ['ejecutada', 'revisar', 'rechazada', 'resuelta'];
+        return res.json({
+          solicitudes: filas.map((s) => ({
+            id: s.id, creado: s.creado, resumen: s.resumen, estado: s.estado, respuesta_analista: s.respuesta_analista,
+            aviso: FINALES.includes(s.estado) ? textoParaPersona(s) : '',
+          })),
+        });
       }
 
       // ---- bandeja del analista ----
