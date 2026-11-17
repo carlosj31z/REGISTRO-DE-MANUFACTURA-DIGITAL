@@ -77,6 +77,7 @@
       <input id="nombreAnalista" placeholder="Tu usuario (queda como aprobador)">
       <select id="filtro"><option value="">Todas</option><option value="nueva,revisar">Por atender</option><option value="lista,ejecutando">En ejecución</option><option value="ejecutada,resuelta,rechazada">Cerradas</option></select>
       <button class="btn primario" id="cargar">Cargar</button>
+      <button class="btn" id="copiarEnlace" title="Enlace que abre la bandeja sin escribir la clave. Guárdelo en favoritos; no lo comparta.">Copiar enlace directo</button>
       <span class="tenue" id="modoBandeja"></span>
     </div>
     <div id="listaBandeja"></div>
@@ -186,7 +187,7 @@
     d.querySelector('.tenue').textContent = `${fecha} · ${quien} · ${s.canal}${s.prioridad === 'alta' ? ' · PRIORIDAD ALTA' : ''}${s.material ? ' · Material ' + s.material + (s.etapa ? ' ' + s.etapa : '') : ''}${s.rmd ? ' · RMD ' + s.rmd : ''}${s.op_lote ? ' · Lote ' + s.op_lote : ''}`;
     d.querySelector('.det').textContent = s.detalle || '';
     d.querySelector('.cam').textContent = cambios ? 'Cambios para aplicar solo:\n' + cambios : '';
-    d.querySelector('.res').textContent = [s.aviso, s.respuesta_analista && 'Respuesta: ' + s.respuesta_analista].filter(Boolean).join('\n');
+    d.querySelector('.res').textContent = [s.resultado && 'Resultado: ' + s.resultado, s.respuesta_analista && 'Respuesta: ' + s.respuesta_analista].filter(Boolean).join('\n');
     const accion = async (cuerpo) => { try { await api({ accion: 'actualizar', id: s.id, analista: $('nombreAnalista').value.trim(), ...cuerpo }, true); cargar(); } catch (e) { alertar(e.message); } };
     d.querySelector('.enviarResp').onclick = () => { const t = d.querySelector('.resp').value.trim(); if (t) accion({ respuesta: t }); };
     d.querySelector('.aprobar')?.addEventListener('click', () => accion({ estado: 'lista' }));
@@ -206,7 +207,26 @@
       lista.forEach((s) => $('listaBandeja').appendChild(tarjeta(s)));
     } catch (e) { $('listaBandeja').innerHTML = ''; alertar(e.message); }
   }
-  $('cargar').onclick = cargar; $('filtro').onchange = cargar;
+  $('cargar').onclick = () => { guardar('chatbotClaveAnalista', $('claveAnalista').value); cargar(); };
+  $('filtro').onchange = cargar;
+
+  // Enlace directo (pedido de Carlos): …/chatbot/index.html#analista=<clave> abre la bandeja, guarda la clave en este
+  // equipo y quita la clave de la barra de direcciones. Después basta …/chatbot/index.html#bandeja.
+  const abrirBandeja = () => { $('tabBandeja').click(); if ($('claveAnalista').value) cargar(); };
+  const hash = new URLSearchParams(location.hash.slice(1));
+  if (hash.get('analista')) {
+    $('claveAnalista').value = hash.get('analista'); guardar('chatbotClaveAnalista', hash.get('analista'));
+    history.replaceState(null, '', location.pathname + '#bandeja');
+    abrirBandeja();
+  } else if (hash.has('bandeja')) abrirBandeja();
+  $('tabBandeja').addEventListener('click', () => { if ($('claveAnalista').value && !$('listaBandeja').children.length) cargar(); });
+  $('copiarEnlace').onclick = async () => {
+    const clave = $('claveAnalista').value;
+    if (!clave) return alertar('Escriba primero la clave de analista (una sola vez) y pulse Cargar.');
+    const enlace = location.origin + location.pathname + '#analista=' + encodeURIComponent(clave);
+    try { await navigator.clipboard.writeText(enlace); alertar('Enlace copiado. Guárdelo en favoritos o ábralo en su celular; abre la bandeja sin escribir nada. No lo comparta: lleva la clave.'); }
+    catch { prompt('Copie este enlace (lleva la clave, no lo comparta):', enlace); }
+  };
 })();
 </script>
 </body>
