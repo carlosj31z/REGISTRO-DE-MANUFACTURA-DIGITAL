@@ -190,10 +190,12 @@
     }
   }
 
-  // Resultado de las solicitudes de este equipo: se consulta cada 20 s mientras haya alguna en curso.
+  // Resultado de las solicitudes de este equipo: se consulta cada 15 s mientras haya alguna en curso.
   let pendientes = [];
   try { pendientes = JSON.parse(leer('chatbotWaPendientes', '[]')).filter(Number.isInteger); } catch {}
   const guardarPendientes = () => guardar('chatbotWaPendientes', JSON.stringify(pendientes.slice(-20)));
+  let avisados = [];
+  try { avisados = JSON.parse(leer('chatbotWaAvisados', '[]')).filter(Number.isInteger); } catch {}
   let reloj = null;
   async function revisar() {
     if (!pendientes.length) { clearInterval(reloj); reloj = null; return; }
@@ -201,6 +203,12 @@
       const { solicitudes } = await api({ accion: 'mis_solicitudes', contacto });
       for (const s of solicitudes || []) {
         if (!pendientes.includes(s.id)) continue;
+        // Aviso de avance (RMD ubicado, preparando el archivo): una sola vez por solicitud.
+        if (s.avance && !avisados.includes(s.id)) {
+          avisados.push(s.id); guardar('chatbotWaAvisados', JSON.stringify(avisados.slice(-20)));
+          const t = `Solicitud #${s.id}. ${s.avance}`;
+          burbuja(t, 'bot'); visibles.push({ q: 'bot', t, h: hora() }); recordar();
+        }
         const texto = s.aviso || (s.respuesta_analista ? `Solicitud #${s.id}. Respuesta del analista: ${s.respuesta_analista}` : '');
         if (!texto) continue;
         pendientes = pendientes.filter((x) => x !== s.id); guardarPendientes();
@@ -208,7 +216,7 @@
       }
     } catch {}
   }
-  function vigilar() { if (!reloj && pendientes.length) reloj = setInterval(revisar, 20000); }
+  function vigilar() { if (!reloj && pendientes.length) reloj = setInterval(revisar, 15000); }
 
   $('enviar').onclick = () => { const t = $('texto').value.trim(); if (!t) return; $('texto').value = ''; ajustar(); enviar(t); };
   $('texto').addEventListener('keydown', (ev) => { if (ev.key === 'Enter' && !ev.shiftKey) { ev.preventDefault(); $('enviar').click(); } });

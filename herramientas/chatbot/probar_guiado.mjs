@@ -100,6 +100,11 @@ Object.assign(tablas.chatbot_solicitudes[0], { estado: 'revisar', resultado: 'de
 const mis = (await llamar({ accion: 'mis_solicitudes', contacto })).body.solicitudes;
 assert.match(mis.find((m) => m.id === 5).aviso, /versión 8/);
 assert.doesNotMatch(JSON.stringify(mis), /detalle técnico interno/);
+// Avance mientras se atiende: el RMD ubicado con su descripción, antes del enlace
+Object.assign(tablas.chatbot_solicitudes[3], { estado: 'ejecutando', resultado: 'Ubiqué el RMD 2202609407 v4 Autorizado: GLYCOLAX. Estoy preparando la plantilla.' });
+const mis2 = (await llamar({ accion: 'mis_solicitudes', contacto })).body.solicitudes;
+assert.match(mis2.find((m) => m.id === 4).avance, /GLYCOLAX/); assert.equal(mis2.find((m) => m.id === 4).aviso, '');
+assert.equal(mis2.find((m) => m.id === 5).avance, '');
 
 // Sin clave del chat web: funciona, pero cambios y documentos esperan al analista; el estado va solo
 const sinClave = (texto) => new Promise((ok) => {

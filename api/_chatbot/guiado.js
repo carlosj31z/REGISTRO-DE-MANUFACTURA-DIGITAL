@@ -55,7 +55,7 @@ const FAQ = [
   ['¿Qué pasos no llevan predecesor?',
     'Rendimiento, Condiciones ambientales y los pasos «Sin tipo de dato». Solo se admite un predecesor por paso.'],
   ['¿Cómo recibo la plantilla o el PDF del master?',
-    'Elija la opción 3 o 4 del menú e indique el lote (o el material y la etapa). En unos minutos le envío por aquí un enlace para descargarlo, válido por 7 días.'],
+    'Elija la opción 3 o 4 del menú e indique el material y la etapa (o el lote). Le confirmo cuál es el RMD y en unos minutos le envío por aquí un enlace para descargarlo, válido por 7 días.'],
 ];
 
 const OPCIONES_MENU = [
@@ -220,12 +220,12 @@ async function registrar(quien, d) {
   let sigue;
   if (d.flujo === 'lectura' && solicitud.estado === 'lista') {
     sigue = d.lectura === 'estado'
-      ? 'Lo consulto en SAP y le respondo por aquí en unos minutos.'
-      : 'Lo preparo desde SAP y le envío por aquí el enlace de descarga en unos minutos.';
+      ? 'Lo consulto en SAP y le respondo por aquí; suele tomar entre 2 y 3 minutos.'
+      : 'Lo preparo desde SAP. Primero ubico el RMD y le confirmo por aquí cuál es (descripción y versión); luego le envío el enlace de descarga. En total suele tomar entre 2 y 4 minutos.';
   } else if (d.flujo === 'lectura') {
     sigue = 'Documentación Técnica lo revisará y se lo enviará por aquí.';
   }
-  else if (solicitud.estado === 'lista') sigue = 'Se aplicará en SAP en unos minutos (guardar y «Actualizar RMD en Línea»). Le aviso el resultado por aquí.';
+  else if (solicitud.estado === 'lista') sigue = 'Se aplicará en SAP (guardar y «Actualizar RMD en Línea»). Primero ubico el RMD y le confirmo por aquí cuál es; luego le aviso el resultado. En total suele tomar entre 3 y 5 minutos.';
   else if (solicitud.automatica) sigue = 'El analista la aprobará y se aplicará sola en SAP. Le aviso por aquí.';
   else sigue = 'El analista de Documentación Técnica la revisará y le responderá por aquí.';
   return { solicitud, texto: `Gracias. Registré su solicitud #${solicitud.id}. ${sigue}\n\n0. Volver al menú` };

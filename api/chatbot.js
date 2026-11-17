@@ -3,7 +3,7 @@
 import { atender, reiniciarConversacion, motorListo, MOTOR } from './_chatbot/motor.js';
 import { MODO } from './_chatbot/solicitudes.js';
 import { sb, enc } from './_chatbot/supabase.js';
-import { despertarEjecutor, enviarWhatsApp, notificarResultado, textoParaPersona, whatsappListo } from './_chatbot/avisos.js';
+import { despertarEjecutor, enviarWhatsApp, notificarAvance, notificarResultado, textoParaPersona, whatsappListo } from './_chatbot/avisos.js';
 
 export const config = { maxDuration: 60 };
 
@@ -60,6 +60,7 @@ export default async function handler(req, res) {
           solicitudes: filas.map((s) => ({
             id: s.id, creado: s.creado, resumen: s.resumen, estado: s.estado, respuesta_analista: s.respuesta_analista,
             aviso: FINALES.includes(s.estado) ? textoParaPersona(s) : '',
+            avance: s.estado === 'ejecutando' ? s.resultado || '' : '',
           })),
         });
       }
@@ -95,7 +96,7 @@ export default async function handler(req, res) {
 
       case 'notificar': {
         if (!esAnalista(req)) return res.status(401).json({ error: 'Clave de analista incorrecta.' });
-        const s = await notificarResultado(Number(b.id));
+        const s = b.avance ? await notificarAvance(Number(b.id)) : await notificarResultado(Number(b.id));
         return res.json({ ok: Boolean(s) });
       }
 
