@@ -101,10 +101,16 @@ const sinClave = (texto) => new Promise((ok) => {
   chatbot({ method: 'POST', body: { accion: 'mensaje', contacto: 'web:sinclave-0001', texto }, headers: {} }, res);
 });
 assert.equal((await sinClave('hola')).status, 200);
-for (const t of ['2', '2', '3000123', '2', '10', '3', '3', '1']) await sinClave(t);
-let n = tablas.chatbot_solicitudes.length;
-assert.equal(tablas.chatbot_solicitudes[n - 1].estado, 'nueva'); assert.equal(tablas.chatbot_solicitudes[n - 1].automatica, true);
-r = (await sinClave('pdf master del lote L2611C')).body; assert.match(r.texto, /Documentación Técnica lo revisará/);
-assert.equal(tablas.chatbot_solicitudes[n].estado, 'nueva');
-await sinClave('estado del lote L2611C'); assert.equal(tablas.chatbot_solicitudes[n + 1].estado, 'lista');
-console.log('OK: bot guiado (saludos y pedidos escritos, plantilla/PDF/estado, lote solo o material + etapa, sin clave al analista).');
+// habilitar un paso con el lote: sin supervisión
+for (const t of ['1', '1', 'L2611D', '6', '12', '1', '4', '1']) await sinClave(t);
+assert.equal(tablas.chatbot_solicitudes.at(-1).estado, 'lista'); assert.equal(tablas.chatbot_solicitudes.at(-1).op_lote, 'L2611D');
+// sin lote ni clave: también directo (decisión de Carlos, «Todo sin supervisión»)
+for (const t of ['0', '2', '2', '3000123', '2', '10', '3', '3', '1']) await sinClave(t);
+assert.equal(tablas.chatbot_solicitudes.at(-1).estado, 'lista'); assert.equal(tablas.chatbot_solicitudes.at(-1).automatica, true);
+r = (await sinClave('plantilla del material 3000123 envase')).body; assert.match(r.texto, /enlace de descarga/);
+assert.equal(tablas.chatbot_solicitudes.at(-1).estado, 'lista');
+// las consultas libres siguen para el analista
+await sinClave('0'); await sinClave('6'); await sinClave('4'); await sinClave('2'); await sinClave('no');
+await sinClave('necesito ayuda con un paso que no se ve en la tablet');
+assert.equal(tablas.chatbot_solicitudes.at(-1).estado, 'nueva');
+console.log('OK: bot guiado (saludos y pedidos escritos, plantilla/PDF/estado, lote solo o material + etapa, todo directo sin clave; consultas al analista).');
