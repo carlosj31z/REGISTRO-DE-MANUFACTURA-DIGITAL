@@ -12662,6 +12662,8 @@ async function maybeAutoStartTour() {
         :is(#tab-status, #prodAcumulado) .sts-regla b.n { font-variant-numeric:tabular-nums; color:rgb(var(--plum-rgb)); }
         :is(#tab-status, #prodAcumulado) .sts-regla .sts-regla-f { display:block; color:var(--slate-400); font-size:11.5px; }
         :is(#tab-status, #prodAcumulado) .sts-grafico.baja { height:170px; }
+        #tab-status .sts-grafico.cons { height:260px; margin-top:8px; }
+        #tab-status .sts-cons .sts-lado > .sts-btn { align-self:flex-start; margin-top:10px; }
         :is(#tab-status, #prodAcumulado) .sts-tabla td.parte, :is(#tab-status, #prodAcumulado) .sts-tabla th.parte { color:var(--slate-400); font-size:.92em; }
         :is(#tab-status, #prodAcumulado) .sts-paneles.uno { grid-template-columns:1fr; }
         #prodAcumulado { padding:22px 24px 26px; }
@@ -14342,6 +14344,82 @@ async function maybeAutoStartTour() {
                 </div>
             </div>`;
         }
+        // Consolidado de la Ruta 1 (pedido de Carlos, 17/11/2026): Planta Ate + Planta Lima en cada casilla del flujo, en un
+        // gráfico apilado por planta con el total encima, y un botón para descargarlo como imagen (PNG con fondo blanco).
+        const CASILLAS_R1 = [['bor', 'Borrador'], ['ing', 'Ingresar'], ['flu', 'Flujo SAP'], ['cc', 'Control de cambio'], ['rev', 'Por revisión'], ['aut', 'Autorizado']];
+        let consR1 = null;
+        function htmlConsolidadoR1(c1, c2, { foto = false, cuando = '', cuandoIso = '' } = {}) {
+            const a = completarFoto(c1 || {}), b = completarFoto(c2 || {});
+            const s = (k) => (a[k] || 0) + (b[k] || 0);
+            consR1 = { P1: a, P2: b, foto, cuando, cuandoIso };
+            const pend = s('pend'), aut = s('aut'), total = pend + aut;
+            const nD = foto ? (n) => numOGuion(n) : nDet;
+            const max = Math.max(s('doc'), s('pro'), s('asc'), 1);
+            const barra = (k, lbl) => `<div class="sts-barra ${k}"><span class="lbl">${lbl}</span><span class="pista"><i style="width:${Math.round((s(k) / max) * 100)}%"></i></span><span class="n">${nD(s(k), `r1|ambas|${k}`)}</span></div>`;
+            const autDet = Number.isFinite(a.autBk) || Number.isFinite(b.autBk) ? ` · ${(a.autBk || 0) + (b.autBk || 0)} del backlog · ${(a.autMes || 0) + (b.autMes || 0)} del mes` : '';
+            return `<div class="sts-ruta sts-cons">
+                <div>
+                    <div class="sts-planta">Consolidado P1 + P2 <span class="sts-total prog">Programa ${total}</span> <span class="sts-chip">${pend} pendientes · ${aut} autorizados${autDet}</span></div>
+                    <div class="sts-grafico cons"><canvas id="stsR1Cons" role="img" aria-label="${esc(`Ruta 1 consolidada: ${CASILLAS_R1.map(([k, l]) => `${l} ${s(k)}`).join(', ')}`)}"></canvas></div>
+                </div>
+                <div class="sts-lado">
+                    <div class="sts-avance">${anillo(total ? Math.round((aut / total) * 100) : 0)}<div class="sts-avance-txt"><b>${total ? `${(Math.round((aut / total) * 1000) / 10).toFixed(1)}%` : '—'} de avance</b>${aut} de ${total}</div></div>
+                    <div class="sts-barras">
+                        <div class="sts-barras-lbl">RMD pendientes por responsable</div>
+                        ${barra('doc', 'DOC')}${barra('pro', 'PRO')}${barra('asc', 'ASC')}
+                    </div>
+                    <button type="button" class="sts-btn" onclick="StatusRmd.descargarGraficoR1()">Descargar gráfico</button>
+                </div>
+            </div>`;
+        }
+        // Configuración del gráfico consolidado: una barra por casilla, apilada Ate + Lima, con el total encima.
+        function configConsR1(x, { texto, rejilla, imagen = false, onClick, onHover } = {}) {
+            const css = getComputedStyle(document.documentElement);
+            const rgb = (v, def) => `rgb(${(css.getPropertyValue(v).trim() || def)})`;
+            const colAte = imagen ? '#2F7FA3' : rgb('--info-rgb', '79 156 190'), colLima = imagen ? '#7A4FA0' : rgb('--plum-rgb', '160 123 187');
+            const ds = (pl, label, color, total) => ({ label, data: CASILLAS_R1.map(([k]) => x[pl][k] || 0), backgroundColor: color, stack: 'r1', etiqueta: 'dentro', totalPila: total,
+                borderRadius: 3, maxBarThickness: imagen ? 120 : 64 });
+            return {
+                type: 'bar',
+                data: { labels: CASILLAS_R1.map(([, l]) => l), datasets: [ds('P1', 'Planta Ate (P1)', colAte, false), ds('P2', 'Planta Lima (P2)', colLima, true)] },
+                options: {
+                    responsive: !imagen, maintainAspectRatio: false, animation: false, devicePixelRatio: imagen ? 1 : undefined,
+                    layout: { padding: { top: imagen ? 30 : 16, left: 8, right: 16, bottom: imagen ? 10 : 0 } },
+                    onClick, onHover,
+                    plugins: {
+                        legend: { position: imagen ? 'bottom' : 'top', align: imagen ? 'center' : 'end', labels: { color: texto, boxWidth: imagen ? 28 : 12, font: { size: imagen ? 24 : 11 } } },
+                        title: { display: imagen, text: 'Ruta 1 · Flujo de Programa – Consolidado P1 + P2', align: 'start', color: '#4A3F8C', font: { size: 32, weight: 'bold' }, padding: { bottom: 6 } },
+                        subtitle: { display: imagen, text: x.sub || '', align: 'start', color: '#555555', font: { size: 20 }, padding: { bottom: 20 } },
+                        stsValores: { activo: true, tam: imagen ? 26 : 11, fuente: 'Raleway, system-ui, sans-serif', color: imagen ? '#333333' : texto },
+                        tooltip: { enabled: !imagen, callbacks: { footer: (els) => (els.length ? `Total: ${(x.P1[CASILLAS_R1[els[0].dataIndex][0]] || 0) + (x.P2[CASILLAS_R1[els[0].dataIndex][0]] || 0)}` : '') } }
+                    },
+                    scales: {
+                        x: { stacked: true, ticks: { color: texto, font: { size: imagen ? 24 : 12 } }, grid: { display: false } },
+                        y: { stacked: true, beginAtZero: true, grace: '12%', ticks: { color: texto, precision: 0, font: { size: imagen ? 20 : 11 } }, grid: { color: rejilla }, border: { display: false } }
+                    }
+                },
+                plugins: [etiquetasValores]
+            };
+        }
+        function descargarGraficoR1() {
+            if (!consR1 || typeof Chart === 'undefined') return;
+            const x = consR1, pend = x.P1.pend + x.P2.pend, aut = x.P1.aut + x.P2.aut;
+            const sub = `${x.cuando || dayjs().format('DD/MM/YYYY')} · Programa ${pend + aut}: ${pend} pendientes y ${aut} autorizados · Planta Ate ${x.P1.pend + x.P1.aut} · Planta Lima ${x.P2.pend + x.P2.aut}`;
+            const canvas = document.createElement('canvas');
+            canvas.width = 1600; canvas.height = 900;
+            canvas.style.cssText = 'position:fixed;left:-10000px;top:0;width:1600px;height:900px';
+            document.body.appendChild(canvas);
+            const cfg = configConsR1(Object.assign({}, x, { sub }), { texto: '#333333', rejilla: 'rgba(0,0,0,0.10)', imagen: true });
+            cfg.plugins.push({ id: 'fondoBlancoR1', beforeDraw: (ch) => { const c = ch.ctx; c.save(); c.globalCompositeOperation = 'destination-over'; c.fillStyle = '#ffffff'; c.fillRect(0, 0, ch.width, ch.height); c.restore(); } });
+            const chart = new Chart(canvas.getContext('2d'), cfg);
+            setTimeout(() => {
+                const a = document.createElement('a');
+                a.href = canvas.toDataURL('image/png');
+                a.download = `RUTA1_CONSOLIDADO_${(x.cuandoIso || dayjs().format('YYYY-MM-DD'))}.png`;
+                document.body.appendChild(a); a.click(); a.remove();
+                chart.destroy(); canvas.remove();
+            }, 80);
+        }
         const leyenda = `<div class="sts-leyenda">${tagResp('PRO')}<span class="sts-chip">Producción</span>${tagResp('DOC')}<span class="sts-chip">QA · Documentación</span>${tagResp('ASC')}<span class="sts-chip">Aseguramiento de la Calidad / CC</span></div>`;
         // ---------- Foto diaria: vista ----------
         const RUTAS_FOTO = { r1: ['RUTA 1', 'Flujo de Programa – P1 y P2', 'Programa'], r2: ['RUTA 2', 'Flujo de Caracterizaciones – P1 y P2', 'Caracterización'] };
@@ -14445,7 +14523,8 @@ async function maybeAutoStartTour() {
                         ? { n: f[pl].bkN, aut: f[pl].bkAut, mes: mesAnt, key: '', pctTxt: f[pl].bkN > 0 && Number.isFinite(f[pl].bkAut) ? `${(Math.round((f[pl].bkAut / f[pl].bkN) * 1000) / 10).toFixed(1)}%` : '—' } : null;
                     const extra = ruta === 'r1' && f[pl] && f[pl].prog ? ` <span class="sts-chip">${plural(f[pl].prog, 'producto programado', 'productos programados')}</span>` : '';
                     return htmlRuta(c, pl, ruta, { foto: true, deltas: deltas(pl), backlog: bk, extra });
-                }).join('');
+                }).join('')
+                + (ruta === 'r1' && f && (f.P1 || f.P2) ? htmlConsolidadoR1(f.P1, f.P2, { foto: true, cuando: fmtDiaCorto(fv.fin.dia), cuandoIso: fv.fin.dia }) : '');
             return `<section class="sts-seccion">
                 <div class="sts-seccion-cab"><div>
                     <div class="sts-seccion-titulo"><span class="sts-num">${num}</span>${titulo}<span class="fto-aviso-foto">FOTO</span></div>
@@ -14572,6 +14651,7 @@ async function maybeAutoStartTour() {
             });
         }
         function htmlRuta1(d) {
+            consR1 = null;
             const fv = fotoEnVista();
             if (fv) return htmlRutaFoto(fv, 'r1');
             const r1 = d.r1, mes = d.per.hasta.format('YYYY-MM');
@@ -14579,7 +14659,8 @@ async function maybeAutoStartTour() {
             const cuerpo = r1.error ? `<div class="sts-aviso"><span>${esc(r1.error)}</span></div>`
                 : (r1.sinArbol ? '<div class="sts-aviso"><span>No se pudo cargar el árbol de materiales de SAP: solo se cuenta el RMD del propio código de cada producto.</span></div>' : '')
                   + ['P1', 'P2'].map((pl) => htmlRuta(r1[pl], pl, 'r1', { extra: extra(pl),
-                      backlog: Object.assign(backlogRuta1(d, pl), { mes: d.per.mesAnterior.toLowerCase(), key: `cuadro|${pl}|${mes}|${claveBacklog(d.programa && d.programa[pl])}` }) })).join('');
+                      backlog: Object.assign(backlogRuta1(d, pl), { mes: d.per.mesAnterior.toLowerCase(), key: `cuadro|${pl}|${mes}|${claveBacklog(d.programa && d.programa[pl])}` }) })).join('')
+                  + htmlConsolidadoR1(r1.P1, r1.P2, { cuando: dayjs().format('DD/MM/YYYY') });
             return `<section class="sts-seccion">
                 <div class="sts-seccion-cab"><div>
                     <div class="sts-seccion-titulo"><span class="sts-num">RUTA 1</span>Flujo de Programa – P1 y P2</div>
@@ -14917,6 +14998,11 @@ async function maybeAutoStartTour() {
                 const t = document.getElementById('stsTend' + pl);
                 if (t) graficos.push(new Chart(t, configTendencia(d.listado ? tendenciaListado(d.listado, pl, d.per.hasta) : tendenciaRuta2(d, pl), { texto, rejilla })));
             });
+            const cons = document.getElementById('stsR1Cons');
+            if (cons && consR1) {
+                const det = consR1.foto ? undefined : (evt, els, chart) => clicEnGrafico(evt, chart, (e) => `r1|${e.datasetIndex === 0 ? 'P1' : 'P2'}|${CASILLAS_R1[e.index][0]}`);
+                graficos.push(new Chart(cons, configConsR1(consR1, { texto, rejilla, onClick: det, onHover: consR1.foto ? undefined : manoEnGrafico })));
+            }
         }
         // Programa acumulado (en Producción): sus gráficos, en el contenedor donde se pintó.
         function dibujarGraficosAcumulado(d, cont) {
@@ -15369,7 +15455,7 @@ async function maybeAutoStartTour() {
         function claveGraficos(d) {
             try {
                 return JSON.stringify([colorTextoGraf(), ['P1', 'P2'].map((pl) => [document.getElementById('stsGrafico' + pl) ? configCuadro(d, pl, {}).data : null,
-                    document.getElementById('stsTend' + pl) ? tendenciaRuta2(d, pl) : null])]);
+                    document.getElementById('stsTend' + pl) ? tendenciaRuta2(d, pl) : null]), consR1 ? CASILLAS_R1.map(([k]) => [consR1.P1[k], consR1.P2[k]]).concat([consR1.foto]) : null]);
             } catch (e) { return Math.random(); }
         }
         function pintar() {
@@ -16593,7 +16679,7 @@ async function maybeAutoStartTour() {
 
         return {
             alEntrar: () => actualizar(), actualizar, recargarPronto, pintarAcumuladoProduccion, descargarPpt, indicadoresDesdeFilas, caracterizacionesDesdeFilas, plantaDe,
-            abrirDetalle, exportarTodo, exportarBacklogMes, _datosBacklogMes: datosBacklogMes, _calcularRuta1: calcularRuta1, _libroBacklogMes: libroBacklogMes, _construirDetalle: construirDetalle,
+            abrirDetalle, exportarTodo, exportarBacklogMes, descargarGraficoR1, _datosBacklogMes: datosBacklogMes, _calcularRuta1: calcularRuta1, _libroBacklogMes: libroBacklogMes, _construirDetalle: construirDetalle,
             setEstatus: (id, valor) => guardarEstatus(id, { e: valor }),
             setResponsable: (id, valor) => guardarEstatus(id, { r: valor }),
             filtrar: (campo, valor) => { vista[campo] = valor; if (ultimo) pintar(); },
