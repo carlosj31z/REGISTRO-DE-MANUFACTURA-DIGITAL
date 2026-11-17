@@ -87,6 +87,14 @@ export function textoParaPersona(s) {
   return `Su solicitud #${s.id} necesita que la revise el analista de Documentación Técnica; le escribirá por aquí. ${s.resumen}`;
 }
 
+/** Mientras se atiende (lo llama el ejecutor al ubicar el RMD): el avance solo a quien pidió, para que no espere a ciegas. */
+export async function notificarAvance(id) {
+  const [s] = await sb(`chatbot_solicitudes?id=eq.${enc(id)}&select=*`);
+  if (!s || s.estado !== 'ejecutando' || !s.resultado) return s || null;
+  if (s.canal === 'whatsapp') await enviarWhatsApp(s.contacto.replace(/^wa:/, ''), `Solicitud #${s.id}. ${s.resultado}`).catch(() => {});
+  return s;
+}
+
 /** Tras ejecutarse (lo llama el ejecutor): resultado a quien pidió y al analista. */
 export async function notificarResultado(id) {
   const [s] = await sb(`chatbot_solicitudes?id=eq.${enc(id)}&select=*`);
