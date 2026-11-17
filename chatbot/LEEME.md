@@ -5,11 +5,14 @@ IA y gratis** (decisión de Carlos, 2026-11-16): menús numerados y opciones cer
 código del material, el lote, números de orden y, en consultas, una descripción. Los cambios que entiende con seguridad
 se aplican solos en SAP con la cuenta del analista; lo demás le llega al analista.
 
-Flujo «habilitar un paso»: material → etapa (FABRICACION, ENVASE, ACONDICIONADO, RECUBRIMIENTO, INSPECCION) → ¿lote en
-proceso? → lista del paso → orden del paso → desde qué paso (misma lista / otra lista / sin predecesor) → orden → confirmar.
-Decimales: igual hasta el orden, luego 0 a 4 decimales. **No se pide el código del RMD**: el ejecutor lo ubica con material +
-etapa (entidad MD, `codDefectoReceta` + `nivelTxt`) y, si dieron lote, toma el RMD cuya «Ver OP» tiene ese lote; sin lote,
-la última versión Autorizada. Si no lo puede ubicar sin dudas, la solicitud pasa al analista.
+Flujo «habilitar un paso»: ¿tienes el lote? → (sí: lote, **con el lote basta**; no: material → etapa (FABRICACION, ENVASE,
+ACONDICIONADO, RECUBRIMIENTO, INSPECCION)) → lista del paso → orden del paso → desde qué paso (misma lista / otra lista /
+sin predecesor) → orden → confirmar. Decimales: igual hasta el orden, luego 0 a 4 decimales. **No se pide el código del
+RMD**: el ejecutor lo ubica por el lote en «Ver OP» (`/RMD`, `lote`) o, sin lote, por material + etapa (entidad MD,
+`codDefectoReceta` + `nivelTxt`, última versión Autorizada). Si no lo puede ubicar sin dudas, la solicitud pasa al analista.
+
+**Chat estilo WhatsApp**: `/chatbot/whatsapp.html` (mismo motor; las opciones numeradas salen como botones, la clave y el
+contacto se piden una sola vez y quedan en el navegador).
 
 ```
 Producción ──WhatsApp──► api/whatsapp.js ─┐

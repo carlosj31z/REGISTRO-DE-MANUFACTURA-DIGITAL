@@ -1,6 +1,7 @@
 // Bot guiado SIN IA (gratis): menús numerados y opciones cerradas. Pedido de Carlos (2026-11-16).
 // Solo se escribe texto libre en: código del material, lote, números de orden y la descripción de una consulta.
-// El RMD no se pide (Producción no lo tiene a mano): el ejecutor lo ubica con material + etapa y confirma el lote en «Ver OP».
+// El RMD no se pide (Producción no lo tiene a mano): con el lote basta (el ejecutor lo busca en «Ver OP»); sin lote,
+// material + etapa (última versión Autorizada).
 // El estado de cada conversación se guarda en chatbot_conversaciones (columna mensajes = { paso, d }).
 import { sb, enc } from './supabase.js';
 import { MODO, registrarSolicitud, misSolicitudes } from './solicitudes.js';
@@ -76,7 +77,7 @@ const PREGUNTA = {
   ]),
   ordenPred: 'Escribe el numero de orden del paso desde el que debe poder registrarse.',
   decimales: lista('¿Cuantos decimales necesita?', DECIMALES.map(String)),
-  op: `¿Es para un lote en proceso? (se confirma en Ver OP que el lote este en ese RMD)\n${SI_NO}`,
+  op: '¿Tienes el numero de lote?\n1. Si (con el lote basta)\n2. No (te pido material y etapa)',
   opNumero: 'Escribe el numero de lote.',
   tema: lista('¿Que tipo de consulta es?', TEMAS.map((t) => t[0])),
   rmdOpcional: 'Escribe el codigo del material o NO si no aplica.',
@@ -88,7 +89,8 @@ function nombreLista(valor) {
 }
 
 function resumen(d) {
-  const base = `Material ${d.material} (${d.etapa})${d.op ? `, lote ${d.op}` : ''}, lista ${nombreLista(d.lista)}, paso de orden ${d.orden}`;
+  const donde = d.material ? `Material ${d.material} (${d.etapa})${d.op ? `, lote ${d.op}` : ''}` : `Lote ${d.op}`;
+  const base = `${donde}, lista ${nombreLista(d.lista)}, paso de orden ${d.orden}`;
   if (d.accion === 'cambiar_predecesor') {
     const destino = d.sin ? 'quedara sin predecesor'
       : `dependera del paso de orden ${d.ordenPred}${d.listaPred && d.listaPred !== d.lista ? ` de la lista ${nombreLista(d.listaPred)}` : ''}`;
@@ -179,8 +181,8 @@ export async function atender(quien, texto) {
   switch (paso) {
     case 'menu': {
       const k = elegir(t, 5);
-      if (k === 1) return responder('material', `Habilitar un paso.\n\n${PREGUNTA.material}`, { flujo: 'cambio', accion: 'cambiar_predecesor' });
-      if (k === 2) return responder('material', `Cambiar decimales.\n\n${PREGUNTA.material}`, { flujo: 'cambio', accion: 'configurar_decimal' });
+      if (k === 1) return responder('op', `Habilitar un paso.\n\n${PREGUNTA.op}`, { flujo: 'cambio', accion: 'cambiar_predecesor' });
+      if (k === 2) return responder('op', `Cambiar decimales.\n\n${PREGUNTA.op}`, { flujo: 'cambio', accion: 'configurar_decimal' });
       if (k === 3) return responder('tema', PREGUNTA.tema, { flujo: 'consulta' });
       if (k === 4) return responder('menu', `${await textoMisSolicitudes(quien.contacto)}\n\n0. Volver al menu`, {});
       return responder('faq', lista('Preguntas frecuentes:', FAQ.map((f) => f[0])), {});
@@ -196,7 +198,7 @@ export async function atender(quien, texto) {
     case 'etapa': {
       const k = elegir(t, ETAPAS.length);
       if (!k) return invalido(PREGUNTA.etapa);
-      return responder('op', PREGUNTA.op, { ...d, etapa: ETAPAS[k - 1] });
+      return trasLote({ ...d, etapa: ETAPAS[k - 1] });
     }
     case 'lista': {
       const opc = d.accion === 'configurar_decimal' ? LISTAS_DECIMAL : LISTAS;
@@ -245,7 +247,9 @@ export async function atender(quien, texto) {
       const k = elegir(t, 2);
       if (k === 1) return responder('opNumero', PREGUNTA.opNumero);
       if (k !== 2) return invalido(PREGUNTA.op);
-      return trasLote({ ...d, op: '' });
+      d = { ...d, op: '' };
+      if (d.flujo === 'consulta') return responder('rmdOpcional', PREGUNTA.rmdOpcional, d);
+      return responder('material', PREGUNTA.material, d);
     }
     case 'opNumero': {
       if (!LOTE.test(t)) return invalido(PREGUNTA.opNumero);
@@ -253,7 +257,7 @@ export async function atender(quien, texto) {
     }
     case 'confirmar': {
       const k = elegir(t, 2);
-      if (k === 2) return responder('material', PREGUNTA.material, { flujo: d.flujo, accion: d.accion });
+      if (k === 2) return responder('op', PREGUNTA.op, { flujo: d.flujo, accion: d.accion });
       if (k !== 1) return invalido('1. Confirmar\n2. Corregir\n0. Cancelar');
       const r = await registrar(quien, d);
       return responder('menu', r.texto, {}, [r.solicitud]);
@@ -261,10 +265,10 @@ export async function atender(quien, texto) {
     case 'tema': {
       const k = elegir(t, TEMAS.length);
       if (!k) return invalido(PREGUNTA.tema);
-      return responder('rmdOpcional', PREGUNTA.rmdOpcional, { ...d, tema: k });
+      return responder('op', PREGUNTA.op, { ...d, tema: k });
     }
     case 'rmdOpcional':
-      if (/^no$/i.test(t)) return responder('op', PREGUNTA.op, { ...d, material: '' });
+      if (/^no$/i.test(t)) return responder('descripcion', PREGUNTA.descripcion, { ...d, material: '' });
       if (!MATERIAL.test(t)) return invalido(PREGUNTA.rmdOpcional);
       return responder('etapa', PREGUNTA.etapa, { ...d, material: t.toUpperCase() });
     case 'descripcion': {

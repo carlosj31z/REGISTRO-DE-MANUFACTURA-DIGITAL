@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#008069">
+<title>Asistente RMD</title>
+<style>
+  /* Copia del chat con aspecto de WhatsApp: botones en vez de escribir números y sin datos que llenar al entrar. */
+  :root {
+    --barra: #008069; --barra-texto: #fff; --fondo: #efeae2; --mio: #d9fdd3; --suyo: #fff; --texto: #111b21;
+    --tenue: #667781; --boton: #fff; --boton-texto: #008069; --borde: #e9edef; --entrada: #fff; --pie: #f0f2f5;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --barra: #202c33; --barra-texto: #e9edef; --fondo: #0b141a; --mio: #005c4b; --suyo: #202c33; --texto: #e9edef;
+      --tenue: #8696a0; --boton: #202c33; --boton-texto: #00a884; --borde: #2a3942; --entrada: #2a3942; --pie: #202c33;
+    }
+  }
+  :root[data-theme="dark"] {
+    --barra: #202c33; --barra-texto: #e9edef; --fondo: #0b141a; --mio: #005c4b; --suyo: #202c33; --texto: #e9edef;
+    --tenue: #8696a0; --boton: #202c33; --boton-texto: #00a884; --borde: #2a3942; --entrada: #2a3942; --pie: #202c33;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body { margin: 0; font: 15px/1.38 -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; color: var(--texto);
+    background: var(--fondo); display: flex; flex-direction: column; }
+  header { background: var(--barra); color: var(--barra-texto); display: flex; align-items: center; gap: 12px;
+    padding: 10px 16px; padding-top: max(10px, env(safe-area-inset-top)); }
+  .avatar { width: 40px; height: 40px; border-radius: 50%; background: #dfe5e7; color: #008069; display: grid;
+    place-items: center; font-weight: 700; font-size: 15px; flex: none; }
+  header .nombre { font-weight: 600; font-size: 16px; }
+  header .estado { font-size: 13px; opacity: .85; }
+  header .titulo { flex: 1; min-width: 0; }
+  header button { background: none; border: 0; color: inherit; font: inherit; font-size: 14px; cursor: pointer; padding: 6px 8px; opacity: .9; }
+  #mensajes { flex: 1; overflow-y: auto; padding: 12px 16px 8px; display: flex; flex-direction: column; gap: 3px;
+    -webkit-overflow-scrolling: touch; }
+  .dia { align-self: center; background: var(--suyo); color: var(--tenue); font-size: 12.5px; padding: 5px 12px;
+    border-radius: 8px; margin: 6px 0; box-shadow: 0 1px .5px rgba(11,20,26,.13); }
+  .msg { max-width: min(85%, 560px); padding: 6px 8px 8px 9px; border-radius: 8px; white-space: pre-wrap; word-wrap: break-word;
+    box-shadow: 0 1px .5px rgba(11,20,26,.13); position: relative; margin-top: 4px; }
+  .msg.yo { align-self: flex-end; background: var(--mio); border-top-right-radius: 0; }
+  .msg.bot { align-self: flex-start; background: var(--suyo); border-top-left-radius: 0; }
+  .msg .hora { float: right; font-size: 11px; color: var(--tenue); margin: 8px 0 -4px 10px; }
+  .msg .sol { display: block; margin-top: 4px; font-size: 12.5px; color: var(--tenue); }
+  .opciones { align-self: flex-start; display: flex; flex-direction: column; gap: 3px; width: min(85%, 560px); margin-top: 2px; }
+  .opciones button { background: var(--boton); color: var(--boton-texto); border: 0; border-radius: 8px; padding: 10px 12px;
+    font: inherit; font-size: 14.5px; text-align: center; cursor: pointer; box-shadow: 0 1px .5px rgba(11,20,26,.13); }
+  .opciones button:active { filter: brightness(.95); }
+  .opciones button.volver { color: var(--tenue); font-size: 13.5px; padding: 8px; }
+  .opciones.usadas button { opacity: .45; pointer-events: none; }
+  .escribiendo { align-self: flex-start; background: var(--suyo); border-radius: 8px; border-top-left-radius: 0;
+    padding: 10px 14px; margin-top: 4px; box-shadow: 0 1px .5px rgba(11,20,26,.13); }
+  .escribiendo i { display: inline-block; width: 7px; height: 7px; margin: 0 2px; border-radius: 50%; background: var(--tenue);
+    animation: salto 1.2s infinite ease-in-out; }
+  .escribiendo i:nth-child(2) { animation-delay: .15s; } .escribiendo i:nth-child(3) { animation-delay: .3s; }
+  @keyframes salto { 0%, 60%, 100% { opacity: .35; transform: none; } 30% { opacity: 1; transform: translateY(-3px); } }
+  @media (prefers-reduced-motion: reduce) { .escribiendo i { animation: none; } }
+  footer { background: var(--pie); padding: 8px 10px; padding-bottom: max(8px, env(safe-area-inset-bottom)); display: flex; gap: 8px; align-items: flex-end; }
+  footer textarea { flex: 1; resize: none; border: 0; border-radius: 22px; padding: 11px 16px; font: inherit; max-height: 120px;
+    background: var(--entrada); color: var(--texto); outline: none; min-height: 44px; }
+  footer button { width: 46px; height: 46px; border-radius: 50%; border: 0; background: #00a884; color: #fff; font: inherit;
+    font-weight: 600; font-size: 13px; cursor: pointer; flex: none; }
+  footer button:disabled { opacity: .5; }
+  #acceso { position: fixed; inset: 0; background: rgba(11,20,26,.55); display: grid; place-items: center; padding: 16px; z-index: 5; }
+  #acceso form { background: var(--suyo); color: var(--texto); border-radius: 12px; padding: 20px; width: min(100%, 360px); display: flex; flex-direction: column; gap: 12px; }
+  #acceso h2 { margin: 0; font-size: 17px; }
+  #acceso p { margin: 0; color: var(--tenue); font-size: 14px; }
+  #acceso input { padding: 11px 12px; border-radius: 8px; border: 1px solid var(--borde); background: var(--entrada); color: var(--texto); font: inherit; }
+  #acceso button { padding: 11px; border-radius: 8px; border: 0; background: #00a884; color: #fff; font: inherit; font-weight: 600; cursor: pointer; }
+  #acceso .error { color: #d93025; font-size: 13.5px; min-height: 1em; }
+  .oculto { display: none !important; }
+</style>
+</head>
+<body>
+<header>
+  <div class="avatar" aria-hidden="true">DT</div>
+  <div class="titulo">
+    <div class="nombre">Asistente RMD</div>
+    <div class="estado" id="estado">Documentación Técnica</div>
+  </div>
+  <button id="nuevo" title="Empezar de nuevo">Nuevo</button>
+</header>
+
+<div id="mensajes" aria-live="polite"></div>
+
+<footer>
+  <textarea id="texto" rows="1" placeholder="Mensaje" aria-label="Mensaje"></textarea>
+  <button id="enviar" aria-label="Enviar">Enviar</button>
+</footer>
+
+<div id="acceso" class="oculto">
+  <form id="formAcceso">
+    <h2>Asistente RMD</h2>
+    <p>Escribe la clave que te dio Documentación Técnica. Solo se pide una vez en este equipo.</p>
+    <input id="clave" type="password" autocomplete="current-password" placeholder="Clave">
+    <div class="error" id="errorClave"></div>
+    <button type="submit">Entrar</button>
+  </form>
+</div>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const leer = (k, d = '') => { try { return localStorage.getItem(k) ?? d; } catch { return d; } };
+  const guardar = (k, v) => { try { localStorage.setItem(k, v); } catch {} };
+
+  let contacto = leer('chatbotContacto');
+  if (!/^web:[\w-]{8,64}$/.test(contacto)) {
+    contacto = 'web:' + (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2));
+    guardar('chatbotContacto', contacto);
+  }
+  let clave = leer('chatbotClave');
+
+  async function api(cuerpo) {
+    const h = { 'Content-Type': 'application/json' };
+    if (clave) h['x-clave'] = clave;
+    const r = await fetch('/api/chatbot', { method: 'POST', headers: h, body: JSON.stringify(cuerpo) });
+    const d = await r.json().catch(() => ({ error: 'Respuesta no válida (' + r.status + ').' }));
+    if (!r.ok) { const e = new Error(d.error || ('Error ' + r.status)); e.status = r.status; throw e; }
+    return d;
+  }
+
+  const hora = () => new Date().toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' });
+  const lista = $('mensajes');
+  const bajar = () => { lista.scrollTop = lista.scrollHeight; };
+
+  // Separa el texto del bot en cuerpo y opciones numeradas («1. …», «0. Volver al menu»).
+  function partir(texto) {
+    const cuerpo = [], opciones = [];
+    for (const linea of String(texto).split('\n')) {
+      const m = linea.match(/^\s*(\d{1,2})\.\s+(.+)$/);
+      if (m) opciones.push({ valor: m[1], texto: m[2].trim() });
+      else cuerpo.push(linea);
+    }
+    // Solo se vuelven botones si son opciones de verdad (al menos una distinta de 0).
+    if (!opciones.some((o) => o.valor !== '0')) return { cuerpo: String(texto), opciones: [] };
+    return { cuerpo: cuerpo.join('\n').replace(/\n{3,}/g, '\n\n').trim(), opciones };
+  }
+
+  function burbuja(texto, quien, extra, h = hora()) {
+    const d = document.createElement('div');
+    d.className = 'msg ' + quien;
+    d.append(document.createTextNode(texto));
+    if (extra) { const s = document.createElement('span'); s.className = 'sol'; s.textContent = extra; d.append(s); }
+    const t = document.createElement('span'); t.className = 'hora'; t.textContent = h; d.append(t);
+    lista.append(d); bajar();
+    return d;
+  }
+
+  function botones(opciones) {
+    const caja = document.createElement('div'); caja.className = 'opciones';
+    for (const o of opciones) {
+      const b = document.createElement('button');
+      b.type = 'button'; b.textContent = o.texto;
+      if (o.valor === '0') b.className = 'volver';
+      b.onclick = () => { caja.classList.add('usadas'); enviar(o.valor, o.texto); };
+      caja.append(b);
+    }
+    lista.append(caja); bajar();
+  }
+
+  function mostrarBot(texto, extra, h, conBotones = true) {
+    const { cuerpo, opciones } = partir(texto);
+    if (cuerpo) burbuja(cuerpo, 'bot', extra, h);
+    if (conBotones && opciones.length) botones(opciones);
+  }
+
+  // Historial visible solo en este equipo (el servidor guarda la conversación real).
+  let visibles = [];
+  try { visibles = JSON.parse(leer('chatbotWaVisibles', '[]')); } catch {}
+  const recordar = () => guardar('chatbotWaVisibles', JSON.stringify(visibles.slice(-80)));
+  visibles.forEach((m, i) => m.q === 'yo' ? burbuja(m.t, 'yo', '', m.h) : mostrarBot(m.t, m.x, m.h, i === visibles.length - 1));
+
+  let ocupado = false;
+  async function enviar(valor, mostrado = valor) {
+    if (ocupado) return;
+    ocupado = true; $('enviar').disabled = true;
+    burbuja(mostrado, 'yo'); visibles.push({ q: 'yo', t: mostrado, h: hora() }); recordar();
+    const esc = document.createElement('div'); esc.className = 'escribiendo'; esc.innerHTML = '<i></i><i></i><i></i>';
+    lista.append(esc); bajar(); $('estado').textContent = 'escribiendo…';
+    try {
+      const r = await api({ accion: 'mensaje', contacto, texto: valor });
+      esc.remove();
+      const extra = (r.solicitudes || []).map((s) => `Solicitud #${s.id}`).join(' · ');
+      mostrarBot(r.texto, extra); visibles.push({ q: 'bot', t: r.texto, x: extra, h: hora() }); recordar();
+    } catch (e) {
+      esc.remove();
+      if (e.status === 401) { pedirClave('La clave no es correcta.'); }
+      else burbuja('No se pudo enviar: ' + e.message, 'bot');
+    } finally {
+      ocupado = false; $('enviar').disabled = false; $('estado').textContent = 'Documentación Técnica';
+    }
+  }
+
+  function pedirClave(error = '') {
+    $('errorClave').textContent = error; $('acceso').classList.remove('oculto'); $('clave').focus();
+  }
+  $('formAcceso').onsubmit = (ev) => {
+    ev.preventDefault();
+    clave = $('clave').value.trim(); guardar('chatbotClave', clave);
+    $('acceso').classList.add('oculto');
+    if (!visibles.length) enviar('hola', 'Hola');
+  };
+
+  $('enviar').onclick = () => { const t = $('texto').value.trim(); if (!t) return; $('texto').value = ''; ajustar(); enviar(t); };
+  $('texto').addEventListener('keydown', (ev) => { if (ev.key === 'Enter' && !ev.shiftKey) { ev.preventDefault(); $('enviar').click(); } });
+  const ajustar = () => { const t = $('texto'); t.style.height = 'auto'; t.style.height = Math.min(t.scrollHeight, 120) + 'px'; };
+  $('texto').addEventListener('input', ajustar);
+
+  $('nuevo').onclick = async () => {
+    try { await api({ accion: 'reiniciar', contacto }); } catch {}
+    visibles = []; recordar(); lista.innerHTML = '';
+    enviar('hola', 'Hola');
+  };
+
+  api({ accion: 'estado' }).then((e) => {
+    if (e.requiereClave && !clave) return pedirClave();
+    if (!visibles.length) enviar('hola', 'Hola');
+  }).catch(() => burbuja('No se pudo contactar al asistente. Intenta en un momento.', 'bot'));
+})();
+</script>
+</body>
+</html>

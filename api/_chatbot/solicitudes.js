@@ -46,9 +46,9 @@ export function origenConfiable(quien) {
 export async function registrarSolicitud(input, quien, conversacion = '') {
   const cambios = limpiarCambios(input.cambios);
   const rmdOk = /^\d{10}$/.test(String(input.rmd || '').trim());
-  // El RMD se identifica por su código o por material + etapa (el ejecutor lo ubica y confirma el lote en «Ver OP»).
+  // El RMD se identifica por su código, por el lote (el ejecutor lo busca en «Ver OP») o por material + etapa.
   const material = String(input.material || '').trim().toUpperCase();
-  const ubicable = rmdOk || Boolean(material && input.etapa);
+  const ubicable = rmdOk || Boolean(material && input.etapa) || Boolean(String(input.op_lote || '').trim());
   // Solo se aplica solo lo que viene de un origen identificado: el chat web con clave (CHATBOT_CLAVE) o un número de
   // WhatsApp de la lista CHATBOT_WHATSAPP_PERMITIDOS. Lo demás queda para que el analista lo apruebe.
   const automatica = input.tipo === 'cambio' && ubicable && cambios.length > 0 && cambios.every(cambioCompleto) && origenConfiable(quien);
