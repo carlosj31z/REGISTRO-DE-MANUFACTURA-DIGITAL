@@ -1,12 +1,19 @@
 # Asistente de configuraciones RMD (chatbot)
 
-Atiende a Producción y Calidad en Operaciones (WhatsApp o el chat web `/chatbot/`): responde dudas de configuración con
-la base de conocimiento, entiende su jerga («habilitar el paso», decimales) y registra solicitudes. Los cambios que
-entiende con seguridad se aplican solos en SAP con la cuenta del analista; lo demás le llega al analista.
+Atiende a Producción y Calidad en Operaciones (WhatsApp o el chat web `/chatbot/`). **Por defecto es un bot guiado, sin
+IA y gratis** (decisión de Carlos, 2026-11-16): menús numerados y opciones cerradas en cada paso. Solo se escribe el
+código del material, el lote, números de orden y, en consultas, una descripción. Los cambios que entiende con seguridad
+se aplican solos en SAP con la cuenta del analista; lo demás le llega al analista.
+
+Flujo «habilitar un paso»: material → etapa (FABRICACION, ENVASE, ACONDICIONADO, RECUBRIMIENTO, INSPECCION) → ¿lote en
+proceso? → lista del paso → orden del paso → desde qué paso (misma lista / otra lista / sin predecesor) → orden → confirmar.
+Decimales: igual hasta el orden, luego 0 a 4 decimales. **No se pide el código del RMD**: el ejecutor lo ubica con material +
+etapa (entidad MD, `codDefectoReceta` + `nivelTxt`) y, si dieron lote, toma el RMD cuya «Ver OP» tiene ese lote; sin lote,
+la última versión Autorizada. Si no lo puede ubicar sin dudas, la solicitud pasa al analista.
 
 ```
 Producción ──WhatsApp──► api/whatsapp.js ─┐
-Producción ──web───────► api/chatbot.js ──┼─► api/_chatbot/nucleo.js (Claude + base de conocimiento)
+Producción ──web───────► api/chatbot.js ──┼─► api/_chatbot/motor.js → guiado.js (menús, sin IA) | nucleo.js (Claude, opcional)
                                           │        └─► Supabase: chatbot_solicitudes / chatbot_conversaciones
 Analista ◄──WhatsApp / bandeja web────────┘        └─► GitHub: workflow «Atender solicitudes del chatbot»
                                                          (AUTOMATIZACION-DE-RMD, `rmd-automation solicitudes atender`)
@@ -33,12 +40,12 @@ Analista ◄──WhatsApp / bandeja web────────┘        └�
 
    | Variable | Para qué |
    |---|---|
-   | `ANTHROPIC_API_KEY` | Clave de la API de Claude (console.anthropic.com). Obligatoria. |
    | `SUPABASE_ANON_KEY` | La clave pública de Supabase que ya usa index.html. Obligatoria. |
    | `CHATBOT_CLAVE_ANALISTA` | Clave para la bandeja del analista y para que el ejecutor avise resultados. Obligatoria. |
    | `CHATBOT_CLAVE` | Opcional: clave para usar el chat web (si no se pone, el chat web queda abierto). |
    | `CHATBOT_MODO` | `automatico` (por defecto) o `aprobacion`. |
-   | `CHATBOT_MODELO`, `CHATBOT_ESFUERZO` | Opcional: modelo (`claude-opus-5-5`) y esfuerzo (`medium`). |
+   | `CHATBOT_MOTOR` | `guiado` (por defecto, gratis) o `claude` (texto libre con IA: necesita `ANTHROPIC_API_KEY`, de pago). |
+   | `ANTHROPIC_API_KEY`, `CHATBOT_MODELO`, `CHATBOT_ESFUERZO` | Solo con `CHATBOT_MOTOR=claude`. Modelo por defecto `claude-haiku-5-5`. |
    | `GITHUB_DISPATCH_TOKEN` | Token de GitHub (fine-grained, repo AUTOMATIZACION-DE-RMD, permiso *Contents: read and write*) para despertar al ejecutor al instante. Sin él, el ejecutor igual pasa cada 15 min. |
    | `WHATSAPP_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID` | Del número de WhatsApp Business (Meta for Developers → WhatsApp → API Setup). |
    | `WHATSAPP_VERIFY_TOKEN` | Texto que inventas y repites en Meta al registrar el webhook. |
@@ -61,12 +68,13 @@ Producción puede escribir `reiniciar` para empezar una conversación nueva.
 
 ## Cambiar lo que sabe
 
-La base es `chatbot/conocimiento/*.md`; `jerga_y_reglas.md` manda sobre las guías. Tras editar:
+Bot guiado: menús, listas y preguntas frecuentes en `api/_chatbot/guiado.js`. Motor con Claude: la base es `chatbot/conocimiento/*.md`; `jerga_y_reglas.md` manda sobre las guías. Tras editar:
 `node herramientas/chatbot/construir_conocimiento.mjs` (con `--desde ../AUTOMATIZACION-DE-RMD` copia antes las guías al día)
 y subir el cambio. Las conversaciones en curso se reinician solas con un resumen.
 
 ## Probar sin claves ni WhatsApp
 
-- `npm install` y `node herramientas/chatbot/probar.mjs` (conversación guionada de punta a punta, todo simulado).
+- `npm install`, `node herramientas/chatbot/probar_guiado.mjs` (bot guiado de punta a punta, todo simulado) y
+  `node herramientas/chatbot/probar.mjs` (el motor opcional con Claude, guionado).
 - `node herramientas/chatbot/servidor_local.mjs --simulado` y abrir `http://localhost:3000/chatbot/` (bandeja: clave `analista`).
 - Sin `--simulado` usa las claves reales de las variables de entorno.

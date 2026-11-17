@@ -3,7 +3,7 @@
 // (Meta reintenta si tarda). Variables de entorno: ver chatbot/LEEME.md.
 import crypto from 'node:crypto';
 import { waitUntil } from '@vercel/functions';
-import { atender, reiniciarConversacion } from './_chatbot/nucleo.js';
+import { atender, reiniciarConversacion } from './_chatbot/motor.js';
 import { sb, enc } from './_chatbot/supabase.js';
 import { despertarEjecutor, enviarWhatsApp, resumenSolicitud } from './_chatbot/avisos.js';
 

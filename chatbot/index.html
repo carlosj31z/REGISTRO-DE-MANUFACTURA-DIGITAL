@@ -66,7 +66,7 @@
     </div>
     <div id="mensajes" aria-live="polite"></div>
     <form id="escribir">
-      <textarea id="texto" placeholder="Escribe como en WhatsApp, p. ej.: necesito que habiliten el paso de tamizado en el RMD 2202609013" rows="1"></textarea>
+      <textarea id="texto" placeholder="Escribe el número de la opción (o hola para ver el menú)" rows="1"></textarea>
       <button class="btn primario" type="submit">Enviar</button>
     </form>
   </section>
@@ -132,12 +132,12 @@
   let visibles = [];
   try { visibles = JSON.parse(leer('chatbotVisibles', '[]')); } catch {}
   const recordar = () => guardar('chatbotVisibles', JSON.stringify(visibles.slice(-60)));
-  if (!visibles.length) visibles.push({ q: 'bot', t: 'Hola. Soy el asistente de configuraciones de RMD de Documentación Técnica. Cuéntame qué necesitas: una duda de configuración o un cambio (por ejemplo, habilitar un paso o cambiar decimales). Ten a mano el código del RMD.' });
+  if (!visibles.length) visibles.push({ q: 'bot', t: 'Hola. Escribe «hola» para ver el menú del asistente de configuraciones de RMD.' });
   visibles.forEach((m) => burbuja(m.t, m.q, m.x));
 
   api({ accion: 'estado' }).then((e) => {
     if (e.requiereClave) $('clave').classList.remove('oculto');
-    if (!e.listo) burbuja('El asistente aún no tiene configurada la clave de la API de Claude en Vercel (ANTHROPIC_API_KEY).', 'sis');
+    if (!e.listo) burbuja('El motor con IA está elegido pero falta ANTHROPIC_API_KEY en Vercel.', 'sis');
   }).catch(() => burbuja('No se pudo contactar al asistente. ¿Está desplegada la carpeta api/ en Vercel?', 'sis'));
 
   async function enviar(texto) {
@@ -169,16 +169,21 @@
     const d = document.createElement('div'); d.className = 'tarjeta';
     const quien = [s.nombre, s.area].filter(Boolean).join(' · ') || s.contacto;
     const fecha = new Date(s.creado).toLocaleString('es-PE', { dateStyle: 'short', timeStyle: 'short' });
-    const cambios = (s.cambios || []).map((c) => c.accion === 'cambiar_predecesor'
-      ? `${c.lista}: «${c.paso}»${c.orden_paso ? ' (#' + c.orden_paso + ')' : ''} → ${c.sin_predecesor ? 'sin predecesor' : 'depende de «' + c.predecesor + '»' + (c.predecesor_orden ? ' (' + c.predecesor_orden + ')' : '')}`
-      : `${c.lista}: «${c.paso}» → ${c.decimal} decimales`).join('\n');
+    const cambios = (s.cambios || []).map((c) => {
+      const paso = [c.paso && '«' + c.paso + '»', c.orden_paso && '#' + c.orden_paso].filter(Boolean).join(' ');
+      if (c.accion === 'cambiar_predecesor') {
+        const pred = [c.predecesor && '«' + c.predecesor + '»', c.predecesor_orden && '#' + c.predecesor_orden].filter(Boolean).join(' ');
+        return `${c.lista}: paso ${paso} → ${c.sin_predecesor ? 'sin predecesor' : 'depende de ' + pred + (c.predecesor_lista ? ' (' + c.predecesor_lista + ')' : '')}`;
+      }
+      return `${c.lista}: paso ${paso} → ${c.decimal} decimales`;
+    }).join('\n');
     d.innerHTML = `<h3></h3><div class="tenue"></div><pre class="det"></pre><pre class="cam"></pre><pre class="res"></pre>
       <div class="fila"><input class="resp" placeholder="Responder a la persona" style="flex:1;min-width:200px"><button class="btn enviarResp">Responder</button>
       ${s.automatica && ['nueva', 'revisar'].includes(s.estado) ? '<button class="btn primario aprobar">Aprobar y aplicar</button>' : ''}
       ${['nueva', 'revisar'].includes(s.estado) ? '<button class="btn resolver">Marcar resuelta</button><button class="btn rechazar">Rechazar</button>' : ''}</div>`;
     d.querySelector('h3').textContent = `#${s.id} ${s.resumen || ''}`;
     const est = document.createElement('span'); est.className = 'estado ' + s.estado; est.textContent = s.estado; d.querySelector('h3').appendChild(est);
-    d.querySelector('.tenue').textContent = `${fecha} · ${quien} · ${s.canal}${s.prioridad === 'alta' ? ' · PRIORIDAD ALTA' : ''}${s.rmd ? ' · RMD ' + s.rmd : ''}${s.op_lote ? ' · OP/lote ' + s.op_lote : ''}`;
+    d.querySelector('.tenue').textContent = `${fecha} · ${quien} · ${s.canal}${s.prioridad === 'alta' ? ' · PRIORIDAD ALTA' : ''}${s.material ? ' · Material ' + s.material + (s.etapa ? ' ' + s.etapa : '') : ''}${s.rmd ? ' · RMD ' + s.rmd : ''}${s.op_lote ? ' · Lote ' + s.op_lote : ''}`;
     d.querySelector('.det').textContent = s.detalle || '';
     d.querySelector('.cam').textContent = cambios ? 'Cambios para aplicar solo:\n' + cambios : '';
     d.querySelector('.res').textContent = [s.resultado && 'Resultado: ' + s.resultado, s.respuesta_analista && 'Respuesta: ' + s.respuesta_analista].filter(Boolean).join('\n');

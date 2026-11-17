@@ -3,6 +3,7 @@
 import assert from 'node:assert/strict';
 import { instalar, tablas, enviados } from './simulado.mjs';
 
+process.env.CHATBOT_MOTOR = 'claude'; // esta prueba es la del motor opcional con Claude; la del guiado: probar_guiado.mjs
 process.env.CHATBOT_CLAVE_ANALISTA = 'clave-analista';
 process.env.CHATBOT_WHATSAPP_ANALISTA = '51999000111';
 process.env.WHATSAPP_TOKEN = 'tok'; process.env.WHATSAPP_PHONE_NUMBER_ID = '123';

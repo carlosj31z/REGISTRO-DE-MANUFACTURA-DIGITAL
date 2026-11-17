@@ -77,7 +77,8 @@ create table if not exists public.chatbot_solicitudes (
   tipo text,                  -- cambio | consulta | incidencia
   prioridad text default 'normal',
   resumen text,
-  rmd text,
+  rmd text,                   -- lo completa el ejecutor si se pidió por material + etapa
+  material text,              -- código del material (el bot guiado no pide el RMD)
   producto text,
   etapa text,
   planta text,
@@ -95,6 +96,7 @@ create table if not exists public.chatbot_solicitudes (
   resultado text,
   conversacion text
 );
+alter table public.chatbot_solicitudes add column if not exists material text;
 create index if not exists chatbot_solicitudes_estado on public.chatbot_solicitudes (estado);
 create index if not exists chatbot_solicitudes_contacto on public.chatbot_solicitudes (contacto);
 

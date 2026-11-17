@@ -1,6 +1,7 @@
 // API del asistente de configuraciones para el chat web (/chatbot/) y la bandeja del analista.
 // POST JSON { accion, ... }. Variables de entorno: ver chatbot/LEEME.md.
-import { atender, reiniciarConversacion, MODO } from './_chatbot/nucleo.js';
+import { atender, reiniciarConversacion, motorListo, MOTOR } from './_chatbot/motor.js';
+import { MODO } from './_chatbot/solicitudes.js';
 import { sb, enc } from './_chatbot/supabase.js';
 import { despertarEjecutor, enviarWhatsApp, notificarResultado, whatsappListo } from './_chatbot/avisos.js';
 
@@ -28,7 +29,8 @@ export default async function handler(req, res) {
           modo: MODO,
           whatsapp: whatsappListo(),
           requiereClave: Boolean(process.env.CHATBOT_CLAVE),
-          listo: Boolean(process.env.ANTHROPIC_API_KEY),
+          listo: motorListo(),
+          motor: MOTOR,
         });
 
       case 'mensaje': {

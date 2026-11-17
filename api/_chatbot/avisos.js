@@ -37,12 +37,14 @@ export async function despertarEjecutor() {
   return r.ok;
 }
 
-function lineaCambio(c) {
+export function lineaCambio(c) {
+  const paso = [c.paso && `«${c.paso}»`, c.orden_paso && `#${c.orden_paso}`].filter(Boolean).join(' ');
   if (c.accion === 'cambiar_predecesor') {
-    const destino = c.sin_predecesor ? 'sin predecesor' : `depende de «${c.predecesor}»${c.predecesor_orden ? ` (${c.predecesor_orden})` : ''}`;
-    return `- ${c.lista}: «${c.paso}»${c.orden_paso ? ` (#${c.orden_paso})` : ''} → ${destino}`;
+    const pred = [c.predecesor && `«${c.predecesor}»`, c.predecesor_orden && `#${c.predecesor_orden}`].filter(Boolean).join(' ');
+    const destino = c.sin_predecesor ? 'sin predecesor' : `depende de ${pred}${c.predecesor_lista ? ` (${c.predecesor_lista})` : ''}`;
+    return `- ${c.lista}: paso ${paso} → ${destino}`;
   }
-  if (c.accion === 'configurar_decimal') return `- ${c.lista}: «${c.paso}» → ${c.decimal} decimales`;
+  if (c.accion === 'configurar_decimal') return `- ${c.lista}: paso ${paso} → ${c.decimal} decimales`;
   return `- ${JSON.stringify(c)}`;
 }
 
@@ -51,8 +53,9 @@ export function resumenSolicitud(s) {
   const lineas = [
     `Solicitud #${s.id} (${s.tipo}${s.prioridad === 'alta' ? ', PRIORIDAD ALTA' : ''}) de ${quien}`,
     s.resumen,
-    s.rmd ? `RMD ${s.rmd}` : [s.producto, s.etapa, s.planta].filter(Boolean).join(' · '),
-    s.op_lote ? `OP/lote: ${s.op_lote}` : '',
+    s.rmd ? `RMD ${s.rmd}` : '',
+    [s.material && `Material ${s.material}`, s.producto, s.etapa, s.planta].filter(Boolean).join(' · '),
+    s.op_lote ? `Lote: ${s.op_lote}` : '',
     ...(s.cambios || []).map(lineaCambio),
     s.detalle ? `Detalle: ${s.detalle}` : '',
   ];
