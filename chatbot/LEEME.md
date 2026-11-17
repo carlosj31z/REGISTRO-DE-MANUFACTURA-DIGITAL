@@ -5,7 +5,7 @@ IA y gratis** (decisión de Carlos, 2026-11-16): menús numerados y opciones cer
 cordial y sin emojis, y entiende saludos y pedidos escritos con palabras comunes («PDF master del lote L2611A») por
 palabras clave (2026-11-17).
 
-Menú: 1 habilitar un paso · 2 decimales · 3 plantilla para Producción · 4 PDF del master · 5 estado de un RMD (última
+Menú (en plantilla y PDF se pide primero material + etapa; el lote es la segunda opción): 1 habilitar un paso · 2 decimales · 3 plantilla para Producción · 4 PDF del master · 5 estado de un RMD (última
 versión y vigente) · 6 consulta para el analista · 7 mis solicitudes · 8 preguntas frecuentes. Las opciones 3 a 5 son de
 solo lectura: el ejecutor arma el archivo en SAP, lo sube al bucket privado `chatbot-archivos` de Supabase y responde con
 un enlace firmado de 7 días. Solo se escribe el

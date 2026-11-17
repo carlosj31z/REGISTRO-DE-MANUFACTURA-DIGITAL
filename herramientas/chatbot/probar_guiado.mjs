@@ -68,8 +68,9 @@ assert.equal(s3.estado, 'nueva'); assert.equal(s3.tipo, 'consulta'); assert.equa
 r = await decir('7'); assert.match(r.texto, /#3/);  // desde el menú: ver mis solicitudes
 
 // Menú 3/4/5: plantilla, PDF del master y estado (con el lote basta; se registran sin confirmar)
-await decir('0'); r = await decir('3'); assert.match(r.texto, /plantilla para Producción.*\n\n¿Tiene el número de lote/s);
-r = await decir('L2611A'); assert.match(r.texto, /Registré su solicitud #4.*enlace de descarga/s);  // el lote escrito directo
+await decir('0'); r = await decir('3'); assert.match(r.texto, /plantilla para Producción.*\n\n¿Cómo ubico el RMD\?\n1\. Con el código del material/s);
+r = await decir('2'); assert.match(r.texto, /número de lote/);
+r = await decir('L2611A'); assert.match(r.texto, /Registré su solicitud #4.*enlace de descarga/s);
 let x = tablas.chatbot_solicitudes[3];
 assert.equal(x.tipo, 'documento'); assert.equal(x.estado, 'lista'); assert.deepEqual(x.cambios[0].accion, 'plantilla');
 await decir('0'); await decir('5'); await decir('2'); await decir('3000123'); r = await decir('1');
@@ -77,13 +78,18 @@ assert.match(r.texto, /Lo consulto en SAP/);
 x = tablas.chatbot_solicitudes[4];
 assert.equal(x.tipo, 'estado'); assert.equal(x.material, '3000123'); assert.equal(x.etapa, 'FABRICACION'); assert.equal(x.cambios[0].accion, 'estado_rmd');
 
+// PDF: primero material + etapa
+await decir('0'); await decir('4'); r = await decir('1'); assert.match(r.texto, /código del material/);
+r = await decir('3000123'); r = await decir('3'); assert.match(r.texto, /enlace de descarga/);
+assert.equal(tablas.chatbot_solicitudes.at(-1).etapa, 'ACONDICIONADO'); assert.equal(tablas.chatbot_solicitudes.at(-1).cambios[0].accion, 'pdf_master');
+
 // Texto libre con saludo: «hola, necesito el pdf master del lote …» va directo
 r = await decir('Hola, buenas tardes. Necesito el PDF master del lote L2611B por favor');
-assert.match(r.texto, /Registré su solicitud #6/);
-x = tablas.chatbot_solicitudes[5];
+assert.match(r.texto, /Registré su solicitud #7/);
+x = tablas.chatbot_solicitudes[6];
 assert.equal(x.tipo, 'documento'); assert.equal(x.cambios[0].accion, 'pdf_master'); assert.equal(x.op_lote, 'L2611B');
 r = await decir('quisiera saber el estado del material 3000123 envase');
-assert.match(r.texto, /Registré su solicitud #7/); assert.equal(tablas.chatbot_solicitudes[6].etapa, 'ENVASE');
+assert.match(r.texto, /Registré su solicitud #8/); assert.equal(tablas.chatbot_solicitudes[7].etapa, 'ENVASE');
 r = await decir('me pueden habilitar un paso'); assert.match(r.texto, /Con gusto le ayudo a habilitar un paso/);
 r = await decir('gracias'); assert.match(r.texto, /Con mucho gusto/);
 r = await decir('blablabla'); assert.match(r.texto, /Disculpe, no le entendí/);
