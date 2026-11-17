@@ -57,10 +57,12 @@ export async function registrarSolicitud(input, quien, conversacion = '') {
   // El ejecutor puede atenderlo solo si es un cambio completo (habilitar paso / decimales) o un pedido de lectura.
   const tipoOk = (c) => (ACCIONES_LECTURA[c.accion] ? input.tipo === ACCIONES_LECTURA[c.accion] : input.tipo === 'cambio');
   const automatica = ubicable && cambios.length > 0 && cambios.every((c) => cambioCompleto(c) && tipoOk(c));
-  // Va directo al ejecutor solo si viene de un origen identificado (o es la consulta de estado, que no escribe ni
-  // entrega documentos). Lo demás queda para que el analista lo apruebe. CHATBOT_MODO=aprobacion frena los cambios.
-  const soloEstado = input.tipo === 'estado';
-  const estado = automatica && (soloEstado || (MODO === 'automatico' && origenConfiable(quien))) ? 'lista' : 'nueva';
+  // Va directo al ejecutor si viene de un origen identificado (clave o número permitido), si es la consulta de estado,
+  // o si es la plantilla / el PDF del master pedido con el lote (pedido de Carlos, 2026-11-17: que salga sin que nadie
+  // lo apruebe; el ejecutor solo lo entrega si el lote está en «Ver OP»). Los cambios en SAP sin clave los aprueba el
+  // analista. CHATBOT_MODO=aprobacion frena los cambios.
+  const soloLectura = input.tipo === 'estado' || (input.tipo === 'documento' && Boolean(String(input.op_lote || '').trim()));
+  const estado = automatica && (soloLectura || (MODO === 'automatico' && origenConfiable(quien))) ? 'lista' : 'nueva';
   const fila = {
     canal: quien.canal,
     contacto: quien.contacto,

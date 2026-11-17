@@ -21,8 +21,9 @@ RMD**: el ejecutor lo ubica por el lote en «Ver OP» (`/RMD`, `lote`) o, sin lo
 **Chat estilo WhatsApp**: `/chatbot/whatsapp.html` (mismo motor; las opciones numeradas salen como botones; el resultado de
 cada solicitud aparece en el chat cuando el ejecutor termina).
 
-**Clave**: el chat funciona sin clave. Sin ella, los cambios y los documentos esperan la aprobación del analista (el estado
-del RMD se responde solo). Para que vayan directo, se reparte el enlace `https://status-rmd.vercel.app/chatbot/whatsapp.html#clave=<CHATBOT_CLAVE>`:
+**Clave**: el chat funciona sin clave. Sin ella, el estado del RMD y la plantilla / PDF del master pedidos **con el lote**
+salen solos (el ejecutor solo los entrega si el lote está en «Ver OP»); los cambios en SAP y los documentos pedidos solo con
+material + etapa esperan la aprobación del analista. Para que vayan directo, se reparte el enlace `https://status-rmd.vercel.app/chatbot/whatsapp.html#clave=<CHATBOT_CLAVE>`:
 la clave queda guardada en ese equipo y se quita de la barra de direcciones. En WhatsApp manda la lista
 `CHATBOT_WHATSAPP_PERMITIDOS`.
 
