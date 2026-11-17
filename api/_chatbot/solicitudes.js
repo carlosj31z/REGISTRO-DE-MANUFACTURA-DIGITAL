@@ -6,9 +6,12 @@ import { alRegistrar } from './avisos.js';
 // aprobacion: todo espera a que el analista lo apruebe en la bandeja o por WhatsApp.
 export const MODO = (process.env.CHATBOT_MODO || 'automatico').toLowerCase();
 export const ACCIONES_AUTOMATICAS = ['cambiar_predecesor', 'configurar_decimal'];
+// Pedidos de solo lectura que el ejecutor atiende en SAP (no escriben nada): estado del RMD, plantilla y PDF del master.
+export const ACCIONES_LECTURA = { estado_rmd: 'estado', plantilla: 'documento', pdf_master: 'documento' };
 
 // ---------- validación de cambios: decide si el ejecutor puede aplicarlos solo ----------
 export function cambioCompleto(c) {
+  if (c && ACCIONES_LECTURA[c.accion]) return true;
   // El paso se identifica por su texto o por su orden; el predecesor, por texto u orden (bot guiado: solo números).
   if (!c || !ACCIONES_AUTOMATICAS.includes(c.accion) || !c.lista || !(c.paso || Number.isInteger(c.orden_paso))) return false;
   if (c.accion === 'cambiar_predecesor') return Boolean(c.sin_predecesor) !== Boolean(c.predecesor || Number.isInteger(c.predecesor_orden));
@@ -34,8 +37,10 @@ export function limpiarCambios(lista) {
 
 const soloDigitos = (x) => String(x || '').replace(/\D/g, '');
 
+// Origen identificado: el chat web abierto con la clave (enlace con la clave adentro o clave recordada en el equipo) o
+// un número de WhatsApp de la lista. Sin clave el chat funciona, pero los cambios y los documentos los aprueba el analista.
 export function origenConfiable(quien) {
-  if (quien.canal === 'web') return Boolean(process.env.CHATBOT_CLAVE);
+  if (quien.canal === 'web') return quien.confiable === true;
   if (quien.canal === 'whatsapp') {
     const lista = (process.env.CHATBOT_WHATSAPP_PERMITIDOS || '').split(',').map(soloDigitos).filter(Boolean);
     return lista.includes(soloDigitos(String(quien.contacto).replace(/^wa:/, '')));
@@ -49,10 +54,13 @@ export async function registrarSolicitud(input, quien, conversacion = '') {
   // El RMD se identifica por su código, por el lote (el ejecutor lo busca en «Ver OP») o por material + etapa.
   const material = String(input.material || '').trim().toUpperCase();
   const ubicable = rmdOk || Boolean(material && input.etapa) || Boolean(String(input.op_lote || '').trim());
-  // Solo se aplica solo lo que viene de un origen identificado: el chat web con clave (CHATBOT_CLAVE) o un número de
-  // WhatsApp de la lista CHATBOT_WHATSAPP_PERMITIDOS. Lo demás queda para que el analista lo apruebe.
-  const automatica = input.tipo === 'cambio' && ubicable && cambios.length > 0 && cambios.every(cambioCompleto) && origenConfiable(quien);
-  const estado = automatica && MODO === 'automatico' ? 'lista' : 'nueva';
+  // El ejecutor puede atenderlo solo si es un cambio completo (habilitar paso / decimales) o un pedido de lectura.
+  const tipoOk = (c) => (ACCIONES_LECTURA[c.accion] ? input.tipo === ACCIONES_LECTURA[c.accion] : input.tipo === 'cambio');
+  const automatica = ubicable && cambios.length > 0 && cambios.every((c) => cambioCompleto(c) && tipoOk(c));
+  // Va directo al ejecutor solo si viene de un origen identificado (o es la consulta de estado, que no escribe ni
+  // entrega documentos). Lo demás queda para que el analista lo apruebe. CHATBOT_MODO=aprobacion frena los cambios.
+  const soloEstado = input.tipo === 'estado';
+  const estado = automatica && (soloEstado || (MODO === 'automatico' && origenConfiable(quien))) ? 'lista' : 'nueva';
   const fila = {
     canal: quien.canal,
     contacto: quien.contacto,

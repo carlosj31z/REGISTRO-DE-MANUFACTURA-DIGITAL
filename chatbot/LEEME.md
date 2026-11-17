@@ -1,7 +1,14 @@
 # Asistente de configuraciones RMD (chatbot)
 
 Atiende a Producción y Calidad en Operaciones (WhatsApp o el chat web `/chatbot/`). **Por defecto es un bot guiado, sin
-IA y gratis** (decisión de Carlos, 2026-11-16): menús numerados y opciones cerradas en cada paso. Solo se escribe el
+IA y gratis** (decisión de Carlos, 2026-11-16): menús numerados y opciones cerradas en cada paso. Trata de usted, con tono
+cordial y sin emojis, y entiende saludos y pedidos escritos con palabras comunes («PDF master del lote L2611A») por
+palabras clave (2026-11-17).
+
+Menú: 1 habilitar un paso · 2 decimales · 3 plantilla para Producción · 4 PDF del master · 5 estado de un RMD (última
+versión y vigente) · 6 consulta para el analista · 7 mis solicitudes · 8 preguntas frecuentes. Las opciones 3 a 5 son de
+solo lectura: el ejecutor arma el archivo en SAP, lo sube al bucket privado `chatbot-archivos` de Supabase y responde con
+un enlace firmado de 7 días. Solo se escribe el
 código del material, el lote, números de orden y, en consultas, una descripción. Los cambios que entiende con seguridad
 se aplican solos en SAP con la cuenta del analista; lo demás le llega al analista.
 
@@ -11,8 +18,13 @@ sin predecesor) → orden → confirmar. Decimales: igual hasta el orden, luego 
 RMD**: el ejecutor lo ubica por el lote en «Ver OP» (`/RMD`, `lote`) o, sin lote, por material + etapa (entidad MD,
 `codDefectoReceta` + `nivelTxt`, última versión Autorizada). Si no lo puede ubicar sin dudas, la solicitud pasa al analista.
 
-**Chat estilo WhatsApp**: `/chatbot/whatsapp.html` (mismo motor; las opciones numeradas salen como botones, la clave y el
-contacto se piden una sola vez y quedan en el navegador).
+**Chat estilo WhatsApp**: `/chatbot/whatsapp.html` (mismo motor; las opciones numeradas salen como botones; el resultado de
+cada solicitud aparece en el chat cuando el ejecutor termina).
+
+**Clave**: el chat funciona sin clave. Sin ella, los cambios y los documentos esperan la aprobación del analista (el estado
+del RMD se responde solo). Para que vayan directo, se reparte el enlace `https://status-rmd.vercel.app/chatbot/whatsapp.html#clave=<CHATBOT_CLAVE>`:
+la clave queda guardada en ese equipo y se quita de la barra de direcciones. En WhatsApp manda la lista
+`CHATBOT_WHATSAPP_PERMITIDOS`.
 
 ```
 Producción ──WhatsApp──► api/whatsapp.js ─┐

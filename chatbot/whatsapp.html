@@ -59,16 +59,10 @@
   footer { background: var(--pie); padding: 8px 10px; padding-bottom: max(8px, env(safe-area-inset-bottom)); display: flex; gap: 8px; align-items: flex-end; }
   footer textarea { flex: 1; resize: none; border: 0; border-radius: 22px; padding: 11px 16px; font: inherit; max-height: 120px;
     background: var(--entrada); color: var(--texto); outline: none; min-height: 44px; }
-  footer button { width: 46px; height: 46px; border-radius: 50%; border: 0; background: #00a884; color: #fff; font: inherit;
+  footer button { min-width: 46px; padding: 0 16px; height: 46px; border-radius: 23px; border: 0; background: #00a884; color: #fff; font: inherit;
     font-weight: 600; font-size: 13px; cursor: pointer; flex: none; }
   footer button:disabled { opacity: .5; }
-  #acceso { position: fixed; inset: 0; background: rgba(11,20,26,.55); display: grid; place-items: center; padding: 16px; z-index: 5; }
-  #acceso form { background: var(--suyo); color: var(--texto); border-radius: 12px; padding: 20px; width: min(100%, 360px); display: flex; flex-direction: column; gap: 12px; }
-  #acceso h2 { margin: 0; font-size: 17px; }
-  #acceso p { margin: 0; color: var(--tenue); font-size: 14px; }
-  #acceso input { padding: 11px 12px; border-radius: 8px; border: 1px solid var(--borde); background: var(--entrada); color: var(--texto); font: inherit; }
-  #acceso button { padding: 11px; border-radius: 8px; border: 0; background: #00a884; color: #fff; font: inherit; font-weight: 600; cursor: pointer; }
-  #acceso .error { color: #d93025; font-size: 13.5px; min-height: 1em; }
+  .msg a { color: #027eb5; font-weight: 600; text-decoration: underline; }
   .oculto { display: none !important; }
 </style>
 </head>
@@ -89,15 +83,6 @@
   <button id="enviar" aria-label="Enviar">Enviar</button>
 </footer>
 
-<div id="acceso" class="oculto">
-  <form id="formAcceso">
-    <h2>Asistente RMD</h2>
-    <p>Escribe la clave que te dio Documentación Técnica. Solo se pide una vez en este equipo.</p>
-    <input id="clave" type="password" autocomplete="current-password" placeholder="Clave">
-    <div class="error" id="errorClave"></div>
-    <button type="submit">Entrar</button>
-  </form>
-</div>
 
 <script>
 (() => {
@@ -110,7 +95,11 @@
     contacto = 'web:' + (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2));
     guardar('chatbotContacto', contacto);
   }
+  // Sin clave el chat funciona (los cambios y documentos los aprueba el analista). El enlace que entrega Documentación
+  // Técnica trae la clave en el ancla (#clave=…): se guarda en este equipo y se quita de la barra de direcciones.
   let clave = leer('chatbotClave');
+  const enlace = new URLSearchParams(location.hash.slice(1)).get('clave');
+  if (enlace) { clave = enlace.trim(); guardar('chatbotClave', clave); history.replaceState(null, '', location.pathname + location.search); }
 
   async function api(cuerpo) {
     const h = { 'Content-Type': 'application/json' };
@@ -133,15 +122,22 @@
       if (m) opciones.push({ valor: m[1], texto: m[2].trim() });
       else cuerpo.push(linea);
     }
-    // Solo se vuelven botones si son opciones de verdad (al menos una distinta de 0).
-    if (!opciones.some((o) => o.valor !== '0')) return { cuerpo: String(texto), opciones: [] };
+    if (!opciones.length) return { cuerpo: String(texto), opciones: [] };
     return { cuerpo: cuerpo.join('\n').replace(/\n{3,}/g, '\n\n').trim(), opciones };
+  }
+
+  // Texto con enlaces (las descargas de la plantilla y del PDF llegan como enlace).
+  function conEnlaces(nodo, texto) {
+    String(texto).split(/(https:\/\/[^\s]+)/).forEach((parte, i) => {
+      if (i % 2) { const a = document.createElement('a'); a.href = parte; a.target = '_blank'; a.rel = 'noopener'; a.textContent = 'Descargar'; nodo.append(a); }
+      else nodo.append(document.createTextNode(parte));
+    });
   }
 
   function burbuja(texto, quien, extra, h = hora()) {
     const d = document.createElement('div');
     d.className = 'msg ' + quien;
-    d.append(document.createTextNode(texto));
+    conEnlaces(d, texto);
     if (extra) { const s = document.createElement('span'); s.className = 'sol'; s.textContent = extra; d.append(s); }
     const t = document.createElement('span'); t.className = 'hora'; t.textContent = h; d.append(t);
     lista.append(d); bajar();
@@ -183,25 +179,36 @@
       const r = await api({ accion: 'mensaje', contacto, texto: valor });
       esc.remove();
       const extra = (r.solicitudes || []).map((s) => `Solicitud #${s.id}`).join(' · ');
+      (r.solicitudes || []).forEach((s) => { if (!pendientes.includes(s.id)) pendientes.push(s.id); });
+      guardarPendientes(); vigilar();
       mostrarBot(r.texto, extra); visibles.push({ q: 'bot', t: r.texto, x: extra, h: hora() }); recordar();
     } catch (e) {
       esc.remove();
-      if (e.status === 401) { pedirClave('La clave no es correcta.'); }
-      else burbuja('No se pudo enviar: ' + e.message, 'bot');
+      burbuja('No se pudo enviar: ' + e.message, 'bot');
     } finally {
       ocupado = false; $('enviar').disabled = false; $('estado').textContent = 'Documentación Técnica';
     }
   }
 
-  function pedirClave(error = '') {
-    $('errorClave').textContent = error; $('acceso').classList.remove('oculto'); $('clave').focus();
+  // Resultado de las solicitudes de este equipo: se consulta cada 20 s mientras haya alguna en curso.
+  let pendientes = [];
+  try { pendientes = JSON.parse(leer('chatbotWaPendientes', '[]')).filter(Number.isInteger); } catch {}
+  const guardarPendientes = () => guardar('chatbotWaPendientes', JSON.stringify(pendientes.slice(-20)));
+  let reloj = null;
+  async function revisar() {
+    if (!pendientes.length) { clearInterval(reloj); reloj = null; return; }
+    try {
+      const { solicitudes } = await api({ accion: 'mis_solicitudes', contacto });
+      for (const s of solicitudes || []) {
+        if (!pendientes.includes(s.id)) continue;
+        const texto = s.aviso || (s.respuesta_analista ? `Solicitud #${s.id}. Respuesta del analista: ${s.respuesta_analista}` : '');
+        if (!texto) continue;
+        pendientes = pendientes.filter((x) => x !== s.id); guardarPendientes();
+        burbuja(texto, 'bot'); visibles.push({ q: 'bot', t: texto, h: hora() }); recordar();
+      }
+    } catch {}
   }
-  $('formAcceso').onsubmit = (ev) => {
-    ev.preventDefault();
-    clave = $('clave').value.trim(); guardar('chatbotClave', clave);
-    $('acceso').classList.add('oculto');
-    if (!visibles.length) enviar('hola', 'Hola');
-  };
+  function vigilar() { if (!reloj && pendientes.length) reloj = setInterval(revisar, 20000); }
 
   $('enviar').onclick = () => { const t = $('texto').value.trim(); if (!t) return; $('texto').value = ''; ajustar(); enviar(t); };
   $('texto').addEventListener('keydown', (ev) => { if (ev.key === 'Enter' && !ev.shiftKey) { ev.preventDefault(); $('enviar').click(); } });
@@ -214,10 +221,8 @@
     enviar('hola', 'Hola');
   };
 
-  api({ accion: 'estado' }).then((e) => {
-    if (e.requiereClave && !clave) return pedirClave();
-    if (!visibles.length) enviar('hola', 'Hola');
-  }).catch(() => burbuja('No se pudo contactar al asistente. Intenta en un momento.', 'bot'));
+  if (!visibles.length) enviar('hola', 'Hola');
+  if (pendientes.length) { revisar(); vigilar(); }
 })();
 </script>
 </body>
