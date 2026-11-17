@@ -95,3 +95,7 @@ y subir el cambio. Las conversaciones en curso se reinician solas con un resumen
   `node herramientas/chatbot/probar.mjs` (el motor opcional con Claude, guionado).
 - `node herramientas/chatbot/servidor_local.mjs --simulado` y abrir `http://localhost:3000/chatbot/` (bandeja: clave `analista`).
 - Sin `--simulado` usa las claves reales de las variables de entorno.
+
+**Enlace directo a la bandeja (2026-11-17, pedido de Carlos)**: `/chatbot/index.html#analista=<clave>` abre la «Bandeja del
+analista», guarda la clave en ese equipo y la quita de la barra de direcciones; luego basta `/chatbot/index.html#bandeja`. El
+botón «Copiar enlace directo» de la bandeja lo arma (lleva la clave: no compartirlo). La bandeja muestra el `resultado` del ejecutor.
