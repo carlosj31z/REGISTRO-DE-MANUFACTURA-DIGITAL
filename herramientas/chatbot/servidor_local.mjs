@@ -1,6 +1,6 @@
 // Servidor local para probar el chat web sin Vercel:  node herramientas/chatbot/servidor_local.mjs [--simulado] [--puerto 3000]
 // Con --simulado no hace falta ninguna clave (Supabase en memoria y respuestas guionadas). Sin él usa las variables de
-// entorno reales (ANTHROPIC_API_KEY, SUPABASE_ANON_KEY, …). Abre http://localhost:3000/chatbot/
+// entorno reales (ANTHROPIC_API_KEY, SUPABASE_SERVICE_ROLE_KEY, …). Abre http://localhost:3000/chatbot/
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';

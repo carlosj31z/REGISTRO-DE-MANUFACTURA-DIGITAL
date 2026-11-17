@@ -5,6 +5,8 @@ import { instalar, tablas, enviados } from './simulado.mjs';
 
 process.env.CHATBOT_MOTOR = 'claude'; // esta prueba es la del motor opcional con Claude; la del guiado: probar_guiado.mjs
 process.env.CHATBOT_CLAVE_ANALISTA = 'clave-analista';
+process.env.CHATBOT_CLAVE = 'clave-web';
+process.env.CHATBOT_WHATSAPP_PERMITIDOS = '51911222333';
 process.env.CHATBOT_WHATSAPP_ANALISTA = '51999000111';
 process.env.WHATSAPP_TOKEN = 'tok'; process.env.WHATSAPP_PHONE_NUMBER_ID = '123';
 process.env.GITHUB_DISPATCH_TOKEN = 'gh';
@@ -21,7 +23,7 @@ function llamar(handler, { method = 'POST', body, headers = {}, query } = {}) {
   });
 }
 const contacto = 'web:prueba-0001';
-const decir = (texto) => llamar(chatbot, { body: { accion: 'mensaje', contacto, nombre: 'Ana', area: 'Producción', texto } });
+const decir = (texto) => llamar(chatbot, { body: { accion: 'mensaje', contacto, nombre: 'Ana', area: 'Producción', texto }, headers: { 'x-clave': 'clave-web' } });
 
 let r = await decir('necesito que habiliten el paso de tamizado del RMD 2202609013, la OP 2100033070 está parada');
 assert.equal(r.status, 200); assert.match(r.body.texto, /Habilitar el paso/);

@@ -40,9 +40,9 @@ Analista ◄──WhatsApp / bandeja web────────┘        └�
 
    | Variable | Para qué |
    |---|---|
-   | `SUPABASE_ANON_KEY` | La clave pública de Supabase que ya usa index.html. Obligatoria. |
+   | `SUPABASE_SERVICE_ROLE_KEY` | Clave **service_role** de Supabase (Project Settings → API). Obligatoria. Es secreta: solo aquí y en GitHub, nunca en la página. Las tablas del chatbot no aceptan la clave pública. |
    | `CHATBOT_CLAVE_ANALISTA` | Clave para la bandeja del analista y para que el ejecutor avise resultados. Obligatoria. |
-   | `CHATBOT_CLAVE` | Opcional: clave para usar el chat web (si no se pone, el chat web queda abierto). |
+   | `CHATBOT_CLAVE` | Clave para usar el chat web. Sin ella, lo que llegue por la web nunca se aplica solo (queda para el analista). |
    | `CHATBOT_MODO` | `automatico` (por defecto) o `aprobacion`. |
    | `CHATBOT_MOTOR` | `guiado` (por defecto, gratis) o `claude` (texto libre con IA: necesita `ANTHROPIC_API_KEY`, de pago). |
    | `ANTHROPIC_API_KEY`, `CHATBOT_MODELO`, `CHATBOT_ESFUERZO` | Solo con `CHATBOT_MOTOR=claude`. Modelo por defecto `claude-haiku-5-5`. |
@@ -51,10 +51,10 @@ Analista ◄──WhatsApp / bandeja web────────┘        └�
    | `WHATSAPP_VERIFY_TOKEN` | Texto que inventas y repites en Meta al registrar el webhook. |
    | `WHATSAPP_APP_SECRET` | App Secret de la app de Meta (verifica que los mensajes vengan de Meta). |
    | `CHATBOT_WHATSAPP_ANALISTA` | Número del analista con código de país, solo dígitos (p. ej. 51999888777). |
-   | `CHATBOT_WHATSAPP_PERMITIDOS` | Opcional: números permitidos separados por comas (si no, cualquiera que escriba). |
+   | `CHATBOT_WHATSAPP_PERMITIDOS` | Números permitidos separados por comas. Solo las solicitudes de estos números se aplican solas. |
 
 3. **GitHub** (repo AUTOMATIZACION-DE-RMD) → Settings → Secrets and variables → Actions: `RMD_USERNAME` y
-   `RMD_PASSWORD` (cuenta del analista en el portal), `SUPABASE_ANON_KEY`, `CHATBOT_URL` (`https://status-rmd.vercel.app`)
+   `RMD_PASSWORD` (cuenta del analista en el portal), `SUPABASE_SERVICE_ROLE_KEY`, `CHATBOT_URL` (`https://status-rmd.vercel.app`)
    y `CHATBOT_CLAVE_ANALISTA`. Luego Actions → «Atender solicitudes del chatbot» → Run workflow con «Solo probar el inicio
    de sesión» marcado: si dice `#login → ok`, el ejecutor ya puede entrar a SAP desde la nube.
 4. **WhatsApp**: en Meta for Developers, webhook = `https://status-rmd.vercel.app/api/whatsapp`, token de verificación =

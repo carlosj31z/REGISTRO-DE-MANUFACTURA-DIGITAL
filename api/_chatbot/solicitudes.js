@@ -32,13 +32,26 @@ export function limpiarCambios(lista) {
   });
 }
 
+const soloDigitos = (x) => String(x || '').replace(/\D/g, '');
+
+export function origenConfiable(quien) {
+  if (quien.canal === 'web') return Boolean(process.env.CHATBOT_CLAVE);
+  if (quien.canal === 'whatsapp') {
+    const lista = (process.env.CHATBOT_WHATSAPP_PERMITIDOS || '').split(',').map(soloDigitos).filter(Boolean);
+    return lista.includes(soloDigitos(String(quien.contacto).replace(/^wa:/, '')));
+  }
+  return false;
+}
+
 export async function registrarSolicitud(input, quien, conversacion = '') {
   const cambios = limpiarCambios(input.cambios);
   const rmdOk = /^\d{10}$/.test(String(input.rmd || '').trim());
   // El RMD se identifica por su código o por material + etapa (el ejecutor lo ubica y confirma el lote en «Ver OP»).
   const material = String(input.material || '').trim().toUpperCase();
   const ubicable = rmdOk || Boolean(material && input.etapa);
-  const automatica = input.tipo === 'cambio' && ubicable && cambios.length > 0 && cambios.every(cambioCompleto);
+  // Solo se aplica solo lo que viene de un origen identificado: el chat web con clave (CHATBOT_CLAVE) o un número de
+  // WhatsApp de la lista CHATBOT_WHATSAPP_PERMITIDOS. Lo demás queda para que el analista lo apruebe.
+  const automatica = input.tipo === 'cambio' && ubicable && cambios.length > 0 && cambios.every(cambioCompleto) && origenConfiable(quien);
   const estado = automatica && MODO === 'automatico' ? 'lista' : 'nueva';
   const fila = {
     canal: quien.canal,

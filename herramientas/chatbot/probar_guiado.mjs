@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import { instalar, tablas, enviados } from './simulado.mjs';
 
 delete process.env.CHATBOT_MOTOR; // por defecto: guiado
+process.env.CHATBOT_CLAVE = 'clave-web'; // solo el chat web con clave aplica solo
 process.env.CHATBOT_WHATSAPP_ANALISTA = '51999000111';
 process.env.WHATSAPP_TOKEN = 'tok'; process.env.WHATSAPP_PHONE_NUMBER_ID = '123';
 process.env.GITHUB_DISPATCH_TOKEN = 'gh';
@@ -13,7 +14,7 @@ const { default: chatbot } = await import('../../api/chatbot.js');
 function llamar(body) {
   return new Promise((ok) => {
     const res = { statusCode: 200, status(c) { this.statusCode = c; return this; }, json(d) { ok({ status: this.statusCode, body: d }); return this; } };
-    chatbot({ method: 'POST', body, headers: {} }, res);
+    chatbot({ method: 'POST', body, headers: { 'x-clave': 'clave-web' } }, res);
   });
 }
 const contacto = 'web:guiado-0001';
@@ -62,5 +63,10 @@ await decir('el boton de guardar no responde en la etiqueta envase');
 const s3 = tablas.chatbot_solicitudes[2];
 assert.equal(s3.estado, 'nueva'); assert.equal(s3.tipo, 'consulta'); assert.equal(s3.automatica, false);
 
-r = await decir('4'); assert.match(r.texto, /#3/);  // desde el menú: ver mis solicitudes
+r = await decir('4'); assert.match(r.texto, /#3/);
+
+// Sin clave del chat web, nada se aplica solo (queda para el analista)
+delete process.env.CHATBOT_CLAVE;
+for (const t of ['0', '2', '3000123', '2', '2', '10', '3', '3', '1']) await decir(t);
+assert.equal(tablas.chatbot_solicitudes[3].estado, 'nueva'); assert.equal(tablas.chatbot_solicitudes[3].automatica, false);  // desde el menú: ver mis solicitudes
 console.log('OK: bot guiado (material + etapa + lote, habilitar paso en otra lista, decimales, consulta, mis solicitudes).');
