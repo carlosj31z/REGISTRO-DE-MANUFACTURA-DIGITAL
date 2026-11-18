@@ -2,29 +2,17 @@
 // Trata de usted, con tono cordial y sin emojis (pedido de Carlos, 2026-11-17). Entiende saludos y pedidos escritos con
 // palabras comunes («PDF master del lote L2611A») por palabras clave, sin IA.
 // Solo se escribe texto libre en: código del material, lote, números de orden y la descripción de una consulta.
-// El RMD no se pide (Producción no lo tiene a mano): con el lote basta (el ejecutor lo busca en «Ver OP»); sin lote,
-// material + etapa (última versión Autorizada).
+// El RMD no se pide (Producción no lo tiene a mano): lote (u orden) o código del material, y siempre la etapa (un lote
+// tiene un RMD por etapa). El paso se indica con su número del registro (4.4.11 o 4.4.11.1), como lo dice Producción.
 // El estado de cada conversación se guarda en chatbot_conversaciones (columna mensajes = { paso, d }).
 import { sb, enc } from './supabase.js';
 import { MODO, registrarSolicitud, misSolicitudes } from './solicitudes.js';
 
-const HUELLA = 'guiado-3';
+const HUELLA = 'guiado-4';
 
-const ETAPAS = ['FABRICACION', 'ENVASE', 'ACONDICIONADO', 'RECUBRIMIENTO', 'INSPECCION'];
-
-// Listas (estructura > etiqueta) que se ofrecen. Rendimiento solo para decimales: no lleva predecesor.
-const LISTAS = [
-  ['PRECAUCIONES', 'PRECAUCIONES'],
-  ['NOTAS IMPORTANTES', 'NOTAS IMPORTANTES DURANTE EL PROCESO'],
-  ['DOCUMENTACION', 'PROCEDIMIENTO>DOCUMENTACION'],
-  ['PREPARACION DEL MATERIAL', 'PROCEDIMIENTO>PREPARACION DEL MATERIAL'],
-  ['PREPARACION DE MAQUINAS', 'PROCEDIMIENTO>PREPARACION DE MAQUINAS'],
-  ['FABRICACION', 'PROCEDIMIENTO>FABRICACION'],
-  ['ENVASE', 'PROCEDIMIENTO>ENVASE'],
-  ['ACONDICIONADO', 'PROCEDIMIENTO>ACONDICIONADO'],
-  ['RECUBRIMIENTO', 'PROCEDIMIENTO>RECUBRIMIENTO'],
-];
-const LISTAS_DECIMAL = [...LISTAS, ['RENDIMIENTO', 'PROCEDIMIENTO>RENDIMIENTO']];
+// Etapas del RMD en el orden que usa Producción (pedido de Carlos, 2026-11-18): FAB, ENV, REC, INS, ACO.
+const ETAPAS = ['FABRICACION', 'ENVASE', 'RECUBRIMIENTO', 'INSPECCION', 'ACONDICIONADO'];
+const ABREV_ETAPA = { fab: 0, fabr: 0, env: 1, rec: 2, recub: 2, ins: 3, insp: 3, aco: 4, acond: 4 };
 const DECIMALES = [0, 1, 2, 3, 4];
 
 const TEMAS = [
@@ -41,11 +29,18 @@ const LECTURAS = {
   estado: { accion: 'estado_rmd', tipo: 'estado', titulo: 'Estado del RMD' },
 };
 
+// «Habilitar un paso» puede ser tres cosas distintas (pedido de Carlos, 2026-11-18).
+const QUE = [
+  ['cc', 'Que lo registre Producción (hoy le toca a Calidad en Operaciones: se quita la casilla Estado CC)'],
+  ['pred', 'Que se pueda registrar antes (cambiar el paso del que depende)'],
+  ['sin', 'Que no dependa de ningún paso (quitar el predecesor)'],
+];
+
 const FAQ = [
   ['¿Qué es «habilitar un paso»?',
-    'Es permitir que un paso se registre antes. Se cambia su predecesor (Depende) por un paso anterior que ya se registra en ese momento o, en casos extremos, se deja sin predecesor. Puede pedirlo con la opción 1 del menú.'],
+    'Puede ser: (1) que lo registre Producción en vez de Calidad en Operaciones, quitando la casilla Estado CC del paso; (2) que se pueda registrar antes, cambiando su predecesor (Depende) por un paso anterior; o (3), en casos extremos, dejarlo sin predecesor. Pídalo con la opción 1 del menú y el número del paso tal como aparece en el registro (por ejemplo 4.4.11).'],
   ['¿Por qué no se cambia el texto de un RMD Autorizado?',
-    'En un RMD Autorizado no se edita ninguna palabra de sus pasos. Un cambio de texto o de pasos va en una versión nueva, que luego se vuelve a autorizar. El predecesor y los decimales sí se ajustan en el mismo RMD.'],
+    'En un RMD Autorizado no se edita ninguna palabra de sus pasos. Un cambio de texto o de pasos va en una versión nueva, que luego se vuelve a autorizar. La casilla Estado CC, el predecesor y los decimales sí se ajustan en el mismo RMD.'],
   ['¿Cuántos decimales se usan?',
     'Lo habitual es 3 en cantidades (números, fórmula, entrega, muestra), 0 en unidades enteras (cajas, folios) y 1 en velocidad o temperatura de proceso. Se cambia en el RMD, no en el paso maestro.'],
   ['¿Cuándo llega un cambio a la OP en proceso?',
@@ -53,13 +48,13 @@ const FAQ = [
   ['¿Qué reglas siguen los textos de los pasos?',
     'Van en mayúsculas y sin tildes. Se dice CALIDAD EN OPERACIONES (no Control de Calidad), salvo biocarga, la nota del granel y el cierre de Acondicionado con FPRO-250. La casilla PM OP no se marca.'],
   ['¿Qué pasos no llevan predecesor?',
-    'Rendimiento, Condiciones ambientales y los pasos «Sin tipo de dato». Solo se admite un predecesor por paso.'],
+    'Rendimiento, Condiciones ambientales, los pasos «Sin tipo de dato» y los procesos menores (como 4.4.11.1). Solo se admite un predecesor por paso.'],
   ['¿Cómo recibo la plantilla o el PDF del master?',
-    'Elija la opción 3 o 4 del menú e indique el material y la etapa (o el lote). Le confirmo cuál es el RMD y en unos minutos le envío por aquí un enlace para descargarlo, válido por 7 días.'],
+    'Elija la opción 3 o 4 del menú e indique el código del material y la etapa (o el lote). Le confirmo cuál es el RMD y en unos minutos le envío por aquí un enlace para descargarlo, válido por 7 días.'],
 ];
 
 const OPCIONES_MENU = [
-  'Habilitar un paso (cambiar su predecesor)',
+  'Habilitar un paso (que lo registre Producción o que se registre antes)',
   'Cambiar los decimales de un dato',
   'Pedir la plantilla para Producción',
   'Pedir el PDF del master',
@@ -81,34 +76,38 @@ function menu(quien, entrada = 'saludo') {
     ? `${saludoHora()}${nombre}. Le saluda el asistente de Documentación Técnica para los RMD. ¿En qué le puedo ayudar?`
     : entrada === 'otra' ? '¿Le puedo ayudar en algo más?' : '¿En qué le puedo ayudar?';
   return [inicio, ...OPCIONES_MENU.map((o, i) => `${i + 1}. ${o}`), '',
-    'También puede escribirme lo que necesita, por ejemplo: «PDF del master del lote L2611A».'].join('\n');
+    'También puede escribirme lo que necesita, por ejemplo: «habilitar para Producción el 4.4.11 del lote 2100886, fabricación».'].join('\n');
 }
 
 const lista = (titulo, opciones) => [titulo, ...opciones.map((o, i) => `${i + 1}. ${o}`), '0. Volver al menú'].join('\n');
 const elegir = (texto, n) => { const k = Number(String(texto).trim()); return Number.isInteger(k) && k >= 1 && k <= n ? k : null; };
-const numero = (texto) => { const m = String(texto).trim().match(/^#?(\d{1,4})$/); return m ? Number(m[1]) : null; };
 const MATERIAL = /^[A-Za-z0-9-]{4,18}$/;
 const LOTE = /^[A-Za-z0-9-]{3,15}$/;
 const CONFIRMAR = '1. Confirmar\n2. Corregir (empezar de nuevo)\n0. Cancelar';
 
+// Números de paso como los ve Producción en el registro: 4.4.11 (paso) o 4.4.11.1 (proceso menor).
+const RE_NUM_PASO = /(?<![\d.])(\d{1,2}(?:\.\d{1,3}){2,3})(?![\d])/g;
+const numerosDe = (texto) => [...new Set([...String(texto || '').matchAll(RE_NUM_PASO)]
+  .map((m) => m[1].split('.').map((x) => String(Number(x))).join('.')))];
+const esProcesoMenor = (n) => n.split('.').length === 4;
+const partes = (n) => n.split('.').map(Number);
+// a < b en el orden del registro (solo se comparan pasos de la misma lista: mismos dos primeros números)
+const anterior = (a, b) => { const x = partes(a), y = partes(b); return x[0] === y[0] && x[1] === y[1] ? x[2] < y[2] : true; };
+const unir = (ns) => (ns.length <= 1 ? ns.join('') : `${ns.slice(0, -1).join(', ')} y ${ns.at(-1)}`);
+
 const PREGUNTA = {
   material: 'Por favor, escriba el código del material (el de la OP o del producto).',
   etapa: lista('¿De qué etapa es el RMD?', ETAPAS),
-  lista: (opc) => lista('¿En qué lista está el paso?', opc.map((x) => x[0])),
-  orden: 'Escriba el número de orden del paso dentro de esa lista (la columna Orden; por ejemplo, 12).',
-  desde: lista('¿Desde qué paso debe poder registrarse?', [
-    'Desde otro paso anterior de la misma lista',
-    'Desde un paso de otra lista',
-    'Sin predecesor (solo si el paso es realmente independiente)',
-  ]),
-  ordenPred: 'Escriba el número de orden del paso desde el que debe poder registrarse.',
+  // Cambios: primero el lote (identifica la OP en proceso); plantilla, PDF y estado: primero el material (pedido de Carlos).
+  ubicarCambio: '¿Cómo ubico el RMD?\n1. Con el número de lote (o de la orden)\n2. Con el código del material\n0. Volver al menú',
+  ubicar: '¿Cómo ubico el RMD?\n1. Con el código del material\n2. Con el número de lote (o de la orden)\n0. Volver al menú',
+  opNumero: 'Por favor, escriba el número de lote (o el número de la orden).',
+  numeros: 'Escriba el número del paso tal como aparece en el registro, por ejemplo 4.4.11. Si son varios, sepárelos con comas: 4.4.11, 4.4.11.1',
+  que: (ns) => lista(`¿Qué necesita en ${ns.length > 1 ? 'esos pasos' : 'ese paso'} (${unir(ns)})?`, QUE.map((q) => q[1])),
+  predNum: 'Escriba el número del paso desde el que debe poder registrarse, por ejemplo 4.4.5.',
   decimales: lista('¿Cuántos decimales necesita?', DECIMALES.map(String)),
-  op: '¿Tiene el número de lote?\n1. Sí (con el lote basta)\n2. No (le pido el material y la etapa)',
-  // Plantilla y PDF del master: primero material + etapa (pedido de Carlos, 2026-11-17); el lote es la segunda opción.
-  ubicar: '¿Cómo ubico el RMD?\n1. Con el código del material y la etapa\n2. Con el número de lote',
-  opNumero: 'Por favor, escriba el número de lote.',
   tema: lista('¿Qué tipo de consulta es?', TEMAS.map((t) => t[0])),
-  rmdOpcional: 'Escriba el código del material, o NO si no aplica.',
+  opConsulta: '¿Sobre qué es la consulta?\n1. Un lote u orden en proceso\n2. Un producto (le doy el código del material)\n3. No es sobre un RMD en particular\n0. Volver al menú',
   descripcion: 'Cuénteme en un solo mensaje lo que necesita (qué paso, qué ocurre y qué espera).',
 };
 
@@ -118,45 +117,61 @@ const SALUDO = /^(hola|buen[oa]s?( dias| tardes| noches)?|saludos|que tal|buen d
 const GRACIAS = /^(muchas )?gracias\b|^ok,? gracias|^listo,? gracias|^perfecto,? gracias|^mil gracias/;
 const DESPEDIDA = /^(chau|adios|hasta luego|nos vemos|bye)\b/;
 
+// «Habilitar para Producción» = quitar la casilla Estado CC (lo registra Producción y no Calidad en Operaciones).
+const RE_CC = /habilit\w* (el paso |los pasos )?para produccion|para que (lo )?(registre|llene|firme|anote) produccion|(casilla|check|estado) (de )?cc\b|quitar (el |la )?(check|casilla)|lo (registra|llena) calidad|le toca a calidad|solo (deja|puede) calidad/;
+const RE_SIN_PRED = /sin predecesor|quitar (el )?predecesor|que no dependa/;
 const INTENCIONES = [
   ['pdf', /\bpdf\b|\bmaster\b|\bmaestro\b/],
   ['plantilla', /plantilla|borrador/],
-  ['estado', /\bestado\b|\bstatus\b|\bestatus\b|ultima version|version vigente|\bvigente\b|en que version|esta autorizad/],
-  ['habilitar', /habilit|predecesor|\bdepende\b|no (me )?deja (registrar|anotar)|paso bloquead|desbloque/],
+  ['estado', /\bestado (del?|de un|de la|de mi) (rmd|registro|version|master|material|producto|lote)\b|que estado|\bstatus\b|\bestatus\b|ultima version|version vigente|\bvigente\b|en que version|esta autorizad/],
+  ['habilitar', /habilit|predecesor|\bdepende\b|no (me )?deja (registrar|anotar|llenar|firmar)|paso bloquead|desbloque|casilla (de )?cc|estado cc|para produccion/],
   ['decimales', /decimal/],
   ['mis', /mis solicitudes|mi solicitud|como va (mi|el) (pedido|solicitud)|seguimiento/],
   ['consulta', /\berror\b|problema|\bfalla|no carga|detenid|no funciona|no responde|consulta|ayuda con/],
   ['faq', /pregunta(s)? frecuente/],
 ];
 
+function etapaDe(t) {
+  const p = plano(t);
+  const exacta = ETAPAS.findIndex((e) => new RegExp(`\\b${e.toLowerCase()}\\b`).test(p));
+  if (exacta >= 0) return ETAPAS[exacta];
+  const ab = (p.match(/\b(fab|fabr|env|rec|recub|ins|insp|aco|acond)\b\.?/) || [])[1];
+  return ab ? ETAPAS[ABREV_ETAPA[ab]] : '';
+}
+
 function entender(texto) {
   const t = plano(texto);
   const intencion = (INTENCIONES.find(([, re]) => re.test(t)) || [null])[0];
-  const lote = (String(texto).match(/\blote\s*(?:n(?:ro|°|º)?\.?\s*)?[:#]?\s*([A-Za-z0-9-]{3,15})\b/i) || [])[1];
+  const lote = (String(texto).match(/\b(?:lote|orden|op)\s*(?:n(?:ro|°|º)?\.?\s*)?[:#]?\s*([A-Za-z0-9-]{3,15})\b/i) || [])[1];
   const material = (String(texto).match(/\bmaterial\s*[:#]?\s*([A-Za-z0-9-]{4,18})\b/i) || [])[1];
-  const etapa = ETAPAS.find((e) => new RegExp(`\\b${e.toLowerCase()}\\b`).test(t));
   return {
     intencion, lote: lote && /\d/.test(lote) ? lote.toUpperCase() : '', material: material && /\d/.test(material) ? material.toUpperCase() : '',
-    etapa: material ? etapa || '' : '', saludo: SALUDO.test(t), gracias: GRACIAS.test(t), despedida: DESPEDIDA.test(t),
+    etapa: etapaDe(texto), numeros: numerosDe(texto),
+    que: RE_CC.test(t) ? 'cc' : RE_SIN_PRED.test(t) ? 'sin' : '',
+    saludo: SALUDO.test(t), gracias: GRACIAS.test(t), despedida: DESPEDIDA.test(t),
   };
 }
 
-function nombreLista(valor) {
-  return (LISTAS_DECIMAL.find((x) => x[1] === valor) || [valor])[0];
-}
-
 function donde(d) {
-  return d.material ? `material ${d.material} (${d.etapa})${d.op ? `, lote ${d.op}` : ''}` : `lote ${d.op}`;
+  const etapa = d.etapa ? `, ${d.etapa}` : '';
+  return d.op ? `lote ${d.op}${etapa}` : d.material ? `material ${d.material}${etapa}` : 'sin RMD indicado';
 }
 
 function resumen(d) {
-  const base = `${donde(d).replace(/^./, (c) => c.toUpperCase())}, lista ${nombreLista(d.lista)}, paso de orden ${d.orden}`;
-  if (d.accion === 'cambiar_predecesor') {
-    const destino = d.sin ? 'quedará sin predecesor'
-      : `dependerá del paso de orden ${d.ordenPred}${d.listaPred && d.listaPred !== d.lista ? ` de la lista ${nombreLista(d.listaPred)}` : ''}`;
-    return `${base}: ${destino}.`;
-  }
-  return `${base}: se configurará con ${d.decimal} decimales.`;
+  const base = donde(d).replace(/^./, (c) => c.toUpperCase());
+  const ns = unir(d.nums || []), pl = (d.nums || []).length > 1;
+  if (d.accion === 'configurar_decimal') return `${base}: ${pl ? 'los pasos' : 'el paso'} ${ns} se ${pl ? 'configurarán' : 'configurará'} con ${d.decimal} decimales.`;
+  if (d.que === 'cc') return `${base}: ${pl ? 'los pasos' : 'el paso'} ${ns} ${pl ? 'quedarán' : 'quedará'} para que ${pl ? 'los' : 'lo'} registre Producción (se quita la casilla Estado CC).`;
+  if (d.que === 'sin') return `${base}: ${pl ? 'los pasos' : 'el paso'} ${ns} ${pl ? 'quedarán' : 'quedará'} sin predecesor.`;
+  return `${base}: ${pl ? 'los pasos' : 'el paso'} ${ns} ${pl ? 'podrán' : 'podrá'} registrarse desde el paso ${d.predNum}.`;
+}
+
+function tituloCambio(d) {
+  const ns = (d.nums || []).join(', ');
+  if (d.accion === 'configurar_decimal') return `Decimales ${ns}: ${d.decimal}`;
+  if (d.que === 'cc') return `Habilitar para Producción ${ns}`;
+  if (d.que === 'sin') return `Quitar predecesor ${ns}`;
+  return `Habilitar ${ns} desde ${d.predNum}`;
 }
 
 async function cargar(contacto) {
@@ -201,19 +216,20 @@ async function registrar(quien, d) {
   } else if (d.flujo === 'consulta') {
     const [titulo, tipo, prioridad] = TEMAS[d.tema - 1];
     input = {
-      tipo, prioridad: d.op ? 'alta' : prioridad, resumen: `${titulo}${d.material ? ` - material ${d.material} ${d.etapa}` : ''}`,
+      tipo, prioridad: d.op ? 'alta' : prioridad, resumen: `${titulo}${d.op || d.material ? ` - ${donde(d)}` : ''}`,
       material: d.material || undefined, etapa: d.etapa || undefined, op_lote: d.op || undefined, detalle: d.descripcion, cambios: [],
     };
   } else {
-    const c = { accion: d.accion, lista: d.lista, paso: '', orden_paso: d.orden };
-    if (d.accion === 'cambiar_predecesor') {
-      if (d.sin) c.sin_predecesor = true;
-      else { c.predecesor_orden = d.ordenPred; if (d.listaPred && d.listaPred !== d.lista) c.predecesor_lista = d.listaPred; }
-    } else c.decimal = d.decimal;
+    // Un cambio por paso, identificado por su número del registro (el ejecutor lo ubica en el RMD).
+    const cambios = d.nums.map((numero) => {
+      if (d.accion === 'configurar_decimal') return { accion: 'configurar_decimal', numero, decimal: d.decimal };
+      if (d.que === 'cc') return { accion: 'quitar_cc', numero };
+      if (d.que === 'sin') return { accion: 'cambiar_predecesor', numero, sin_predecesor: true };
+      return { accion: 'cambiar_predecesor', numero, predecesor_numero: d.predNum };
+    });
     input = {
-      tipo: 'cambio', prioridad: d.op ? 'alta' : 'normal',
-      resumen: d.accion === 'cambiar_predecesor' ? `Habilitar paso ${d.orden} de ${nombreLista(d.lista)}` : `Decimales del paso ${d.orden} de ${nombreLista(d.lista)}: ${d.decimal}`,
-      material: d.material, etapa: d.etapa, op_lote: d.op || undefined, detalle: resumen(d), cambios: [c],
+      tipo: 'cambio', prioridad: d.op ? 'alta' : 'normal', resumen: tituloCambio(d),
+      material: d.material || undefined, etapa: d.etapa, op_lote: d.op || undefined, detalle: resumen(d), cambios,
     };
   }
   const { solicitud } = await registrarSolicitud(input, quien, `Bot guiado: ${JSON.stringify(d)}`);
@@ -231,18 +247,41 @@ async function registrar(quien, d) {
   return { solicitud, texto: `Gracias. Registré su solicitud #${solicitud.id}. ${sigue}\n\n0. Volver al menú` };
 }
 
-// Arranca un flujo desde el menú (por número o por lo que se entendió del texto libre).
-function iniciar(intencion, x = {}) {
-  const conLote = x.lote ? { op: x.lote } : x.material && x.etapa ? { op: '', material: x.material, etapa: x.etapa } : null;
-  const flujos = {
-    habilitar: [{ flujo: 'cambio', accion: 'cambiar_predecesor' }, 'Con gusto le ayudo a habilitar un paso.'],
-    decimales: [{ flujo: 'cambio', accion: 'configurar_decimal' }, 'Con gusto le ayudo a cambiar los decimales.'],
-    plantilla: [{ flujo: 'lectura', lectura: 'plantilla' }, 'Con gusto le preparo la plantilla para Producción.'],
-    pdf: [{ flujo: 'lectura', lectura: 'pdf' }, 'Con gusto le preparo el PDF del master.'],
-    estado: [{ flujo: 'lectura', lectura: 'estado' }, 'Con gusto le consulto el estado del RMD.'],
-  };
-  const [d, intro] = flujos[intencion];
-  return { d: conLote ? { ...d, ...conLote } : d, intro, listo: Boolean(conLote) };
+const FLUJOS = {
+  habilitar: [{ flujo: 'cambio', accion: 'habilitar' }, 'Con gusto le ayudo a habilitar el paso.'],
+  decimales: [{ flujo: 'cambio', accion: 'configurar_decimal' }, 'Con gusto le ayudo a cambiar los decimales.'],
+  plantilla: [{ flujo: 'lectura', lectura: 'plantilla' }, 'Con gusto le preparo la plantilla para Producción.'],
+  pdf: [{ flujo: 'lectura', lectura: 'pdf' }, 'Con gusto le preparo el PDF del master.'],
+  estado: [{ flujo: 'lectura', lectura: 'estado' }, 'Con gusto le consulto el estado del RMD.'],
+};
+
+// Lo que se entendió de un texto libre se aprovecha: solo se pregunta lo que falta.
+function conLoEntendido(d, x) {
+  const o = { ...d };
+  if (x.lote) { o.op = x.lote; delete o.material; }
+  else if (x.material) { o.material = x.material; o.op = ''; }
+  if (x.etapa && (o.op || o.material)) o.etapa = x.etapa;
+  if (o.flujo === 'cambio' && x.numeros && x.numeros.length) o.nums = x.numeros;
+  if (o.accion === 'habilitar' && x.que) o.que = x.que;
+  return o;
+}
+
+// Siguiente pregunta según lo que falta (o el registro, si ya está todo).
+function siguientePaso(d) {
+  if (d.flujo === 'consulta') {
+    if (d.tema == null) return ['tema', PREGUNTA.tema];
+    if (d.op === undefined && d.material === undefined) return ['opConsulta', PREGUNTA.opConsulta];
+    if ((d.op || d.material) && !d.etapa) return ['etapa', PREGUNTA.etapa];
+    return ['descripcion', PREGUNTA.descripcion];
+  }
+  if (!d.op && !d.material) return d.flujo === 'cambio' ? ['ubicarCambio', PREGUNTA.ubicarCambio] : ['ubicar', PREGUNTA.ubicar];
+  if (!d.etapa) return ['etapa', PREGUNTA.etapa];
+  if (d.flujo === 'lectura') return ['registrar', ''];
+  if (!d.nums || !d.nums.length) return ['numeros', PREGUNTA.numeros];
+  if (d.accion === 'configurar_decimal') return d.decimal == null ? ['decimales', PREGUNTA.decimales] : ['confirmar', ''];
+  if (!d.que) return ['que', PREGUNTA.que(d.nums)];
+  if (d.que === 'pred' && !d.predNum) return ['predNum', PREGUNTA.predNum];
+  return ['confirmar', ''];
 }
 
 /**
@@ -256,31 +295,36 @@ export async function atender(quien, texto) {
     await guardar(quien.contacto, { paso: nuevoPaso, d: datos });
     return { texto: salida, solicitudes };
   };
-  // Tras ubicar el RMD (lote, o material + etapa): la lectura se registra ya; la consulta pide la descripción;
-  // el cambio sigue con la lista del paso.
-  const trasLote = async (datos) => {
-    if (datos.flujo === 'lectura') {
+  // Avanza a la siguiente pregunta que falte; con todo, confirma (cambios) o registra (lecturas).
+  const avanzar = async (datos, intro = '') => {
+    const [p, pregunta] = siguientePaso(datos);
+    const pre = intro ? `${intro}\n\n` : '';
+    if (p === 'registrar') {
       const r = await registrar(quien, datos);
-      return responder('menu', r.texto, {}, [r.solicitud]);
+      return responder('menu', pre + r.texto, {}, [r.solicitud]);
     }
-    if (datos.flujo === 'consulta') return responder('descripcion', PREGUNTA.descripcion, datos);
-    return responder('lista', PREGUNTA.lista(datos.accion === 'configurar_decimal' ? LISTAS_DECIMAL : LISTAS), datos);
+    if (p === 'confirmar') {
+      const aviso = datos.que === 'sin'
+        ? 'Quitar el predecesor es la excepción: Documentación Técnica lo revisará si el paso no es condicional o en paralelo.\n\n' : '';
+      return responder('confirmar', `${pre}${aviso}Resumen: ${resumen(datos)}\n\n${CONFIRMAR}`, datos);
+    }
+    return responder(p, pre + pregunta, datos);
   };
-  const arrancar = async (intencion, x) => {
+  const arrancar = async (intencion, x = {}) => {
     if (intencion === 'mis') return responder('menu', `${await textoMisSolicitudes(quien.contacto)}\n\n0. Volver al menú`, {});
     if (intencion === 'faq') return responder('faq', lista('Preguntas frecuentes:', FAQ.map((f) => f[0])), {});
-    if (intencion === 'consulta') return responder('tema', PREGUNTA.tema, { flujo: 'consulta' });
-    const r = iniciar(intencion, x);
-    if (r.listo) return trasLote(r.d);
-    if (r.d.lectura === 'plantilla' || r.d.lectura === 'pdf') return responder('ubicar', `${r.intro}\n\n${PREGUNTA.ubicar}`, r.d);
-    return responder('op', `${r.intro}\n\n${PREGUNTA.op}`, r.d);
+    if (intencion === 'consulta') return avanzar({ flujo: 'consulta' });
+    const [d0, intro] = FLUJOS[intencion];
+    return avanzar(conLoEntendido(d0, x), intro);
   };
   // Respuesta que no encaja con la pregunta: si se entiende un pedido escrito, se atiende; si no, se repregunta.
+  const repreguntar = (pregunta, motivo = 'Disculpe, no le entendí.') => responder(paso, `${motivo}\n\n${pregunta}`);
   const invalido = (pregunta) => {
     const x = entender(t);
     if (x.intencion && t.length > 3) return arrancar(x.intencion, x);
-    return responder(paso, `Disculpe, no le entendí.\n\n${pregunta}`);
+    return repreguntar(pregunta);
   };
+  const preguntaActual = () => (siguientePaso(d)[0] === paso ? siguientePaso(d)[1] : menu(quien, 'menu'));
 
   if (t === '0' || /^(menu|menú|inicio|cancelar|reiniciar)$/i.test(t)) return responder('menu', menu(quien, 'menu'), {});
   // Saludos, agradecimientos y pedidos escritos (en el menú, o con saludo en medio de un flujo). La descripción
@@ -297,90 +341,78 @@ export async function atender(quien, texto) {
   switch (paso) {
     case 'menu': {
       const k = elegir(t, N_MENU);
-      return arrancar(['habilitar', 'decimales', 'plantilla', 'pdf', 'estado', 'consulta', 'mis', 'faq'][k - 1], {});
+      return arrancar(['habilitar', 'decimales', 'plantilla', 'pdf', 'estado', 'consulta', 'mis', 'faq'][k - 1]);
     }
     case 'faq': {
       const k = elegir(t, FAQ.length);
       if (!k) return invalido(lista('Preguntas frecuentes:', FAQ.map((f) => f[0])));
       return responder('faq', `${FAQ[k - 1][1]}\n\nSi tiene otra pregunta, escriba su número (1-${FAQ.length}).\n0. Volver al menú`);
     }
+    case 'ubicarCambio':
+    case 'ubicar': {
+      const k = elegir(t, 2);
+      const porLote = paso === 'ubicarCambio' ? k === 1 : k === 2;
+      if (k && porLote) return responder('opNumero', PREGUNTA.opNumero, { ...d, material: undefined });
+      if (k) return responder('material', PREGUNTA.material, { ...d, op: '' });
+      // Escribió directamente el lote, el material o un pedido completo
+      const x = entender(t);
+      if (x.lote || x.material) return avanzar(conLoEntendido(d, x));
+      if (/^\d{6,8}$/.test(t)) return avanzar({ ...d, op: t }); // un número suelto de 6 a 8 cifras: lote
+      if (MATERIAL.test(t) && /\d/.test(t) && /[A-Za-z]/.test(t)) return avanzar({ ...d, op: '', material: t.toUpperCase() });
+      return invalido(PREGUNTA[paso]);
+    }
+    case 'opNumero': {
+      const x = entender(t);
+      const m = x.lote || (t.match(/([A-Za-z0-9-]{3,15})\s*$/) || [])[1];
+      if (!m || !LOTE.test(m) || !/\d/.test(m)) return invalido(PREGUNTA.opNumero);
+      return avanzar(conLoEntendido({ ...d, op: m.toUpperCase() }, { ...x, lote: '' }));
+    }
     case 'material':
       if (!MATERIAL.test(t) || !/\d/.test(t)) return invalido(PREGUNTA.material);
-      return responder('etapa', PREGUNTA.etapa, { ...d, material: t.toUpperCase() });
+      return avanzar({ ...d, op: '', material: t.toUpperCase() });
     case 'etapa': {
-      const k = elegir(t, ETAPAS.length) || ETAPAS.indexOf(plano(t).toUpperCase()) + 1;
-      if (!k) return invalido(PREGUNTA.etapa);
-      return trasLote({ ...d, etapa: ETAPAS[k - 1] });
+      const k = elegir(t, ETAPAS.length);
+      const e = k ? ETAPAS[k - 1] : etapaDe(t);
+      if (!e) return invalido(PREGUNTA.etapa);
+      return avanzar({ ...d, etapa: e });
     }
-    case 'lista': {
-      const opc = d.accion === 'configurar_decimal' ? LISTAS_DECIMAL : LISTAS;
-      const k = elegir(t, opc.length);
-      if (!k) return invalido(PREGUNTA.lista(opc));
-      return responder('orden', PREGUNTA.orden, { ...d, lista: opc[k - 1][1] });
-    }
-    case 'orden': {
-      const n = numero(t);
-      if (!n) return invalido(PREGUNTA.orden);
-      if (d.accion === 'configurar_decimal') return responder('decimales', PREGUNTA.decimales, { ...d, orden: n });
-      return responder('desde', PREGUNTA.desde, { ...d, orden: n });
-    }
-    case 'desde': {
-      const k = elegir(t, 3);
-      if (k === 1) {
-        if (d.orden <= 1) return responder(paso, `El paso 1 no tiene pasos anteriores en su lista.\n\n${PREGUNTA.desde}`);
-        return responder('ordenPred', PREGUNTA.ordenPred, { ...d, listaPred: d.lista, sin: false });
+    case 'numeros': {
+      const ns = numerosDe(t);
+      if (!ns.length) {
+        if (/^\d{1,3}$/.test(t)) return repreguntar(PREGUNTA.numeros, `Necesito el número completo como aparece en el registro (por ejemplo 4.4.${t}), no solo el orden.`);
+        return invalido(PREGUNTA.numeros);
       }
-      if (k === 2) return responder('listaPred', PREGUNTA.lista(LISTAS).replace('¿En qué lista está el paso?', '¿En qué lista está ese paso?'), { ...d, sin: false });
-      if (k === 3) {
-        d = { ...d, sin: true };
-        return responder('confirmar', `Quitar el predecesor es la excepción: Documentación Técnica lo revisará si el paso no es condicional o en paralelo.\n\nResumen: ${resumen(d)}\n\n${CONFIRMAR}`, d);
+      const x = entender(t);
+      return avanzar({ ...d, nums: ns, ...(d.accion === 'habilitar' && x.que && !d.que ? { que: x.que } : {}) });
+    }
+    case 'que': {
+      const k = elegir(t, QUE.length);
+      const que = k ? QUE[k - 1][0] : entender(t).que;
+      if (!que) return invalido(PREGUNTA.que(d.nums));
+      if (que !== 'cc') {
+        const pm = d.nums.filter(esProcesoMenor);
+        if (pm.length) {
+          return repreguntar(PREGUNTA.que(d.nums), `${unir(pm)} ${pm.length > 1 ? 'son procesos menores' : 'es un proceso menor'} y no ${pm.length > 1 ? 'tienen' : 'tiene'} predecesor. Para ellos solo se puede quitar la casilla Estado CC (opción 1); si necesita otra cosa, escriba 0 y pídalo como consulta para el analista.`);
+        }
       }
-      return invalido(PREGUNTA.desde);
+      return avanzar({ ...d, que });
     }
-    case 'listaPred': {
-      const k = elegir(t, LISTAS.length);
-      if (!k) return invalido(PREGUNTA.lista(LISTAS));
-      return responder('ordenPred', PREGUNTA.ordenPred, { ...d, listaPred: LISTAS[k - 1][1] });
-    }
-    case 'ordenPred': {
-      const n = numero(t);
-      if (!n) return invalido(PREGUNTA.ordenPred);
-      if (d.listaPred === d.lista && n >= d.orden) return responder(paso, `Debe ser un paso anterior al ${d.orden}.\n\n${PREGUNTA.ordenPred}`);
-      d = { ...d, ordenPred: n };
-      return responder('confirmar', `Resumen: ${resumen(d)}\n\n${CONFIRMAR}`, d);
+    case 'predNum': {
+      const [n] = numerosDe(t);
+      if (!n) return invalido(PREGUNTA.predNum);
+      if (esProcesoMenor(n)) return repreguntar(PREGUNTA.predNum, 'Un proceso menor no puede ser predecesor: indique el paso (por ejemplo 4.4.5).');
+      const malos = d.nums.filter((x) => x === n || !anterior(n, x));
+      if (malos.length) return repreguntar(PREGUNTA.predNum, `Debe ser un paso anterior al ${unir(malos)}.`);
+      return avanzar({ ...d, predNum: n });
     }
     case 'decimales': {
       const k = elegir(t, DECIMALES.length);
       if (!k) return invalido(PREGUNTA.decimales);
-      d = { ...d, decimal: DECIMALES[k - 1] };
-      return responder('confirmar', `Resumen: ${resumen(d)}\n\n${CONFIRMAR}`, d);
-    }
-    case 'op': {
-      const k = elegir(t, 2);
-      if (k === 1) return responder('opNumero', PREGUNTA.opNumero);
-      if (k !== 2) {
-        if (LOTE.test(t) && /\d/.test(t)) return trasLote({ ...d, op: t.toUpperCase() }); // escribió el lote directamente
-        return invalido(PREGUNTA.op);
-      }
-      d = { ...d, op: '' };
-      if (d.flujo === 'consulta') return responder('rmdOpcional', PREGUNTA.rmdOpcional, d);
-      return responder('material', PREGUNTA.material, d);
-    }
-    case 'ubicar': {
-      const k = elegir(t, 2);
-      if (k === 1) return responder('material', PREGUNTA.material, { ...d, op: '' });
-      if (k === 2) return responder('opNumero', PREGUNTA.opNumero);
-      if (MATERIAL.test(t) && /\d/.test(t)) return responder('etapa', PREGUNTA.etapa, { ...d, op: '', material: t.toUpperCase() }); // escribió el material
-      return invalido(PREGUNTA.ubicar);
-    }
-    case 'opNumero': {
-      const m = t.match(/([A-Za-z0-9-]{3,15})\s*$/);
-      if (!m || !LOTE.test(m[1]) || !/\d/.test(m[1])) return invalido(PREGUNTA.opNumero);
-      return trasLote({ ...d, op: m[1].toUpperCase() });
+      return avanzar({ ...d, decimal: DECIMALES[k - 1] });
     }
     case 'confirmar': {
       const k = elegir(t, 2);
-      if (k === 2) return responder('op', PREGUNTA.op, { flujo: d.flujo, accion: d.accion });
+      if (k === 2) return avanzar({ flujo: d.flujo, accion: d.accion }, 'De acuerdo, empecemos de nuevo.');
       if (k !== 1) return invalido(CONFIRMAR);
       const r = await registrar(quien, d);
       return responder('menu', r.texto, {}, [r.solicitud]);
@@ -388,18 +420,21 @@ export async function atender(quien, texto) {
     case 'tema': {
       const k = elegir(t, TEMAS.length);
       if (!k) return invalido(PREGUNTA.tema);
-      return responder('op', PREGUNTA.op, { ...d, tema: k });
+      return avanzar({ ...d, tema: k });
     }
-    case 'rmdOpcional':
-      if (/^no$/i.test(t)) return responder('descripcion', PREGUNTA.descripcion, { ...d, material: '' });
-      if (!MATERIAL.test(t)) return invalido(PREGUNTA.rmdOpcional);
-      return responder('etapa', PREGUNTA.etapa, { ...d, material: t.toUpperCase() });
+    case 'opConsulta': {
+      const k = elegir(t, 3);
+      if (k === 1) return responder('opNumero', PREGUNTA.opNumero, { ...d, material: undefined });
+      if (k === 2) return responder('material', PREGUNTA.material, { ...d, op: '' });
+      if (k === 3) return avanzar({ ...d, op: '', material: '' });
+      return invalido(PREGUNTA.opConsulta);
+    }
     case 'descripcion': {
       if (t.length < 10) return responder(paso, `Por favor, deme un poco más de detalle.\n\n${PREGUNTA.descripcion}`);
       const r = await registrar(quien, { ...d, descripcion: t.slice(0, 2000) });
       return responder('menu', r.texto, {}, [r.solicitud]);
     }
     default:
-      return responder('menu', menu(quien, 'menu'), {});
+      return responder('menu', preguntaActual(), {});
   }
 }

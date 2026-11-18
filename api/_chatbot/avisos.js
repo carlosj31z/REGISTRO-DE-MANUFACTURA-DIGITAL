@@ -38,6 +38,11 @@ export async function despertarEjecutor() {
 }
 
 export function lineaCambio(c) {
+  if (c.numero) {
+    if (c.accion === 'quitar_cc') return `- Paso ${c.numero} → quitar la casilla Estado CC (lo registra Producción)`;
+    if (c.accion === 'configurar_decimal') return `- Paso ${c.numero} → ${c.decimal} decimales`;
+    return `- Paso ${c.numero} → ${c.sin_predecesor ? 'sin predecesor' : `depende del ${c.predecesor_numero}`}`;
+  }
   const paso = [c.paso && `«${c.paso}»`, c.orden_paso && `#${c.orden_paso}`].filter(Boolean).join(' ');
   if (c.accion === 'cambiar_predecesor') {
     const pred = [c.predecesor && `«${c.predecesor}»`, c.predecesor_orden && `#${c.predecesor_orden}`].filter(Boolean).join(' ');

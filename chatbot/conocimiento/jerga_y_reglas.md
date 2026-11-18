@@ -24,6 +24,13 @@ vuelve a construir la base (`node herramientas/chatbot/construir_conocimiento.mj
 
 ## Cómo traducir lo que pide Producción
 
+### «Habilitar para PRODUCCION» (o «que lo registre Producción», «solo deja a Calidad»)
+Pedido de Carlos (2026-11-18): el paso lo está registrando Calidad en Operaciones porque tiene marcada la casilla
+**Estado CC** en la configuración del RMD. «Habilitar para Producción» = **quitar la casilla Estado CC** de ese paso (o
+proceso menor), para que lo registre Producción. Producción da el número tal como aparece en el registro: **4.4.11** es
+el paso 11 de la 4.ª lista del PROCEDIMIENTO y **4.4.11.1** su primer proceso menor. Ej. real: lote 2100886 (orden
+2100032380), 4.4.11 «EL JEFE O SUPERVISOR DE LA SECCION VERIFICA LA CONFORMIDAD…» y 4.4.11.1 «FECHA / HORA DE VERIFICACION».
+
 ### «Habilitar el paso» (o «que se habilite», «que me deje registrar el paso», «está bloqueado»)
 Significa que el paso **no se puede registrar porque su predecesor (Depende) todavía no está registrado**, y Producción
 quiere poder registrarlo antes. La solución es **cambiar el predecesor del paso a un paso anterior** que ya se registra

@@ -5,15 +5,28 @@ import { alRegistrar } from './avisos.js';
 // automatico: los cambios completos (habilitar paso / decimales) pasan directo al ejecutor.
 // aprobacion: todo espera a que el analista lo apruebe en la bandeja o por WhatsApp.
 export const MODO = (process.env.CHATBOT_MODO || 'automatico').toLowerCase();
-export const ACCIONES_AUTOMATICAS = ['cambiar_predecesor', 'configurar_decimal'];
+export const ACCIONES_AUTOMATICAS = ['cambiar_predecesor', 'configurar_decimal', 'quitar_cc'];
+// Número del paso como lo ve Producción en el registro: 4.4.11 (paso) o 4.4.11.1 (proceso menor).
+const NUM_PASO = /^\d{1,2}(\.\d{1,3}){2,3}$/;
+const esPM = (n) => String(n).split('.').length === 4;
 // Pedidos de solo lectura que el ejecutor atiende en SAP (no escriben nada): estado del RMD, plantilla y PDF del master.
 export const ACCIONES_LECTURA = { estado_rmd: 'estado', plantilla: 'documento', pdf_master: 'documento' };
 
 // ---------- validación de cambios: decide si el ejecutor puede aplicarlos solo ----------
 export function cambioCompleto(c) {
   if (c && ACCIONES_LECTURA[c.accion]) return true;
-  // El paso se identifica por su texto o por su orden; el predecesor, por texto u orden (bot guiado: solo números).
-  if (!c || !ACCIONES_AUTOMATICAS.includes(c.accion) || !c.lista || !(c.paso || Number.isInteger(c.orden_paso))) return false;
+  if (!c || !ACCIONES_AUTOMATICAS.includes(c.accion)) return false;
+  // Bot guiado (2026-11-18): el paso va por su número del registro; el ejecutor lo ubica en el RMD.
+  if (c.numero !== undefined) {
+    if (!NUM_PASO.test(String(c.numero))) return false;
+    if (c.accion === 'quitar_cc') return true;
+    if (c.accion === 'configurar_decimal') return Number.isInteger(c.decimal) && c.decimal >= 0 && c.decimal <= 6;
+    if (esPM(c.numero)) return false; // un proceso menor no tiene predecesor
+    if (c.sin_predecesor) return !c.predecesor_numero;
+    return NUM_PASO.test(String(c.predecesor_numero || '')) && !esPM(c.predecesor_numero);
+  }
+  // Formato anterior: lista + texto u orden del paso; el predecesor, por texto u orden.
+  if (c.accion === 'quitar_cc' || !c.lista || !(c.paso || Number.isInteger(c.orden_paso))) return false;
   if (c.accion === 'cambiar_predecesor') return Boolean(c.sin_predecesor) !== Boolean(c.predecesor || Number.isInteger(c.predecesor_orden));
   if (c.accion === 'configurar_decimal') return Number.isInteger(c.decimal) && c.decimal >= 0 && c.decimal <= 6;
   return false;
@@ -22,6 +35,15 @@ export function cambioCompleto(c) {
 export function limpiarCambios(lista) {
   if (!Array.isArray(lista)) return [];
   return lista.map((c) => {
+    if (c && c.numero !== undefined) {
+      const x = { accion: c.accion, numero: String(c.numero).trim() };
+      if (c.accion === 'configurar_decimal' && c.decimal !== undefined) x.decimal = Number(c.decimal);
+      if (c.accion === 'cambiar_predecesor') {
+        if (c.sin_predecesor) x.sin_predecesor = true;
+        else if (c.predecesor_numero) x.predecesor_numero = String(c.predecesor_numero).trim();
+      }
+      return x;
+    }
     const x = { accion: c.accion, lista: String(c.lista || '').trim(), paso: String(c.paso || '').trim() };
     if (Number.isInteger(c.orden_paso)) x.orden_paso = c.orden_paso;
     if (c.accion === 'cambiar_predecesor') {
