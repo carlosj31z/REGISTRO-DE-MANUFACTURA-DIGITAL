@@ -99,3 +99,11 @@ y subir el cambio. Las conversaciones en curso se reinician solas con un resumen
 **Enlace directo a la bandeja (2026-11-17, pedido de Carlos)**: `/chatbot/index.html#analista=<clave>` abre la «Bandeja del
 analista», guarda la clave en ese equipo y la quita de la barra de direcciones; luego basta `/chatbot/index.html#bandeja`. El
 botón «Copiar enlace directo» de la bandeja lo arma (lleva la clave: no compartirlo). La bandeja muestra el `resultado` del ejecutor.
+
+**Pasos por su número y etapa siempre (2026-11-18, pedido de Carlos)**: para habilitar paso y decimales el bot pregunta
+«lote (o la orden) o código del material» y **siempre la etapa** (FAB, ENV, REC, INS, ACO: un lote tiene un RMD por etapa).
+El paso va por su **número del registro** (4.4.11; 4.4.11.1 = proceso menor), uno o varios. «Habilitar un paso» ofrece:
+que lo registre Producción (**quitar la casilla Estado CC**, acción `quitar_cc`), cambiar el predecesor (`predecesor_numero`)
+o quitarlo. Los cambios llevan `numero`; el ejecutor (AUTOMATIZACION-DE-RMD) los ubica con la numeración del RMD y escribe
+Estado CC y decimales como el Grabar del portal. Un pedido escrito completo («habilitar para PRODUCCION 4.4.11 y 4.4.11.1 del
+lote 2100886 fabricacion») solo pide confirmar.
