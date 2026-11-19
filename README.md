@@ -441,3 +441,7 @@ Pedido de Carlos (14/11/2026), pensado para que David lo lea de un vistazo. Cód
   responsable, siguiente paso, compromiso, seguimiento (Por atender / En curso / Bloqueado), nota, quién y cuándo, `ok` (autorizado a
   mano) e historial (últimos 20). Quién anota se elige de `DNI_DIRECTORIO` y se recuerda en el navegador.
 - **Exportar Excel**: hoja Resumen y hoja Backlog (backlog, luego programa, luego autorizados a mano) con los filtros de ese momento.
+
+## RETIRO VB (19/11/2026)
+
+Hojas **RETIRO VB** y **RETIRO VB árbol PT** en el Excel de la pestaña BACKLOG y en el «Backlog del mes» de INDICADORES (`RetiroVb.agregarHojas`). Cruza el forecast de demanda de Supply (hoja FC CONS MIF: ZTER, ZTMM y fabricación MIF-HERSIL; sin ZMER) con el árbol de producción de SAP (motor de Listas de materiales) en un horizonte de 12 meses desde el mes siguiente. La demanda baja por el árbol con las cantidades de cada lista; lotes = lo pedido ÷ cantidad base de la lista de la etapa. Cuentan los RMD que deciden cada etapa (`estadoDeCadenaPrecisa`) Autorizados, Suspendidos, Ingresados o Solicitados con F2/F2R en la 1.ª línea de Observaciones (`faseRmd`) y sin F3 (ya tienen el retiro de V°B°). Prioritarios = los de más lotes hasta el 80 %. Forecast: el último cargado con «Cargar forecast» (clave `val_forecast_demanda`) o `datos/forecast-demanda-202610.json`.
