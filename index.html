@@ -12896,8 +12896,10 @@ async function maybeAutoStartTour() {
     <script>
     // Fase de un RMD según sus Observaciones de SAP (pedido de Carlos, 19/11/2026): FASE 2 si la primera línea con texto dice
     // «F2» o «F2R» como palabra o segmento (p. ej. «20261113CJ-1-C2-FI1.0-FA1.0-F2R»); si no, FASE 1. No cuenta «F20», «F2A», etc.
+    // FASE 3 (20/11/2026): «F3» como segmento de esa línea (va al final; marca los RMD que ya tienen el retiro de V°B°). Manda sobre F2.
     function faseRmd(obs) {
         const l1 = String(obs || '').split(/\r?\n/).map((x) => x.trim()).find(Boolean) || '';
+        if (/(^|[^A-Z0-9])F3(?![A-Z0-9])/i.test(l1)) return 'FASE 3';
         return /(^|[^A-Z0-9])F2R?(?![A-Z0-9])/i.test(l1) ? 'FASE 2' : 'FASE 1';
     }
     const StatusRmd = (() => {
@@ -16537,6 +16539,7 @@ async function maybeAutoStartTour() {
                 if (/^Mes vigente/.test(s)) return 'FFF2CC';
                 if (s === 'PROGRAMA DE PRODUCCIÓN') return 'F3D36B';
                 if (cab === 'Fase' && s === 'FASE 2') return 'D9C8F0';
+                if (cab === 'Fase' && s === 'FASE 3') return 'C6EFCE';
                 if (s === 'Fuera del programa') return 'EDEDED';
                 if (s === 'CARACTERIZACIÓN') return 'D9D3F5';
                 return null;
@@ -17739,21 +17742,22 @@ async function maybeAutoStartTour() {
                 if (!c) return;
                 if (val instanceof Date) c.z = 'dd/mm/yyyy';
                 if (j === 4 && val === 'FASE 2') c.s = { font: { bold: true, color: { rgb: '3B1F66' } }, fill: { patternType: 'solid', fgColor: { rgb: 'D9C8F0' } } };
+                if (j === 4 && val === 'FASE 3') c.s = { font: { bold: true, color: { rgb: '1E5631' } }, fill: { patternType: 'solid', fgColor: { rgb: 'C6EFCE' } } };
                 if (j === 5) c.s = val === 'NUEVO' ? { font: { bold: true, color: { rgb: 'FFFFFF' } }, fill: { patternType: 'solid', fgColor: { rgb: 'C2652E' } } } : { font: { bold: true, color: { rgb: 'FFFFFF' } }, fill: { patternType: 'solid', fgColor: { rgb: '5B5F97' } } };
                 if (j === 6 && val) c.s = { font: { bold: true, color: { rgb: '3B2F06' } }, fill: { patternType: 'solid', fgColor: { rgb: 'F3D36B' } } };
             }));
             ws['!cols'] = cab.map((h) => ({ wch: /Producto|Nota|Observaci|Por qué|Cómo aplicarlo|Qué falta/.test(h) ? 42 : /Siguiente/.test(h) ? 30 : Math.max(9, Math.min(22, h.length + 2)) }));
             ws['!autofilter'] = { ref: XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: filas.length, c: cab.length - 1 } }) };
-            const res = [['Backlog de RMD', `corte ${fmt(modelo.corte)}`], [], ['Planta', `Backlog al 1 de ${nombreMes(modelo.mes)}`, 'Nuevos del mes', 'Autorizados en el mes', 'Pendientes hoy', 'Pendientes FASE 1', 'Pendientes FASE 2', 'Con estatus elegido', 'En Programa de producción', 'Autorizados a mano']];
+            const res = [['Backlog de RMD', `corte ${fmt(modelo.corte)}`], [], ['Planta', `Backlog al 1 de ${nombreMes(modelo.mes)}`, 'Nuevos del mes', 'Autorizados en el mes', 'Pendientes hoy', 'Pendientes FASE 1', 'Pendientes FASE 2', 'Pendientes FASE 3', 'Con estatus elegido', 'En Programa de producción', 'Autorizados a mano']];
             ['P1', 'P2', ''].forEach((pl) => {
                 const its = modelo.items.filter((it) => !pl || it.v.planta === pl), pend = its.filter((it) => !manual(it)), man = its.filter(manual);
                 const aut = modelo.aut.filter((a) => !pl || a.v.planta === pl), autBk = aut.filter((a) => a.cuenta === 'Backlog').length + man.filter((it) => !it.nuevo).length, autTot = aut.length + man.length;
                 res.push([pl ? PLANTA_NOMBRE[pl] : 'Total', pend.filter((it) => !it.nuevo).length + autBk, pend.filter((it) => it.nuevo).length + (autTot - autBk), autTot, pend.length, pend.filter((it) => faseRmd(it.v.obs) === 'FASE 1').length, pend.filter((it) => faseRmd(it.v.obs) === 'FASE 2').length,
-                    pend.filter((it) => estadoDe(it).confirmado).length, pend.filter((it) => it.prog).length, man.length]);
+                    pend.filter((it) => faseRmd(it.v.obs) === 'FASE 3').length, pend.filter((it) => estadoDe(it).confirmado).length, pend.filter((it) => it.prog).length, man.length]);
             });
-            res.push([], ['Backlog al 1 del mes + Nuevos del mes − Autorizados en el mes = Pendientes hoy.'], ['Backlog = Ingresados por autorizar + Solicitudes por ingresar + Suspendidos sin versión nueva (sin los INACTIVO).'], ['FASE 2 = la primera línea de las Observaciones de SAP dice F2 o F2R; el resto es FASE 1. Filtra la columna «Fase» de la hoja Backlog.']);
+            res.push([], ['Backlog al 1 del mes + Nuevos del mes − Autorizados en el mes = Pendientes hoy.'], ['Backlog = Ingresados por autorizar + Solicitudes por ingresar + Suspendidos sin versión nueva (sin los INACTIVO).'], ['FASE 2 = la primera línea de las Observaciones de SAP dice F2 o F2R; FASE 3 = dice F3 (ya tiene el retiro de V°B°); el resto es FASE 1. Filtra la columna «Fase» de la hoja Backlog.']);
             const wr = XLSX.utils.aoa_to_sheet(res);
-            wr['!cols'] = [{ wch: 12 }, { wch: 26 }, { wch: 16 }, { wch: 20 }, { wch: 16 }, { wch: 16 }, { wch: 16 }, { wch: 18 }, { wch: 26 }, { wch: 18 }];
+            wr['!cols'] = [{ wch: 12 }, { wch: 26 }, { wch: 16 }, { wch: 20 }, { wch: 16 }, { wch: 16 }, { wch: 16 }, { wch: 16 }, { wch: 18 }, { wch: 26 }, { wch: 18 }];
             const wb = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(wb, wr, 'Resumen');
             XLSX.utils.book_append_sheet(wb, ws, 'Backlog');
@@ -17803,18 +17807,26 @@ async function maybeAutoStartTour() {
     //    etapa = lo pedido en el horizonte ÷ cantidad base de su lista (redondeado hacia arriba). Si un producto tiene varias rutas
     //    vigentes se usa la primera, para no contar dos veces los mismos lotes.
     //  - RMD de cada etapa: el que decide la etapa en Producción (estadoDeCadenaPrecisa sobre las recetas de SAP). Entra si está
-    //    Autorizado, Suspendido, Ingresado o Solicitado y la primera línea de sus Observaciones dice F2 o F2R (faseRmd). Si esa línea
-    //    dice F3 ya tiene el retiro de V°B° aplicado y no entra.
-    //  - Prioritarios: los RMD con más lotes hasta juntar el 80 % de los lotes (Pareto).
+    //    Autorizado, Ingresado o Suspendido y es FASE 2 (faseRmd: F2 o F2R en la primera línea de Observaciones). Los FASE 3 (F3) ya
+    //    tienen el retiro de V°B° y no entran (20/11/2026: tampoco los Solicitados, que aún no tienen pasos).
+    //  - V°B° (20/11/2026): casillas «V.B.» de los pasos activos de PROCEDIMIENTO de esa versión (la cuenta del PPT de V°B°), leídas del
+    //    portal en datos/vb-fase2.json (o la clave val_vb_fase2 si existe). Orden y prioridad: V°B° al año = V°B° × lotes a fabricar
+    //    (las firmas de V°B° que se dejarían de hacer); empate: más V°B°, luego más lotes. Prioritarios: los primeros hasta juntar el
+    //    80 % de los V°B° al año (Pareto).
     const RetiroVb = (() => {
         const CLAVE = 'val_forecast_demanda';
         const ARCHIVO_BASE = 'datos/forecast-demanda-202610.json';
         const TIPOS = new Set(['ZTER', 'ZTMM', 'FAB MIF-HERSIL (PT)', 'FAB MIF-HERSIL (MM)']);
-        const ESTADOS = new Set(['AUTORIZADO', 'SUSPENDIDO', 'INGRESADO', 'SOLICITADO']);
+        const ESTADOS = new Set(['AUTORIZADO', 'SUSPENDIDO', 'INGRESADO']);
+        const CLAVE_VB = 'val_vb_fase2', ARCHIVO_VB = 'datos/vb-fase2.json';
+        async function vbFase2() {
+            try { const g = await storeGet(CLAVE_VB); if (g && g.vb) return g; } catch (e) { /* se usa el del repositorio */ }
+            try { const r = await fetch(ARCHIVO_VB, { cache: 'no-cache' }); if (r.ok) return r.json(); } catch (e) { /* sin V°B° */ }
+            return { vb: {} };
+        }
         const PARETO = 0.8;
         const MESES_HORIZONTE = 12;
         const linea1 = (obs) => String(obs || '').split(/\r?\n/).map((x) => x.trim()).find(Boolean) || '';
-        const tieneF3 = (obs) => /(^|[^A-Z0-9])F3(?![A-Z0-9])/i.test(linea1(obs));
         const ESTADO_TXT = { AUTORIZADO: 'Autorizado', SUSPENDIDO: 'Suspendido', INGRESADO: 'Ingresado', SOLICITADO: 'Solicitado' };
 
         // ---------- Forecast ----------
@@ -17902,7 +17914,8 @@ async function maybeAutoStartTour() {
             const motor = await asegurarMotorArboles();
             if (!motor) throw new Error('no se pudo cargar el árbol de materiales de SAP (Listas de materiales)');
             if (!rmdPreciso) throw new Error('faltan los RMD de SAP con recetas («Enviar a Status RMD» desde el portal)');
-            const fc = await forecast();
+            const [fc, vbs] = await Promise.all([forecast(), vbFase2()]);
+            const vbDe = (u) => (u && u.rmd && vbs.vb && Number.isFinite(vbs.vb[`${String(u.rmd).trim()}|${u.version}`]) ? vbs.vb[`${String(u.rmd).trim()}|${u.version}`] : null);
             const desde = dayjs().add(1, 'month').startOf('month'), meses = [];
             for (let i = 0; i < MESES_HORIZONTE; i++) meses.push(desde.add(i, 'month').format('YYYY-MM'));
             const enHorizonte = new Set(meses);
@@ -17959,8 +17972,8 @@ async function maybeAutoStartTour() {
                 if (!u) { e.estado = 'SIN RMD'; return; }
                 const r = detDe(u);
                 e.u = u; e.estado = u.estadoNorm; e.obs = r ? (r.observacion || '') : ''; e.planta = r ? r.planta : '';
-                e.fase = faseRmd(e.obs); e.f3 = tieneF3(e.obs);
-                e.entra = ESTADOS.has(e.estado) && e.fase === 'FASE 2' && !e.f3;
+                e.fase = faseRmd(e.obs); e.f3 = e.fase === 'FASE 3'; e.vb = vbDe(u);
+                e.entra = ESTADOS.has(e.estado) && e.fase === 'FASE 2';
             });
             // Un RMD puede ser el de varios materiales (recetas): se junta por RMD y versión
             const porRmd = new Map();
@@ -17968,16 +17981,17 @@ async function maybeAutoStartTour() {
                 if (!e.entra) return;
                 const k = `${e.u.rmd ? 'R' + e.u.rmd : 'S' + e.u.sol}|${e.u.version}`;
                 let g = porRmd.get(k);
-                if (!g) { g = { u: e.u, etapa: e.etapa, planta: e.planta, estado: e.estado, obs: e.obs, desc: e.u.desc || e.desc, mats: [], lotes: 0, pm: {}, pts: new Map() }; porRmd.set(k, g); }
+                if (!g) { g = { u: e.u, etapa: e.etapa, planta: e.planta, estado: e.estado, obs: e.obs, desc: e.u.desc || e.desc, vb: e.vb, mats: [], lotes: 0, pm: {}, pts: new Map() }; porRmd.set(k, g); }
                 g.mats.push(e); g.lotes += e.lotes || 0;
                 Object.entries(e.pm).forEach(([m, n]) => { g.pm[m] = (g.pm[m] || 0) + (e.base > 0 ? n / e.base : 0); });
                 e.pts.forEach((n, pt) => g.pts.set(pt, (g.pts.get(pt) || 0) + n));
             });
-            const lista = [...porRmd.values()].sort((a, b) => b.lotes - a.lotes || String(a.desc).localeCompare(String(b.desc)));
-            const total = lista.reduce((s, g) => s + g.lotes, 0);
+            porRmd.forEach((g) => { g.vbAnio = g.vb === null || g.vb === undefined ? null : g.vb * g.lotes; });
+            const lista = [...porRmd.values()].sort((a, b) => (b.vbAnio ?? -1) - (a.vbAnio ?? -1) || (b.vb ?? -1) - (a.vb ?? -1) || b.lotes - a.lotes || String(a.desc).localeCompare(String(b.desc)));
+            const total = lista.reduce((s, g) => s + g.lotes, 0), totalVb = lista.reduce((s, g) => s + (g.vbAnio || 0), 0);
             let acum = 0;
-            lista.forEach((g, i) => { g.orden = i + 1; g.prioritario = acum < PARETO * total && g.lotes > 0; acum += g.lotes; g.acum = total ? acum / total : 0; });
-            return { fc, meses, dem, etapas, productos, lista, total };
+            lista.forEach((g, i) => { g.orden = i + 1; g.prioritario = acum < PARETO * totalVb && g.vbAnio > 0; acum += g.vbAnio || 0; g.acum = totalVb ? acum / totalVb : 0; });
+            return { fc, meses, dem, etapas, productos, lista, total, totalVb, vbLeido: vbs.leido || '' };
         }
 
         // ---------- Hojas del Excel ----------
@@ -17995,16 +18009,16 @@ async function maybeAutoStartTour() {
             const aoa = [], estilos = [];
             const fila = (vals, est) => { aoa.push(vals); estilos.push(est || null); return aoa.length - 1; };
             const prio = r.lista.filter((g) => g.prioritario);
-            const lotesPrio = prio.reduce((s, g) => s + g.lotes, 0);
+            const lotesPrio = prio.reduce((s, g) => s + g.lotes, 0), vbPrio = prio.reduce((s, g) => s + (g.vbAnio || 0), 0);
             fila(['RETIRO DE VISTOS BUENOS (V°B°): RMD FASE 2 SEGÚN FORECAST'], [TIT]);
-            fila([`Forecast: ${r.fc.archivo || 'sin nombre'} · horizonte ${nombreMesCorto(r.meses[0])} a ${nombreMesCorto(r.meses[r.meses.length - 1])} · RMD de SAP del ${rmdPreciso.generado ? dayjs(rmdPreciso.generado).format('DD/MM/YYYY HH:mm') : 'último envío'} · calculado ${dayjs().format('DD/MM/YYYY HH:mm')}`]);
+            fila([`Forecast: ${r.fc.archivo || 'sin nombre'} · horizonte ${nombreMesCorto(r.meses[0])} a ${nombreMesCorto(r.meses[r.meses.length - 1])} · RMD de SAP del ${rmdPreciso.generado ? dayjs(rmdPreciso.generado).format('DD/MM/YYYY HH:mm') : 'último envío'} · V°B° leídos del portal ${r.vbLeido ? 'el ' + dayjs(r.vbLeido).format('DD/MM/YYYY HH:mm') : '(sin lectura)'} · calculado ${dayjs().format('DD/MM/YYYY HH:mm')}`]);
             fila([]);
             // Resumen
-            fila(['Resumen', '', '', '', ''], [SUB, SUB, SUB, SUB, SUB]);
-            fila(['Planta', 'RMD Fase 2 con producción', 'Lotes a fabricar', 'RMD prioritarios', 'Lotes de los prioritarios'], Array(5).fill(CAB));
+            fila(['Resumen', '', '', '', '', '', ''], Array(7).fill(SUB));
+            fila(['Planta', 'RMD Fase 2 con producción', 'Lotes a fabricar', 'V°B° al año (V°B° × lotes)', 'RMD prioritarios', 'Lotes de los prioritarios', 'V°B° al año de los prioritarios'], Array(7).fill(CAB));
             ['P1', 'P2', ''].forEach((p) => {
-                const l = r.lista.filter((g) => !p || g.planta === p), lp = l.filter((g) => g.prioritario);
-                fila([p ? PL(p) : 'Total', l.length, l.reduce((s, g) => s + g.lotes, 0), lp.length, lp.reduce((s, g) => s + g.lotes, 0)], p ? null : Array(5).fill({ font: { bold: true } }));
+                const l = r.lista.filter((g) => !p || g.planta === p), lp = l.filter((g) => g.prioritario), sv = (xs) => xs.reduce((s, g) => s + (g.vbAnio || 0), 0);
+                fila([p ? PL(p) : 'Total', l.length, l.reduce((s, g) => s + g.lotes, 0), sv(l), lp.length, lp.reduce((s, g) => s + g.lotes, 0), sv(lp)], p ? null : Array(7).fill({ font: { bold: true } }));
             });
             fila([]);
             fila(['Etapa', 'ATE: RMD', 'ATE: lotes', 'LIMA: RMD', 'LIMA: lotes'], Array(5).fill(CAB));
@@ -18014,26 +18028,26 @@ async function maybeAutoStartTour() {
             });
             fila([]);
             fila([`Productos terminados con demanda en el horizonte: ${r.dem.size}. Sin árbol en SAP: ${r.productos.filter((p) => !p.ruta).length} (hoja «RETIRO VB árbol PT»).`]);
-            fila([`Prioritarios: los RMD con más lotes hasta juntar el ${Math.round(PARETO * 100)} % de los lotes Fase 2 (${prio.length} RMD, ${lotesPrio} de ${r.total} lotes).`]);
-            fila(['Fase 2 = la primera línea de las Observaciones de SAP dice F2 o F2R. Si dice F3 ya tiene el retiro de V°B° y no se cuenta. Estados: Autorizado, Suspendido, Ingresado y Solicitado (el RMD que decide la etapa en Producción).']);
+            fila([`Orden: V°B° al año = V°B° del RMD × lotes a fabricar (las firmas de V°B° que se dejarían de hacer); en empate, más V°B° y luego más lotes. Prioritarios: los primeros hasta juntar el ${Math.round(PARETO * 100)} % de los V°B° al año (${prio.length} RMD, ${vbPrio} de ${r.totalVb} V°B° al año; ${lotesPrio} lotes).`]);
+            fila(['Solo FASE 2 (la primera línea de las Observaciones de SAP dice F2 o F2R) Autorizado, Ingresado o Suspendido: el RMD que decide la etapa en Producción. Los FASE 3 (F3) ya tienen el retiro de V°B° y no salen. V°B° = casillas «V.B.» de los pasos activos de PROCEDIMIENTO (la cuenta del PPT de V°B°).']);
             fila(['Lotes = demanda del forecast en el horizonte bajada por el árbol de producción con las cantidades de la lista de materiales, ÷ cantidad base de la lista de cada etapa (redondeado hacia arriba). Lotes por mes: sin redondear.']);
             fila([]);
             // Consolidado + detalle (una sola tabla: los prioritarios primero, marcados)
-            const cab = ['N°', 'Prioritario', 'Planta', 'Etapa', 'RMD', 'Versión', 'Estado', 'Descripción', 'Material(es)', 'Lotes a fabricar', '% acumulado', 'Productos terminados que lo usan',
+            const cab = ['N°', 'Prioritario', 'Planta', 'Etapa', 'RMD', 'Versión', 'Estado', 'Descripción', 'Material(es)', 'V°B°', 'Lotes a fabricar', 'V°B° al año', '% acumulado', 'Productos terminados que lo usan',
                 ...r.meses.map(nombreMesCorto), 'Cantidad base (lote)', 'Primera línea de Observaciones', 'Productos terminados (código y descripción)'];
-            fila(['Consolidado y detalle de RMD Fase 2 (ordenados por lotes a fabricar; los PRIORITARIOS van primero)'], [SUB]);
+            fila(['Consolidado y detalle de RMD Fase 2 (ordenados por V°B° al año = V°B° × lotes; los PRIORITARIOS van primero)'], [SUB]);
             const iCab = fila(cab, Array(cab.length).fill(CAB));
             const iIni = aoa.length;
             r.lista.forEach((g) => {
                 const bases = [...new Set(g.mats.map((e) => `${e.base ? e.base.toLocaleString('es-PE') : '?'} ${e.um}`.trim()))].join(' / ');
                 fila([g.orden, g.prioritario ? 'PRIORITARIO' : '', PL(g.planta), ETQ(g.etapa), rmdTxt(g.u), g.u.version, ESTADO_TXT[g.estado] || g.estado, g.desc || '',
-                    g.mats.map((e) => e.material).join(', '), g.lotes, Math.round(g.acum * 1000) / 1000, g.pts.size,
+                    g.mats.map((e) => e.material).join(', '), g.vb ?? 'sin dato', g.lotes, g.vbAnio ?? '', Math.round(g.acum * 1000) / 1000, g.pts.size,
                     ...r.meses.map((m) => (g.pm[m] ? Math.round(g.pm[m] * 10) / 10 : '')), bases, linea1(g.obs), ptsTxt(g, r.dem)],
                     g.prioritario ? [null, PRIO] : null);
             });
             const ws = XLSX.utils.aoa_to_sheet(aoa);
             estilos.forEach((est, i) => { if (!est) return; est.forEach((s, j) => { if (!s) return; const c = ws[XLSX.utils.encode_cell({ r: i, c: j })]; if (c) c.s = s; }); });
-            for (let i = iIni; i < aoa.length; i++) { const c = ws[XLSX.utils.encode_cell({ r: i, c: 10 })]; if (c) c.z = '0%'; }
+            for (let i = iIni; i < aoa.length; i++) { const c = ws[XLSX.utils.encode_cell({ r: i, c: 12 })]; if (c) c.z = '0%'; }
             ws['!cols'] = cab.map((h, j) => ({ wch: j === 0 ? 24 : /Descripción|Observaciones/.test(h) ? 44 : /código y descripción/.test(h) ? 70 : /Material/.test(h) ? 22 : /Productos terminados que/.test(h) ? 14 : Math.max(8, Math.min(16, h.length + 2)) }));
             ws['!autofilter'] = { ref: XLSX.utils.encode_range({ s: { r: iCab, c: 0 }, e: { r: Math.max(iCab, aoa.length - 1), c: cab.length - 1 } }) };
             return ws;
@@ -18041,17 +18055,17 @@ async function maybeAutoStartTour() {
         // Mapa de cada producto terminado con su árbol: una fila por etapa, con su RMD y si entra en el retiro de V°B°.
         function hojaArbol(r) {
             const cab = ['Producto terminado', 'Descripción', 'Tipo', 'Marca', 'Demanda en el horizonte', 'Unidad', 'Etapa', 'Material', 'Descripción del material', 'Cantidad pedida a la etapa',
-                'Cantidad base (lote)', 'Lotes de este producto', 'RMD', 'Versión', 'Estado', 'Planta', 'Fase', 'Retiro V°B°', 'Primera línea de Observaciones', 'Aviso'];
+                'Cantidad base (lote)', 'Lotes de este producto', 'RMD', 'Versión', 'Estado', 'Planta', 'Fase', 'Retiro V°B°', 'V°B°', 'Primera línea de Observaciones', 'Aviso'];
             const filas = [];
             const orden = [...r.productos].sort((a, b) => b.d.total - a.d.total);
             orden.forEach((p) => {
                 const d = p.d, base = [d.pt, d.desc, d.tipo, d.marca, Math.round(d.total), d.um];
-                if (!p.ruta) { filas.push([...base, '', '', '', '', '', '', '', '', '', '', '', '', '', '', 'Sin árbol de producción en SAP (lista de materiales)']); return; }
+                if (!p.ruta) { filas.push([...base, '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', 'Sin árbol de producción en SAP (lista de materiales)']); return; }
                 p.pasos.forEach(({ e, req }) => {
                     const u = e.u;
                     filas.push([...base, ETQ(e.etapa), e.material, e.desc, Math.round(req * 100) / 100, e.base || '', e.base > 0 ? Math.round(req / e.base * 10) / 10 : '',
-                        u ? rmdTxt(u) : 'Sin RMD', u ? u.version : '', u ? (ESTADO_TXT[e.estado] || e.estado) : '', PL(e.planta), u ? (e.f3 ? 'FASE 3' : e.fase) : '',
-                        e.entra ? 'SÍ' : (u && e.f3 ? 'Ya aplicado (F3)' : 'No'), linea1(e.obs),
+                        u ? rmdTxt(u) : 'Sin RMD', u ? u.version : '', u ? (ESTADO_TXT[e.estado] || e.estado) : '', PL(e.planta), u ? e.fase : '',
+                        e.entra ? 'SÍ' : (u && e.f3 ? 'Ya aplicado (F3)' : 'No'), e.vb ?? '', linea1(e.obs),
                         [p.ruta.aviso, p.ruta.rutas > 1 ? `${p.ruta.rutas} rutas vigentes: se usó la primera` : '', p.umDistinta ? `Unidad del forecast ${d.um} y de la lista ${p.umDistinta}` : ''].filter(Boolean).join(' · ')]);
                 });
             });
