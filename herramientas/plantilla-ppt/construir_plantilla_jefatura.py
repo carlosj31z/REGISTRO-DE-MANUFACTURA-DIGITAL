@@ -87,6 +87,7 @@ CUADRES = [
         ([('Autorizados: ', AZ, True), ('{{J_AUT_ANT}}', AZ, True), (' al {{J_FECHA_ANT}}', GR, False)], ['Autorizados cierre']),
         ([('  +  ', GR, False), ('{{J_AUTORIZADO}}', AZ, True), (' autorizados del mes', GR, False)], ['Autorizado']),
         ([('  −  ', GR, False), ('{{J_AUT_RE}}', AZ, True), (' reautorizados', GR, False)], ['Autorizado']),
+        ([('  −  ', GR, False), ('{{J_AUT_NSOL}}', AZ, True), (' con versión nueva', GR, False)], ['Pendientes corte']),
         ([('  −  ', GR, False), ('{{J_AUT_SUSP}}', AZ, True), (' suspendidos', GR, False)], ['Pendientes corte']),
         ([('  =  ', GR, False), ('{{J_AUT_HOY}}', AZ, True), (' al {{J_FECHA_CORTE}}', GR, False)], ['Autorizados corte'])])]
 CUADRE_PASOS = []   # [(nombre de la copia, [tarjetas a resaltar])] en orden de clic
