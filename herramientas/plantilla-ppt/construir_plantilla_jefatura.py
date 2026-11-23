@@ -77,9 +77,9 @@ for _k, (_nombre, _partes) in enumerate([
         ('Cuadre pendientes', [('Pendientes: ', AZ, True), ('{{J_PEND_ANT}}', NAR, True), (' al {{J_FECHA_ANT}}  −  ', GR, False), ('{{J_AUT_BK}}', NAR, True),
             (' autorizados del backlog  +  ', GR, False), ('{{J_PEND_NUEVOS}}', NAR, True), (' nuevas solicitudes  =  ', GR, False), ('{{J_PEND_HOY}}', NAR, True), (' al {{J_FECHA_CORTE}}', GR, False)]),
         ('Cuadre autorizados', [('Autorizados: ', AZ, True), ('{{J_AUT_ANT}}', AZ, True), (' al {{J_FECHA_ANT}}  +  ', GR, False), ('{{J_AUTORIZADO}}', AZ, True),
-            (' autorizados del mes  −  ', GR, False), ('{{J_AUT_NS_TOT}}', AZ, True), (' de nuevas solicitudes del mes (', GR, False), ('{{J_AUT_NSOL}}', AZ, True), (' versiones nuevas, ', GR, False),
-            ('{{J_AUT_REAUT}}', AZ, True), (' reautorizados, ', GR, False), ('{{J_AUT_SUSP}}', AZ, True), (' suspendidos)  =  ', GR, False), ('{{J_AUT_HOY}}', AZ, True), (' al {{J_FECHA_CORTE}}', GR, False)])]):
-    _c = s.shapes.add_textbox(Emu(546100), Emu(5180000 + _k * 260000), Emu(11099800), Emu(250000)); _c.name = _nombre
+            (' autorizados del mes  −  ', GR, False), ('{{J_AUT_NS_TOT}}', AZ, True), (' de nuevas solicitudes (', GR, False), ('{{J_AUT_REAUT}}', AZ, True), (' reautorizados, ', GR, False),
+            ('{{J_AUT_SUSP}}', AZ, True), (' suspendidos, ', GR, False), ('{{J_AUT_NSOL}}', AZ, True), (' versiones nuevas)  =  ', GR, False), ('{{J_AUT_HOY}}', AZ, True), (' al {{J_FECHA_CORTE}}', GR, False)])]):
+    _c = s.shapes.add_textbox(Emu(546100), Emu(5180000 + _k * 260000), Emu(11420000), Emu(250000)); _c.name = _nombre
     _tf = _c.text_frame; _tf.word_wrap = True
     _tf.margin_left = _tf.margin_right = _tf.margin_top = _tf.margin_bottom = 0
     _pp = _tf.paragraphs[0]
