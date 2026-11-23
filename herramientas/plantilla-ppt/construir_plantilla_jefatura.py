@@ -62,6 +62,19 @@ for k, pre in (('Programa', 'PROG'), ('Otros', 'OTROS')):
 runs(sh(s, 'Caracterizaciones texto'), [None, '{{J_CAR_TOTAL}}', None, '{{J_CAR_PEND}} pendientes.'])
 runs(sh(s, 'Proyeccion'), [None, '{{J_PROY}}'])
 runs(sh(s, 'Autorizado'), [None, '{{J_AUTORIZADO}}', '  ({{J_PCT}}%)'])
+# Cómo cuadra el cierre con el corte (Carlos, 23/11/2026: «breve y sencillo», sin cambiar el resto de la lámina).
+from pptx.util import Pt, Emu
+from pptx.dml.color import RGBColor
+_c = s.shapes.add_textbox(Emu(546100), Emu(5180000), Emu(11099800), Emu(560000)); _c.name = 'Cuadre'
+_tf = _c.text_frame; _tf.word_wrap = True
+_tf.margin_left = _tf.margin_right = _tf.margin_top = _tf.margin_bottom = 0
+for _k, _partes in enumerate([
+        [('Pendientes: ', True), ('{{J_PEND_ANT}} al {{J_FECHA_ANT}} − {{J_AUT_BK}} autorizados del backlog + {{J_PEND_NUEVOS}} nuevos del mes = {{J_PEND_HOY}} al {{J_FECHA_CORTE}}', False)],
+        [('Autorizados: ', True), ('{{J_AUT_ANT}} al {{J_FECHA_ANT}} + {{J_AUT_SUMAN}} que pasaron a autorizados − {{J_AUT_SUSP}} suspendidos en el mes = {{J_AUT_HOY}} al {{J_FECHA_CORTE}}', False)]]):
+    _pp = _tf.paragraphs[0] if _k == 0 else _tf.add_paragraph()
+    for _t, _b in _partes:
+        _rr = _pp.add_run(); _rr.text = _t; _rr.font.size = Pt(11); _rr.font.bold = _b; _rr.font.name = 'Raleway'
+        _rr.font.color.rgb = RGBColor(0x4A, 0x3F, 0x8C) if _b else RGBColor(0x4D, 0x4D, 0x4D)
 
 # Láminas 3 y 4: Ruta 1 y Ruta 2, P1 arriba y P2 abajo (los cuadros se repiten por panel, en ese orden).
 for s, R in ((S[2], 'R1'), (S[3], 'R2')):
