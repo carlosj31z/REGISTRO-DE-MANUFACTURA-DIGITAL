@@ -75,7 +75,7 @@ for s, R in ((S[2], 'R1'), (S[3], 'R2')):
         runs(sh(s, f'Avance {pl}'), ['{{%sAVANCE}}' % k, None])
         for nombre, c in (('Borrador', 'BOR'), ('Ingresar', 'ING'), ('Flujo SAP', 'FLU'), ('Control de cambio', 'CC'), ('Por revision', 'REV'), ('Autorizado', 'AUT')):
             runs(sh(s, f'Valor {nombre}', i), ['{{%s%s}}' % (k, c)])
-        runs(sh(s, 'Responsable Control de cambio', i), ['PRO {{%sCC_PRO}}' % k, ' · ASC {{%sCC_ASC}}' % k])
+        runs(sh(s, 'Responsable Control de cambio', i), ['PRO {{%sCC_PRO}}' % k, ' · ASC {{%sCC_ASC}}{{%sCC_SD}}' % (k, k)])
         if R == 'R1': runs(sh(s, 'Responsable Autorizado', i), ['{{%sAUT_BK}} del backlog · {{%sAUT_MES}} del mes' % (k, k)])
 
 # Lámina 5: pendientes por planta (Ruta 1 arriba, Ruta 2 abajo); color de cada número para poder poner «–» en gris si es 0.
