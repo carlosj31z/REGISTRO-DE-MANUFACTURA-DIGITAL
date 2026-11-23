@@ -16047,7 +16047,22 @@ async function maybeAutoStartTour() {
             XLSX.utils.book_append_sheet(wb, w2, 'Ruta 2 caracterizaciones');
             XLSX.writeFile(wb, `PENDIENTES_RUTA_1_Y_2_${corte.format('YYYY-MM-DD')}.xlsx`, { compression: true });
         }
+        // PPT para jefatura (Carlos, 23/11/2026): las etapas del programa autorizadas a mano (sin RMD autorizado en SAP) no cuentan
+        // ni como programadas ni como autorizadas, para que los números cuadren con SAP.
+        function sinManualesR1(r1) {
+            if (!r1 || r1.error) return r1;
+            const out = Object.assign({}, r1);
+            ['P1', 'P2'].forEach((pl) => {
+                if (!r1[pl]) return;
+                const items = (r1[pl].items || []).filter((it) => !(it.cat === 'aut' && it.manual));
+                const aut = items.filter((it) => it.cat === 'aut'), bk = aut.filter((it) => it.bk).length;
+                out[pl] = Object.assign({}, r1[pl], { items, aut: aut.length, autBk: bk, autMes: aut.length - bk, autProd: aut.length,
+                    manuales: (r1[pl].items || []).length - items.length });
+            });
+            return out;
+        }
         async function zipPpt(d, g, jefatura) {
+            if (jefatura) d = Object.assign({}, d, { r1: sinManualesR1(d.r1) });
             const JSZip = await cargarJsZip();
             const zip = await JSZip.loadAsync(jefatura ? STATUS_RMD_JEFATURA_B64 : STATUS_RMD_PLANTILLA_B64, { base64: true });
             const v = valoresPpt(d, g);
