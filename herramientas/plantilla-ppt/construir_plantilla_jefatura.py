@@ -71,19 +71,40 @@ for _t in ('Backlog: {{J_PEND_BK}}', 'Nuevas solicitudes: {{J_PEND_NUEVOS}}'):
 # Cómo cuadra el cierre con el corte (Carlos, 23/11/2026: «breve y sencillo», sin cambiar el resto de la lámina).
 from pptx.util import Pt, Emu
 from pptx.dml.color import RGBColor
-# Una línea por cuadro (para animarlas por separado), con los números en negrita del color de su tarjeta.
-NAR, AZ, GR = RGBColor(0xE0, 0x88, 0x3A), RGBColor(0x4A, 0x3F, 0x8C), RGBColor(0x4D, 0x4D, 0x4D)
-for _k, (_nombre, _partes) in enumerate([
-        ('Cuadre pendientes', [('Pendientes: ', AZ, True), ('{{J_PEND_ANT}}', NAR, True), (' al {{J_FECHA_ANT}}  −  ', GR, False), ('{{J_AUT_BK}}', NAR, True),
-            (' autorizados del backlog  +  ', GR, False), ('{{J_PEND_NUEVOS}}', NAR, True), (' nuevas solicitudes  =  ', GR, False), ('{{J_PEND_HOY}}', NAR, True), (' al {{J_FECHA_CORTE}}', GR, False)]),
-        ('Cuadre autorizados', [('Autorizados: ', AZ, True), ('{{J_AUT_ANT}}', AZ, True), (' al {{J_FECHA_ANT}}  +  ', GR, False), ('{{J_AUTORIZADO}}', AZ, True),
-            (' autorizados del mes  −  ', GR, False), ('{{J_AUT_RE}}', AZ, True), (' reautorizados  −  ', GR, False), ('{{J_AUT_SUSP}}', AZ, True), (' suspendidos  =  ', GR, False), ('{{J_AUT_HOY}}', AZ, True), (' al {{J_FECHA_CORTE}}', GR, False)])]):
-    _c = s.shapes.add_textbox(Emu(546100), Emu(5180000 + _k * 260000), Emu(11420000), Emu(250000)); _c.name = _nombre
-    _tf = _c.text_frame; _tf.word_wrap = True
-    _tf.margin_left = _tf.margin_right = _tf.margin_top = _tf.margin_bottom = 0
-    _pp = _tf.paragraphs[0]
-    for _t, _col, _b in _partes:
-        _rr = _pp.add_run(); _rr.text = _t; _rr.font.size = Pt(11); _rr.font.bold = _b; _rr.font.name = 'Raleway'; _rr.font.color.rgb = _col
+# Una línea por cuadro, con los números en negrita del color de su tarjeta. Cada línea se arma por partes con cada clic
+# (Carlos, 23/11/2026: «que vean de dónde salió cada dato»): una copia de la línea por paso, una encima de otra, que solo
+# deja ver su trozo (el resto transparente); al aparecer se resalta (crece y vuelve) la tarjeta de donde sale el dato.
+from pptx.oxml.ns import qn
+from lxml import etree
+NAR, AZ, GR, BL = RGBColor(0xE0, 0x88, 0x3A), RGBColor(0x4A, 0x3F, 0x8C), RGBColor(0x4D, 0x4D, 0x4D), RGBColor(0xFF, 0xFF, 0xFF)
+CUADRES = [
+    ('Cuadre pendientes', [
+        ([('Pendientes: ', AZ, True), ('{{J_PEND_ANT}}', NAR, True), (' al {{J_FECHA_ANT}}', GR, False)], ['Pendientes cierre']),
+        ([('  −  ', GR, False), ('{{J_AUT_BK}}', NAR, True), (' autorizados del backlog', GR, False)], ['Programa detalle', 'Otros detalle']),
+        ([('  +  ', GR, False), ('{{J_PEND_NUEVOS}}', NAR, True), (' nuevas solicitudes', GR, False)], ['Pendientes corte']),
+        ([('  =  ', GR, False), ('{{J_PEND_HOY}}', NAR, True), (' al {{J_FECHA_CORTE}}', GR, False)], ['Pendientes corte'])]),
+    ('Cuadre autorizados', [
+        ([('Autorizados: ', AZ, True), ('{{J_AUT_ANT}}', AZ, True), (' al {{J_FECHA_ANT}}', GR, False)], ['Autorizados cierre']),
+        ([('  +  ', GR, False), ('{{J_AUTORIZADO}}', AZ, True), (' autorizados del mes', GR, False)], ['Autorizado']),
+        ([('  −  ', GR, False), ('{{J_AUT_RE}}', AZ, True), (' reautorizados', GR, False)], ['Autorizado']),
+        ([('  −  ', GR, False), ('{{J_AUT_SUSP}}', AZ, True), (' suspendidos', GR, False)], ['Pendientes corte']),
+        ([('  =  ', GR, False), ('{{J_AUT_HOY}}', AZ, True), (' al {{J_FECHA_CORTE}}', GR, False)], ['Autorizados corte'])])]
+CUADRE_PASOS = []   # [(nombre de la copia, [tarjetas a resaltar])] en orden de clic
+for _k, (_nombre, _trozos) in enumerate(CUADRES):
+    for _m in range(len(_trozos)):
+        _c = s.shapes.add_textbox(Emu(546100), Emu(5180000 + _k * 260000), Emu(11420000), Emu(250000)); _c.name = f'{_nombre} {_m + 1}'
+        _tf = _c.text_frame; _tf.word_wrap = True
+        _tf.margin_left = _tf.margin_right = _tf.margin_top = _tf.margin_bottom = 0
+        _pp = _tf.paragraphs[0]
+        for _q, (_partes, _) in enumerate(_trozos):
+            for _t, _col, _b in _partes:
+                _rr = _pp.add_run(); _rr.text = _t; _rr.font.size = Pt(11); _rr.font.bold = _b; _rr.font.name = 'Raleway'
+                _rr.font.color.rgb = _col
+                if _q != _m:   # solo se ve su trozo; el resto ocupa su lugar pero transparente
+                    _clr = _rr.font.color._xFill.find(qn('a:srgbClr')) if hasattr(_rr.font.color, '_xFill') else None
+                    _clr = _rr._r.find(qn('a:rPr')).find('.//' + qn('a:srgbClr'))
+                    etree.SubElement(_clr, qn('a:alpha')).set('val', '0')
+        CUADRE_PASOS.append((_c.name, _trozos[_m][1], None))
 
 # Animaciones de la lámina 2 (Carlos, 23/11/2026: «que se entienda la suma»): con cada clic aparece (desvanecer) un paso:
 # 1 cierre del mes anterior · 2 Programa y Otros · 3 caracterizaciones · 4 proyección y autorizado · 5 corte ·
@@ -93,7 +114,7 @@ for _x in s.shapes: _ids.setdefault(_x.name, []).append(_x.shape_id)
 _pasos = [['Fecha cierre', 'Pendientes cierre', 'Autorizados cierre'],
           ['Conector'] + [f'{k}{x}' for k in ('Programa', 'Otros') for x in ('', ' total', ' autorizados', ' detalle')],
           ['Caracterizaciones', 'Caracterizaciones franja', 'Caracterizaciones texto'],
-          ['Proyeccion', 'Autorizado'], ['Fecha corte', 'Pendientes corte', 'Autorizados corte'], ['Cuadre pendientes'], ['Cuadre autorizados']]
+          ['Proyeccion', 'Autorizado'], ['Fecha corte', 'Pendientes corte', 'Autorizados corte']]
 _conector_car = max(_ids['Conector'])   # el conector punteado de caracterizaciones es el último
 _pasos_ids = []
 for _i, _p in enumerate(_pasos):
@@ -113,14 +134,59 @@ def _efecto(spid, primero):
             '<p:attrNameLst><p:attrName>style.visibility</p:attrName></p:attrNameLst></p:cBhvr><p:to><p:strVal val="visible"/></p:to></p:set>'
             f'<p:animEffect transition="in" filter="fade"><p:cBhvr><p:cTn id="{_cid()}" dur="500"/><p:tgtEl><p:spTgt spid="{spid}"/></p:tgtEl></p:cBhvr></p:animEffect>'
             '</p:childTnLst></p:cTn></p:par>')
+def _resaltar(spid):
+    # Énfasis «Aumentar o reducir» al 108 % que vuelve a su tamaño.
+    return (f'<p:par><p:cTn id="{_cid()}" presetID="6" presetClass="emph" presetSubtype="0" autoRev="1" fill="hold" nodeType="withEffect">'
+            '<p:stCondLst><p:cond delay="200"/></p:stCondLst><p:childTnLst>'
+            f'<p:animScale><p:cBhvr><p:cTn id="{_cid()}" dur="450" fill="hold"/><p:tgtEl><p:spTgt spid="{spid}"/></p:tgtEl></p:cBhvr>'
+            '<p:by x="108000" y="108000"/></p:animScale></p:childTnLst></p:cTn></p:par>')
+def _ocultar(spid):
+    return (f'<p:par><p:cTn id="{_cid()}" presetID="1" presetClass="exit" presetSubtype="0" fill="hold" grpId="1" nodeType="withEffect">'
+            '<p:stCondLst><p:cond delay="500"/></p:stCondLst><p:childTnLst>'
+            f'<p:set><p:cBhvr><p:cTn id="{_cid()}" dur="1" fill="hold"><p:stCondLst><p:cond delay="0"/></p:stCondLst></p:cTn><p:tgtEl><p:spTgt spid="{spid}"/></p:tgtEl>'
+            '<p:attrNameLst><p:attrName>style.visibility</p:attrName></p:attrNameLst></p:cBhvr><p:to><p:strVal val="hidden"/></p:to></p:set>'
+            '</p:childTnLst></p:cTn></p:par>')
+def _opacidad(spid, val, delay=0):
+    # Énfasis «Transparencia»: atenúa (0.3) o devuelve (1) la tarjeta y se queda así.
+    return (f'<p:par><p:cTn id="{_cid()}" presetID="9" presetClass="emph" presetSubtype="0" fill="hold" nodeType="withEffect">'
+            f'<p:stCondLst><p:cond delay="{delay}"/></p:stCondLst><p:childTnLst>'
+            f'<p:set><p:cBhvr><p:cTn id="{_cid()}" dur="400" fill="hold"/><p:tgtEl><p:spTgt spid="{spid}"/></p:tgtEl>'
+            f'<p:attrNameLst><p:attrName>style.opacity</p:attrName></p:attrNameLst></p:cBhvr><p:to><p:strVal val="{val}"/></p:to></p:set>'
+            f'<p:animEffect filter="image" prLst="opacity: {val}"><p:cBhvr rctx="IE"><p:cTn id="{_cid()}" dur="400" fill="hold"/>'
+            f'<p:tgtEl><p:spTgt spid="{spid}"/></p:tgtEl></p:cBhvr></p:animEffect></p:childTnLst></p:cTn></p:par>')
+def _color(spid):
+    # Énfasis «Color de fuente»: el texto de la tarjeta (su número) se ilumina en dorado y vuelve.
+    return (f'<p:par><p:cTn id="{_cid()}" presetID="3" presetClass="emph" presetSubtype="2" autoRev="1" fill="hold" nodeType="withEffect">'
+            '<p:stCondLst><p:cond delay="200"/></p:stCondLst><p:childTnLst>'
+            f'<p:animClr clrSpc="rgb"><p:cBhvr override="childStyle"><p:cTn id="{_cid()}" dur="700" fill="hold"/><p:tgtEl><p:spTgt spid="{spid}"/></p:tgtEl>'
+            '<p:attrNameLst><p:attrName>style.color</p:attrName></p:attrNameLst></p:cBhvr><p:to><a:srgbClr val="F2B705"/></p:to></p:animClr>'
+            '</p:childTnLst></p:cTn></p:par>')
+_ids = {}
+for _x in s.shapes: _ids.setdefault(_x.name, []).append(_x.shape_id)
+_ocultos = set()
 _cuerpo = ''
-for _l in _pasos_ids:
+def _clic(efs):
     a1, a2 = _cid(), _cid()
-    _efs = ''.join(_efecto(x, k == 0) for k, x in enumerate(_l))
-    _cuerpo += (f'<p:par><p:cTn id="{a1}" fill="hold"><p:stCondLst><p:cond delay="indefinite"/></p:stCondLst><p:childTnLst>'
-                f'<p:par><p:cTn id="{a2}" fill="hold"><p:stCondLst><p:cond delay="0"/></p:stCondLst><p:childTnLst>{_efs}</p:childTnLst></p:cTn></p:par>'
-                '</p:childTnLst></p:cTn></p:par>')
-_bld = ''.join(f'<p:bldP spid="{x}" grpId="0"{" animBg=\"1\"" if True else ""}/>' for _l in _pasos_ids for x in _l if x not in _cxn)
+    return (f'<p:par><p:cTn id="{a1}" fill="hold"><p:stCondLst><p:cond delay="indefinite"/></p:stCondLst><p:childTnLst>'
+            f'<p:par><p:cTn id="{a2}" fill="hold"><p:stCondLst><p:cond delay="0"/></p:stCondLst><p:childTnLst>{efs}</p:childTnLst></p:cTn></p:par>'
+            '</p:childTnLst></p:cTn></p:par>')
+for _l in _pasos_ids:
+    _cuerpo += _clic(''.join(_efecto(x, k == 0) for k, x in enumerate(_l)))
+_cuadre_ids = []
+# Mientras se muestra un dato, las demás tarjetas se atenúan (Carlos, 23/11/2026); al terminar el cuadre vuelven todas.
+_tarjetas_todas = [x for _l in _pasos_ids for x in _l]
+for _q, (_copia, _tarjetas, _anterior) in enumerate(CUADRE_PASOS):
+    _sp = _ids[_copia][0]; _cuadre_ids.append(_sp)
+    _fuente = {x for t in _tarjetas for x in _ids[t][:1]}
+    _efs = _efecto(_sp, True) + ''.join(_resaltar(x) + _color(x) for x in sorted(_fuente))
+    _efs += ''.join(_opacidad(x, '1' if x in _fuente else '0.3') for x in _tarjetas_todas)
+    if _q == len(CUADRE_PASOS) - 1:
+        _efs += ''.join(_opacidad(x, '1', 2500) for x in _tarjetas_todas)
+    if _anterior:
+        _efs += _ocultar(_ids[_anterior][0]); _ocultos.add(_ids[_anterior][0])
+    _cuerpo += _clic(_efs)
+_bld = ''.join(f'<p:bldP spid="{x}" grpId="0" animBg="1"/>' for _l in _pasos_ids + [_cuadre_ids] for x in _l if x not in _cxn)
+_bld += ''.join(f'<p:bldP spid="{x}" grpId="1" animBg="1"/>' for x in sorted(_ocultos))
 TIMING_LAMINA2 = ('<p:transition spd="med"><p:fade/></p:transition><p:timing><p:tnLst><p:par><p:cTn id="1" dur="indefinite" restart="never" nodeType="tmRoot"><p:childTnLst>'
     '<p:seq concurrent="1" nextAc="seek"><p:cTn id="2" dur="indefinite" nodeType="mainSeq"><p:childTnLst>' + _cuerpo + '</p:childTnLst></p:cTn>'
     '<p:prevCondLst><p:cond evt="onPrev" delay="0"><p:tgtEl><p:sldTgt/></p:tgtEl></p:cond></p:prevCondLst>'
