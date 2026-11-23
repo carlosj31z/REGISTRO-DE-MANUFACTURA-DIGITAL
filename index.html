@@ -16188,8 +16188,8 @@ async function maybeAutoStartTour() {
             // «Enviar a Status RMD» en los datos precisos) y por descripción + planta + etapa. La última es la de versión más alta
             // (y, a igual versión, la registrada después) entre Autorizado, Ingresado y Suspendido.
             const ULT = new Set([...ES_REGISTRADO, 'INACTIVO']);
-            const linajeDe = new Map();
-            ((precisos && precisos.filas) || []).forEach((f) => { const c = String(f[0] || '').trim(), l = String(f[1] || '').trim(); if (c && l) linajeDe.set(c, l); });
+            const linajeDe = new Map(), regMs = new Map();
+            ((precisos && precisos.filas) || []).forEach((f) => { const c = String(f[0] || '').trim(), l = String(f[1] || '').trim(); if (c && l) linajeDe.set(c, l); if (c && Number.isFinite(f[9])) regMs.set(c, f[9]); });
             const padre = new Map(), raiz = (k) => { let r = k; while (padre.get(r) !== r) r = padre.get(r); let c = k; while (c !== r) { const nx = padre.get(c); padre.set(c, r); c = nx; } return r; };
             const unirUF = (a, b) => { [a, b].forEach((k) => { if (!padre.has(k)) padre.set(k, k); }); const ra = raiz(a), rb = raiz(b); if (ra !== rb) padre.set(ra < rb ? rb : ra, ra < rb ? ra : rb); };
             const nodoV = (v) => `${v.planta}|c:${String(v.codigo || `S${v.sol}`).trim()}`;
@@ -16198,14 +16198,28 @@ async function maybeAutoStartTour() {
             const conMaster = [...linajeDe.values()].some((l) => l.startsWith('M:'));
             versiones.forEach((v) => {
                 const c = nodoV(v), l = v.codigo && linajeDe.get(String(v.codigo).trim()); unirUF(c, c);
-                if (l) unirUF(c, `${v.planta}|c:${l}`);
-                if (v.desc && !(conMaster && l)) unirUF(c, `${v.planta}|d:${String(v.desc).normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toUpperCase().replace(/\s+/g, ' ')}|${etapaDe(v)}`);
+                // 23/11/2026 (pedido de Carlos, «que cuadre con el portal»): el master del portal («M:<código>») une versiones de
+                // distintas plantas y etapas (versión principal / versión anterior): se une sin la planta, como allí.
+                if (l) unirUF(c, conMaster && l.startsWith('M:') ? `L|${l}` : `${v.planta}|c:${l}`);
+                if (v.desc && !(conMaster && l && l.startsWith('M:'))) unirUF(c, `${v.planta}|d:${String(v.desc).normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toUpperCase().replace(/\s+/g, ' ')}|${etapaDe(v)}`);
             });
             const masters = new Map();
             versiones.forEach((v) => { if (!ULT.has(v.estado)) return; const k = raiz(nodoV(v)); if (!masters.has(k)) masters.set(k, []); masters.get(k).push(v); });
             const ultimas = new Set();
-            masters.forEach((vs) => { vs.sort((a, b) => (b.version - a.version) || ((b.fReg ? b.fReg.valueOf() : 0) - (a.fReg ? a.fReg.valueOf() : 0))); ultimas.add(vs[0]); });
+            // A igual versión, la registrada después (con la hora de los datos de SAP, como el portal).
+            const msReg = (v) => regMs.get(String(v.codigo || '').trim()) || (v.fReg ? v.fReg.valueOf() : 0);
+            masters.forEach((vs) => { vs.sort((a, b) => (b.version - a.version) || (msReg(b) - msReg(a))); ultimas.add(vs[0]); });
             const esUltima = (v) => ultimas.has(v);
+            // 23/11/2026 (pedido de Carlos, «que cuadre con el portal»): como «Última versión de cada master» (casilla «Quitar los que ya
+            // tienen otro master Autorizado o Ingresado», marcada por defecto), un Suspendido que es la última versión de su master no
+            // cuenta si otro master del mismo material (código por defecto), etapa y planta tiene hoy su última versión Autorizada
+            // (o, si no hay, Ingresada): ya está reemplazado.
+            const claveMat = (v) => { const d = normalizeMaterialCode(v.codDef || ''); return d ? `${d}|${etapaDe(v)}|${v.planta}` : ''; };
+            const vivos = new Map();
+            [...ultimas].filter((v) => (v.estado === 'AUTORIZADO' || v.estado === 'INGRESADO') && claveMat(v)).sort((a, b) => (a.estado === 'AUTORIZADO' ? 0 : 1) - (b.estado === 'AUTORIZADO' ? 0 : 1))
+                .forEach((v) => { const k = claveMat(v); if (!vivos.has(k)) vivos.set(k, v); });
+            const reemplazoDe = (v) => { const k = claveMat(v), w = k ? vivos.get(k) : null; return w && String(w.codigo) !== String(v.codigo) ? w : null; };
+            const reemplazados = [];
             // Ingresados pendientes: solo la última versión de su master (pedido de Carlos, 16/11/2026), para que backlog + mes
             // vigente sumen lo mismo que los Ingresados del Resumen y de la hoja «Última versión» del portal.
             for (let i = pend.length - 1; i >= 0; i--) if (pend[i].tipo === 'Ingresado' && !esUltima(pend[i].v)) pend.splice(i, 1);
@@ -16218,6 +16232,8 @@ async function maybeAutoStartTour() {
                 // Pedido de Carlos (16/11/2026, «así debería cuadrar»): los Suspendidos del backlog + mes vigente son los mismos del
                 // cuadro por planta (última versión de cada master), aunque ya tengan una solicitud nueva abierta.
                 if (esUltima(v)) {
+                    const r = reemplazoDe(v);
+                    if (r) { reemplazados.push({ v, por: r }); return; }
                     const m = fS ? mesDe(fS) : 'sin fecha', d = decision(v);
                     const x = { tipo: 'Suspendido', v, m, cuando: vigente(m), fS, d, porque: `Suspendido (última versión de su master): cuenta en el mes de su suspensión${fS ? `, ${dd(fS)}` : ''}.` };
                     x.prio = !fS ? 'Sin fecha' : fS.year() >= anio ? `Prioridad 1 (${anio})` : fS.year() === anio - 1 ? `Prioridad 2 (${anio - 1})` : `Prioridad 3 (${anio - 2} y antes)`;
@@ -16267,7 +16283,7 @@ async function maybeAutoStartTour() {
                 if (!resumen[v.planta]) return;
                 if (v.estado === 'AUTORIZADO') resumen[v.planta].AUTORIZADO += 1;
                 if (v.estado === 'INGRESADO') resumen[v.planta].INGRESADO += 1;
-                if ((v.estado === 'SUSPENDIDO' || v.estado === 'INACTIVO') && !esInactivo(v)) {
+                if ((v.estado === 'SUSPENDIDO' || v.estado === 'INACTIVO') && !esInactivo(v) && !reemplazoDe(v)) {
                     resumen[v.planta].SUSPENDIDO += 1;
                     // Suspendidos del Resumen que no están en los pendientes (pedido de Carlos, 16/11/2026: que cuadre y se vea por qué).
                     const x = enSusp.get(v);
@@ -16277,12 +16293,12 @@ async function maybeAutoStartTour() {
                             : v.estado === 'INACTIVO' ? 'Su estado en SAP es INACTIVO pero no está en la lista de INACTIVOS del equipo.' : fS && fS.isAfter(fin) ? 'Se suspendió después de la fecha de corte.' : 'No entra en los pendientes.' });
                     }
                 }
-                if (v.estado === 'SUSPENDIDO' && !esInactivo(v)) dec.push({ pl: v.planta, cod: String(v.codigo || '').trim(), c: 'S', d: decision(v) || {}, fS: suspDe(v), full: v, pend: enSusp.get(v) || null, v: { desc: v.desc || '', etapa: v.etapa || '', estado: v.estado, version: v.version } });
+                if (v.estado === 'SUSPENDIDO' && !esInactivo(v) && !reemplazoDe(v)) dec.push({ pl: v.planta, cod: String(v.codigo || '').trim(), c: 'S', d: decision(v) || {}, fS: suspDe(v), full: v, pend: enSusp.get(v) || null, v: { desc: v.desc || '', etapa: v.etapa || '', estado: v.estado, version: v.version } });
             });
             ['P1', 'P2'].forEach((pl) => { resumen[pl].INACTIVO = RMD_INACTIVOS[pl].size; });
             // Autorizados al corte (los que suma la tarjeta RMD AUTORIZADOS): última versión de cada master hoy Autorizada.
             const autCorte = [...ultimas].filter((v) => v.estado === 'AUTORIZADO' && resumen[v.planta]);
-            return { corte, mes, pend, susp, aut, dec, resumen, omitidos, susNoPend, autCorte };
+            return { corte, mes, pend, susp, aut, dec, resumen, omitidos, susNoPend, autCorte, reemplazados };
         }
         const NOMBRE_PLANTA_BK = { P1: 'ATE', P2: 'LIMA' };
         const SUGERENCIA_BK = { A: 'ACTUALIZAR', R: 'REVISAR', P: 'PASAR A INACTIVO', N: 'NO CONSIDERAR' };
