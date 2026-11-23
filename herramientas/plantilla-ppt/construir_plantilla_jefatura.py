@@ -82,14 +82,8 @@ CUADRES = [
         ([('Pendientes: ', AZ, True), ('{{J_PEND_ANT}}', NAR, True), (' al {{J_FECHA_ANT}}', GR, False)], ['Pendientes cierre']),
         ([('  −  ', GR, False), ('{{J_AUT_BK}}', NAR, True), (' autorizados del backlog', GR, False)], ['Programa detalle', 'Otros detalle']),
         ([('  +  ', GR, False), ('{{J_PEND_NUEVOS}}', NAR, True), (' nuevas solicitudes', GR, False)], ['Pendientes corte']),
-        ([('  =  ', GR, False), ('{{J_PEND_HOY}}', NAR, True), (' al {{J_FECHA_CORTE}}', GR, False)], ['Pendientes corte'])]),
-    ('Cuadre autorizados', [
-        ([('Autorizados: ', AZ, True), ('{{J_AUT_ANT}}', AZ, True), (' al {{J_FECHA_ANT}}', GR, False)], ['Autorizados cierre']),
-        ([('  +  ', GR, False), ('{{J_AUTORIZADO}}', AZ, True), (' autorizados del mes', GR, False)], ['Autorizado']),
-        ([('  −  ', GR, False), ('{{J_AUT_RE}}', AZ, True), (' reautorizados', GR, False)], ['Autorizado']),
-        ([('  −  ', GR, False), ('{{J_AUT_NSOL}}', AZ, True), (' con versión nueva', GR, False)], ['Pendientes corte']),
-        ([('  −  ', GR, False), ('{{J_AUT_SUSP}}', AZ, True), (' suspendidos', GR, False)], ['Pendientes corte']),
-        ([('  =  ', GR, False), ('{{J_AUT_HOY}}', AZ, True), (' al {{J_FECHA_CORTE}}', GR, False)], ['Autorizados corte'])])]
+        ([('  =  ', GR, False), ('{{J_PEND_HOY}}', NAR, True), (' al {{J_FECHA_CORTE}}', GR, False)], ['Pendientes corte'])])]
+# Sin línea de autorizados (Carlos, 23/11/2026, con su lámina): autorizados al cierre = al corte − AUTORIZADO del mes.
 CUADRE_PASOS = []   # [(nombre de la copia, [tarjetas a resaltar])] en orden de clic
 for _k, (_nombre, _trozos) in enumerate(CUADRES):
     for _m in range(len(_trozos)):
@@ -109,7 +103,7 @@ for _k, (_nombre, _trozos) in enumerate(CUADRES):
 
 # Animaciones de la lámina 2 (Carlos, 23/11/2026: «que se entienda la suma»): con cada clic aparece (desvanecer) un paso:
 # 1 cierre del mes anterior · 2 Programa y Otros · 3 caracterizaciones · 4 proyección y autorizado · 5 corte ·
-# 6 cuadre de pendientes · 7 cuadre de autorizados. El título queda siempre a la vista.
+# 6 cuadre de pendientes. El título queda siempre a la vista.
 _ids = {}
 for _x in s.shapes: _ids.setdefault(_x.name, []).append(_x.shape_id)
 _pasos = [['Fecha cierre', 'Pendientes cierre', 'Autorizados cierre'],
