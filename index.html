@@ -16012,46 +16012,39 @@ async function maybeAutoStartTour() {
             }
             r2.sort((a, b) => a[0].localeCompare(b[0]) || ORDEN_CASILLA.indexOf(a.campo) - ORDEN_CASILLA.indexOf(b.campo) || String(a[3]).localeCompare(String(b[3])));
             const w2 = XLSX.utils.aoa_to_sheet([c2, ...r2]); ancho(w2, c2.map((c, i) => (i < 3 ? [11, 20, 12][i] : Math.min(50, Math.max(10, String(c).length + 4))))); filtro(w2, r2.length, c2.length);
-            // Resumen: lo mismo que las láminas 3 a 5.
-            const res = [['Ruta', 'Planta', 'Borrador', 'Ingresar', 'Flujo SAP', 'Control de cambio', 'Por revisión', 'Total', 'PRO', 'DOC', 'ASC']];
-            [['R1', 'Ruta 1 · Programa'], ['R2', 'Ruta 2 · Caracterizaciones']].forEach(([R, nom]) => {
-                const tot = { bor: 0, ing: 0, flu: 0, cc: 0, rev: 0, PRO: 0, DOC: 0, ASC: 0 };
-                ['P1', 'P2'].forEach((pl) => {
-                    const x = resumen[`${R}|${pl}`] || { bor: 0, ing: 0, flu: 0, cc: 0, rev: 0, PRO: 0, DOC: 0, ASC: 0 };
-                    Object.keys(tot).forEach((k) => { tot[k] += x[k]; });
-                    res.push([nom, pl === 'P1' ? 'P1 · Ate' : 'P2 · Lima', ...ORDEN_CASILLA.map((k) => x[k]), ORDEN_CASILLA.reduce((t, k) => t + x[k], 0), x.PRO, x.DOC, x.ASC]);
-                });
-                res.push([nom, 'Total', ...ORDEN_CASILLA.map((k) => tot[k]), ORDEN_CASILLA.reduce((t, k) => t + tot[k], 0), tot.PRO, tot.DOC, tot.ASC], []);
-            });
-            res.push(['Corte', corte.format('DD/MM/YYYY')], ['Datos de SAP del', sapTxt(d)], ['Ruta 2 desde', d.listado ? `Excel CARACTERIZACIÓN LISTADO (traído el ${dayjs(d.listado.cargado).format('DD/MM/YYYY HH:mm')})` : 'RMD de SAP con Motivo CARACTERIZACION'],
-                ['Descargado el', dayjs().format('DD/MM/YYYY HH:mm')]);
-            const w0 = XLSX.utils.aoa_to_sheet(res); ancho(w0, [26, 12, 10, 10, 10, 17, 12, 8, 7, 7, 7]);
-            XLSX.utils.book_append_sheet(wb, w0, 'Resumen');
-            XLSX.utils.book_append_sheet(wb, w1, 'Ruta 1 programa');
-            XLSX.utils.book_append_sheet(wb, w2, 'Ruta 2 caracterizaciones');
-            // Autorizados del cierre al corte (Carlos, 23/11/2026: «no se entiende de dónde salieron los autorizados»): cada RMD
-            // autorizado en el mes y cada autorizado que se suspendió en el mes, con cómo cuenta en la línea de la lámina 2.
+            // Cuadre de la lámina 2 (Carlos, 23/11/2026: «enlista todos esos RMD… diferenciarlos al filtrar por las columnas»; sin
+            // hoja Resumen). Una fila por RMD que entra en el cuadre; filtrando cada columna sale cada número de la lámina:
+            //   Pendiente al cierre = Sí → pendientes al 31/10 · Pendiente al corte → Backlog / Nueva solicitud (pendientes de hoy)
+            //   Autorizado en el mes → Backlog / Nueva solicitud (AUTORIZADO) · Resta en autorizados → Reautorizado /
+            //   Versión nueva / Suspendido (las restas de la línea de autorizados).
             if (g) {
                 const iniMes = corte.startOf('month'), finAnt = iniMes.subtract(1, 'day').endOf('day'), f = (x) => (x ? x.format('DD/MM/YYYY') : '');
-                const pl = (v) => (v.planta === 'P1' ? 'P1 · Ate' : 'P2 · Lima');
-                const fa = [['Cuenta', 'Planta', 'RMD', 'Versión', 'Producto', 'Etapa', 'Fecha autorización', 'Versión anterior', 'Suspensión de la anterior / de esta versión']];
-                const filasA = g.aut.map((x) => {
-                    const suma = !(x.cuenta === 'Solicitados del mes' && x.ant && x.ant.estado !== 'INGRESADO');
-                    const cuenta = suma ? (!x.ant ? '+ Autorizado del mes (master nuevo)' : x.cuenta === 'Backlog' ? '+ Autorizado del mes (estaba pendiente al cierre: backlog)'
-                            : '+ Autorizado del mes (su versión anterior estaba ingresada)')
-                        : (x.ant.estado === 'SUSPENDIDO' ? '− Reautorizado (su versión anterior se suspendió en el mes)'
-                            : `− Versión nueva solicitada en el mes (su versión anterior estaba ${String(x.ant.estado || '').toLowerCase()})`);
-                    return [cuenta, pl(x.v), x.v.codigo || '', x.v.version || '', x.v.desc || '', x.v.etapa || '', f(x.v.fAut), x.ant ? x.ant.version : '', f(x.fS)];
+                const VIG = 'Mes vigente', cab = ['Planta', 'RMD', 'Versión', 'Producto', 'Etapa', 'Estado SAP hoy', `Pendiente al ${f(finAnt).slice(0, 5)}`,
+                    `Pendiente al ${corte.format('DD/MM')}`, 'Autorizado en el mes', 'Resta en autorizados', 'Fecha solicitud', 'Fecha registro', 'Fecha autorización',
+                    'Fecha suspensión', 'Versión anterior', 'Estado versión anterior'];
+                const filas = [];
+                const fila = (x, o) => {
+                    const v = x.v, ant = x.ant;
+                    filas.push([v.planta === 'P1' ? 'P1 · Ate' : 'P2 · Lima', v.codigo || (v.sol ? `Sol. ${v.sol}` : ''), v.version || '', v.desc || '', v.etapa || '',
+                        String(v.estado || '').toUpperCase(), o.pAnt ? 'Sí' : 'No', o.pHoy || 'No', o.aut || 'No', o.resta || '', f(v.fSol), f(v.fReg), f(v.fAut),
+                        f(x.fS), ant ? ant.version : '', ant ? String(ant.estado || '').toUpperCase() : '']);
+                };
+                g.pend.forEach((x) => {
+                    const susp = x.tipo === 'Suspendido' && x.cuando === VIG && x.v.fAut && !x.v.fAut.isAfter(finAnt);
+                    fila(x, { pAnt: x.cuando !== VIG, pHoy: x.cuando !== VIG ? 'Backlog' : 'Nueva solicitud', resta: susp ? 'Suspendido en el mes' : '' });
                 });
-                const filasS = g.pend.filter((x) => x.tipo === 'Suspendido' && x.cuando === 'Mes vigente' && x.v.fAut && !x.v.fAut.isAfter(finAnt))
-                    .map((x) => ['− Suspendido en el mes (estaba autorizado al cierre)', pl(x.v), x.v.codigo || '', x.v.version || '', x.v.desc || '', x.v.etapa || '', f(x.v.fAut), '', f(x.fS)]);
-                const todas = [...filasA, ...filasS].sort((a, b) => a[0].localeCompare(b[0]) || a[1].localeCompare(b[1]) || String(a[4]).localeCompare(String(b[4])));
-                const nSuma = filasA.filter((r) => r[0].startsWith('+')).length, nRe = filasA.filter((r) => r[0].startsWith('− Reaut')).length, nNs = filasA.length - nSuma - nRe;
-                const w3 = XLSX.utils.aoa_to_sheet([...fa, ...todas, [], ['Autorizados del mes', filasA.length], ['− Nuevas solicitudes del mes', nNs + nRe + filasS.length], ['   Versiones nuevas', nNs], ['   Reautorizados', nRe], ['   Suspendidos en el mes', filasS.length],
-                    ['Cambio del cierre al corte', nSuma - filasS.length]]);
-                ancho(w3, [70, 11, 13, 8, 44, 16, 14, 10, 18]); filtro(w3, todas.length, fa[0].length);
-                XLSX.utils.book_append_sheet(wb, w3, 'Autorizados del mes');
+                g.aut.forEach((x) => {
+                    const noSuma = x.cuenta === 'Solicitados del mes' && x.ant && x.ant.estado !== 'INGRESADO';
+                    fila(x, { pAnt: x.cuenta === 'Backlog', aut: x.cuenta === 'Backlog' ? 'Backlog' : 'Nueva solicitud',
+                        resta: noSuma ? (x.ant.estado === 'SUSPENDIDO' ? 'Reautorizado' : 'Versión nueva') : '' });
+                });
+                filas.sort((a, b2) => a[0].localeCompare(b2[0]) || String(a[3]).localeCompare(String(b2[3])) || String(a[1]).localeCompare(String(b2[1])));
+                const w3 = XLSX.utils.aoa_to_sheet([cab, ...filas]);
+                ancho(w3, [10, 13, 8, 44, 16, 14, 13, 15, 18, 20, 12, 12, 13, 13, 9, 14]); filtro(w3, filas.length, cab.length);
+                XLSX.utils.book_append_sheet(wb, w3, 'Cuadre lámina 2');
             }
+            XLSX.utils.book_append_sheet(wb, w1, 'Ruta 1 programa');
+            XLSX.utils.book_append_sheet(wb, w2, 'Ruta 2 caracterizaciones');
             XLSX.writeFile(wb, `PENDIENTES_RUTA_1_Y_2_${corte.format('YYYY-MM-DD')}.xlsx`, { compression: true });
         }
         async function zipPpt(d, g, jefatura) {
