@@ -15889,7 +15889,7 @@ async function maybeAutoStartTour() {
         //   Programa = programados de la Ruta 1 de P1 + P2 (lámina 3), entre paréntesis los autorizados en el mes.
         //   Otros = autorizados en el mes fuera del programa, proyectados a fin de mes por días hábiles (lunes a viernes).
         //   Proyección = Programa + Otros; Autorizado = (programa) + (otros) y su % sobre la proyección.
-        //   Al cierre del mes anterior: pendientes = pendientes al corte + autorizados del mes; autorizados = al corte − del mes.
+        //   Al cierre del mes anterior: el cierre real con las fechas de SAP (ver abajo).
         //   Caracterizaciones = total de la Ruta 2 P1 + P2 (lámina 4); pendientes = Ingresar + Flujo SAP + Control de cambio +
         //   Por revisión (todo el flujo menos Borrador y Autorizado).
         function datosJefatura(d, g) {
@@ -15908,7 +15908,18 @@ async function maybeAutoStartTour() {
                 pend: ['P1', 'P2'].reduce((n, pl) => { const c = c2(pl); return n + c.ing + c.flu + c.cc + c.rev; }, 0) };
             const proy = prog.total + otros.total, autorizado = prog.aut + otros.aut;
             const pendHoy = g.pend.length;
-            return { corte, hab, autHoy, autAnt: autHoy - autorizado, pendHoy, pendAnt: pendHoy + autorizado, prog, otros, car, proy, autorizado,
+            // Cierre real del mes anterior (Carlos, 23/11/2026: «Recalcular el cierre real del 31/10»; antes se sacaba hacia atrás
+            // desde hoy y cambiaba cada día). Con las fechas de SAP:
+            //  - Pendientes al cierre = los pendientes de hoy que ya lo eran (backlog: registro, solicitud o suspensión de un mes
+            //    anterior) + los autorizados del mes que venían del backlog. Las solicitudes nuevas del mes no lo mueven.
+            //  - Autorizados al cierre = autorizados de hoy − los masters que pasaron a autorizados en el mes (master nuevo o con la
+            //    versión anterior suspendida antes del mes) + los que estaban autorizados y se suspendieron en el mes.
+            const VIG = 'Mes vigente', iniMes = corte.startOf('month'), finAnt = iniMes.subtract(1, 'day').endOf('day');
+            const pendAnt = g.pend.filter((x) => x.cuando !== VIG).length + autBkG;
+            const sumanMaster = g.aut.filter((x) => !x.ant || x.ant.estado === 'INGRESADO' || (x.ant.estado === 'SUSPENDIDO' && (!x.fS || x.fS.isBefore(iniMes)))).length;
+            const susMes = g.pend.filter((x) => x.tipo === 'Suspendido' && x.cuando === VIG && x.v.fAut && !x.v.fAut.isAfter(finAnt)).length;
+            const autAnt = autHoy - sumanMaster + susMes;
+            return { corte, hab, autHoy, autAnt, pendHoy, pendAnt, prog, otros, car, proy, autorizado,
                 pct: proy ? Math.round((autorizado / proy) * 100) : 0 };
         }
         // Marcadores J_* de la plantilla de jefatura (los de las rutas, R1_* y R2_*, salen de valoresPpt).
