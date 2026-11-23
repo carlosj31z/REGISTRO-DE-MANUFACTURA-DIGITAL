@@ -15644,7 +15644,10 @@ async function maybeAutoStartTour() {
                 rows.slice(iCab + 1).forEach((r) => {
                     const est = norm(r[c.estatus]), nom = String(r[c.nombre] || '').trim();
                     if (!nom || !est) return;
-                    filas.push({ pl, nombre: nom, etapa: norm(r[c.etapa]), estatus: est, fecha: c.fecha >= 0 ? fechaCelda(r[c.fecha]) : '', area: c.area >= 0 ? norm(r[c.area]) : '', obs: c.obs >= 0 ? String(r[c.obs] || '').trim() : '' });
+                    // x: la fila completa con los títulos del Excel, para el Excel de pendientes de jefatura (pedido de Carlos, 23/11/2026).
+                    const x = {};
+                    rows[iCab].forEach((t, i) => { const tt = String(t || '').trim(); if (!tt || tt in x) return; const val = r[i]; x[tt] = val instanceof Date ? dayjs(fechaCelda(val)).format('DD/MM/YYYY') : val; });
+                    filas.push({ pl, nombre: nom, etapa: norm(r[c.etapa]), estatus: est, fecha: c.fecha >= 0 ? fechaCelda(r[c.fecha]) : '', area: c.area >= 0 ? norm(r[c.area]) : '', obs: c.obs >= 0 ? String(r[c.obs] || '').trim() : '', x });
                 });
             });
             if (!filas.length) throw new Error('el Excel no tiene las hojas PLA1 / PLA2 con la columna «ESTATUS DOC TEC»');
@@ -15926,6 +15929,80 @@ async function maybeAutoStartTour() {
                 }));
             });
         }
+        // Excel de pendientes que baja con el «PPT para jefatura» (pedido de Carlos, 23/11/2026): los RMD de la Ruta 1 y la Ruta 2
+        // que están en Borrador, Ingresar, Flujo SAP, Control de cambio o Por revisión (lo que suman las láminas 3 a 5).
+        const CASILLA_TXT = { bor: 'BORRADOR', ing: 'INGRESAR', flu: 'FLUJO SAP', cc: 'CONTROL DE CAMBIO', rev: 'POR REVISIÓN' };
+        const ORDEN_CASILLA = ['bor', 'ing', 'flu', 'cc', 'rev'];
+        function respRuta2Listado(f, campo) {
+            if (campo === 'cc') return f.area === 'ASC' || /\bASC\b/i.test(f.obs) ? 'ASC' : 'PRO';
+            return campo === 'ing' || campo === 'rev' ? 'DOC' : 'PRO';
+        }
+        function excelPendientesJefatura(d) {
+            const wb = XLSX.utils.book_new(), corte = d.per.hasta;
+            const ancho = (ws, w) => { ws['!cols'] = w.map((x) => ({ wch: x })); };
+            const filtro = (ws, n, m) => { ws['!autofilter'] = { ref: XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: Math.max(n, 1), c: m - 1 } }) }; };
+            const orden = (a, b) => a[0].localeCompare(b[0]) || ORDEN_CASILLA.indexOf(a.campo) - ORDEN_CASILLA.indexOf(b.campo) || String(a[3]).localeCompare(String(b[3]));
+            const resumen = {};
+            const contar = (R, pl, campo, resp) => { const k = `${R}|${pl}`; resumen[k] = resumen[k] || { bor: 0, ing: 0, flu: 0, cc: 0, rev: 0, PRO: 0, DOC: 0, ASC: 0 }; resumen[k][campo]++; if (resp) resumen[k][resp]++; };
+            // Ruta 1: etapas pendientes del programa de producción.
+            const r1 = [];
+            if (d.r1 && !d.r1.error) ['P1', 'P2'].forEach((pl) => ((d.r1[pl] && d.r1[pl].items) || []).forEach((it) => {
+                if (it.cat !== 'pend') return;
+                const campo = CAMPO_ESTATUS[it.estatus];
+                if (!campo) return;
+                const f = filaRuta1(it), fila = [pl === 'P1' ? 'P1 · Ate' : 'P2 · Lima', CASILLA_TXT[campo], it.resp || '', f.producto || '', f.etapa || '', f.material || f.m || '',
+                    f.codigo || '', f.version || '', f.estado || '', it.inicio ? dayjs(it.inicio).format('DD/MM/YYYY') : '', f.obs || ''];
+                fila.campo = campo; r1.push(fila); contar('R1', pl, campo, it.resp);
+            }));
+            r1.sort(orden);
+            const c1 = ['Planta', 'Estatus', 'Responsable', 'Producto', 'Etapa', 'Material', 'RMD', 'Versión', 'Estado SAP', 'Inicio de producción', 'Observación'];
+            const w1 = XLSX.utils.aoa_to_sheet([c1, ...r1]); ancho(w1, [11, 20, 12, 44, 18, 13, 14, 8, 14, 12, 50]); filtro(w1, r1.length, c1.length);
+            // Ruta 2: del Excel CARACTERIZACIÓN LISTADO (con todas sus columnas) o, si no se trajo, de los RMD de SAP con Motivo CARACTERIZACION.
+            let r2 = [], c2;
+            if (d.listado) {
+                const extra = [];
+                (d.listado.filas || []).forEach((f) => Object.keys(f.x || {}).forEach((k) => { if (!extra.includes(k)) extra.push(k); }));
+                c2 = ['Planta', 'Estatus', 'Responsable', ...extra];
+                (d.listado.filas || []).forEach((f) => {
+                    const campo = ESTATUS_LISTADO_CAMPO[f.estatus];
+                    if (!campo || campo === 'aut') return;
+                    const resp = respRuta2Listado(f, campo);
+                    const fila = [f.pl === 'P1' ? 'P1 · Ate' : 'P2 · Lima', CASILLA_TXT[campo], resp, ...extra.map((k) => (f.x && f.x[k] !== undefined ? f.x[k] : ''))];
+                    if (!f.x) { fila[3] = f.nombre; fila[4] = f.etapa; }
+                    fila.campo = campo; r2.push(fila); contar('R2', f.pl, campo, resp);
+                });
+                if (!extra.length) c2.push('Nombre', 'Etapa');
+            } else {
+                c2 = ['Planta', 'Estatus', 'Responsable', 'Producto', 'Etapa', 'RMD', 'Versión', 'Estado SAP', 'Observación'];
+                if (d.r2 && !d.r2.error) ['P1', 'P2'].forEach((pl) => ((d.r2[pl] && d.r2[pl].items) || []).forEach((it) => {
+                    if (it.cat !== 'pend') return;
+                    const campo = CAMPO_ESTATUS[it.estatus];
+                    if (!campo) return;
+                    const f = filaRuta2(it), fila = [pl === 'P1' ? 'P1 · Ate' : 'P2 · Lima', CASILLA_TXT[campo], it.resp || '', f.desc || '', f.etapa || '', f.codigo || '', f.version || '', f.estado || '', f.obs || ''];
+                    fila.campo = campo; r2.push(fila); contar('R2', pl, campo, it.resp);
+                }));
+            }
+            r2.sort((a, b) => a[0].localeCompare(b[0]) || ORDEN_CASILLA.indexOf(a.campo) - ORDEN_CASILLA.indexOf(b.campo) || String(a[3]).localeCompare(String(b[3])));
+            const w2 = XLSX.utils.aoa_to_sheet([c2, ...r2]); ancho(w2, c2.map((c, i) => (i < 3 ? [11, 20, 12][i] : Math.min(50, Math.max(10, String(c).length + 4))))); filtro(w2, r2.length, c2.length);
+            // Resumen: lo mismo que las láminas 3 a 5.
+            const res = [['Ruta', 'Planta', 'Borrador', 'Ingresar', 'Flujo SAP', 'Control de cambio', 'Por revisión', 'Total', 'PRO', 'DOC', 'ASC']];
+            [['R1', 'Ruta 1 · Programa'], ['R2', 'Ruta 2 · Caracterizaciones']].forEach(([R, nom]) => {
+                const tot = { bor: 0, ing: 0, flu: 0, cc: 0, rev: 0, PRO: 0, DOC: 0, ASC: 0 };
+                ['P1', 'P2'].forEach((pl) => {
+                    const x = resumen[`${R}|${pl}`] || { bor: 0, ing: 0, flu: 0, cc: 0, rev: 0, PRO: 0, DOC: 0, ASC: 0 };
+                    Object.keys(tot).forEach((k) => { tot[k] += x[k]; });
+                    res.push([nom, pl === 'P1' ? 'P1 · Ate' : 'P2 · Lima', ...ORDEN_CASILLA.map((k) => x[k]), ORDEN_CASILLA.reduce((t, k) => t + x[k], 0), x.PRO, x.DOC, x.ASC]);
+                });
+                res.push([nom, 'Total', ...ORDEN_CASILLA.map((k) => tot[k]), ORDEN_CASILLA.reduce((t, k) => t + tot[k], 0), tot.PRO, tot.DOC, tot.ASC], []);
+            });
+            res.push(['Corte', corte.format('DD/MM/YYYY')], ['Datos de SAP del', sapTxt(d)], ['Ruta 2 desde', d.listado ? `Excel CARACTERIZACIÓN LISTADO (traído el ${dayjs(d.listado.cargado).format('DD/MM/YYYY HH:mm')})` : 'RMD de SAP con Motivo CARACTERIZACION'],
+                ['Descargado el', dayjs().format('DD/MM/YYYY HH:mm')]);
+            const w0 = XLSX.utils.aoa_to_sheet(res); ancho(w0, [26, 12, 10, 10, 10, 17, 12, 8, 7, 7, 7]);
+            XLSX.utils.book_append_sheet(wb, w0, 'Resumen');
+            XLSX.utils.book_append_sheet(wb, w1, 'Ruta 1 programa');
+            XLSX.utils.book_append_sheet(wb, w2, 'Ruta 2 caracterizaciones');
+            XLSX.writeFile(wb, `PENDIENTES_RUTA_1_Y_2_${corte.format('YYYY-MM-DD')}.xlsx`, { compression: true });
+        }
         async function zipPpt(d, g, jefatura) {
             const JSZip = await cargarJsZip();
             const zip = await JSZip.loadAsync(jefatura ? STATUS_RMD_JEFATURA_B64 : STATUS_RMD_PLANTILLA_B64, { base64: true });
@@ -15963,6 +16040,8 @@ async function maybeAutoStartTour() {
                 a.download = `STATUS_RMD_${ultimo.per.hasta.format('YYYY-MM-DD')}.pptx`;
                 document.body.appendChild(a); a.click(); a.remove();
                 setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+                // Con el PPT para jefatura baja también el Excel de pendientes de la Ruta 1 y la Ruta 2 (pedido de Carlos, 23/11/2026).
+                if (jefatura) { try { excelPendientesJefatura(ultimo); } catch (err) { console.error('Excel de pendientes:', err); } }
             } catch (err) {
                 console.error(err);
                 Swal.fire({ icon: 'error', title: 'No se pudo generar el PowerPoint', text: err.message, background: '#0f172a' });
