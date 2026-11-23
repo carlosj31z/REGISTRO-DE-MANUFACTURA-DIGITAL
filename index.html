@@ -13772,12 +13772,15 @@ async function maybeAutoStartTour() {
         function periodo() {
             const d = document.getElementById('stsDesde'), h = document.getElementById('stsHasta');
             if (!h.value) h.value = dayjs().format('YYYY-MM-DD');
-            if (!d.value) d.value = dayjs(h.value).subtract((dayjs(h.value).day() + 6) % 7, 'day').format('YYYY-MM-DD'); // lunes de esa semana
+            // Desde = 1 del mes vigente (pedido de Carlos, 23/11/2026; antes el lunes de esa semana). Si «Hasta» pasa a otro mes, el
+            // «Desde» vuelve al 1 de ese mes.
+            const ini = dayjs(h.value).startOf('month').format('YYYY-MM-DD');
+            if (!d.value || d.value.slice(0, 7) !== h.value.slice(0, 7)) d.value = ini;
             if (d.value > h.value) d.value = h.value;
             return periodoDe(dayjs(d.value), dayjs(h.value));
         }
-        // Periodo de hoy (lunes de esta semana – hoy), sin tocar lo elegido arriba: para la foto diaria.
-        const periodoHoy = () => { const h = dayjs().startOf('day'); return periodoDe(h.subtract((h.day() + 6) % 7, 'day'), h); };
+        // Periodo de hoy (1 del mes – hoy), sin tocar lo elegido arriba: para la foto diaria.
+        const periodoHoy = () => { const h = dayjs().startOf('day'); return periodoDe(h.startOf('month'), h); };
         function periodoDe(desde, hasta) {
             const meses = [2, 1, 0].map((k) => hasta.startOf('month').subtract(k, 'month'));
             const ini = meses[0], fin = meses[2];
