@@ -16023,27 +16023,30 @@ async function maybeAutoStartTour() {
             if (g) {
                 const iniMes = corte.startOf('month'), finAnt = iniMes.subtract(1, 'day').endOf('day'), f = (x) => (x ? x.format('DD/MM/YYYY') : '');
                 const VIG = 'Mes vigente', cab = ['Planta', 'RMD', 'Versión', 'Producto', 'Etapa', 'Estado SAP hoy', `Pendiente al ${f(finAnt).slice(0, 5)}`,
-                    `Pendiente al ${corte.format('DD/MM')}`, 'Autorizado en el mes', 'Resta en autorizados', 'Fecha solicitud', 'Fecha registro', 'Fecha autorización',
+                    `Pendiente al ${corte.format('DD/MM')}`, `Autorizado al ${f(finAnt).slice(0, 5)}`, `Autorizado al ${corte.format('DD/MM')}`, 'Autorizado en el mes', 'Resta en autorizados', 'Fecha solicitud', 'Fecha registro', 'Fecha autorización',
                     'Fecha suspensión', 'Versión anterior', 'Estado versión anterior'];
-                const filas = [];
+                const filas = [], enCorte = new Set(g.autCorte || []), listados = new Set();
                 const fila = (x, o) => {
                     const v = x.v, ant = x.ant;
                     filas.push([v.planta === 'P1' ? 'P1 · Ate' : 'P2 · Lima', v.codigo || (v.sol ? `Sol. ${v.sol}` : ''), v.version || '', v.desc || '', v.etapa || '',
-                        String(v.estado || '').toUpperCase(), o.pAnt ? 'Sí' : 'No', o.pHoy || 'No', o.aut || 'No', o.resta || '', f(v.fSol), f(v.fReg), f(v.fAut),
+                        String(v.estado || '').toUpperCase(), o.pAnt ? 'Sí' : 'No', o.pHoy || 'No', o.aAnt ? 'Sí' : 'No', o.aHoy ? 'Sí' : 'No', o.aut || 'No', o.resta || '', f(v.fSol), f(v.fReg), f(v.fAut),
                         f(x.fS), ant ? ant.version : '', ant ? String(ant.estado || '').toUpperCase() : '']);
                 };
                 g.pend.forEach((x) => {
                     const susp = x.tipo === 'Suspendido' && x.cuando === VIG && x.v.fAut && !x.v.fAut.isAfter(finAnt);
-                    fila(x, { pAnt: x.cuando !== VIG, pHoy: x.cuando !== VIG ? 'Backlog' : 'Nueva solicitud', resta: susp ? 'Suspendido en el mes' : '' });
+                    fila(x, { pAnt: x.cuando !== VIG, pHoy: x.cuando !== VIG ? 'Backlog' : 'Nueva solicitud', aAnt: susp, resta: susp ? 'Suspendido en el mes' : '' });
                 });
                 g.aut.forEach((x) => {
                     const nueva = x.ultima === false, noSuma = nueva || (x.cuenta === 'Solicitados del mes' && x.ant && x.ant.estado !== 'INGRESADO');
-                    fila(x, { pAnt: x.cuenta === 'Backlog', aut: x.cuenta === 'Backlog' ? 'Backlog' : 'Nueva solicitud',
+                    const hoy = enCorte.has(x.v); listados.add(x.v);
+                    fila(x, { pAnt: x.cuenta === 'Backlog', aAnt: hoy && noSuma, aHoy: hoy, aut: x.cuenta === 'Backlog' ? 'Backlog' : 'Nueva solicitud',
                         resta: !noSuma ? '' : nueva ? 'Ya tiene versión nueva' : x.ant.estado === 'SUSPENDIDO' ? 'Reautorizado' : 'Versión nueva' });
                 });
+                // El resto de autorizados al corte: ya lo estaban al cierre (no se movieron en el mes).
+                (g.autCorte || []).forEach((v) => { if (!listados.has(v)) fila({ v, ant: null, fS: null }, { aAnt: true, aHoy: true }); });
                 filas.sort((a, b2) => a[0].localeCompare(b2[0]) || String(a[3]).localeCompare(String(b2[3])) || String(a[1]).localeCompare(String(b2[1])));
                 const w3 = XLSX.utils.aoa_to_sheet([cab, ...filas]);
-                ancho(w3, [10, 13, 8, 44, 16, 14, 13, 15, 18, 20, 12, 12, 13, 13, 9, 14]); filtro(w3, filas.length, cab.length);
+                ancho(w3, [10, 13, 8, 44, 16, 14, 13, 15, 13, 14, 18, 20, 12, 12, 13, 13, 9, 14]); filtro(w3, filas.length, cab.length);
                 XLSX.utils.book_append_sheet(wb, w3, 'Cuadre lámina 2');
             }
             XLSX.utils.book_append_sheet(wb, w1, 'Ruta 1 programa');
@@ -16277,7 +16280,9 @@ async function maybeAutoStartTour() {
                 if (v.estado === 'SUSPENDIDO' && !esInactivo(v)) dec.push({ pl: v.planta, cod: String(v.codigo || '').trim(), c: 'S', d: decision(v) || {}, fS: suspDe(v), full: v, pend: enSusp.get(v) || null, v: { desc: v.desc || '', etapa: v.etapa || '', estado: v.estado, version: v.version } });
             });
             ['P1', 'P2'].forEach((pl) => { resumen[pl].INACTIVO = RMD_INACTIVOS[pl].size; });
-            return { corte, mes, pend, susp, aut, dec, resumen, omitidos, susNoPend };
+            // Autorizados al corte (los que suma la tarjeta RMD AUTORIZADOS): última versión de cada master hoy Autorizada.
+            const autCorte = [...ultimas].filter((v) => v.estado === 'AUTORIZADO' && resumen[v.planta]);
+            return { corte, mes, pend, susp, aut, dec, resumen, omitidos, susNoPend, autCorte };
         }
         const NOMBRE_PLANTA_BK = { P1: 'ATE', P2: 'LIMA' };
         const SUGERENCIA_BK = { A: 'ACTUALIZAR', R: 'REVISAR', P: 'PASAR A INACTIVO', N: 'NO CONSIDERAR' };
