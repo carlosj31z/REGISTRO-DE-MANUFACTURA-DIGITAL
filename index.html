@@ -16256,10 +16256,10 @@ async function maybeAutoStartTour() {
                 { planta: 'Planta' });
             // Autorizados al cierre (calculado): los de hoy que ya lo eran + cambios de estado (ya eran autorizados al cierre).
             const aAnt = [...(g.autCorte || []).filter((v) => !enMes.has(v)).map((v) => ({ v, por: 'Autorizado antes del mes y sigue autorizado' })),
-                ...g.aut.filter((x) => !sumaAlCierre(x)).map((x) => ({ v: x.v, por: `Cambio de estado: ${tipoCambio.get(x).toLowerCase()} (el master ya era autorizado)` })),
+                ...g.aut.filter((x) => !sumaAlCierre(x) && x.ultima !== false).map((x) => ({ v: x.v, por: `Cambio de estado: ${tipoCambio.get(x).toLowerCase()} (el master ya era autorizado)` })),
                 ...cambio.filas.filter((f) => f.tipo === 'Suspendido en el mes').map((f) => ({ v: f.x.v, por: 'Estaba autorizado y se suspendió en el mes' }))];
             det('aAnt', 'Autorizados al cierre', `RMD autorizados al ${fAnt} (lámina: RMD AUTORIZADOS ${fAnt})`,
-                `Masters autorizados al cierre del mes anterior, rearmados con las fechas de SAP: los que hoy siguen autorizados sin moverse en el mes + los que cambiaron de estado en el mes. El número de la lámina está congelado (ver la portada).`,
+                `Masters autorizados al cierre del mes anterior, rearmados con las fechas de SAP: los que hoy siguen autorizados sin moverse en el mes + reautorizados, versiones nuevas y suspendidos en el mes («Ya tiene versión nueva» no: se autorizó en el mes y ya salió). El número de la lámina está congelado (ver la portada).`,
                 [['Planta', 7], ['Por qué cuenta', 50], ['Código RMD', 13], ['Versión', 8], ['Descripción', 46], ['Etapa', 15], ['Estado SAP hoy', 13], ['Fecha de autorización', 11]],
                 aAnt.map(({ v, por }) => [PL[v.planta], por, v.codigo || '', v.version, v.desc || '', v.etapa || '', String(v.estado || '').toUpperCase(), fx(v.fAut)]).sort(ord),
                 { planta: 'Planta' });
