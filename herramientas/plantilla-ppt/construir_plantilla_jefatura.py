@@ -56,11 +56,10 @@ runs(sh(s, 'Fecha corte'), ['{{J_FECHA_CORTE}}'])
 runs(sh(s, 'Pendientes corte'), [None, '{{J_PEND_HOY}}'])
 runs(sh(s, 'Autorizados corte'), [None, '{{J_AUT_HOY}}'])
 for k, pre in (('Programa', 'PROG'), ('Otros', 'OTROS')):
-    runs(sh(s, f'{k} total'), [None, '{{J_%s_TOTAL}}' % pre])
+    runs(sh(s, f'{k} total'), [None, '{{J_%s_NUM}}' % pre])
     runs(sh(s, f'{k} autorizados'), ['({{J_%s_AUT}})' % pre])
     runs(sh(s, f'{k} detalle'), ['Backlog: {{J_%s_BK}}' % pre, 'Nuevas solicitudes: {{J_%s_MES}}' % pre])
 runs(sh(s, 'Caracterizaciones texto'), [None, '{{J_CAR_TOTAL}}', None, '{{J_CAR_PEND}} pendientes.'])
-runs(sh(s, 'Proyeccion'), [None, '{{J_PROY}}'])
 runs(sh(s, 'Autorizado'), [None, '{{J_AUTORIZADO}}', '  ({{J_PCT}}%)'])
 # Pendientes al corte: cuántos son del backlog y cuántos nuevas solicitudes del mes (Carlos, 23/11/2026).
 from pptx.util import Pt
@@ -68,6 +67,31 @@ from pptx.dml.color import RGBColor
 _tf = sh(s, 'Pendientes corte').text_frame
 for _t in ('Backlog: {{J_PEND_BK}}', 'Nuevas solicitudes: {{J_PEND_NUEVOS}}'):
     _rr = _tf.add_paragraph().add_run(); _rr.text = _t; _rr.font.size = Pt(10); _rr.font.name = 'Raleway'; _rr.font.color.rgb = RGBColor(0x4D, 0x4D, 0x4D)
+# Forma final de la lámina 2 (Carlos, 24/11/2026, «dale esta forma al final»): sin el recuadro PROYECCIÓN ni las líneas de
+# fórmula; la proyección va debajo de Programa y Otros («(Proyección: N)»), el paréntesis de autorizados y Backlog / Nuevas
+# solicitudes quedan fuera de la tarjeta, y abajo: RMD AUTORIZADOS al cierre  +  AUTORIZADO (con «N cambiaron de status»)  →  al corte.
+from pptx.enum.shapes import MSO_SHAPE
+from pptx.util import Emu
+from pptx.enum.text import PP_ALIGN
+_px = sh(s, 'Proyeccion'); _px._element.getparent().remove(_px._element)
+for k, pre in (('Programa', 'PROG'), ('Otros', 'OTROS')):
+    _card = sh(s, k); _card.width = Emu(2150000)
+    _tot = sh(s, f'{k} total'); _tot.width = Emu(1950000); _tot.top = _card.top + Emu(40000); _tot.height = Emu(610000)
+    _p0 = _tot.text_frame.paragraphs[0]
+    _rr = _tot.text_frame.add_paragraph().add_run(); _rr.text = '(Proyección: {{J_%s_PROY}})' % pre
+    _rr.font.size = Pt(10); _rr.font.bold = True; _rr.font.name = 'Raleway'; _rr.font.color.rgb = RGBColor(0x4D, 0x4D, 0x4D)
+    sh(s, f'{k} autorizados').left = _card.left + _card.width + Emu(150000)
+    _det = sh(s, f'{k} detalle'); _det.left = _card.left + _card.width + Emu(800000); _det.width = Emu(1500000)
+_au = sh(s, 'Autorizado')
+_au.left, _au.top, _au.width, _au.height = Emu(4346000), Emu(3640000), Emu(3500000), Emu(1150000)
+for _pp in _au.text_frame.paragraphs: _pp.alignment = PP_ALIGN.CENTER
+_np = _au.text_frame.add_paragraph(); _np.alignment = PP_ALIGN.CENTER
+_rr = _np.add_run(); _rr.text = '{{J_AUT_NS_TOT}} cambiaron de status'
+_rr.font.size = Pt(12); _rr.font.name = 'Raleway'; _rr.font.color.rgb = RGBColor(0x4D, 0x4D, 0x4D)
+_cy = sh(s, 'Autorizados cierre').top + sh(s, 'Autorizados cierre').height // 2
+for _nom, _forma, _x, _w, _h in (('Mas', MSO_SHAPE.MATH_PLUS, 3366000, 720000, 720000), ('Flecha', MSO_SHAPE.RIGHT_ARROW, 8100000, 760000, 480000)):
+    _f = s.shapes.add_shape(_forma, Emu(_x), Emu(_cy - _h // 2), Emu(_w), Emu(_h)); _f.name = _nom
+    _f.fill.solid(); _f.fill.fore_color.rgb = RGBColor(0x1E, 0x5F, 0x74); _f.line.color.rgb = RGBColor(0x14, 0x3F, 0x4D)
 # Cómo cuadra el cierre con el corte (Carlos, 23/11/2026: «breve y sencillo», sin cambiar el resto de la lámina).
 from pptx.util import Pt, Emu
 from pptx.dml.color import RGBColor
@@ -77,19 +101,7 @@ from pptx.dml.color import RGBColor
 from pptx.oxml.ns import qn
 from lxml import etree
 NAR, AZ, GR, BL = RGBColor(0xE0, 0x88, 0x3A), RGBColor(0x4A, 0x3F, 0x8C), RGBColor(0x4D, 0x4D, 0x4D), RGBColor(0xFF, 0xFF, 0xFF)
-CUADRES = [
-    ('Cuadre pendientes', [
-        ([('Pendientes: ', AZ, True), ('{{J_PEND_ANT}}', NAR, True), (' al {{J_FECHA_ANT}}', GR, False)], ['Pendientes cierre']),
-        ([('  −  ', GR, False), ('{{J_AUT_BK}}', NAR, True), (' autorizados del backlog', GR, False)], ['Programa detalle', 'Otros detalle']),
-        ([('  +  ', GR, False), ('{{J_PEND_NUEVOS}}', NAR, True), (' nuevas solicitudes', GR, False)], ['Pendientes corte']),
-        ([('  =  ', GR, False), ('{{J_PEND_HOY}}', NAR, True), (' al {{J_FECHA_CORTE}}', GR, False)], ['Pendientes corte'])]),
-    ('Cuadre autorizados', [
-        ([('Autorizados: ', AZ, True), ('{{J_AUT_ANT}}', AZ, True), (' al {{J_FECHA_ANT}}', GR, False)], ['Autorizados cierre']),
-        ([('  +  ', GR, False), ('{{J_AUTORIZADO}}', AZ, True), (' autorizados del mes', GR, False)], ['Autorizado']),
-        ([('  −  ', GR, False), ('{{J_AUT_RE}}', AZ, True), (' reautorizados', GR, False)], ['Autorizado']),
-        ([('  −  ', GR, False), ('{{J_AUT_NSOL}}', AZ, True), (' con versión nueva', GR, False)], ['Pendientes corte']),
-        ([('  −  ', GR, False), ('{{J_AUT_SUSP}}', AZ, True), (' suspendidos', GR, False)], ['Pendientes corte']),
-        ([('  =  ', GR, False), ('{{J_AUT_HOY}}', AZ, True), (' al {{J_FECHA_CORTE}}', GR, False)], ['Autorizados corte'])])]
+CUADRES = []   # Carlos, 24/11/2026: sin las líneas de fórmula al pie (la suma se ve en los recuadros de abajo).
 CUADRE_PASOS = []   # [(nombre de la copia, [tarjetas a resaltar])] en orden de clic
 for _k, (_nombre, _trozos) in enumerate(CUADRES):
     for _m in range(len(_trozos)):
@@ -108,14 +120,14 @@ for _k, (_nombre, _trozos) in enumerate(CUADRES):
         CUADRE_PASOS.append((_c.name, _trozos[_m][1], None))
 
 # Animaciones de la lámina 2 (Carlos, 23/11/2026: «que se entienda la suma»): con cada clic aparece (desvanecer) un paso:
-# 1 cierre del mes anterior · 2 Programa y Otros · 3 caracterizaciones · 4 proyección y autorizado · 5 corte ·
-# 6 cuadre de pendientes · 7 cuadre de autorizados. El título queda siempre a la vista.
+# 1 cierre del mes anterior · 2 Programa y Otros · 3 caracterizaciones · 4 «+ AUTORIZADO →» · 5 corte.
+# El título queda siempre a la vista.
 _ids = {}
 for _x in s.shapes: _ids.setdefault(_x.name, []).append(_x.shape_id)
 _pasos = [['Fecha cierre', 'Pendientes cierre', 'Autorizados cierre'],
           ['Conector'] + [f'{k}{x}' for k in ('Programa', 'Otros') for x in ('', ' total', ' autorizados', ' detalle')],
           ['Caracterizaciones', 'Caracterizaciones franja', 'Caracterizaciones texto'],
-          ['Proyeccion', 'Autorizado'], ['Fecha corte', 'Pendientes corte', 'Autorizados corte']]
+          ['Mas', 'Autorizado', 'Flecha'], ['Fecha corte', 'Pendientes corte', 'Autorizados corte']]
 _conector_car = max(_ids['Conector'])   # el conector punteado de caracterizaciones es el último
 _pasos_ids = []
 for _i, _p in enumerate(_pasos):
