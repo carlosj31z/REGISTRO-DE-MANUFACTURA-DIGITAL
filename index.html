@@ -16225,6 +16225,8 @@ async function maybeAutoStartTour() {
             const VIG = 'Mes vigente', corte = g.corte, finAnt = corte.startOf('month').subtract(1, 'day').endOf('day');
             const fAnt = finAnt.format('DD/MM'), fCor = corte.format('DD/MM'), mesN = MESES[corte.month()].toLowerCase();
             const nPl = (xs, pl) => xs.filter((x) => x.v.planta === pl).length;
+            const dA = fAnt.replace('/', '-'), dC = fCor.replace('/', '-'), IDX = 'Índice';
+            const H3 = 'L3 Programa', H3D = 'L3 Programa (lista)', H4 = 'L4 Caracterizaciones', H4D = 'L4 Caracterizac. (lista)', H5 = 'L5 Semana anterior';
 
             // ---------- Datos de cada hoja de detalle ----------
             const cambio = cambiosStatusMes(g, cierre);
@@ -16235,14 +16237,14 @@ async function maybeAutoStartTour() {
             const ord = (a, b) => a[0].localeCompare(b[0]) || String(a[1]).localeCompare(String(b[1])) || String(a[5] || '').localeCompare(String(b[5] || ''));
             const oT = { Ingresado: 0, Solicitado: 1, Suspendido: 2 };
             // Pendientes al corte
-            det('pHoy', 'Pendientes al corte', `Pendientes al ${fCor} (lámina: PENDIENTES ${fCor})`,
+            det('pHoy', `L2 Pendientes al ${dC}`, `Pendientes al ${fCor} (lámina: PENDIENTES ${fCor})`,
                 'Última versión de cada master que hoy está Ingresada, Solicitada o Suspendida (sin las que pasan a INACTIVO). «Origen»: Backlog = ya era pendiente al cierre del mes anterior; Solicitud del mes = entró en el mes.',
                 [['Planta', 7], ['Origen', 16], ['Tipo', 11], ['Código RMD', 13], ['Versión', 8], ['Descripción', 46], ['Etapa', 15], ['Estado SAP hoy', 13], ['Fecha de solicitud', 11], ['Fecha de registro', 11], ['Fecha de suspensión', 11], ['Versión anterior (estado hoy)', 26], ['Explicación', 70]],
                 g.pend.slice().sort((a, b) => a.v.planta.localeCompare(b.v.planta) || (a.cuando === VIG) - (b.cuando === VIG) || oT[a.tipo] - oT[b.tipo] || String(a.v.desc || '').localeCompare(String(b.v.desc || '')))
                     .map((x) => [PL[x.v.planta], x.cuando === VIG ? 'Solicitud del mes' : 'Backlog', x.tipo, x.v.codigo || (x.v.sol ? `Sol. ${x.v.sol}` : ''), x.v.version, x.v.desc || '', x.v.etapa || '', String(x.v.estado || '').toUpperCase(), fx(x.v.fSol), fx(x.v.fReg), fx(x.fS), antTxt(x.ant), x.porque || '']),
                 { planta: 'Planta', origen: 'Origen', tipo: 'Tipo' });
             // Autorizados del mes
-            det('aMes', 'Autorizados del mes', `Autorizados del 01/${corte.format('MM')} al ${fCor} (lámina: AUTORIZADOS)`,
+            det('aMes', `L2 Autorizados en ${mesN}`, `Autorizados del 01/${corte.format('MM')} al ${fCor} (lámina: AUTORIZADOS)`,
                 '«Cuenta como»: Backlog = venía de un mes anterior; Solicitud del mes = se solicitó o registró en el mes. «Cambio de estado»: si el master ya era autorizado al cierre (no suma al total de autorizados).',
                 [['Planta', 7], ['Cuenta como', 16], ['Cambio de estado', 20], ['Código RMD', 13], ['Versión', 8], ['Descripción', 46], ['Etapa', 15], ['Fecha de registro', 11], ['Fecha de autorización', 11], ['Versión anterior (estado hoy)', 26], ['Explicación', 70]],
                 g.aut.slice().sort((a, b) => a.v.planta.localeCompare(b.v.planta) || a.cuenta.localeCompare(b.cuenta) || a.v.fAut - b.v.fAut)
@@ -16250,7 +16252,7 @@ async function maybeAutoStartTour() {
                 { planta: 'Planta', cuenta: 'Cuenta como' });
             // Cambio de estado
             const TIPOS = ['Reautorizado', 'Versión nueva', 'Ya tiene versión nueva', 'Suspendido en el mes'];
-            det('cam', 'Cambio de estado', `Cambio de estado del 01/${corte.format('MM')} al ${fCor} (lámina: CAMBIO ESTADO)`,
+            det('cam', 'L2 Cambio de estado', `Cambio de estado del 01/${corte.format('MM')} al ${fCor} (lámina: CAMBIO ESTADO)`,
                 'RMD que ya contaban como autorizados al cierre y que en el mes se movieron: reautorizados, versión nueva de un RMD ya autorizado, autorizados cuyo master ya tiene una versión más nueva, y autorizados que se suspendieron.',
                 [['Planta', 7], ['Tipo de cambio', 20], ['Código RMD', 13], ['Versión', 8], ['Descripción', 46], ['Etapa', 15], ['Estado SAP hoy', 13], ['Fecha de solicitud', 11], ['Fecha de registro', 11], ['Fecha de autorización', 11], ['Fecha de suspensión', 11], ['Versión anterior (estado hoy)', 26], ['Explicación', 70]],
                 cambio.filas.slice().sort((a, b) => a.x.v.planta.localeCompare(b.x.v.planta) || TIPOS.indexOf(a.tipo) - TIPOS.indexOf(b.tipo) || String(a.x.v.desc || '').localeCompare(String(b.x.v.desc || '')))
@@ -16258,21 +16260,21 @@ async function maybeAutoStartTour() {
                 { planta: 'Planta', tipo: 'Tipo de cambio' });
             // Pendientes al cierre (lista calculada con las fechas de SAP)
             const pAnt = [...g.pend.filter((x) => x.cuando !== VIG).map((x) => ({ x, hoy: 'Sigue pendiente' })), ...g.aut.filter((x) => x.cuenta === 'Backlog').map((x) => ({ x, hoy: 'Autorizado en el mes' }))];
-            det('pAnt', 'Pendientes al cierre', `Pendientes al ${fAnt} (lámina: PENDIENTES ${fAnt})`,
+            det('pAnt', `L2 Pendientes al ${dA}`, `Pendientes al ${fAnt} (lámina: PENDIENTES ${fAnt})`,
                 `Lo que ya era pendiente al cierre del mes anterior (registro, solicitud o suspensión de un mes anterior), con las fechas de SAP. «Hoy»: si sigue pendiente o se autorizó en el mes (los ${'«'}del backlog${'»'}).`,
                 [['Planta', 7], ['Hoy', 18], ['Tipo', 11], ['Código RMD', 13], ['Versión', 8], ['Descripción', 46], ['Etapa', 15], ['Estado SAP hoy', 13], ['Fecha de solicitud', 11], ['Fecha de registro', 11], ['Fecha de autorización', 11], ['Fecha de suspensión', 11]],
                 pAnt.map(({ x, hoy }) => [PL[x.v.planta], hoy, x.tipo || 'Autorizado', x.v.codigo || (x.v.sol ? `Sol. ${x.v.sol}` : ''), x.v.version, x.v.desc || '', x.v.etapa || '', String(x.v.estado || '').toUpperCase(), fx(x.v.fSol), fx(x.v.fReg), fx(x.v.fAut), fx(x.fS)]).sort(ord),
                 { planta: 'Planta', hoy: 'Hoy' });
             // Solicitados del mes
             const sol = [...g.pend.filter((x) => x.cuando === VIG).map((x) => ({ x, hoy: `Pendiente (${x.tipo.toLowerCase()})` })), ...g.aut.filter((x) => x.cuenta !== 'Backlog').map((x) => ({ x, hoy: 'Autorizado' }))];
-            det('sol', 'Solicitados del mes', `Solicitados de ${mesN} (lámina: Solicitados ${mesN.toUpperCase()})`,
+            det('sol', `L2 Solicitados ${mesN}`, `Solicitados de ${mesN} (lámina: Solicitados ${mesN.toUpperCase()})`,
                 `Lo que entró en el mes: los pendientes del mes vigente (tabla 1 y 2 del Backlog, columna «Mes vigente») + los autorizados de las solicitudes del mes (tabla 5, «De las solicitudes del mes»).`,
                 [['Planta', 7], ['Hoy', 22], ['Código RMD', 13], ['Versión', 8], ['Descripción', 46], ['Etapa', 15], ['Estado SAP hoy', 13], ['Fecha de solicitud', 11], ['Fecha de registro', 11], ['Fecha de autorización', 11], ['Versión anterior (estado hoy)', 26], ['Explicación', 70]],
                 sol.map(({ x, hoy }) => [PL[x.v.planta], hoy, x.v.codigo || (x.v.sol ? `Sol. ${x.v.sol}` : ''), x.v.version, x.v.desc || '', x.v.etapa || '', String(x.v.estado || '').toUpperCase(), fx(x.v.fSol), fx(x.v.fReg), fx(x.v.fAut), antTxt(x.ant), x.porque || '']).sort(ord),
                 { planta: 'Planta', hoy: 'Hoy' });
             // Autorizados al corte
             const enMes = new Set(g.aut.map((x) => x.v));
-            det('aHoy', 'Autorizados al corte', `RMD autorizados al ${fCor} (lámina: RMD AUTORIZADOS ${fCor})`,
+            det('aHoy', `L2 Autorizados al ${dC}`, `RMD autorizados al ${fCor} (lámina: RMD AUTORIZADOS ${fCor})`,
                 'Última versión de cada master que hoy está Autorizada (como «Última versión de cada master» del portal), sin los que pasan a INACTIVO.',
                 [['Planta', 7], ['Autorizado en el mes', 12], ['Código RMD', 13], ['Versión', 8], ['Descripción', 46], ['Etapa', 15], ['Fecha de registro', 11], ['Fecha de autorización', 11]],
                 (g.autCorte || []).map((v) => [PL[v.planta], enMes.has(v) ? 'Sí' : 'No', v.codigo || '', v.version, v.desc || '', v.etapa || '', fx(v.fReg), fx(v.fAut)]).sort(ord),
@@ -16281,7 +16283,7 @@ async function maybeAutoStartTour() {
             const aAnt = [...(g.autCorte || []).filter((v) => !enMes.has(v)).map((v) => ({ v, por: 'Autorizado antes del mes y sigue autorizado' })),
                 ...g.aut.filter((x) => !sumaAlCierre(x) && x.ultima !== false).map((x) => ({ v: x.v, por: `Cambio de estado: ${tipoCambio.get(x).toLowerCase()} (el master ya era autorizado)` })),
                 ...cambio.filas.filter((f) => f.tipo === 'Suspendido en el mes').map((f) => ({ v: f.x.v, por: 'Estaba autorizado y se suspendió en el mes' }))];
-            det('aAnt', 'Autorizados al cierre', `RMD autorizados al ${fAnt} (lámina: RMD AUTORIZADOS ${fAnt})`,
+            det('aAnt', `L2 Autorizados al ${dA}`, `RMD autorizados al ${fAnt} (lámina: RMD AUTORIZADOS ${fAnt})`,
                 `Masters autorizados al cierre del mes anterior, rearmados con las fechas de SAP: los que hoy siguen autorizados sin moverse en el mes + reautorizados, versiones nuevas y suspendidos en el mes («Ya tiene versión nueva» no: se autorizó en el mes y ya salió). El número de la lámina está congelado (ver la portada).`,
                 [['Planta', 7], ['Por qué cuenta', 50], ['Código RMD', 13], ['Versión', 8], ['Descripción', 46], ['Etapa', 15], ['Estado SAP hoy', 13], ['Fecha de autorización', 11]],
                 aAnt.map(({ v, por }) => [PL[v.planta], por, v.codigo || '', v.version, v.desc || '', v.etapa || '', String(v.estado || '').toUpperCase(), fx(v.fAut)]).sort(ord),
@@ -16298,9 +16300,10 @@ async function maybeAutoStartTour() {
             };
 
             // ---------- Portada ----------
-            const R = hojaNueva(), HP = 'Lámina 2';
+            const R = hojaNueva(), HP = 'L2 Resumen';
             R['!cols'] = [{ wch: 2 }, { wch: 52 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 2 }, { wch: 14 }, { wch: 2 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 12 }];
-            poner(R, 0, 1, `SUSTENTO LÁMINA 2 – STATUS GENERAL RMD · corte ${corte.format('DD/MM/YYYY')}`, S.tit); R['!rows'][0] = { hpt: 30 };
+            poner(R, 0, 1, `LÁMINA 2 – STATUS GENERAL RMD · corte ${corte.format('DD/MM/YYYY')}`, S.tit); R['!rows'][0] = { hpt: 30 };
+            poner(R, 0, 6, '← Índice', S.link, irA(IDX, '← Volver al índice'));
             poner(R, 1, 1, 'Cada número de la lámina tiene su tabla y su hoja de detalle (fórmulas sobre la hoja: filtra la hoja y sale el mismo número). Clic en «Ver detalle» para ir a la lista; las reglas están en «Como se cuenta».', S.nota);
             unir(R, 1, 1, 1, 11, S.nota); R['!rows'][1] = { hpt: 26 };
             const T0 = 3; R['!rows'][T0] = { hpt: 30 }; R['!rows'][T0 + 1] = { hpt: 36 }; R['!rows'][T0 + 2] = { hpt: 26 };
@@ -16393,13 +16396,13 @@ async function maybeAutoStartTour() {
 
             // Tabla 5: caracterizaciones
             const r2 = d.r2 && !d.r2.error ? d.r2 : null, c2 = (pl) => completarFoto((r2 && r2[pl]) || {});
-            titulo('5. Caracterizaciones (lámina: CARACTERIZACIONES)', d.listado || r2 ? 'Caracterizaciones' : null);
+            titulo('5. Caracterizaciones (lámina: CARACTERIZACIONES)', H4);
             const car5 = ['P1', 'P2'].map((pl) => { const c = c2(pl); return { tot: c.pend + c.aut, pend: c.ing + c.flu + c.cc + c.rev, bor: c.bor, aut: c.aut }; });
             fila('Total (Ruta 2: pendientes + autorizados)', car5.map((x) => x.tot), { bold: true });
             fila('Pendientes (Ingresar + Flujo SAP + Control de cambio + Por revisión)', car5.map((x) => x.pend));
             fila('En borrador', car5.map((x) => x.bor));
             fila('Autorizados', car5.map((x) => x.aut));
-            nota('Mismos números de la lámina 4 (Ruta 2, P1 + P2). La hoja «Caracterizaciones» lista las pendientes.');
+            nota(`Mismos números de la lámina 4 (Ruta 2, P1 + P2). El detalle está en «${H4}».`);
 
             // Tarjetas
             const tarjetas = [
@@ -16418,10 +16421,10 @@ async function maybeAutoStartTour() {
 
             // ---------- Hojas de detalle ----------
             const TINTE = { ATE: C.ATE[1], LIMA: C.LIMA[1], Backlog: 'DDEBF7', 'Solicitud del mes': 'FFF2CC', Reautorizado: 'E2EFDA', 'Versión nueva': 'FFF2CC', 'Ya tiene versión nueva': 'EDEDED', 'Suspendido en el mes': 'FCE4D6', 'Autorizado en el mes': 'E2EFDA', 'Sigue pendiente': 'FCE4D6', Autorizado: 'E2EFDA' };
-            ['pAnt', 'sol', 'pHoy', 'aAnt', 'aMes', 'cam', 'aHoy'].forEach((k) => {
+            const hojaDetalle = (k) => {
                 const dd = H[k], h = hojaNueva(), nc = dd.cols.length;
                 poner(h, 0, 0, dd.titulo, { font: fuente({ bold: true, sz: 14, color: { rgb: AZUL } }) });
-                poner(h, 0, Math.max(nc - 1, 2), '← Volver a la lámina 2', S.link, irA(HP, '← Volver a la lámina 2'));
+                poner(h, 0, Math.max(nc - 1, 2), '← Volver al resumen', S.link, irA(dd.volver || HP, '← Volver al resumen'));
                 poner(h, 1, 0, `${dd.nota} Filas: ${dd.filas.length}.`, S.nota); unir(h, 1, 0, 1, Math.max(nc - 2, 1), S.nota); h['!rows'][1] = { hpt: 30 };
                 dd.cols.forEach((c, jj) => poner(h, FILA_CAB, jj, c[0], S.dCab)); h['!rows'][FILA_CAB] = { hpt: 32 };
                 dd.filas.forEach((f, i) => f.forEach((v, jj) => {
@@ -16431,16 +16434,167 @@ async function maybeAutoStartTour() {
                 h['!cols'] = dd.cols.map((c) => ({ wch: c[1] }));
                 h['!autofilter'] = { ref: XL.utils.encode_range({ s: { r: FILA_CAB, c: 0 }, e: { r: FILA_CAB + Math.max(dd.filas.length, 1), c: nc - 1 } }) };
                 cerrar(h, dd.nombre, { filasFijas: FILA_CAB + 1, colsFijas: 2, zoom: 90 });
+            };
+            ['pAnt', 'sol', 'pHoy', 'aAnt', 'aMes', 'cam', 'aHoy'].forEach(hojaDetalle);
+            // ---------- Láminas 3, 4 y 5 (Carlos, 24/11/2026: «agrupa las hojas por lámina… que sea fácil de entender») ----------
+            // Lista de RMD pendientes de cada ruta: una fila por etapa (Ruta 1) o caracterización (Ruta 2), con su estatus y responsable
+            // (PRO = Borrador + Flujo SAP + CC de PRO; DOC = Ingresar + Por revisión; ASC = CC de ASC), como cuentan las láminas.
+            const ESTATUS_TXT = Object.assign({}, CASILLA_TXT, { sin: 'SIN ESTATUS' });
+            const respDe = (campo, r) => (campo === 'bor' || campo === 'flu' ? 'PRO' : campo === 'ing' || campo === 'rev' ? 'DOC' : campo === 'cc' ? (r === 'PRO' || r === 'ASC' ? r : 'Sin definir') : 'Sin definir');
+            const colsRuta = [['Planta', 7], ['Estatus', 18], ['Responsable', 12], ['Producto / descripción', 46], ['Etapa', 16], ['Código RMD', 13], ['Versión', 8], ['Estado SAP', 14], ['Inicio de producción', 12], ['Observación', 60]];
+            const ordRuta = (a, b) => a[0].localeCompare(b[0]) || Object.values(ESTATUS_TXT).indexOf(a[1]) - Object.values(ESTATUS_TXT).indexOf(b[1]) || String(a[3]).localeCompare(String(b[3]));
+            const filasR1 = [];
+            if (d.r1 && !d.r1.error) ['P1', 'P2'].forEach((pl) => ((d.r1[pl] && d.r1[pl].items) || []).forEach((it) => {
+                if (it.cat !== 'pend') return;
+                const campo = CAMPO_ESTATUS[it.estatus] || 'sin', fr = filaRuta1(it);
+                filasR1.push([PL[pl], ESTATUS_TXT[campo], respDe(campo, it.resp), fr.producto || '', fr.etapa || '', fr.codigo || '', fr.version || '', fr.estado || '', it.inicio ? fx(dayjs(it.inicio)) : '', fr.obs || '']);
+            }));
+            const filasR2 = [];
+            if (d.listado) (d.listado.filas || []).forEach((fl) => {
+                const campo = ESTATUS_LISTADO_CAMPO[fl.estatus];
+                if (!campo || campo === 'aut') return;
+                const r = campo === 'cc' ? respCcListado(fl) : '';
+                filasR2.push([PL[fl.pl], ESTATUS_TXT[campo], respDe(campo, r), fl.nombre || '', fl.etapa || '', fl.codigo || '', fl.version || '', fl.estado || '', '', fl.obs || '']);
             });
-            // Caracterizaciones pendientes (la misma lista de antes: Excel CARACTERIZACIÓN LISTADO o RMD con Motivo CARACTERIZACION).
-            const wCar = hojaCaracterizacionesJefatura(d);
-            if (wCar) { XL.utils.book_append_sheet(wb, wCar, 'Caracterizaciones'); wb._vistas.Caracterizaciones = {}; }
+            else if (d.r2 && !d.r2.error) ['P1', 'P2'].forEach((pl) => ((d.r2[pl] && d.r2[pl].items) || []).forEach((it) => {
+                if (it.cat !== 'pend') return;
+                const campo = CAMPO_ESTATUS[it.estatus] || 'sin', fr = filaRuta2(it);
+                filasR2.push([PL[pl], ESTATUS_TXT[campo], respDe(campo, it.resp), fr.desc || '', fr.etapa || '', fr.codigo || '', fr.version || '', fr.estado || '', '', fr.obs || '']);
+            }));
+            filasR1.sort(ordRuta); filasR2.sort(ordRuta);
+            det('r1', H3D, 'Lámina 3 · Programa de producción: etapas pendientes', 'Cada fila es una etapa del Programa de Producción que todavía no tiene su RMD autorizado. «Estatus» dice en qué paso está y «Responsable» quién debe moverlo.', colsRuta, filasR1, { planta: 'Planta', estatus: 'Estatus', resp: 'Responsable' });
+            det('r2', H4D, 'Lámina 4 · Caracterizaciones pendientes', 'Cada fila es una caracterización que todavía no está autorizada. «Estatus» dice en qué paso está y «Responsable» quién debe moverla.', colsRuta, filasR2, { planta: 'Planta', estatus: 'Estatus', resp: 'Responsable' });
+            H.r1.volver = H3; H.r2.volver = H4;
+
+            // Hoja resumen simple: título, explicación en lenguaje sencillo y tablas ATE | LIMA | TOTAL.
+            const resumen = (nombre, tit, explic, hojaLista) => {
+                const h = hojaNueva(); let y = 0;
+                h['!cols'] = [{ wch: 2 }, { wch: 46 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 2 }, { wch: 16 }];
+                poner(h, 0, 1, tit, S.tit); h['!rows'][0] = { hpt: 30 };
+                poner(h, 0, 7, '← Índice', S.link, irA(IDX, '← Volver al índice'));
+                poner(h, 1, 1, explic, S.nota); unir(h, 1, 1, 1, 7, S.nota); h['!rows'][1] = { hpt: 40 };
+                y = 3;
+                const api = {
+                    h,
+                    titulo: (t, cols) => {
+                        poner(h, y, 1, t, S.sec); for (let c = 2; c <= 1 + cols.length; c++) poner(h, y, c, '', S.sec);
+                        if (hojaLista) poner(h, y, 7, 'Ver la lista →', S.link, irA(hojaLista));
+                        y += 1;
+                        poner(h, y, 1, '', S.cab(AZUL)); cols.forEach((c, k) => poner(h, y, 2 + k, c[0], S.cab(c[1])));
+                        y += 1;
+                    },
+                    fila: (eti, cels, o) => {   // cels: [{n, f?, st?}]
+                        o = o || {};
+                        poner(h, y, 1, eti, o.tot ? S.tot : S.eti);
+                        cels.forEach((x, k) => poner(h, y, 2 + k, x.n, x.st || (o.tot ? S.totN : S.num(C.Total[1])), x.f ? { f: x.f } : undefined));
+                        const r = y; y += 1; return r;
+                    },
+                    nota: (t) => { poner(h, y, 1, t, S.nota); unir(h, y, 1, y, 7, S.nota); h['!rows'][y] = { hpt: 28 }; y += 2; },
+                    salto: () => { y += 1; },
+                    cerrar: () => cerrar(h, nombre, { sinCuadricula: true })
+                };
+                return api;
+            };
+            const colsPl = [['ATE', C.ATE[0]], ['LIMA', C.LIMA[0]], ['TOTAL', AZUL]];
+            const sumaF = (r) => ({ f: `${enc({ r, c: 2 })}+${enc({ r, c: 3 })}` });
+            // Lámina 3 y 4: pendientes por estatus (con fórmula sobre la lista), autorizados y total.
+            const ruta = (nombre, k, tit, explic, rr, etiTot) => {
+                const A = resumen(nombre, tit, explic, H[k].nombre);
+                A.titulo('Pendientes por estatus', colsPl);
+                const ini = [];
+                ['bor', 'ing', 'flu', 'cc', 'rev', 'sin'].forEach((cp) => {
+                    const xs = plantas.map((pl) => contar(k, { planta: pl, estatus: ESTATUS_TXT[cp] }));
+                    if (cp === 'sin' && !xs[0].n && !xs[1].n) return;
+                    const r = A.fila({ bor: 'Borrador', ing: 'Ingresar', flu: 'Flujo SAP', cc: 'Control de cambio', rev: 'Por revisión', sin: 'Sin estatus' }[cp], [
+                        Object.assign({ st: S.num(C.ATE[1]) }, xs[0]), Object.assign({ st: S.num(C.LIMA[1]) }, xs[1])]);
+                    poner(A.h, r, 4, xs[0].n + xs[1].n, S.num(C.Total[1], true), sumaF(r)); ini.push(r);
+                });
+                const pend = plantas.map((pl) => contar(k, { planta: pl }));
+                const rP = A.fila('= Pendientes', [0, 1, 2].map((c) => ({ n: c < 2 ? pend[c].n : pend[0].n + pend[1].n, f: `SUM(${enc({ r: ini[0], c: 2 + c })}:${enc({ r: ini[ini.length - 1], c: 2 + c })})` })), { tot: true });
+                const aut = ['P1', 'P2'].map((pl) => completarFoto((rr && rr[pl]) || {}).aut);
+                const rA = A.fila('Autorizados', [{ n: aut[0], st: S.num(C.ATE[1]) }, { n: aut[1], st: S.num(C.LIMA[1]) }]);
+                poner(A.h, rA, 4, aut[0] + aut[1], S.num(C.Total[1], true), sumaF(rA));
+                A.fila(`= ${etiTot}`, [0, 1, 2].map((c) => ({ n: c < 2 ? pend[c].n + aut[c] : pend[0].n + pend[1].n + aut[0] + aut[1], f: `${enc({ r: rP, c: 2 + c })}+${enc({ r: rA, c: 2 + c })}` })), { tot: true });
+                A.nota('Los pendientes se cuentan sobre la lista (fórmulas): filtra la lista por Planta y Estatus y sale el mismo número. Los autorizados son los de la lámina.');
+                A.titulo('Pendientes por responsable', colsPl);
+                ['PRO', 'DOC', 'ASC', 'Sin definir'].forEach((rs) => {
+                    const xs = plantas.map((pl) => contar(k, { planta: pl, resp: rs }));
+                    if (rs === 'Sin definir' && !xs[0].n && !xs[1].n) return;
+                    const r = A.fila(rs, [Object.assign({ st: S.num(C.ATE[1]) }, xs[0]), Object.assign({ st: S.num(C.LIMA[1]) }, xs[1])]);
+                    poner(A.h, r, 4, xs[0].n + xs[1].n, S.num(C.Total[1], true), sumaF(r));
+                });
+                A.nota('PRO = Producción (borrador, flujo SAP y controles de cambio de PRO). DOC = Documentación (ingresar y por revisión). ASC = Aseguramiento de la Calidad (controles de cambio de ASC).');
+                A.cerrar();
+            };
+            ruta(H3, 'r1', `LÁMINA 3 – PROGRAMA DE PRODUCCIÓN · corte ${corte.format('DD/MM/YYYY')}`,
+                'Etapas del Programa de Producción (Ruta 1): cuántas siguen pendientes, en qué paso están y quién debe moverlas. Las etapas autorizadas a mano no cuentan.', d.r1 && !d.r1.error ? d.r1 : null, 'Programados');
+            ruta(H4, 'r2', `LÁMINA 4 – CARACTERIZACIONES · corte ${corte.format('DD/MM/YYYY')}`,
+                'Caracterizaciones (Ruta 2): cuántas siguen pendientes, en qué paso están y quién debe moverlas.', d.r2 && !d.r2.error ? d.r2 : null, 'Total');
+            // Lámina 5: pendientes por planta y responsable (lámina 3 + lámina 4) de la semana anterior vs hoy.
+            {
+                const sa = j.semAnt, fch = (x) => `${x.format('DD')} ${MESES[x.month()].slice(0, 3)}`;
+                const A = resumen(H5, `LÁMINA 5 – PENDIENTES POR PLANTA VS SEMANA ANTERIOR · corte ${corte.format('DD/MM/YYYY')}`,
+                    `Pendientes de las láminas 3 y 4 juntas, por responsable. «Semana anterior» es la foto que guardó la página el ${sa ? dayjs(sa.dia).format('DD/MM/YYYY') : '(sin foto)'}; «Hoy» se cuenta sobre las listas de las láminas 3 y 4.`, null);
+                const resp2 = (c) => ({ PRO: c.bor + c.flu + c.ccPro, DOC: c.ing + c.rev, ASC: c.ccAsc, TOT: c.pend });
+                const antDe = (pl) => { if (!sa) return null; const a = resp2(completarFoto((sa.f.r1 && sa.f.r1[pl]) || {})), b = resp2(completarFoto((sa.f.r2 && sa.f.r2[pl]) || {})); return { PRO: a.PRO + b.PRO, DOC: a.DOC + b.DOC, ASC: a.ASC + b.ASC, TOT: a.TOT + b.TOT }; };
+                const pct = { font: fuente({ bold: true }), fill: fill(C.Total[1]), border: borde, alignment: { horizontal: 'center' }, numFmt: '+0%;-0%;0%' };
+                const varSt = { font: fuente({ bold: true }), fill: fill(C.Total[1]), border: borde, alignment: { horizontal: 'center' }, numFmt: '+#,##0;-#,##0;0' };
+                ['P1', 'P2'].forEach((pl) => {
+                    const ant = antDe(pl), nom = PL[pl];
+                    A.titulo(`${pl} · Planta ${pl === 'P1' ? 'Ate' : 'Lima'}`, [[sa ? fch(dayjs(sa.dia)) : 'Semana anterior', C[nom][0]], [fch(corte), C[nom][0]], ['Variación', AZUL], ['%', AZUL]]);
+                    ['PRO', 'DOC', 'ASC', 'TOT'].forEach((rs) => {
+                        const x1 = rs === 'TOT' ? contar('r1', { planta: nom }) : contar('r1', { planta: nom, resp: rs });
+                        const x2 = rs === 'TOT' ? contar('r2', { planta: nom }) : contar('r2', { planta: nom, resp: rs });
+                        const hoy = { n: x1.n + x2.n, f: `${x1.f}+${x2.f}` }, a = ant ? ant[rs] : '';
+                        const r = A.fila(rs === 'TOT' ? 'Total' : rs, [{ n: a, st: S.num(C[nom][1], rs === 'TOT') }, Object.assign({ st: S.num(C[nom][1], rs === 'TOT') }, hoy)], { tot: rs === 'TOT' });
+                        if (ant) {
+                            poner(A.h, r, 4, hoy.n - a, varSt, { f: `${enc({ r, c: 3 })}-${enc({ r, c: 2 })}` });
+                            poner(A.h, r, 5, a ? (hoy.n - a) / a : 0, pct, { f: `IF(${enc({ r, c: 2 })}=0,0,(${enc({ r, c: 3 })}-${enc({ r, c: 2 })})/${enc({ r, c: 2 })})` });
+                        } else { poner(A.h, r, 4, '—', varSt); poner(A.h, r, 5, '—', pct); }
+                    });
+                    A.nota(`Total = todos los pendientes de la planta (incluye los que aún no tienen responsable definido). Detalle de hoy: «${H3D}» y «${H4D}».`);
+                });
+                A.cerrar();
+            }
+            hojaDetalle('r1'); hojaDetalle('r2');
+
+            // ---------- Índice (primera hoja): qué muestra cada hoja, en lenguaje simple ----------
+            {
+                const h = hojaNueva();
+                h['!cols'] = [{ wch: 2 }, { wch: 10 }, { wch: 30 }, { wch: 95 }];
+                poner(h, 0, 1, `STATUS RMD – SUSTENTO DEL PPT PARA JEFATURA · corte ${corte.format('DD/MM/YYYY')}`, S.tit); h['!rows'][0] = { hpt: 30 };
+                poner(h, 1, 1, 'Cada lámina del PPT tiene una hoja «Resumen» con sus números y, a continuación, las listas de RMD de donde salen. Haz clic en el nombre de una hoja para ir a ella; en cada hoja hay un enlace para volver.', S.nota);
+                unir(h, 1, 1, 1, 3, S.nota); h['!rows'][1] = { hpt: 30 };
+                ['Lámina', 'Hoja', '¿Qué muestra?'].forEach((t, k) => poner(h, 3, 1 + k, t, S.cab(AZUL)));
+                const filas = [
+                    ['2', HP, 'Resumen de la lámina 2: pendientes y RMD autorizados al cierre del mes anterior y hoy, lo que entró en el mes, lo autorizado y lo que cambió de estado.'],
+                    ['2', H.pAnt.nombre, `Los RMD que estaban pendientes al ${fAnt}.`],
+                    ['2', H.sol.nombre, `Los RMD que entraron en ${mesN}: los que siguen pendientes y los que ya se autorizaron.`],
+                    ['2', H.pHoy.nombre, `Los RMD pendientes hoy (${fCor}).`],
+                    ['2', H.aAnt.nombre, `Los RMD que estaban autorizados al ${fAnt}.`],
+                    ['2', H.aMes.nombre, `Los RMD autorizados en ${mesN}: los que venían del backlog y los de las solicitudes del mes.`],
+                    ['2', H.cam.nombre, 'Los RMD que ya estaban autorizados y en el mes cambiaron de estado (se reautorizaron, se suspendieron o tienen una versión más nueva).'],
+                    ['2', H.aHoy.nombre, `Los RMD autorizados hoy (${fCor}).`],
+                    ['3', H3, 'Resumen de la lámina 3: etapas del Programa de Producción pendientes, por paso y por responsable.'],
+                    ['3', H3D, 'La lista de esas etapas pendientes.'],
+                    ['4', H4, 'Resumen de la lámina 4: caracterizaciones pendientes, por paso y por responsable.'],
+                    ['4', H4D, 'La lista de esas caracterizaciones pendientes.'],
+                    ['5', H5, 'Lámina 5: pendientes por planta y responsable, comparados con la semana anterior.'],
+                    ['–', 'Como se cuenta', 'Las reglas de cada número, por si alguien pregunta de dónde sale.']];
+                filas.forEach(([l, hj, txt], i) => {
+                    const r = 4 + i, st = Object.assign({}, S.eti, { alignment: { vertical: 'center', wrapText: true } });
+                    poner(h, r, 1, l, Object.assign({}, st, { alignment: { horizontal: 'center', vertical: 'center' } }));
+                    poner(h, r, 2, hj, Object.assign({}, st, { font: fuente({ color: { rgb: '0563C1' }, underline: true }) }), irA(hj, `Ir a la hoja ${hj}`));
+                    poner(h, r, 3, txt, st); h['!rows'][r] = { hpt: txt.length > 95 ? 30 : 18 };
+                });
+                cerrar(h, IDX, { sinCuadricula: true });
+            }
 
             // ---------- Como se cuenta ----------
             const G = hojaNueva();
             G['!cols'] = [{ wch: 2 }, { wch: 30 }, { wch: 110 }];
-            poner(G, 0, 1, 'Cómo se cuenta cada número de la lámina 2', S.tit);
-            poner(G, 1, 2, '← Volver a la lámina 2', S.link, irA(HP, '← Volver a la lámina 2'));
+            poner(G, 0, 1, 'Cómo se cuenta cada número', S.tit);
+            poner(G, 1, 2, '← Volver al índice', S.link, irA(IDX, '← Volver al índice'));
             let gy = 3;
             [[`PENDIENTES ${fAnt}`, [`Cierre del mes anterior, congelado una vez (octubre 2026 lo fijó Carlos el 24/11/2026). Lo que SAP cambie después va en «Ajuste por cierre congelado».`, 'La hoja lista lo que hoy da SAP: pendientes de hoy que ya lo eran (registro, solicitud o suspensión de un mes anterior) + autorizados del mes que venían del backlog.']],
                 [`Solicitados ${mesN.toUpperCase()}`, ['Pendientes del mes vigente (columna «Mes vigente» de las tablas 1 y 2 del Excel del Backlog) + autorizados de las solicitudes del mes (tabla 5 del Backlog).']],
@@ -16449,13 +16603,18 @@ async function maybeAutoStartTour() {
                 ['AUTORIZADOS', ['Autorizados del 1 del mes a la fecha de corte que siguen Autorizados (tabla 5 del Backlog): del backlog + de las solicitudes del mes.']],
                 ['CAMBIO ESTADO', ['Masters que ya eran autorizados al cierre y se movieron en el mes: reautorizados, versión nueva, ya tienen versión nueva, suspendidos en el mes; más el ajuste por cierre congelado.']],
                 [`RMD AUTORIZADOS ${fCor}`, ['Última versión de cada master Autorizada, sin INACTIVO (como «Última versión de cada master» del portal).', `Cuadra así: autorizados al ${fAnt} + AUTORIZADOS − CAMBIO ESTADO.`]],
-                ['CARACTERIZACIONES', ['Ruta 2 P1 + P2: total = pendientes + autorizados; pendientes = Ingresar + Flujo SAP + Control de cambio + Por revisión.']]]
+                ['CARACTERIZACIONES', ['Ruta 2 P1 + P2: total = pendientes + autorizados; pendientes = Ingresar + Flujo SAP + Control de cambio + Por revisión.']],
+                ['LÁMINA 3 · PROGRAMA', ['Etapas del Programa de Producción sin RMD autorizado, por estatus y responsable. Programados = pendientes + autorizados. Las etapas autorizadas a mano no cuentan.']],
+                ['LÁMINA 4 · CARACTERIZACIONES', ['Caracterizaciones sin autorizar, por estatus y responsable (Excel CARACTERIZACIÓN LISTADO o RMD de SAP con motivo CARACTERIZACIÓN).']],
+                ['LÁMINA 5 · SEMANA ANTERIOR', ['Pendientes de las láminas 3 y 4 juntos, por planta y responsable. Semana anterior = foto diaria que guarda la página de hace 7 días (o la última de antes). Variación = hoy − semana anterior; % = variación / semana anterior.']]]
                 .forEach(([t, ls]) => {
                     poner(G, gy, 1, t, Object.assign({}, S.eti, { font: fuente({ bold: true, color: { rgb: AZUL } }), alignment: { vertical: 'top', wrapText: true } }));
                     ls.forEach((l, k) => { if (k > 0) poner(G, gy, 1, '', S.eti); poner(G, gy, 2, `• ${l}`, S.eti); G['!rows'][gy] = { hpt: Math.max(15, Math.ceil(l.length / 105) * 14 + 2) }; gy += 1; });
                     gy += 1;
                 });
             cerrar(G, 'Como se cuenta', { sinCuadricula: true });
+            const orden = [IDX, HP, H.pAnt.nombre, H.sol.nombre, H.pHoy.nombre, H.aAnt.nombre, H.aMes.nombre, H.cam.nombre, H.aHoy.nombre, H3, H3D, H4, H4D, H5, 'Como se cuenta'];
+            wb.SheetNames = [...orden.filter((x) => wb.SheetNames.includes(x)), ...wb.SheetNames.filter((x) => !orden.includes(x))];
             return wb;
         }
         // PPT para jefatura (Carlos, 23/11/2026): las etapas del programa autorizadas a mano (sin RMD autorizado en SAP) no cuentan
