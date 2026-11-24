@@ -15973,7 +15973,7 @@ async function maybeAutoStartTour() {
         //   Al cierre del mes anterior: el cierre real con las fechas de SAP (ver abajo).
         //   Caracterizaciones = total de la Ruta 2 P1 + P2 (lámina 4); pendientes = Ingresar + Flujo SAP + Control de cambio +
         //   Por revisión (todo el flujo menos Borrador y Autorizado).
-        function datosJefatura(d, g) {
+        function datosJefatura(d, g, cierre) {
             if (!g) return null;
             const R = g.resumen, corte = g.corte;
             const autHoy = R.P1.AUTORIZADO + R.P2.AUTORIZADO, autMesN = g.aut.length;
@@ -16008,9 +16008,40 @@ async function maybeAutoStartTour() {
             const autReaut = g.aut.filter(reaut).length;
             const sumanMaster = autMesN - autNSol - autReaut;
             const susMes = g.pend.filter((x) => x.tipo === 'Suspendido' && x.cuando === VIG && x.v.fAut && !x.v.fAut.isAfter(finAnt)).length;
-            const autAnt = autHoy - sumanMaster + susMes;
-            return { corte, hab, autHoy, autAnt, pendHoy, pendAnt, autBk: autBkG, pendNuevos: pendHoy - (pendAnt - autBkG), autSuman: sumanMaster, autNSol, autReaut, autSusp: susMes, prog, otros, car, proy, autorizado,
+            const autAntCalc = autHoy - sumanMaster + susMes;
+            // Por planta (para guardar el cierre congelado).
+            const porPl = (pl) => {
+                const de = (x) => x.v.planta === pl, aP = g.aut.filter(de), sP = aP.filter((x) => !noSuma(x) && !reaut(x)).length;
+                return { pend: g.pend.filter((x) => de(x) && x.cuando !== VIG).length + aP.filter((x) => x.cuenta === 'Backlog').length,
+                    aut: R[pl].AUTORIZADO - sP + g.pend.filter((x) => de(x) && x.tipo === 'Suspendido' && x.cuando === VIG && x.v.fAut && !x.v.fAut.isAfter(finAnt)).length };
+            };
+            const calc = { pend: { P1: porPl('P1').pend, P2: porPl('P2').pend }, aut: { P1: porPl('P1').aut, P2: porPl('P2').aut } };
+            // Cierre congelado (Carlos, 24/11/2026: «estas cantidades no cambian al corte del mes de octubre en adelante»): el cierre del
+            // mes anterior se fija una vez y las sincronizaciones posteriores ya no lo mueven. Lo que cambie después en SAP se absorbe
+            // en «Nuevas solicitudes» (pendientes) y en «cambiaron de status» (autorizados), para que la lámina siga cuadrando.
+            const fijo = cierre && cierre.pend && cierre.aut ? cierre : null;
+            const sum = (o) => (o.P1 || 0) + (o.P2 || 0);
+            const pendAntF = fijo ? sum(fijo.pend) : pendAnt, autAnt = fijo ? sum(fijo.aut) : autAntCalc;
+            return { corte, hab, autHoy, autAnt, pendHoy, pendAnt: pendAntF, autBk: autBkG, pendNuevos: pendHoy - (pendAntF - autBkG), autSuman: sumanMaster, autNSol, autReaut, autSusp: susMes,
+                autCambio: autAnt + autorizado - autHoy, calc, congelado: !!fijo, mesCierre: finAnt.format('YYYY-MM'), prog, otros, car, proy, autorizado,
                 pct: proy ? Math.round((autorizado / proy) * 100) : 0 };
+        }
+        // Cierres congelados de la lámina 2 por mes («AAAA-MM» = mes que cierra). Octubre 2026 lo fijó Carlos el 24/11/2026 con la
+        // lámina de ese día (751 pendientes / 1,731 autorizados). Desde noviembre, el primer cálculo después del cierre se guarda en
+        // Supabase (val_jefatura_cierres) y no se vuelve a calcular.
+        const CIERRES_JEFATURA_FIJOS = { '2026-10': { pend: { P1: 509, P2: 242 }, aut: { P1: 920, P2: 811 }, fijado: '2026-11-24', por: 'Carlos' } };
+        async function cierreJefatura(mes) {
+            if (CIERRES_JEFATURA_FIJOS[mes]) return CIERRES_JEFATURA_FIJOS[mes];
+            try { const t = (await storeGet('val_jefatura_cierres')) || {}; return t[mes] || null; } catch (e) { return null; }
+        }
+        async function guardarCierreJefatura(mes, calc) {
+            if (mes < '2026-10' || CIERRES_JEFATURA_FIJOS[mes]) return;
+            try {
+                const t = (await storeGetFresco('val_jefatura_cierres')) || {};
+                if (t[mes]) return;
+                t[mes] = Object.assign({}, calc, { fijado: dayjs().format('YYYY-MM-DD') });
+                await storeSet('val_jefatura_cierres', t);
+            } catch (e) { console.warn('No se pudo guardar el cierre de la lámina 2', e); }
         }
         // Marcadores J_* de la plantilla de jefatura (los de las rutas, R1_* y R2_*, salen de valoresPpt).
         function valoresJefatura(v, d, j) {
@@ -16023,7 +16054,7 @@ async function maybeAutoStartTour() {
                 J_PROG_PROY: n(j.prog.total), J_PROG_NUM: n(Math.max(0, j.prog.total - j.prog.aut)),
                 J_OTROS_PROY: n(j.otros.total), J_OTROS_NUM: n(Math.max(0, j.otros.total - j.otros.aut)),
                 J_OTROS_TOTAL: n(j.otros.total), J_OTROS_AUT: n(j.otros.aut), J_OTROS_BK: n(j.otros.bk), J_OTROS_MES: n(j.otros.mes),
-                J_AUT_BK: n(j.autBk), J_PEND_NUEVOS: n(j.pendNuevos), J_PEND_BK: n(j.pendHoy - j.pendNuevos), J_AUT_SUMAN: n(j.autSuman), J_AUT_NSOL: n(j.autNSol), J_AUT_REAUT: n(j.autReaut), J_AUT_NS_TOT: n(j.autNSol + j.autReaut + j.autSusp), J_AUT_RE: n(j.autReaut), J_AUT_SUSP: n(j.autSusp),
+                J_AUT_BK: n(j.autBk), J_PEND_NUEVOS: n(j.pendNuevos), J_PEND_BK: n(j.pendHoy - j.pendNuevos), J_AUT_SUMAN: n(j.autSuman), J_AUT_NSOL: n(j.autNSol), J_AUT_REAUT: n(j.autReaut), J_AUT_NS_TOT: n(j.autCambio), J_AUT_RE: n(j.autReaut), J_AUT_SUSP: n(j.autSusp),
                 J_CAR_TOTAL: n(j.car.total), J_CAR_PEND: n(j.car.pend), J_PROY: n(j.proy), J_AUTORIZADO: n(j.autorizado), J_PCT: String(j.pct)
             });
             // Láminas 3 a 5: autorizados de cada ruta y pendientes por planta y responsable (PRO = Borrador + Flujo SAP + CC de PRO;
@@ -16154,8 +16185,11 @@ async function maybeAutoStartTour() {
             const zip = await JSZip.loadAsync(jefatura ? STATUS_RMD_JEFATURA_B64 : STATUS_RMD_PLANTILLA_B64, { base64: true });
             const v = valoresPpt(d, g);
             if (jefatura) {
-                const j = datosJefatura(d, g);
+                const mesCierre = g && g.corte ? g.corte.startOf('month').subtract(1, 'day').format('YYYY-MM') : '';
+                const cierre = mesCierre ? await cierreJefatura(mesCierre) : null;
+                const j = datosJefatura(d, g, cierre);
                 if (!j) throw new Error('faltan los RMD de SAP para la lámina 2 (usa «Enviar a Status RMD»)');
+                if (!cierre) await guardarCierreJefatura(j.mesCierre, j.calc);
                 valoresJefatura(v, d, j);
             } else {
                 for (const [lamina, pl] of [['slide3', 'P1'], ['slide4', 'P2']]) {
