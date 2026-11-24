@@ -4342,6 +4342,8 @@ alter publication supabase_realtime add table public.rmd_dashboard_kv;`;
             return (Array.isArray(historial) ? historial : []).filter(h => h && h.fecha && h.accion === 'Carga de archivo' && re && re.test(h.detalle || '')).map(h => h.fecha);
         }
         // El acumulado guardado o, si todavía no hay, el reconstruido (sin guardarlo: se guarda con la próxima carga).
+        // Copia en memoria del acumulado de cada planta, para la tabla de Producción (autorizados de programas anteriores).
+        const acumuladoProgramaMem = { planta1: null, planta2: null };
         async function leerAcumuladoPrograma(plantaKey) {
             const acc = await storeGet(`prod_acumulado_${plantaKey}`);
             if (acc && acc.v === 1 && acc.items) return acc;
@@ -4354,6 +4356,7 @@ alter publication supabase_realtime add table public.rmd_dashboard_kv;`;
             const guardado = await storeGetFresco(clave);
             const acc = guardado && guardado.v === 1 && guardado.items ? sumarCargaAlAcumulado(guardado, data, new Date().toISOString())
                 : await leerAcumuladoPrograma(plantaKey);
+            acumuladoProgramaMem[plantaKey] = acc;
             return storeSet(clave, acc);
         }
 
@@ -8350,6 +8353,9 @@ async function downloadPlanProduccionFromCloud() {
             ]);
             if (maf) manualAutorizadosForecast = new Set(maf);
             manualAutorizadosForecastMeta = metaManualDesdeGuardado(mmf);
+            // Acumulado del programa (no frena la carga: al llegar se vuelve a pintar la tabla de Producción).
+            Promise.all(['planta1', 'planta2'].map((pk) => leerAcumuladoPrograma(pk).then((acc) => { acumuladoProgramaMem[pk] = acc; }).catch((e) => console.warn('Programa acumulado:', e))))
+                .then(() => { try { if (productionData.length) runValidacionMateriales(); } catch (e) { console.warn(e); } });
             fechasInicioManual = mapaFechasInicioManual(fim);
             if (traz) trazabilidadSap = traz;
             opsSap = normalizarOpsSap(ops);
@@ -8513,7 +8519,9 @@ async function downloadPlanProduccionFromCloud() {
             const filasOps = opsSinRmd ? filasOpsSinRmd(opsSinRmd, enPrograma) : [];
             ultimoResultadoValidacion.opsSinRmd = opsSinRmd || [];
             ultimoResultadoValidacion.enPrograma = enPrograma;
-            const todasLasFilas = ordenarFilasEtapa([...etapas, ...filasOps]);
+            const etapasFuera = etapasAutorizadasFueraDelPrograma(new Set(productos.map(p => p.material)), new Set(etapas.map(f => f.id)));
+            ultimoResultadoValidacion.etapasFueraPrograma = etapasFuera;
+            const todasLasFilas = ordenarFilasEtapa([...etapas, ...etapasFuera, ...filasOps]);
 
             if (todasLasFilas.length === 0) {
                 emptyState.style.display = 'block';
@@ -8528,6 +8536,40 @@ async function downloadPlanProduccionFromCloud() {
             }
             renderSummaryProd();
             if (typeof StatusRmd !== 'undefined' && StatusRmd.pintarAcumuladoProduccion) StatusRmd.pintarAcumuladoProduccion();
+        }
+
+        // Autorizados acumulados del mes (pedido de Carlos, 24/11/2026): en la tabla de Producción, los grupos de autorizados por
+        // día muestran también las etapas autorizadas en el mes de productos que estuvieron en un programa del mes (cualquier carga
+        // del mes o la última antes del 1, según prod_acumulado) aunque la carga nueva los haya sacado. Igual que la Ruta 1 del
+        // Status RMD. Solo se muestran como autorizadas (no cuentan en los KPI de productos del programa de hoy).
+        function etapasAutorizadasFueraDelPrograma(materialesHoy, idsHoy) {
+            const pks = currentPlanta === 'consolidado' ? ['planta1', 'planta2'] : [currentPlanta];
+            const iniMes = dayjs().startOf('month'), finHoy = dayjs().endOf('day'), iniIso = iniMes.toISOString();
+            const productos = new Map();
+            pks.forEach((pk) => {
+                const acc = acumuladoProgramaMem[pk];
+                if (!acc || !acc.items) return;
+                const previa = (acc.cargas || []).filter((x) => x < iniIso).pop() || iniIso;
+                Object.entries(acc.items).forEach(([m, it]) => {
+                    if (!it || !it.u || it.u < previa || materialesHoy.has(m)) return;
+                    if (currentAreaFilter !== 'TODAS' && !(it.a || []).includes(currentAreaFilter)) return;
+                    const planta = pk === 'planta1' ? 'ATE' : 'LIMA';
+                    let x = productos.get(m);
+                    if (!x) { const r = evaluarMaterialPreciso(m); productos.set(m, x = { material: m, descripcion: r.descripcion || it.p || '', r, areas: [], plantas: [], fechaProxima: null, fechaDe: () => null, motivoRevisar: '' }); }
+                    if (!x.plantas.includes(planta)) x.plantas.push(planta);
+                    (it.a || []).forEach((a) => { if (!x.areas.some((y) => y.toUpperCase() === String(a).toUpperCase())) x.areas.push(String(a).toUpperCase()); });
+                });
+            });
+            if (!productos.size) return [];
+            return etapasDeProductos([...productos.values()], manualAutorizados).filas.filter((f) => {
+                if (idsHoy.has(f.id) || (f.estado !== 'autorizado' && f.estado !== 'sap')) return false;
+                const fa = fechaAutorizacionDeFila(f, 'produccion');
+                if (!fa) return false;
+                const d = dayjs(fa.ms);
+                if (d.isBefore(iniMes) || d.isAfter(finHoy)) return false;
+                f.fueraPrograma = true;
+                return true;
+            });
         }
 
         function refiltrarValidacionFiltros() {
@@ -9067,6 +9109,8 @@ async function downloadPlanProduccionFromCloud() {
             const { tit, sub } = tituloDiaAut(dia);
             const extra = [`${plural(materiales, 'material', 'materiales')}`];
             if (proximos.length) extra.push(`próximo inicio ${dayjs(proximos[0]).format('DD/MM')}`);
+            const fuera = filas.filter(f => f.fueraPrograma).length;
+            if (fuera) extra.push(`${fuera} de programas anteriores`);
             return `<tr class="fila-grupo-aut${dia === hoyTxt ? ' fila-grupo-aut--hoy' : ''}"><td colspan="${colspan}">
                 <button type="button" class="gaut-btn" aria-expanded="${abierto}" onclick="toggleGrupoAut(this,'${origen}','${dia}')" title="${abierto ? 'Ocultar' : 'Ver'} el detalle de los autorizados de este día">
                     <span class="gaut-flecha" aria-hidden="true">▸</span>
@@ -9356,7 +9400,7 @@ async function downloadPlanProduccionFromCloud() {
                 return `<tr class="${rowCls}">
                     <td class="whitespace-nowrap py-2 text-slate-300">${plantaCelda(f)}</td>
                     <td class="whitespace-nowrap py-2">${htmlMaterialEtapa(f, 'mat-code')}</td>
-                    <td class="text-slate-200 py-2">${esc(f.descripcion || '-')}${htmlProductosDeEtapa(f)}${typeof Caracterizacion !== 'undefined' ? Caracterizacion.chipProduccion(f) : ''}</td>
+                    <td class="text-slate-200 py-2">${esc(f.descripcion || '-')}${f.fueraPrograma ? '<span class="etapa-para" title="Estuvo en un programa de este mes; la última carga del Programa de Producción ya no lo trae">Programa anterior</span>' : ''}${htmlProductosDeEtapa(f)}${typeof Caracterizacion !== 'undefined' ? Caracterizacion.chipProduccion(f) : ''}</td>
                     <td class="text-slate-400 py-2">${esc(f.areas || '')}</td>
                     <td class="whitespace-nowrap py-2">${htmlFechaInicioEtapa(f)}</td>
                     <td class="py-2">${c.etapa}</td>
