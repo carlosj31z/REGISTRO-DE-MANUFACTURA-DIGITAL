@@ -14229,14 +14229,14 @@ async function maybeAutoStartTour() {
 
             // Lámina 2 del PPT: status por planta y pendientes backlog vs. mes.
             const R = g.resumen, est = (k) => tres((pl) => R[pl][k]);
-            const status = tabla(`Status por planta al ${fCor} <small>(lámina 2 del PPT: última versión de cada master)</small>`, cabPl, [
+            const status = tabla(`Status por planta al ${fCor} <small>(última versión de cada master)</small>`, cabPl, [
                 fila('Autorizado', est('AUTORIZADO'), 'autHoy'), fila('Ingresado', est('INGRESADO')), fila('Suspendido', est('SUSPENDIDO')), fila('Inactivo', est('INACTIVO')),
                 fila('Total', tres((pl) => R[pl].AUTORIZADO + R[pl].INGRESADO + R[pl].SUSPENDIDO + R[pl].INACTIVO), '', 'total')]);
             const cuenta = (pl, tipo, vig) => g.pend.filter((x) => x.v.planta === pl && (!tipo || x.tipo === tipo) && (x.cuando === VIG) === vig).length;
             const bkMes = (tipo) => { const a = [cuenta('P1', tipo, false), cuenta('P2', tipo, false), cuenta('P1', tipo, true), cuenta('P2', tipo, true)]; return a.concat(a.reduce((s, x) => s + x, 0)); };
             const clBM = ['bk|P1', 'bk|P2', 'mes|P1', 'mes|P2', 'todo|T'];
             const filaBM = (eti, tipo, total) => `<tr${total ? ' class="total"' : ''}><td>${eti}</td>${bkMes(tipo).map((x, k) => `<td class="mono${total ? ' fuerte' : ''}">${nDet(x, `lam|${clBM[k].split('|')[1]}|pendTipo|${tipo || 'todo'}|${clBM[k].split('|')[0]}`, nEn(x))}</td>`).join('')}</tr>`;
-            const bm = tabla(`Pendientes: backlog vs. ${esc(mesN)} <small>(lámina 2 del PPT)</small>`, ['', 'Backlog ATE', 'Backlog LIMA', `${capital(mesN)} ATE`, `${capital(mesN)} LIMA`, 'Total'],
+            const bm = tabla(`Pendientes: backlog vs. ${esc(mesN)}`, ['', 'Backlog ATE', 'Backlog LIMA', `${capital(mesN)} ATE`, `${capital(mesN)} LIMA`, 'Total'],
                 [filaBM('Ingresado', 'Ingresado'), filaBM('Solicitado', 'Solicitado'), filaBM('Suspendido', 'Suspendido'), filaBM('Total', '', true)]);
 
             // Lámina 2 del PPT para jefatura: del cierre al corte (igual que las tablas 1 a 4 del Excel de sustento).
@@ -14246,7 +14246,7 @@ async function maybeAutoStartTour() {
             const pSol = tres((pl) => n(g.pend.filter((x) => x.cuando === VIG), pl));
             const pH = [0, 1, 2].map((k) => pA[k] + ajP[k] - pAB[k] + pSol[k]);
             const solMes = tres((pl) => n(g.pend.filter((x) => x.cuando === VIG), pl) + n(g.aut.filter((x) => x.cuenta !== 'Backlog'), pl));
-            const pend = tabla(`Pendientes del ${fAnt} al ${fCor} <small>(lámina 2 del PPT para jefatura)</small>`, cabPl, [
+            const pend = tabla(`Pendientes del ${fAnt} al ${fCor}`, cabPl, [
                 fila(`Pendientes al ${fAnt}${fijo ? ' (congelado)' : ''}`, pA, fijo ? '' : 'pendAnt', ''),
                 ...(ajP[2] || ajP[0] || ajP[1] ? [fila('± Ajuste por cierre congelado', ajP)] : []),
                 fila('− Autorizados del backlog', pAB, 'autBk'), fila(`+ Solicitados de ${esc(mesN)} que siguen pendientes`, pSol, 'pendSol'),
@@ -14258,7 +14258,7 @@ async function maybeAutoStartTour() {
             const aM = tres((pl) => n(g.aut, pl));
             const aH = [0, 1, 2].map((k) => aA[k] + aM[k] - camTot[k]);
             const TIPOS = ['Reautorizado', 'Versión nueva', 'Ya tiene versión nueva', 'Suspendido en el mes'];
-            const aut = tabla(`RMD autorizados del ${fAnt} al ${fCor} <small>(lámina 2 del PPT para jefatura)</small>`, cabPl, [
+            const aut = tabla(`RMD autorizados del ${fAnt} al ${fCor}`, cabPl, [
                 fila(`Autorizados al ${fAnt}${fijo ? ' (congelado)' : ''}`, aA, fijo ? '' : 'autAnt'),
                 fila(`+ Autorizados del 01/${corte.format('MM')} al ${fCor}`, aM, 'autMes'),
                 fila('&nbsp;&nbsp;&nbsp;del backlog', pAB, 'autBk', 'parte'), fila('&nbsp;&nbsp;&nbsp;de las solicitudes del mes', tres((pl) => n(g.aut.filter((x) => x.cuenta !== 'Backlog'), pl)), 'autMesSol', 'parte'),
@@ -14266,7 +14266,7 @@ async function maybeAutoStartTour() {
                 ...TIPOS.map((t, i) => fila(`&nbsp;&nbsp;&nbsp;${t.toLowerCase()}`, camT(t), `cam|${i}`, 'parte')),
                 ...(ajA[0] || ajA[1] ? [fila('&nbsp;&nbsp;&nbsp;ajuste por cierre congelado', ajA, '', 'parte')] : []),
                 fila(`= RMD autorizados al ${fCor}`, aH, 'autHoy', 'total')]);
-            const notaSol = `<p class="sts-nota"><b>Solicitados de ${esc(mesN)}</b> en la lámina: ${nDet(solMes[2], 'lam|T|sol', nEn(solMes[2]))} (ATE ${nEn(solMes[0])}, LIMA ${nEn(solMes[1])}) = ${nEn(pSol[2])} que siguen pendientes + ${nEn(solMes[2] - pSol[2])} ya autorizados.
+            const notaSol = `<p class="sts-nota"><b>Solicitados de ${esc(mesN)}</b>: ${nDet(solMes[2], 'lam|T|sol', nEn(solMes[2]))} (ATE ${nEn(solMes[0])}, LIMA ${nEn(solMes[1])}) = ${nEn(pSol[2])} que siguen pendientes + ${nEn(solMes[2] - pSol[2])} ya autorizados.
                 ${fijo ? `El cierre del ${fAnt} quedó congelado (${esc(fijo.por || '')} ${fijo.fijado ? `el ${dayjs(fijo.fijado).format('DD/MM/YYYY')}` : ''}); lo que SAP cambió después va en «ajuste».` : ''}
                 Cambio de estado: masters que ya eran autorizados al cierre y se movieron en el mes (no suman al total). Cada número abre su lista.</p>`;
 
@@ -14278,14 +14278,14 @@ async function maybeAutoStartTour() {
                     ${rs.map(([k, t]) => { const p = `J_C_${pl}_${k}_`, baja = /^−/.test(v[p + 'V']); return `<tr${k === 'TOT' ? ' class="total"' : ''}><td>${t}</td><td class="mono">${esc(v[p + 'A'])}</td><td class="mono">${esc(v[p + 'H'])}</td><td class="mono${baja ? ' aut' : ''}">${esc(v[p + 'V'])}</td><td class="mono">${esc(v[p + 'P'])}</td></tr>`; }).join('')}
                     </tbody></table></div></div>`;
             };
-            const semana = j.semAnt ? `<div class="sts-grafico-titulo">Pendientes por responsable: semana anterior vs. hoy <small>(lámina 5 del PPT para jefatura: Ruta 1 + Ruta 2; la semana anterior es la foto diaria del ${dayjs(j.semAnt.dia).format('DD/MM')})</small></div>
+            const semana = j.semAnt ? `<div class="sts-grafico-titulo">Pendientes por responsable: semana anterior vs. hoy <small>(Ruta 1 + Ruta 2)</small></div>
                 <div class="sts-paneles">${comp('P1')}${comp('P2')}</div>`
-                : '<p class="sts-nota">Lámina 5 (semana anterior vs. hoy): aún no hay foto diaria guardada de hace una semana.</p>';
+                : '';
 
             return `<section class="sts-seccion" id="stsLaminas">
                 <div class="sts-seccion-cab"><div>
-                    <div class="sts-seccion-titulo"><span class="sts-num">LÁMINAS</span>Lo que dicen el PPT y el PPT para jefatura</div>
-                    <div class="sts-seccion-sub">Al ${corte.format('DD/MM/YYYY')}, con los mismos números que bajan en las láminas · el Programa, la Ruta 1 y la Ruta 2 (láminas 3 a 6) y las caracterizaciones están más abajo</div>
+                    <div class="sts-seccion-titulo"><span class="sts-num">STATUS</span>Status general</div>
+                    <div class="sts-seccion-sub">Pendientes y autorizados al ${corte.format('DD/MM/YYYY')}</div>
                 </div></div>
                 ${tarjetas}
                 <div class="sts-paneles"><div class="sts-panel">${status}</div><div class="sts-panel">${bm}</div></div>
@@ -14314,7 +14314,7 @@ async function maybeAutoStartTour() {
             else if (que === 'pendSol') { titulo = `Solicitados de ${mesN} que siguen pendientes`; explica = 'Pendientes de hoy que entraron en el mes.'; filas = pendF(g.pend.filter((x) => x.cuando === VIG)); }
             else if (que === 'pendTipo') {
                 const tipo = a2 === 'todo' ? '' : a2, vig = a3 === 'mes' ? true : a3 === 'bk' ? false : null;
-                titulo = `Pendientes${tipo ? ` · ${tipo}` : ''}${vig === null ? '' : vig ? ` · ${mesN}` : ' · backlog'}`; explica = 'Lámina 2 del PPT: pendientes backlog vs. mes.';
+                titulo = `Pendientes${tipo ? ` · ${tipo}` : ''}${vig === null ? '' : vig ? ` · ${mesN}` : ' · backlog'}`; explica = 'Pendientes del backlog y del mes, por tipo.';
                 filas = pendF(g.pend.filter((x) => (!tipo || x.tipo === tipo) && (vig === null || (x.cuando === VIG) === vig)));
             } else if (que === 'pendAnt') {
                 titulo = `Pendientes al ${fAnt}`; explica = 'Lo que ya era pendiente al cierre del mes anterior, con las fechas de SAP: los que siguen pendientes + los autorizados del backlog.';
@@ -14336,7 +14336,7 @@ async function maybeAutoStartTour() {
                     ...deP(g.aut.filter((x) => cam.has(x) && x.ultima !== false)).map((x) => fila(x.v, `Cambio de estado: ${cam.get(x).toLowerCase()}`, x)),
                     ...L.cambio.filas.filter((f) => f.tipo === 'Suspendido en el mes' && de(f.x.v)).map((f) => fila(f.x.v, 'Estaba autorizado y se suspendió en el mes', f.x))];
             } else return null;
-            return { tipo: 'lam', pl: pl === 'T' ? 'ambas' : pl, titulo, sub: `${pl === 'T' ? 'P1 y P2' : PLANTAS[pl]} · láminas del ${corte.format('DD/MM/YYYY')}`, numero: filas.length, explica, aviso, filas };
+            return { tipo: 'lam', pl: pl === 'T' ? 'ambas' : pl, titulo, sub: `${pl === 'T' ? 'P1 y P2' : PLANTAS[pl]} · al ${corte.format('DD/MM/YYYY')}`, numero: filas.length, explica, aviso, filas };
         }
         const TITULOS_CUADRO = {
             bkv: 'Backlog como el PowerPoint del status: la última versión Autorizada (vigente) de cada RMD al empezar el mes, sin los códigos que no empiezan por 2 (migrados antes de SAP) ni los que dicen «descontinuado» en Observaciones',
@@ -15713,7 +15713,7 @@ async function maybeAutoStartTour() {
         }
         function pintar() {
             const cont = document.getElementById('stsContenido');
-            const html = htmlMeta(ultimo) + htmlLogica(ultimo) + htmlResumen(ultimo) + htmlLaminas(ultimo) + htmlPrograma(ultimo) + htmlRuta1(ultimo) + htmlRuta2(ultimo) + (MOSTRAR_HORAS ? htmlHoras(ultimo) : '');
+            const html = htmlMeta(ultimo) + htmlLogica(ultimo) + htmlRuta1(ultimo) + htmlRuta2(ultimo) + htmlResumen(ultimo) + htmlLaminas(ultimo) + htmlPrograma(ultimo) + (MOSTRAR_HORAS ? htmlHoras(ultimo) : '');
             const igual = html === pintado.html && cont.dataset.stsPintado === '1';
             if (!igual) {
                 cont.innerHTML = html;
