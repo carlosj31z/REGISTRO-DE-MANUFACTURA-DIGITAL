@@ -2,14 +2,21 @@
 (STATUS_RMD_2026-11-17_FINAL.pptx, 23/11/2026): 1 portada · 2 status general · 3 Ruta 1 P1+P2 · 4 Ruta 2 P1+P2 ·
 5 pendientes por planta · 6 cierre. Todo queda igual al original; solo los números pasan a marcadores que llena la página.
 
-Uso: python construir_plantilla_jefatura.py REFERENCIA.pptx SALIDA.pptx [index.html]
+Uso: python construir_plantilla_jefatura.py REFERENCIA.pptx SALIDA.pptx [index.html] [--lamina2 LAMINA2.pptx]
 Con index.html, reemplaza (o agrega) la constante STATUS_RMD_JEFATURA_B64 en la página.
+Con --lamina2, la lámina 2 se toma de ese PPTX (la estructura que Carlos armó el 24/11/2026 sobre el exportado:
+STATUS_RMD_2026-11-24 (7).pptx): 31/10 → Solicitados del mes → corte (pendientes) y autorizados al cierre + AUTORIZADOS −
+CAMBIO ESTADO → al corte.
 """
 import base64, io, re, sys, zipfile
 from pptx import Presentation
 
-REF, SALIDA = sys.argv[1], sys.argv[2]
-INDEX = sys.argv[3] if len(sys.argv) > 3 else None
+_args = list(sys.argv[1:])
+L2REF = None
+if '--lamina2' in _args:
+    _i = _args.index('--lamina2'); L2REF = _args[_i + 1]; del _args[_i:_i + 2]
+REF, SALIDA = _args[0], _args[1]
+INDEX = _args[2] if len(_args) > 2 else None
 p = Presentation(REF)
 S = list(p.slides)
 A = '{http://schemas.openxmlformats.org/drawingml/2006/main}'
@@ -206,6 +213,56 @@ TIMING_LAMINA2 = ('<p:transition spd="med"><p:fade/></p:transition><p:timing><p:
     '<p:nextCondLst><p:cond evt="onNext" delay="0"><p:tgtEl><p:sldTgt/></p:tgtEl></p:cond></p:nextCondLst></p:seq>'
     '</p:childTnLst></p:cTn></p:par></p:tnLst><p:bldLst>' + _bld + '</p:bldLst></p:timing>')
 
+# Lámina 2 nueva (Carlos, 24/11/2026: «adaptar el PPT… donde solicitados noviembre sale de estos 121 y 53»): se toma su lámina.
+LAMINA2_XML = None
+if L2REF:
+    from lxml import etree as _et
+    s7 = list(Presentation(L2REF).slides)[1]
+    runs(sh(s7, 'Subtitulo'), ['corte {{FECHA_CORTA}}'])
+    runs(sh(s7, 'Fecha cierre'), ['{{J_FECHA_ANT}}'])
+    runs(sh(s7, 'Fecha corte'), ['{{J_FECHA_CORTE}}'])
+    runs(sh(s7, 'Pendientes cierre'), [None, '{{J_PEND_ANT}}'])
+    runs(sh(s7, 'Autorizados cierre'), [None, '{{J_AUT_ANT}}'])
+    runs(sh(s7, 'Pendientes corte'), [None, '{{J_PEND_HOY}}'])
+    runs(sh(s7, 'Autorizados corte'), [None, '{{J_AUT_HOY}}'])
+    runs(sh(s7, 'Noviembre total'), ['Solicitados {{J_MES_NOMBRE}}', '{{J_SOL_MES}}'])
+    runs(sh(s7, 'Noviembre', 0), [None, '{{J_AUTORIZADO}}', '{{J_AUT_BK}}', ' del backlog · ', '{{J_AUT_MESN}}', ' del mes'])
+    sh(s7, 'Noviembre', 1).name = 'Cambio estado'
+    runs(sh(s7, 'Cambio estado'), [None, '{{J_AUT_NS_TOT}}'])
+    runs(sh(s7, 'Caracterizaciones texto'), [None, '{{J_CAR_TOTAL}}', '{{J_CAR_PEND}} pendientes.'])
+    # Animación: 1 cierre · 2 solicitados del mes · 3 caracterizaciones · 4 + AUTORIZADOS · 5 − CAMBIO ESTADO · 6 → corte.
+    _id7 = {}
+    for _x in s7.shapes: _id7.setdefault(_x.name, []).append(_x)
+    _con = sorted(_id7['Conector'], key=lambda x: x.shape_id)
+    _horiz = [x.shape_id for x in _con if x.height == 0]
+    _vert = [x for x in _con if x.width == 0]
+    _car = min(_vert, key=lambda x: x.top).shape_id      # el punteado corto que baja de caracterizaciones
+    _baja = max(_vert, key=lambda x: x.top).shape_id     # el que baja a AUTORIZADOS
+    _ids1 = lambda *ns: [x.shape_id for n in ns for x in _id7[n]]
+    _p7 = [_ids1('Fecha cierre', 'Pendientes cierre', 'Autorizados cierre'),
+           _horiz + _ids1('Noviembre total'),
+           _ids1('Caracterizaciones', 'Caracterizaciones franja', 'Caracterizaciones texto') + [_car],
+           _ids1('Mas') + [_baja] + _ids1('Noviembre'),
+           _ids1('Menos', 'Cambio estado'),
+           _ids1('Flecha', 'Fecha corte', 'Pendientes corte', 'Autorizados corte')]
+    _cxn = {x.shape_id for x in s7.shapes if x.shape_type == 9 or x._element.tag.endswith('cxnSp')}
+    _n[0] = 2
+    _c7 = ''.join(_clic(''.join(_efecto(x, k == 0) for k, x in enumerate(_l))) for _l in _p7)
+    _b7 = ''.join(f'<p:bldP spid="{x}" grpId="0" animBg="1"/>' for _l in _p7 for x in _l if x not in _cxn)
+    _t7 = ('<p:transition spd="med"><p:fade/></p:transition><p:timing><p:tnLst><p:par><p:cTn id="1" dur="indefinite" restart="never" nodeType="tmRoot"><p:childTnLst>'
+        '<p:seq concurrent="1" nextAc="seek"><p:cTn id="2" dur="indefinite" nodeType="mainSeq"><p:childTnLst>' + _c7 + '</p:childTnLst></p:cTn>'
+        '<p:prevCondLst><p:cond evt="onPrev" delay="0"><p:tgtEl><p:sldTgt/></p:tgtEl></p:cond></p:prevCondLst>'
+        '<p:nextCondLst><p:cond evt="onNext" delay="0"><p:tgtEl><p:sldTgt/></p:tgtEl></p:cond></p:nextCondLst></p:seq>'
+        '</p:childTnLst></p:cTn></p:par></p:tnLst><p:bldLst>' + _b7 + '</p:bldLst></p:timing>')
+    _el = s7._element
+    for _tag in ('timing', 'transition'):
+        for _e in _el.findall(qn('p:' + _tag)): _el.remove(_e)
+    for _e in list(_el):
+        if _e.tag.startswith('{http://schemas.openxmlformats.org/markup-compatibility'): _el.remove(_e)
+    LAMINA2_XML = _et.tostring(_el, xml_declaration=True, encoding='UTF-8', standalone=True).decode('utf8')
+    assert '</p:clrMapOvr>' in LAMINA2_XML
+    LAMINA2_XML = LAMINA2_XML.replace('</p:clrMapOvr>', '</p:clrMapOvr>' + _t7, 1)
+
 # Láminas 3 y 4: Ruta 1 y Ruta 2, P1 arriba y P2 abajo (los cuadros se repiten por panel, en ese orden).
 for s, R in ((S[2], 'R1'), (S[3], 'R2')):
     runs(sh(s, 'Subtitulo'), ['cierre: {{FECHA_LARGA}}' if R == 'R1' else 'RMD pendientes por etapa y responsable · {{FECHA_LARGA}}'])
@@ -241,7 +298,9 @@ for it in zin.infolist():
         d = re.sub(rb'<Relationship [^>]*webextensions/[^>]*/>', b'', d)
     if it.filename == '[Content_Types].xml':
         d = re.sub(rb'<Override PartName="/ppt/webextensions/[^>]*/>', b'', d)
-    if it.filename == 'ppt/slides/slide2.xml':
+    if it.filename == 'ppt/slides/slide2.xml' and LAMINA2_XML:
+        d = LAMINA2_XML.encode('utf8')
+    elif it.filename == 'ppt/slides/slide2.xml':
         x = d.decode('utf8')
         assert '<p:timing' not in x and '<p:transition' not in x
         d = x.replace('</p:clrMapOvr>', '</p:clrMapOvr>' + TIMING_LAMINA2, 1).encode('utf8')
