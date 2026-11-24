@@ -9134,10 +9134,23 @@ async function downloadPlanProduccionFromCloud() {
                 grupos.get(dia).push(f);
             });
             const dias = Array.from(grupos.keys()).sort((a, b) => b.localeCompare(a));
+            // Total de cada mes antes de sus días (pedido de Carlos, 24/11/2026): para contar en las filas verdes el Autorizado de
+            // la Ruta 1 (en SAP + a mano; el PPT para jefatura no cuenta los de a mano).
+            const totalMes = (mes) => {
+                const l = dias.filter(d => d && d.slice(0, 7) === mes).flatMap(d => grupos.get(d));
+                const mano = l.filter(f => f.estado === 'autorizado').length, fuera = l.filter(f => f.fueraPrograma).length;
+                const nombre = dayjs(mes + '-01').format('MMMM YYYY');
+                const partes = [`${l.length - mano} en SAP`, mano ? `${mano} a mano` : '', fuera ? `${fuera} de programas anteriores` : ''].filter(Boolean).join(' · ');
+                return `<tr class="fila-mes-aut"><td colspan="${colspan}" style="padding:10px 12px 4px;font-size:12px;font-weight:700;letter-spacing:.04em;color:rgb(110 231 183)">${escapeHtmlRmdConfig(nombre.charAt(0).toUpperCase() + nombre.slice(1))}: ${plural(l.length, 'autorizado', 'autorizados')} <span style="font-weight:500;opacity:.8">(${escapeHtmlRmdConfig(partes)})</span></td></tr>`;
+            };
+            let mesAnt = null;
             return pend.map(filaHtml).join('') + dias.map(dia => {
                 const filas = grupos.get(dia), abierto = !!abrirTodo || gruposAutAbiertos.has(`${origen}|${dia}`);
                 const cls = CLASE_GRUPO_AUT(dia) + (abierto ? '' : ' gaut-oculta');
-                return htmlCabeceraGrupoAut(dia, filas, origen, colspan, abierto)
+                const mes = dia ? dia.slice(0, 7) : '';
+                const cabMes = mes && mes !== mesAnt ? totalMes(mes) : '';
+                mesAnt = mes;
+                return cabMes + htmlCabeceraGrupoAut(dia, filas, origen, colspan, abierto)
                     + filas.map(f => filaHtml(f).replace(/^\s*<tr class="/, `<tr data-gaut="${origen}" class="fila-de-grupo-aut ${cls} `)).join('');
             }).join('');
         }
