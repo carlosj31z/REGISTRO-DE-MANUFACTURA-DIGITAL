@@ -16026,6 +16026,39 @@ async function maybeAutoStartTour() {
                 autCambio: autAnt + autorizado - autHoy, calc, congelado: !!fijo, mesCierre: finAnt.format('YYYY-MM'), prog, otros, car, proy, autorizado,
                 pct: proy ? Math.round((autorizado / proy) * 100) : 0 };
         }
+        // Autorizados que «cambiaron de status» en el mes (Carlos, 24/11/2026: «aquí puedo encontrar los que cambiaron de estado los
+        // autorizados? … sí agrégalo»): la misma cuenta del «N cambiaron de status» de la lámina 2, RMD por RMD. Son los autorizados
+        // del mes que no suman al total de masters (reautorizados, versión nueva de un RMD ya autorizado, ya tienen una versión más
+        // nueva) y los que estaban autorizados al cierre y se suspendieron en el mes. Con el cierre congelado, lo que SAP cambió
+        // después del congelamiento va como «Ajuste por cierre congelado» (por planta), para que el total cuadre con la lámina.
+        function cambiosStatusMes(g, cierre) {
+            const VIG = 'Mes vigente', finAnt = g.corte.startOf('month').subtract(1, 'day').endOf('day');
+            const filas = [];
+            g.aut.forEach((x) => {
+                const reaut = x.ultima !== false && x.cuenta === 'Solicitados del mes' && x.ant && x.ant.estado === 'SUSPENDIDO';
+                const noSuma = x.ultima === false || (x.cuenta === 'Solicitados del mes' && x.ant && x.ant.estado !== 'INGRESADO');
+                if (!reaut && !noSuma) return;
+                const tipo = reaut ? 'Reautorizado' : x.ultima === false ? 'Ya tiene versión nueva' : 'Versión nueva';
+                const porque = reaut ? 'Autorizado en el mes; su versión anterior se suspendió en el mes: el master ya contaba como autorizado al cierre.'
+                    : x.ultima === false ? 'Autorizado en el mes, pero hoy la última versión de su master es otra (no es autorizado en la «Última versión» del portal).'
+                        : 'Versión nueva solicitada en el mes de un RMD que ya estaba autorizado: el master no suma al total.';
+                filas.push({ x, tipo, porque });
+            });
+            g.pend.forEach((x) => {
+                if (x.tipo === 'Suspendido' && x.cuando === VIG && x.v.fAut && !x.v.fAut.isAfter(finAnt))
+                    filas.push({ x, tipo: 'Suspendido en el mes', porque: 'Estaba autorizado al cierre del mes anterior y se suspendió en el mes: sale de los autorizados.' });
+            });
+            const ajuste = { P1: 0, P2: 0 };
+            if (cierre && cierre.aut) {
+                const R = g.resumen;
+                ['P1', 'P2'].forEach((pl) => {
+                    const sP = g.aut.filter((x) => x.v.planta === pl).length - filas.filter((f) => f.x.v.planta === pl && f.tipo !== 'Suspendido en el mes').length;
+                    const susP = filas.filter((f) => f.x.v.planta === pl && f.tipo === 'Suspendido en el mes').length;
+                    ajuste[pl] = (cierre.aut[pl] || 0) - (R[pl].AUTORIZADO - sP + susP);
+                });
+            }
+            return { filas, ajuste };
+        }
         // Cierres congelados de la lámina 2 por mes («AAAA-MM» = mes que cierra). Octubre 2026 lo fijó Carlos el 24/11/2026 con la
         // lámina de ese día (751 pendientes / 1,731 autorizados). Desde noviembre, el primer cálculo después del cierre se guarda en
         // Supabase (val_jefatura_cierres) y no se vuelve a calcular.
@@ -16604,6 +16637,28 @@ async function maybeAutoStartTour() {
             const tA = t5['Total autorizados'];
             tarjetas.push({ t: `Autorizados ${m.rangoAutCorto || 'en el mes'}`, ref: enc({ r: tA.r, c: 4 }), n: R[enc({ r: tA.r, c: 4 })].v, pie: `ATE ${tA.vals[0]}  ·  LIMA ${tA.vals[1]}`, hoja: m.aut.nombre });
 
+            // --- Tabla 6 (24/11/2026): autorizados que cambiaron de status (el «N cambiaron de status» de la lámina 2) ---
+            if (m.cambio) {
+                const t6 = tablaChica(`6. Autorizados que cambiaron de status ${m.rangoAut}`, m.cambio, m.cambio.tipos.map((t) => [t, { tipo: t }]));
+                const iniT6 = t6[m.cambio.tipos[0]].r, sNum = (pl) => S.num(C[pl][1]), sTot = Object.assign({}, S.tot, { alignment: { horizontal: 'center' }, numFmt: '0' });
+                let filaAj = null;
+                if (m.cambio.ajuste && (m.cambio.ajuste.ATE || m.cambio.ajuste.LIMA)) {
+                    filaAj = r;
+                    poner(R, r, 1, m.cambio.etiAjuste, S.eti);
+                    plantas.forEach((pl, k) => poner(R, r, 2 + k, m.cambio.ajuste[pl] || 0, sNum(pl)));
+                    sumaCel(R, r, 4, [enc({ r, c: 2 }), enc({ r, c: 3 })], (m.cambio.ajuste.ATE || 0) + (m.cambio.ajuste.LIMA || 0), S.num(C.Total[1], true));
+                    r += 1;
+                }
+                poner(R, r, 1, 'Total cambiaron de status (lámina 2)', S.tot);
+                for (let c = 2; c <= 4; c++) {
+                    const n = [];
+                    for (let i = iniT6; i < r; i++) n.push(R[enc({ r: i, c })].v || 0);
+                    poner(R, r, c, n.reduce((a, b) => a + b, 0), sTot, { f: `SUM(${enc({ r: iniT6, c })}:${enc({ r: r - 1, c })})` });
+                }
+                r += 1;
+                if (m.cambio.notaTabla) { poner(R, r, 1, m.cambio.notaTabla, S.nota); unir(R, r, 1, r, 12, S.nota); R['!rows'][r] = { hpt: 24 }; }
+            }
+
             // Tarjetas: 4 de 2 columnas con 1 de separación (C-D, F-G, I-J, L-M... ajustado a 9 columnas: B, C-D, ...)
             const posT = [[1, 1], [3, 4], [6, 7], [9, 10]];
             [tarjetas[0], tarjetas[3], tarjetas[1], tarjetas[2]].forEach((t, k) => {
@@ -16652,7 +16707,7 @@ async function maybeAutoStartTour() {
                 if (s === 'CARACTERIZACIÓN') return 'D9D3F5';
                 return null;
             };
-            [m.pend, m.dec, m.prio, m.aut].forEach((d) => hojaDet(d, tinte));
+            [m.pend, m.dec, m.prio, m.aut, m.cambio].filter(Boolean).forEach((d) => hojaDet(d, tinte));
 
             // ================= Como se cuenta =================
             const G = hojaNueva();
@@ -16711,6 +16766,7 @@ async function maybeAutoStartTour() {
             const susp = r.susp.slice().sort((a, b) => a.v.planta.localeCompare(b.v.planta) || a.prio.localeCompare(b.prio) || ((b.d && b.d.fc > 0) - (a.d && a.d.fc > 0)) || ((b.d && b.d.op) - (a.d && a.d.op)) || ((b.fS ? b.fS.valueOf() : 0) - (a.fS ? a.fS.valueOf() : 0)));
             const aut = r.aut.slice().sort((a, b) => a.v.planta.localeCompare(b.v.planta) || a.cuenta.localeCompare(b.cuenta) || a.v.fAut - b.v.fAut);
             const inact = D('P1', 'I') + D('P2', 'I'), mant = D('P1', 'S') + D('P2', 'S');
+            const cambio = r.resumen && r.corte ? cambiosStatusMes(r, r.cierreJefatura || null) : null;
             return escribirLibroBacklog(XLSX, {
                 titulo: `BACKLOG RMD – ${nomMes.toUpperCase()} ${anio}`,
                 subtitulo: `Corte: ${corte}`, resumen: r.resumen,
@@ -16749,6 +16805,19 @@ async function maybeAutoStartTour() {
                     cols: [['Planta', 7], ['Cuenta como', 16], ['Fase', 9], ['Programa de producción', 14], ['Caracterización', 13], ['Código RMD', 13], ['Versión', 8], ['Descripción', 46], ['Etapa', 15], ['Fecha de registro', 11], ['Fecha de autorización', 11], ['Versión anterior (estado hoy)', 26],
                         ['Suspensión de la versión anterior', 12], ['Explicación', 70], ['Observaciones (SAP)', 60]],
                     filas: aut.map((x) => [NOMBRE_PLANTA_BK[x.v.planta], x.cuenta, faseRmd(x.v.obs), progAut ? (progAut.has(claveAutProg(x.v)) ? 'PROGRAMA DE PRODUCCIÓN' : 'Fuera del programa') : '', carDe(x.v) ? 'CARACTERIZACIÓN' : '', x.v.codigo, x.v.version, x.v.desc || '', x.v.etapa || '', fx(x.v.fReg), fx(x.v.fAut), antTxt(x.ant), fx(x.fS), x.porque, x.v.obs || '']) },
+                cambio: cambio && {
+                    nombre: '6 Cambiaron de status', titulo: `Autorizados que cambiaron de status del 01/${r.corte.format('MM/YYYY')} al ${corte} (tabla 6 = «cambiaron de status» de la lámina 2)`,
+                    nota: 'Autorizados del mes que no suman al total de masters (reautorizados, versión nueva de un RMD ya autorizado, ya tienen una versión más nueva) y autorizados al cierre que se suspendieron en el mes. Filtra «Tipo de cambio» para ver cada grupo.',
+                    tipos: ['Reautorizado', 'Versión nueva', 'Ya tiene versión nueva', 'Suspendido en el mes'],
+                    claves: { planta: 'Planta', tipo: 'Tipo de cambio' },
+                    ajuste: { ATE: cambio.ajuste.P1, LIMA: cambio.ajuste.P2 },
+                    etiAjuste: `Ajuste por cierre congelado (${r.corte.startOf('month').subtract(1, 'day').format('DD/MM')})`,
+                    notaTabla: `Suma con el «AUTORIZADO» del mes para llegar del cierre al corte: autorizados al cierre + autorizados en el mes − cambiaron de status = autorizados al ${r.corte.format('DD/MM')}.`
+                        + (cambio.ajuste.P1 || cambio.ajuste.P2 ? ' El ajuste es lo que SAP cambió en los autorizados del cierre después de congelarlo (no tiene RMD en la lista).' : ''),
+                    cols: [['Planta', 7], ['Tipo de cambio', 20], ['Código RMD', 13], ['Versión', 8], ['Descripción', 46], ['Etapa', 15], ['Estado hoy en SAP', 13], ['Cuenta como', 16], ['Fecha de solicitud', 11], ['Fecha de registro', 11], ['Fecha de autorización', 11],
+                        ['Versión anterior (estado hoy)', 26], ['Fecha de suspensión', 12], ['Explicación', 70]],
+                    filas: cambio.filas.slice().sort((a, b) => a.x.v.planta.localeCompare(b.x.v.planta) || ['Reautorizado', 'Versión nueva', 'Ya tiene versión nueva', 'Suspendido en el mes'].indexOf(a.tipo) - ['Reautorizado', 'Versión nueva', 'Ya tiene versión nueva', 'Suspendido en el mes'].indexOf(b.tipo) || String(a.x.v.desc || '').localeCompare(String(b.x.v.desc || '')))
+                        .map(({ x, tipo, porque }) => [NOMBRE_PLANTA_BK[x.v.planta], tipo, x.v.codigo || '', x.v.version, x.v.desc || '', x.v.etapa || '', String(x.v.estado || '').toUpperCase(), x.cuenta || 'Backlog (suspendido)', fx(x.v.fSol), fx(x.v.fReg), fx(x.v.fAut), antTxt(x.ant), fx(x.fS), porque]) },
                 reglas: [
                     ['1. Pendientes', ['Ingresados + solicitados + suspendidos. No entran los INACTIVO, las Solicitudes Rechazadas, las Canceladas, los Autorizados ni las Solicitudes Aprobadas.']],
                     ['2. Composición (mes de cada pendiente)', [
@@ -16763,7 +16832,12 @@ async function maybeAutoStartTour() {
                     ['5. Autorizados', ['Solo los autorizados del 1 del mes a la fecha de corte que siguen Autorizados (como la tarjeta).',
                         'Regla 1: registrado en el mes, pero su versión anterior se suspendió en un mes anterior → Backlog.',
                         'Regla 2: registrado en un mes anterior → Backlog.',
-                        'Regla 3: registrado en el mes y su versión anterior se suspendió en el mes (o master nuevo) → Solicitados del mes.']]
+                        'Regla 3: registrado en el mes y su versión anterior se suspendió en el mes (o master nuevo) → Solicitados del mes.']],
+                    ['6. Cambiaron de status', ['Mismo número que «cambiaron de status» de la lámina 2 del PPT para jefatura.',
+                        'Reautorizado: autorizado en el mes y su versión anterior se suspendió en el mes (el master ya era autorizado al cierre).',
+                        'Versión nueva: versión solicitada en el mes de un RMD ya autorizado. Ya tiene versión nueva: autorizado en el mes, pero hoy la última versión de su master es otra.',
+                        'Suspendido en el mes: estaba autorizado al cierre y se suspendió en el mes.',
+                        'Ajuste por cierre congelado: el cierre del mes anterior quedó fijo; lo que SAP cambió después en esos autorizados va en esta línea, por planta.']]
                 ]
             });
         }
@@ -16785,6 +16859,7 @@ async function maybeAutoStartTour() {
             const datos = datosBacklogMes(filas, traz, corte, rmdPrecisoDatos);
             try { const cl = (ultimo && ultimo.car && ultimo.car.items) || ((await storeGet('val_rmd_caracterizaciones')) || {}).items; datos.caract = esCaractDe(cl); } catch (err) { console.warn('Backlog del mes: sin caracterizaciones', err); }
             try { datos.programa = await BacklogRmd.programaParaExcel(); datos.progAut = datos.programa.autorizados; } catch (err) { console.warn('Backlog del mes: sin Programa de producción', err); }
+            try { datos.cierreJefatura = await cierreJefatura(corte.startOf('month').subtract(1, 'day').format('YYYY-MM')); } catch (err) { datos.cierreJefatura = null; }
             const wb = libroBacklogMes(datos);
             // Hoja RETIRO VB (19/11/2026): RMD Fase 2 según el forecast; misma hoja que el Excel de la pestaña BACKLOG.
             Swal.fire({ title: 'Armando el Excel…', text: 'Calculando la hoja RETIRO VB (forecast y árbol de producción).', allowOutsideClick: false, didOpen: () => Swal.showLoading(), background: '#0f172a', color: '#e2e8f0' });
