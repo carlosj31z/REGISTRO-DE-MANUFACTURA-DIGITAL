@@ -16171,10 +16171,13 @@ async function maybeAutoStartTour() {
                     `Pendiente al ${corte.format('DD/MM')}`, `Autorizado al ${f(finAnt).slice(0, 5)}`, `Autorizado al ${corte.format('DD/MM')}`, 'Autorizado en el mes', 'Cambió de estado', 'Fecha solicitud', 'Fecha registro', 'Fecha autorización',
                     'Fecha suspensión', 'Versión anterior', 'Estado versión anterior'];
                 const filas = [], enCorte = new Set(g.autCorte || []), listados = new Set();
+                // «Estado SAP hoy» (Carlos, 24/11/2026: «aquí debería cuadrar las cantidades con lo mostrado en la ppt»): los autorizados
+                // del mes cuyo master ya tiene una versión más nueva no son la última versión, así que no cuentan entre los autorizados
+                // de hoy; van como «AUTORIZADO (no es la última versión)» para que el filtro AUTORIZADO dé lo mismo que la lámina.
                 const fila = (x, o) => {
-                    const v = x.v, ant = x.ant;
+                    const v = x.v, ant = x.ant, est = String(v.estado || '').toUpperCase();
                     filas.push([v.planta === 'P1' ? 'P1 · Ate' : 'P2 · Lima', v.codigo || (v.sol ? `Sol. ${v.sol}` : ''), v.version || '', v.desc || '', v.etapa || '',
-                        String(v.estado || '').toUpperCase(), o.pAnt ? 'Sí' : 'No', o.pHoy || 'No', o.aAnt ? 'Sí' : 'No', o.aHoy ? 'Sí' : 'No', o.aut || 'No', o.resta || '', f(v.fSol), f(v.fReg), f(v.fAut),
+                        o.noUltima && est === 'AUTORIZADO' ? 'AUTORIZADO (no es la última versión)' : est, o.pAnt ? 'Sí' : 'No', o.pHoy || 'No', o.aAnt ? 'Sí' : 'No', o.aHoy ? 'Sí' : 'No', o.aut || 'No', o.resta || '', f(v.fSol), f(v.fReg), f(v.fAut),
                         f(x.fS), ant ? ant.version : '', ant ? String(ant.estado || '').toUpperCase() : '']);
                 };
                 g.pend.forEach((x) => {
@@ -16184,7 +16187,7 @@ async function maybeAutoStartTour() {
                 g.aut.forEach((x) => {
                     const nueva = x.ultima === false, noSuma = nueva || (x.cuenta === 'Solicitados del mes' && x.ant && x.ant.estado !== 'INGRESADO');
                     const hoy = enCorte.has(x.v); listados.add(x.v);
-                    fila(x, { pAnt: x.cuenta === 'Backlog', aAnt: hoy && noSuma, aHoy: hoy, aut: x.cuenta === 'Backlog' ? 'Backlog' : 'Nueva solicitud',
+                    fila(x, { noUltima: nueva, pAnt: x.cuenta === 'Backlog', aAnt: hoy && noSuma, aHoy: hoy, aut: x.cuenta === 'Backlog' ? 'Backlog' : 'Nueva solicitud',
                         resta: !noSuma ? '' : nueva ? 'Ya tiene versión nueva' : x.ant.estado === 'SUSPENDIDO' ? 'Reautorizado' : 'Versión nueva' });
                 });
                 // El resto de autorizados al corte: ya lo estaban al cierre (no se movieron en el mes).
