@@ -14180,6 +14180,164 @@ async function maybeAutoStartTour() {
                 <div class="sts-res copper"><small>Pendientes Caracterización</small><b>${nDet(pend2, 'r2|ambas|pend')}</b><span>${pct(aut2, pend2)}% de avance</span></div>
             </div>`;
         }
+        // ---------- Lo que dicen las láminas (Carlos, 24/11/2026: «quiero que la página de status RMD sección INDICADORES me
+        // muestre lo que sale en la PPT y PPT para jefatura, ambas; si hay cosas que se repiten, omitir») ----------
+        // Lámina 2 del PPT (status por planta, pendientes backlog vs. mes, autorizados del mes por programa), lámina 2 del PPT para
+        // jefatura (cierre → corte de pendientes y de autorizados, proyección del mes) y su lámina 5 (semana anterior vs. hoy).
+        // Lo que ya está más abajo no se repite: Programa del mes, Ruta 1 y Ruta 2 (láminas 3 a 6 del PPT y 3 y 4 de jefatura) y
+        // las caracterizaciones (tarjeta «Pendientes Caracterización» y Ruta 2). Se calcula igual que al descargar los PPT.
+        async function datosLaminas(d) {
+            const g = datosGeneralesPpt(d);
+            if (!g) return null;
+            const dj = Object.assign({}, d, { r1: sinManualesR1(d.r1) });
+            const cierre = await cierreJefatura(g.corte.startOf('month').subtract(1, 'day').format('YYYY-MM'));
+            const j = datosJefatura(dj, g, cierre);
+            if (!j) return null;
+            try {
+                if (!fotosGuardadas) { const gg = await storeGet(CLAVE_FOTOS); if (gg && gg.v === 1) fotosGuardadas = gg; }
+                j.semAnt = fotoDelDia(j.corte.subtract(7, 'day').format('YYYY-MM-DD'));
+            } catch (err) { j.semAnt = null; }
+            const v = valoresPpt(d, g);
+            valoresJefatura(v, dj, j);
+            return { g, j, v, cierre: cierre || null, cambio: cambiosStatusMes(g, cierre) };
+        }
+        const PL_LAM = ['P1', 'P2'];
+        function htmlLaminas(d) {
+            const L = d.lam;
+            if (!L) return '';
+            const { g, j, v, cambio } = L, VIG = 'Mes vigente', corte = g.corte, fin = corte.startOf('month').subtract(1, 'day');
+            const fAnt = fin.format('DD/MM'), fCor = corte.format('DD/MM'), mesN = MESES[corte.month()].toLowerCase();
+            const de = (pl) => (x) => x.v.planta === pl, n = (xs, pl) => (pl === 'T' ? xs.length : xs.filter(de(pl)).length);
+            const fijo = L.cierre && L.cierre.pend && L.cierre.aut ? L.cierre : null, calc = j.calc || { pend: {}, aut: {} };
+            const tres = (f) => { const a = f('P1'), b = f('P2'); return [a, b, a + b]; };
+            const celdas = (ns, clave, fuerte) => ns.map((x, k) => `<td class="mono${fuerte ? ' fuerte' : ''}">${clave ? nDet(x, `lam|${['P1', 'P2', 'T'][k]}|${clave}`, nEn(x)) : (Number.isFinite(x) ? (x < 0 ? `−${nEn(-x)}` : nEn(x)) : '—')}</td>`).join('');
+            const fila = (eti, ns, clave, clase) => `<tr${clase ? ` class="${clase}"` : ''}><td>${eti}</td>${celdas(ns, clave, clase === 'total')}</tr>`;
+            const tabla = (tit, cab, filas) => `<div class="sts-grafico-titulo">${tit}</div><div class="sts-tabla-wrap sts-meses"><table class="sts-tabla">
+                <thead><tr>${cab.map((c) => `<th>${c}</th>`).join('')}</tr></thead><tbody>${filas.join('')}</tbody></table></div>`;
+            const cabPl = ['', 'ATE', 'LIMA', 'Total'];
+
+            // Tarjetas: lo que no está en las tarjetas de arriba ni en las tablas de abajo.
+            const pBk = g.pend.filter((x) => x.cuando !== VIG).length, pMes = g.pend.length - pBk;
+            const aBk = g.aut.filter((x) => x.cuenta === 'Backlog').length, aMes = g.aut.length - aBk;
+            const faltaOtros = Math.max(0, j.otros.total - j.otros.aut);
+            const tarjetas = `<div class="sts-resumen">
+                <div class="sts-res plum"><small>Pendientes al ${fCor}</small><b>${nDet(g.pend.length, 'lam|T|pendHoy', nEn(g.pend.length))}</b><span>${nDet(pBk, 'lam|T|pendBkHoy', nEn(pBk))} del backlog · ${nDet(pMes, 'lam|T|pendSol', nEn(pMes))} de ${esc(mesN)}</span></div>
+                <div class="sts-res ok"><small>Autorizados en ${esc(mesN)}</small><b>${nDet(g.aut.length, 'lam|T|autMes', nEn(g.aut.length))}</b><span>${nDet(aBk, 'lam|T|autBk', nEn(aBk))} del backlog · ${nDet(aMes, 'lam|T|autMesSol', nEn(aMes))} del mes · ${esc(v.G_AUTMES_PROG)} del programa · ${esc(v.G_AUTMES_NOPROG)} fuera</span></div>
+                <div class="sts-res copper"><small>Otros por autorizar</small><b>${nEn(faltaOtros)}</b><span>fuera del programa · proyección ${nEn(j.otros.total)} (${nEn(j.otros.aut)} autorizados, días hábiles ${j.hab.van} de ${j.hab.mes})</span></div>
+                <div class="sts-res"><small>Avance del mes</small><b>${j.pct} %</b><span>${nEn(j.autorizado)} autorizados de ${nEn(j.proy)} proyectados (programa ${nEn(j.prog.total)} + otros ${nEn(j.otros.total)})</span></div>
+            </div>`;
+
+            // Lámina 2 del PPT: status por planta y pendientes backlog vs. mes.
+            const R = g.resumen, est = (k) => tres((pl) => R[pl][k]);
+            const status = tabla(`Status por planta al ${fCor} <small>(lámina 2 del PPT: última versión de cada master)</small>`, cabPl, [
+                fila('Autorizado', est('AUTORIZADO'), 'autHoy'), fila('Ingresado', est('INGRESADO')), fila('Suspendido', est('SUSPENDIDO')), fila('Inactivo', est('INACTIVO')),
+                fila('Total', tres((pl) => R[pl].AUTORIZADO + R[pl].INGRESADO + R[pl].SUSPENDIDO + R[pl].INACTIVO), '', 'total')]);
+            const cuenta = (pl, tipo, vig) => g.pend.filter((x) => x.v.planta === pl && (!tipo || x.tipo === tipo) && (x.cuando === VIG) === vig).length;
+            const bkMes = (tipo) => { const a = [cuenta('P1', tipo, false), cuenta('P2', tipo, false), cuenta('P1', tipo, true), cuenta('P2', tipo, true)]; return a.concat(a.reduce((s, x) => s + x, 0)); };
+            const clBM = ['bk|P1', 'bk|P2', 'mes|P1', 'mes|P2', 'todo|T'];
+            const filaBM = (eti, tipo, total) => `<tr${total ? ' class="total"' : ''}><td>${eti}</td>${bkMes(tipo).map((x, k) => `<td class="mono${total ? ' fuerte' : ''}">${nDet(x, `lam|${clBM[k].split('|')[1]}|pendTipo|${tipo || 'todo'}|${clBM[k].split('|')[0]}`, nEn(x))}</td>`).join('')}</tr>`;
+            const bm = tabla(`Pendientes: backlog vs. ${esc(mesN)} <small>(lámina 2 del PPT)</small>`, ['', 'Backlog ATE', 'Backlog LIMA', `${capital(mesN)} ATE`, `${capital(mesN)} LIMA`, 'Total'],
+                [filaBM('Ingresado', 'Ingresado'), filaBM('Solicitado', 'Solicitado'), filaBM('Suspendido', 'Suspendido'), filaBM('Total', '', true)]);
+
+            // Lámina 2 del PPT para jefatura: del cierre al corte (igual que las tablas 1 a 4 del Excel de sustento).
+            const pA = fijo ? [fijo.pend.P1, fijo.pend.P2, fijo.pend.P1 + fijo.pend.P2] : tres((pl) => calc.pend[pl] || 0);
+            const ajP = fijo ? tres((pl) => (calc.pend[pl] || 0) - (fijo.pend[pl] || 0)) : [0, 0, 0];
+            const pAB = tres((pl) => n(g.aut.filter((x) => x.cuenta === 'Backlog'), pl));
+            const pSol = tres((pl) => n(g.pend.filter((x) => x.cuando === VIG), pl));
+            const pH = [0, 1, 2].map((k) => pA[k] + ajP[k] - pAB[k] + pSol[k]);
+            const solMes = tres((pl) => n(g.pend.filter((x) => x.cuando === VIG), pl) + n(g.aut.filter((x) => x.cuenta !== 'Backlog'), pl));
+            const pend = tabla(`Pendientes del ${fAnt} al ${fCor} <small>(lámina 2 del PPT para jefatura)</small>`, cabPl, [
+                fila(`Pendientes al ${fAnt}${fijo ? ' (congelado)' : ''}`, pA, fijo ? '' : 'pendAnt', ''),
+                ...(ajP[2] || ajP[0] || ajP[1] ? [fila('± Ajuste por cierre congelado', ajP)] : []),
+                fila('− Autorizados del backlog', pAB, 'autBk'), fila(`+ Solicitados de ${esc(mesN)} que siguen pendientes`, pSol, 'pendSol'),
+                fila(`= Pendientes al ${fCor}`, pH, 'pendHoy', 'total')]);
+            const camT = (t) => tres((pl) => cambio.filas.filter((f) => f.tipo === t && f.x.v.planta === pl).length);
+            const ajA = [cambio.ajuste.P1 || 0, cambio.ajuste.P2 || 0, (cambio.ajuste.P1 || 0) + (cambio.ajuste.P2 || 0)];
+            const camTot = tres((pl) => cambio.filas.filter((f) => f.x.v.planta === pl).length + (cambio.ajuste[pl] || 0));
+            const aA = fijo ? [fijo.aut.P1, fijo.aut.P2, fijo.aut.P1 + fijo.aut.P2] : tres((pl) => calc.aut[pl] || 0);
+            const aM = tres((pl) => n(g.aut, pl));
+            const aH = [0, 1, 2].map((k) => aA[k] + aM[k] - camTot[k]);
+            const TIPOS = ['Reautorizado', 'Versión nueva', 'Ya tiene versión nueva', 'Suspendido en el mes'];
+            const aut = tabla(`RMD autorizados del ${fAnt} al ${fCor} <small>(lámina 2 del PPT para jefatura)</small>`, cabPl, [
+                fila(`Autorizados al ${fAnt}${fijo ? ' (congelado)' : ''}`, aA, fijo ? '' : 'autAnt'),
+                fila(`+ Autorizados del 01/${corte.format('MM')} al ${fCor}`, aM, 'autMes'),
+                fila('&nbsp;&nbsp;&nbsp;del backlog', pAB, 'autBk', 'parte'), fila('&nbsp;&nbsp;&nbsp;de las solicitudes del mes', tres((pl) => n(g.aut.filter((x) => x.cuenta !== 'Backlog'), pl)), 'autMesSol', 'parte'),
+                fila('− Cambio de estado', camTot, 'cam'),
+                ...TIPOS.map((t, i) => fila(`&nbsp;&nbsp;&nbsp;${t.toLowerCase()}`, camT(t), `cam|${i}`, 'parte')),
+                ...(ajA[0] || ajA[1] ? [fila('&nbsp;&nbsp;&nbsp;ajuste por cierre congelado', ajA, '', 'parte')] : []),
+                fila(`= RMD autorizados al ${fCor}`, aH, 'autHoy', 'total')]);
+            const notaSol = `<p class="sts-nota"><b>Solicitados de ${esc(mesN)}</b> en la lámina: ${nDet(solMes[2], 'lam|T|sol', nEn(solMes[2]))} (ATE ${nEn(solMes[0])}, LIMA ${nEn(solMes[1])}) = ${nEn(pSol[2])} que siguen pendientes + ${nEn(solMes[2] - pSol[2])} ya autorizados.
+                ${fijo ? `El cierre del ${fAnt} quedó congelado (${esc(fijo.por || '')} ${fijo.fijado ? `el ${dayjs(fijo.fijado).format('DD/MM/YYYY')}` : ''}); lo que SAP cambió después va en «ajuste».` : ''}
+                Cambio de estado: masters que ya eran autorizados al cierre y se movieron en el mes (no suman al total). Cada número abre su lista.</p>`;
+
+            // Lámina 5 del PPT para jefatura: pendientes por responsable (Ruta 1 + Ruta 2), semana anterior vs. hoy.
+            const comp = (pl) => {
+                const rs = [['PRO', 'Producción (PRO)'], ['DOC', 'Documentación (DOC)'], ['ASC', 'Aseguramiento de la Calidad (ASC)'], ['TOT', 'Total']];
+                return `<div class="sts-panel"><div class="sts-planta">${PLANTAS[pl]}</div><div class="sts-tabla-wrap sts-meses"><table class="sts-tabla">
+                    <thead><tr><th>Responsable</th><th>${esc(v.J_SEM_ANT)}</th><th>${esc(v.J_SEM_HOY)}</th><th>Variación</th><th>%</th></tr></thead><tbody>
+                    ${rs.map(([k, t]) => { const p = `J_C_${pl}_${k}_`, baja = /^−/.test(v[p + 'V']); return `<tr${k === 'TOT' ? ' class="total"' : ''}><td>${t}</td><td class="mono">${esc(v[p + 'A'])}</td><td class="mono">${esc(v[p + 'H'])}</td><td class="mono${baja ? ' aut' : ''}">${esc(v[p + 'V'])}</td><td class="mono">${esc(v[p + 'P'])}</td></tr>`; }).join('')}
+                    </tbody></table></div></div>`;
+            };
+            const semana = j.semAnt ? `<div class="sts-grafico-titulo">Pendientes por responsable: semana anterior vs. hoy <small>(lámina 5 del PPT para jefatura: Ruta 1 + Ruta 2; la semana anterior es la foto diaria del ${dayjs(j.semAnt.dia).format('DD/MM')})</small></div>
+                <div class="sts-paneles">${comp('P1')}${comp('P2')}</div>`
+                : '<p class="sts-nota">Lámina 5 (semana anterior vs. hoy): aún no hay foto diaria guardada de hace una semana.</p>';
+
+            return `<section class="sts-seccion" id="stsLaminas">
+                <div class="sts-seccion-cab"><div>
+                    <div class="sts-seccion-titulo"><span class="sts-num">LÁMINAS</span>Lo que dicen el PPT y el PPT para jefatura</div>
+                    <div class="sts-seccion-sub">Al ${corte.format('DD/MM/YYYY')}, con los mismos números que bajan en las láminas · el Programa, la Ruta 1 y la Ruta 2 (láminas 3 a 6) y las caracterizaciones están más abajo</div>
+                </div></div>
+                ${tarjetas}
+                <div class="sts-paneles"><div class="sts-panel">${status}</div><div class="sts-panel">${bm}</div></div>
+                <div class="sts-paneles" style="margin-top:14px"><div class="sts-panel">${pend}</div><div class="sts-panel">${aut}</div></div>
+                ${notaSol}
+                ${semana}
+            </section>`;
+        }
+        // Detalle de cada número de las láminas: lam|P1, P2 o T|qué.
+        function detalleLaminas(d, pl, que, a2, a3) {
+            const L = d.lam;
+            if (!L) return null;
+            const g = L.g, VIG = 'Mes vigente', corte = g.corte, fAnt = corte.startOf('month').subtract(1, 'day').format('DD/MM'), fCor = corte.format('DD/MM');
+            const mesN = MESES[corte.month()].toLowerCase(), de = (v) => pl === 'T' || v.planta === pl;
+            const cam = new Map(L.cambio.filas.map((f) => [f.x, f.tipo]));
+            const dd = (x) => (x && x.format ? x.format('DD/MM/YYYY') : '');
+            const fila = (v, como, x) => ({ planta: v.planta, como, codigo: v.codigo || (v.sol ? `Solicitud ${v.sol}` : ''), desc: v.desc || '', version: v.version, etapa: v.etapa || '',
+                estado: estadoTxt(v.estado), fSol: dd(v.fSol), fReg: dd(v.fReg), fAut: dd(v.fAut), fSusp: dd((x && x.fS) || v.fSusp), obs: v.obs || '' });
+            const deP = (xs) => xs.filter((x) => de(x.v));
+            const pendF = (xs) => deP(xs).map((x) => fila(x.v, `${x.cuando === VIG ? `Solicitud de ${mesN}` : 'Backlog'} · ${x.tipo}`, x));
+            const autF = (xs) => deP(xs).map((x) => fila(x.v, `${x.cuenta === 'Backlog' ? 'Del backlog' : 'Solicitud del mes'}${cam.has(x) ? ` · cambio de estado: ${cam.get(x).toLowerCase()}` : ''}`, x));
+            const TIPOS = ['Reautorizado', 'Versión nueva', 'Ya tiene versión nueva', 'Suspendido en el mes'];
+            let titulo, explica, filas, aviso = '';
+            if (que === 'pendHoy') { titulo = `Pendientes al ${fCor}`; explica = 'Última versión de cada master Ingresada, Solicitada o Suspendida (sin las que pasan a INACTIVO).'; filas = pendF(g.pend); }
+            else if (que === 'pendBkHoy') { titulo = 'Pendientes del backlog'; explica = 'Pendientes de hoy que ya lo eran al cierre del mes anterior.'; filas = pendF(g.pend.filter((x) => x.cuando !== VIG)); }
+            else if (que === 'pendSol') { titulo = `Solicitados de ${mesN} que siguen pendientes`; explica = 'Pendientes de hoy que entraron en el mes.'; filas = pendF(g.pend.filter((x) => x.cuando === VIG)); }
+            else if (que === 'pendTipo') {
+                const tipo = a2 === 'todo' ? '' : a2, vig = a3 === 'mes' ? true : a3 === 'bk' ? false : null;
+                titulo = `Pendientes${tipo ? ` · ${tipo}` : ''}${vig === null ? '' : vig ? ` · ${mesN}` : ' · backlog'}`; explica = 'Lámina 2 del PPT: pendientes backlog vs. mes.';
+                filas = pendF(g.pend.filter((x) => (!tipo || x.tipo === tipo) && (vig === null || (x.cuando === VIG) === vig)));
+            } else if (que === 'pendAnt') {
+                titulo = `Pendientes al ${fAnt}`; explica = 'Lo que ya era pendiente al cierre del mes anterior, con las fechas de SAP: los que siguen pendientes + los autorizados del backlog.';
+                filas = [...pendF(g.pend.filter((x) => x.cuando !== VIG)), ...deP(g.aut.filter((x) => x.cuenta === 'Backlog')).map((x) => fila(x.v, 'Autorizado en el mes (del backlog)', x))];
+            } else if (que === 'autMes') { titulo = `Autorizados del 01/${corte.format('MM')} al ${fCor}`; explica = 'Versiones autorizadas en el mes (por fecha de autorización).'; filas = autF(g.aut); }
+            else if (que === 'autBk') { titulo = 'Autorizados del backlog'; explica = 'Autorizados en el mes que venían de un mes anterior.'; filas = autF(g.aut.filter((x) => x.cuenta === 'Backlog')); }
+            else if (que === 'autMesSol') { titulo = 'Autorizados de las solicitudes del mes'; explica = 'Autorizados en el mes que se solicitaron o registraron en el mes.'; filas = autF(g.aut.filter((x) => x.cuenta !== 'Backlog')); }
+            else if (que === 'sol') { titulo = `Solicitados de ${mesN}`; explica = 'Pendientes del mes vigente + autorizados de las solicitudes del mes.'; filas = [...pendF(g.pend.filter((x) => x.cuando === VIG)), ...autF(g.aut.filter((x) => x.cuenta !== 'Backlog'))]; }
+            else if (que === 'cam') {
+                const t = a2 !== undefined ? TIPOS[Number(a2)] : '';
+                titulo = `Cambio de estado${t ? ` · ${t.toLowerCase()}` : ''}`; explica = 'Masters que ya eran autorizados al cierre y se movieron en el mes: no suman al total de autorizados.';
+                filas = L.cambio.filas.filter((f) => de(f.x.v) && (!t || f.tipo === t)).map((f) => Object.assign(fila(f.x.v, f.tipo, f.x), { obs: f.porque }));
+                if (!t && pl !== 'T' ? L.cambio.ajuste[pl] : !t && (L.cambio.ajuste.P1 || L.cambio.ajuste.P2)) aviso = 'El total incluye el ajuste por cierre congelado (lo que SAP cambió después de congelar), que no tiene RMD en la lista.';
+            } else if (que === 'autHoy') { titulo = `RMD autorizados al ${fCor}`; explica = 'Última versión de cada master que hoy está Autorizada (sin los que pasan a INACTIVO).'; filas = (g.autCorte || []).filter(de).map((v) => fila(v, 'Autorizado')); }
+            else if (que === 'autAnt') {
+                const enMes = new Set(g.aut.map((x) => x.v));
+                titulo = `RMD autorizados al ${fAnt}`; explica = 'Masters autorizados al cierre, rearmados con las fechas de SAP.';
+                filas = [...(g.autCorte || []).filter((v) => de(v) && !enMes.has(v)).map((v) => fila(v, 'Autorizado antes del mes y sigue autorizado')),
+                    ...deP(g.aut.filter((x) => cam.has(x) && x.ultima !== false)).map((x) => fila(x.v, `Cambio de estado: ${cam.get(x).toLowerCase()}`, x)),
+                    ...L.cambio.filas.filter((f) => f.tipo === 'Suspendido en el mes' && de(f.x.v)).map((f) => fila(f.x.v, 'Estaba autorizado y se suspendió en el mes', f.x))];
+            } else return null;
+            return { tipo: 'lam', pl: pl === 'T' ? 'ambas' : pl, titulo, sub: `${pl === 'T' ? 'P1 y P2' : PLANTAS[pl]} · láminas del ${corte.format('DD/MM/YYYY')}`, numero: filas.length, explica, aviso, filas };
+        }
         const TITULOS_CUADRO = {
             bkv: 'Backlog como el PowerPoint del status: la última versión Autorizada (vigente) de cada RMD al empezar el mes, sin los códigos que no empiezan por 2 (migrados antes de SAP) ni los que dicen «descontinuado» en Observaciones',
             ant: 'Backlog: pendientes al cierre del mes anterior (RMD Ingresados, solicitudes abiertas y Suspendidos con «masivo» en Observaciones, de ese mes y de los anteriores)',
@@ -15186,9 +15344,10 @@ async function maybeAutoStartTour() {
             cuadro: ['planta', 'mes', 'como', 'codigo', 'desc', 'version', 'etapa', 'estado', 'fSol', 'fReg', 'fIng', 'fAut', 'fSusp', 'prodEstado', 'fuera', 'codDef', 'obs'],
             r1: ['planta', 'm', 'producto', 'etapa', 'situacion', 'estatus', 'resp', 'codigo', 'desc', 'version', 'estado', 'material', 'obs'],
             r2: ['planta', 'codigo', 'desc', 'version', 'etapa', 'estado', 'situacion', 'estatus', 'resp', 'fSol', 'fAut', 'codDef', 'obs'],
-            acu: ['planta', 'm', 'producto', 'etapa', 'desde', 'hasta', 'dias', 'como', 'codigo', 'desc', 'version', 'estado', 'material', 'obs']
+            acu: ['planta', 'm', 'producto', 'etapa', 'desde', 'hasta', 'dias', 'como', 'codigo', 'desc', 'version', 'estado', 'material', 'obs'],
+            lam: ['planta', 'como', 'codigo', 'desc', 'version', 'etapa', 'estado', 'fSol', 'fReg', 'fAut', 'fSusp', 'obs']
         };
-        const UNIDAD_DET = { cuadro: ['versión de RMD', 'versiones de RMD'], r1: ['etapa', 'etapas'], r2: ['RMD', 'RMD'], acu: ['etapa', 'etapas'] };
+        const UNIDAD_DET = { cuadro: ['versión de RMD', 'versiones de RMD'], r1: ['etapa', 'etapas'], r2: ['RMD', 'RMD'], acu: ['etapa', 'etapas'], lam: ['versión de RMD', 'versiones de RMD'] };
         const diaTxt = (iso) => (iso ? dayjs(iso).format('DD/MM/YYYY') : '');
         const refRmd = (c) => (c ? (c.rmd || (c.sol ? `Solicitud ${c.sol}` : '')) : '');
         const etapaTxt = (e) => (e ? ETAPAS_FIJAS_LABEL[e] || e : '');
@@ -15369,6 +15528,7 @@ async function maybeAutoStartTour() {
             if (tipo === 'cuadro') return detalleCuadro(d, pl, a1, a2);
             if (tipo === 'r1' || tipo === 'r2') return detalleRuta(d, tipo, pl, a1);
             if (/^acu/.test(tipo)) return detalleAcu(d, tipo, pl, a1, a2, a3);
+            if (tipo === 'lam') return detalleLaminas(d, pl, a1, a2, a3);
             return null;
         }
 
@@ -15553,7 +15713,7 @@ async function maybeAutoStartTour() {
         }
         function pintar() {
             const cont = document.getElementById('stsContenido');
-            const html = htmlMeta(ultimo) + htmlLogica(ultimo) + htmlResumen(ultimo) + htmlPrograma(ultimo) + htmlRuta1(ultimo) + htmlRuta2(ultimo) + (MOSTRAR_HORAS ? htmlHoras(ultimo) : '');
+            const html = htmlMeta(ultimo) + htmlLogica(ultimo) + htmlResumen(ultimo) + htmlLaminas(ultimo) + htmlPrograma(ultimo) + htmlRuta1(ultimo) + htmlRuta2(ultimo) + (MOSTRAR_HORAS ? htmlHoras(ultimo) : '');
             const igual = html === pintado.html && cont.dataset.stsPintado === '1';
             if (!igual) {
                 cont.innerHTML = html;
@@ -15601,6 +15761,8 @@ async function maybeAutoStartTour() {
                     if (!ultimo) { cont.dataset.stsPintado = ''; cont.innerHTML = `<div class="sts-esqueleto" aria-label="Cargando"><div></div><div></div><div></div><div></div></div>
                         <p class="sts-vacio">${motorArbolesResuelto() ? 'Calculando el status…' : 'Cargando el árbol de materiales de SAP (Listas de materiales)… la primera vez del día puede tardar unos segundos.'}</p>`; }
                     ultimo = await calcular();
+                    // Láminas del PPT y del PPT para jefatura (cierre congelado y foto de la semana anterior: asíncronos).
+                    try { ultimo.lam = await datosLaminas(ultimo); } catch (err) { console.warn('Indicadores: sin las láminas', err); ultimo.lam = null; }
                     pintar();
                     guardarFoto(ultimo).then((ok) => { if (ok && vista.foto) pintar(); }).catch((err) => console.error('Foto diaria del flujo:', err));
                 } catch (err) {
@@ -17328,7 +17490,7 @@ async function maybeAutoStartTour() {
             _detalle: (abierto) => { vista.detalleAbierto = abierto; },
             _detalleAcumulado: (abierto) => { vista.acuAbierto = abierto; },
             trazabilidadDesdePuente, lineaDeTiempo, motivoObservacion,
-            _ultimo: () => ultimo, _valoresPpt: valoresPpt, _zipPpt: zipPpt, _ruta2DesdeListado: ruta2DesdeListado, traerListadoCaract, recibirListadoCaract, _leerListadoCaractExcel: leerListadoCaractExcel, _datosGeneralesPpt: datosGeneralesPpt
+            _ultimo: () => ultimo, _valoresPpt: valoresPpt, _zipPpt: zipPpt, _ruta2DesdeListado: ruta2DesdeListado, traerListadoCaract, recibirListadoCaract, _leerListadoCaractExcel: leerListadoCaractExcel, _datosGeneralesPpt: datosGeneralesPpt, _datosLaminas: datosLaminas, _htmlLaminas: htmlLaminas, _detalleLaminas: detalleLaminas
         };
     })();
     </script>
