@@ -13354,7 +13354,7 @@ async function maybeAutoStartTour() {
         // Ruta 1: las etapas pendientes del programa de la planta, contadas como en Producción (una vez cada etapa, aunque
         // la compartan varios productos), repartidas por su Estatus. Autorizado = los autorizados del mes del cuadro (lo que
         // se autorizó en el mes), y el total (pendientes + autorizados del mes) es el universo con que se trabaja el mes.
-        function ruta1DePlanta(guardado, pl) {
+        function ruta1DePlanta(guardado, pl, acumulado) {
             const c = contadorVacio();
             const data = guardado && Array.isArray(guardado.data) ? guardado.data : [];
             c.productos = 0; c.autEtapas = 0;
@@ -13396,8 +13396,8 @@ async function maybeAutoStartTour() {
             // mes en curso, como los grupos por día de la tabla de Producción. Del backlog si el RMD que la autorizó tiene su
             // ingreso real (o registro) en un mes anterior al de la autorización, o si se autorizó a mano; si no, del mes.
             const iniMes = dayjs().startOf('month'), finHoy = dayjs().endOf('day');
-            c.autBk = 0; c.autMes = 0;
-            filas.forEach((f) => {
+            c.autBk = 0; c.autMes = 0; c.autFuera = 0;
+            const sumarAutorizado = (f, fuera) => {
                 if (f.estado !== 'autorizado' && f.estado !== 'sap') return;
                 const fa = fechaAutorizacionDeFila(f, 'produccion');
                 if (!fa) return;
@@ -13416,17 +13416,38 @@ async function maybeAutoStartTour() {
                 }
                 const bk = !fIng || fIng.format('YYYY-MM') < dAut.format('YYYY-MM');
                 if (bk) c.autBk++; else c.autMes++;
-                c.items.push({ pl, m: f.codigo, producto: f.descripcion || '', etapa: f.fija || '', d: f.d, cat: 'aut', manual: f.estado === 'autorizado', bk, rmd, fAut: dAut.format('YYYY-MM-DD') });
-            });
+                if (fuera) c.autFuera++;
+                c.items.push({ pl, m: f.codigo, producto: f.descripcion || '', etapa: f.fija || '', d: f.d, cat: 'aut', manual: f.estado === 'autorizado', bk, rmd, fAut: dAut.format('YYYY-MM-DD'), fuera });
+            };
+            filas.forEach((f) => sumarAutorizado(f, false));
+            // Autorizados acumulados del mes (pedido de Carlos, 24/11/2026): una etapa autorizada en el mes de un producto que estuvo
+            // en el programa durante el mes sigue contando aunque una carga nueva del Programa de Producción lo haya sacado; así el
+            // Autorizado no baja cuando cambia el programa y los Programados (pendientes de hoy + autorizados) lo incluyen. «Estuvo
+            // en el programa del mes» = estuvo en alguna carga hecha en el mes o en la última carga anterior al 1 (que cubría los
+            // primeros días), según prod_acumulado_<planta>. Sus etapas pendientes no cuentan: ya no están programadas.
+            if (acumulado && acumulado.items) {
+                const iniIso = iniMes.toISOString();
+                const previa = (acumulado.cargas || []).filter((x) => x < iniIso).pop() || iniIso;
+                const salieron = Object.entries(acumulado.items).filter(([m, it]) => !materiales.has(m) && it && it.u && it.u >= previa).map(([m, it]) => {
+                    const r = evaluarMaterialPreciso(m);
+                    return { material: m, descripcion: r.descripcion || it.p || '', r, fechaDe: () => null, motivoRevisar: !r.conArbol ? (r.sinArbol || true) : '' };
+                });
+                if (salieron.length) {
+                    const ids = new Set(filas.map((f) => f.id));
+                    etapasDeProductos(salieron, manualAutorizados).filas.forEach((f) => { if (!ids.has(f.id)) sumarAutorizado(f, true); });
+                }
+            }
             c.autProd = c.autBk + c.autMes;
             return c;
         }
         async function calcularRuta1() {
             if (!rmdPreciso || !rmdPreciso.totalEntradas) return { error: 'Faltan los RMD de SAP: usa «Enviar a Status RMD» en el portal o carga el Exportado RMD en Producción.' };
             await asegurarMotorArboles();
-            const [d1, d2, a1, a2] = await Promise.all([storeGet('prod_data_planta1'), storeGet('prod_data_planta2'),
-                storeGet('prod_archivo_original_planta1'), storeGet('prod_archivo_original_planta2')]);
-            const r = { P1: ruta1DePlanta(d1, 'P1'), P2: ruta1DePlanta(d2, 'P2'), sinArbol: motorArboles.estado !== 'listo' };
+            const sinAcu = (e) => { console.warn('Ruta 1: sin el programa acumulado', e); return null; };
+            const [d1, d2, a1, a2, h1, h2] = await Promise.all([storeGet('prod_data_planta1'), storeGet('prod_data_planta2'),
+                storeGet('prod_archivo_original_planta1'), storeGet('prod_archivo_original_planta2'),
+                leerAcumuladoPrograma('planta1').catch(sinAcu), leerAcumuladoPrograma('planta2').catch(sinAcu)]);
+            const r = { P1: ruta1DePlanta(d1, 'P1', h1), P2: ruta1DePlanta(d2, 'P2', h2), sinArbol: motorArboles.estado !== 'listo' };
             // Horizonte del Programa de Producción: 2 semanas desde la semana en que se cargó (lunes de esa semana + 13 días).
             [['P1', a1], ['P2', a2]].forEach(([pl, a]) => {
                 const f = a && a.fechaCarga ? dayjs(a.fechaCarga) : null;
@@ -15201,7 +15222,7 @@ async function maybeAutoStartTour() {
         }
         function filaRuta1(it) {
             const base = { planta: it.pl, m: it.m, producto: it.producto, etapa: etapaTxt(it.etapa) || '—', situacion: it.cat === 'aut' ? 'Autorizado' : 'Pendiente',
-                estatus: it.cat === 'aut' ? (it.manual ? 'Autorizado a mano' : '') : (it.estatus || 'Sin estatus'), resp: it.resp || '' };
+                estatus: it.cat === 'aut' ? [it.manual ? 'Autorizado a mano' : '', it.fuera ? 'Ya no está en el programa de hoy' : ''].filter(Boolean).join(' · ') : (it.estatus || 'Sin estatus'), resp: it.resp || '' };
             if (!it.d) return Object.assign(base, { estado: 'Sin árbol de producción', obs: `Para revisar en Producción${typeof it.revisar === 'string' ? `: ${it.revisar}` : ''}` });
             // El RMD que decide la etapa: el pendiente (como en Producción) o, si ya está resuelta, el de versión más alta.
             const s = it.d.pendiente ? situacionHoy(it.d) : null, c = s ? s.c : it.d.candidatos[0];
@@ -15226,7 +15247,7 @@ async function maybeAutoStartTour() {
             const nombre = k === 'todo' ? (ruta === 'r1' ? 'Etapas pendientes' : 'Todos los RMD') : NOMBRES_RUTA[k];
             return { tipo: ruta, pl, titulo: `${nombre} · ${ruta === 'r1' ? 'Ruta 1, programa' : 'Ruta 2, caracterizaciones'}`,
                 sub: pl === 'ambas' ? 'P1 y P2 · Plantas Ate y Lima' : PLANTAS[pl], numero, filas: items.map(ruta === 'r1' ? filaRuta1 : filaRuta2).sort(orden),
-                explica: ruta === 'r1' ? 'Cada etapa pendiente de los productos programados, contada como en Producción (una vez aunque la compartan varias presentaciones), con su Estatus y responsable. El RMD es el que deja pendiente la etapa. Los autorizados de la Ruta 1 son las etapas autorizadas en el mes, como los grupos por día de Producción; del backlog o del mes según su RMD en «Autorizados en el mes» del status general (autorizadas a mano: del backlog).'
+                explica: ruta === 'r1' ? 'Cada etapa pendiente de los productos programados, contada como en Producción (una vez aunque la compartan varias presentaciones), con su Estatus y responsable. El RMD es el que deja pendiente la etapa. Los autorizados de la Ruta 1 son las etapas autorizadas en el mes, como los grupos por día de Producción; del backlog o del mes según su RMD en «Autorizados en el mes» del status general (autorizadas a mano: del backlog). Se acumulan en el mes: una etapa autorizada de un producto que estuvo en el programa del mes sigue contando aunque una carga nueva del programa lo haya sacado («Ya no está en el programa de hoy»), y los Programados la incluyen.'
                     : 'RMD de SAP con Motivo CARACTERIZACION. Autorizado o Suspendido en SAP cuenta como autorizado; el resto, como pendiente, con el Estatus elegido en la tabla de caracterizaciones.' };
         }
 
