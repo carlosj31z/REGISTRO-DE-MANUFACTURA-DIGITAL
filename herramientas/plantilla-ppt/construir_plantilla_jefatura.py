@@ -6,7 +6,7 @@ Uso: python construir_plantilla_jefatura.py REFERENCIA.pptx SALIDA.pptx [index.h
 Con index.html, reemplaza (o agrega) la constante STATUS_RMD_JEFATURA_B64 en la página.
 Con --lamina2, la lámina 2 se toma de ese PPTX (la estructura que Carlos armó el 24/11/2026 sobre el exportado:
 STATUS_RMD_2026-11-24 (7).pptx): 31/10 → Solicitados del mes → corte (pendientes) y autorizados al cierre + AUTORIZADOS −
-CAMBIO ESTADO → al corte.
+CAMBIO ESTADO → al corte. La lámina 5 también sale de ese PPTX («Pendientes por planta vs semana anterior», 24/11/2026).
 """
 import base64, io, re, sys, zipfile
 from pptx import Presentation
@@ -214,7 +214,7 @@ TIMING_LAMINA2 = ('<p:transition spd="med"><p:fade/></p:transition><p:timing><p:
     '</p:childTnLst></p:cTn></p:par></p:tnLst><p:bldLst>' + _bld + '</p:bldLst></p:timing>')
 
 # Lámina 2 nueva (Carlos, 24/11/2026: «adaptar el PPT… donde solicitados noviembre sale de estos 121 y 53»): se toma su lámina.
-LAMINA2_XML = None
+LAMINA2_XML = LAMINA5_XML = None
 if L2REF:
     from lxml import etree as _et
     s7 = list(Presentation(L2REF).slides)[1]
@@ -262,6 +262,19 @@ if L2REF:
     LAMINA2_XML = _et.tostring(_el, xml_declaration=True, encoding='UTF-8', standalone=True).decode('utf8')
     assert '</p:clrMapOvr>' in LAMINA2_XML
     LAMINA2_XML = LAMINA2_XML.replace('</p:clrMapOvr>', '</p:clrMapOvr>' + _t7, 1)
+    # Lámina 5 (Carlos, 24/11/2026: «hagamos esta comparativa en la lámina 5 tal cual»): por planta, PRO / DOC / ASC / Total
+    # de la semana anterior (foto guardada de hace 7 días) vs hoy, con la variación y el %.
+    s5 = list(Presentation(L2REF).slides)[4]
+    for _pl in ('P1', 'P2'):
+        _t = sh(s5, 'Comparativo %s · Planta %s' % (_pl, 'Ate' if _pl == 'P1' else 'Lima')).table
+        celda(_t.cell(0, 1), '{{J_SEM_ANT}}'); celda(_t.cell(0, 2), '{{J_SEM_HOY}}')
+        for _i, _k in enumerate(('PRO', 'DOC', 'ASC', 'TOT'), 1):
+            for _j, _c in enumerate(('A', 'H', 'V', 'P'), 1):
+                celda(_t.cell(_i, _j), '{{J_C_%s_%s_%s}}' % (_pl, _k, _c))
+    _el5 = s5._element
+    for _tag in ('timing', 'transition'):
+        for _e in _el5.findall(qn('p:' + _tag)): _el5.remove(_e)
+    LAMINA5_XML = _et.tostring(_el5, xml_declaration=True, encoding='UTF-8', standalone=True).decode('utf8')
 
 # Láminas 3 y 4: Ruta 1 y Ruta 2, P1 arriba y P2 abajo (los cuadros se repiten por panel, en ese orden).
 for s, R in ((S[2], 'R1'), (S[3], 'R2')):
@@ -298,7 +311,9 @@ for it in zin.infolist():
         d = re.sub(rb'<Relationship [^>]*webextensions/[^>]*/>', b'', d)
     if it.filename == '[Content_Types].xml':
         d = re.sub(rb'<Override PartName="/ppt/webextensions/[^>]*/>', b'', d)
-    if it.filename == 'ppt/slides/slide2.xml' and LAMINA2_XML:
+    if it.filename == 'ppt/slides/slide5.xml' and LAMINA5_XML:
+        d = LAMINA5_XML.encode('utf8')
+    elif it.filename == 'ppt/slides/slide2.xml' and LAMINA2_XML:
         d = LAMINA2_XML.encode('utf8')
     elif it.filename == 'ppt/slides/slide2.xml':
         x = d.decode('utf8')
