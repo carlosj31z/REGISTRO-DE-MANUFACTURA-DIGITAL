@@ -9978,7 +9978,8 @@ async function downloadPlanProduccionFromCloud() {
                 'Versión': c && !c.sinRmd ? c.version : '',
                 'Antigüedad (días)': f.estado === 'pendiente' && c && !c.sinRmd && Number.isFinite(c.fecha) ? diasDesde(c.fecha) : '',
                 'Para los productos': (f.productos || []).map(p => p.material).join(', '),
-                'Observación': (fila && fila.observacion) || ''
+                'Observación': (fila && fila.observacion) || '',
+                'Fase': fila ? faseRmdExcel(fila.observacion) : ''
             });
         }
         function hojaEtapasExcel(filas, origen) {
@@ -9986,7 +9987,7 @@ async function downloadPlanProduccionFromCloud() {
             const headers = Object.keys(datos[0]);
             const ws = XLSX.utils.json_to_sheet(datos, { header: headers });
             const anchos = { 'Planta': 10, 'Material': 13, 'Descripción': 44, 'Área': 16, 'Mes(es)': 22, 'Inicio de producción': 13, 'Etapa pendiente': 16, 'Estatus': 19, 'Responsable': 12,
-                'Estado en SAP': 14, 'RMD': 13, 'Versión': 8, 'Antigüedad (días)': 10, 'Para los productos': 26, 'Observación': 60 };
+                'Estado en SAP': 14, 'RMD': 13, 'Versión': 8, 'Antigüedad (días)': 10, 'Para los productos': 26, 'Observación': 60, 'Fase': 9 };
             ws['!cols'] = headers.map(h => ({ wch: anchos[h] || 12 }));
             ws['!autofilter'] = { ref: `A1:${XLSX.utils.encode_col(headers.length - 1)}${datos.length + 1}` };
             ws['!views'] = [{ state: 'frozen', ySplit: 1 }];
@@ -12954,6 +12955,13 @@ async function maybeAutoStartTour() {
     // Fase de un RMD según sus Observaciones de SAP (pedido de Carlos, 19/11/2026): FASE 2 si la primera línea con texto dice
     // «F2» o «F2R» como palabra o segmento (p. ej. «20261113CJ-1-C2-FI1.0-FA1.0-F2R»); si no, FASE 1. No cuenta «F20», «F2A», etc.
     // FASE 3 (20/11/2026): «F3» como segmento de esa línea (va al final; marca los RMD que ya tienen el retiro de V°B°). Manda sobre F2.
+    // Columna «Fase» de los Excel (pedido de Carlos, 25/11/2026): la fase escrita en la primera línea de Observaciones (F1, F2, F2R, F3, F4…;
+    // la R es una revisión de la misma fase) como «FASE n»; si no se reconoce ninguna, la celda queda VACÍA (faseRmd, que cuenta, sigue dando FASE 1).
+    function faseRmdExcel(obs) {
+        const l1 = String(obs || '').split(/\r?\n/).map((x) => x.trim()).find(Boolean) || '';
+        const ns = [...l1.matchAll(/(?:^|[^A-Z0-9])F(\d)(?:-?R)?(?![A-Z0-9])/gi)].map((m) => +m[1]).filter((n) => n > 0);
+        return ns.length ? `FASE ${Math.max(...ns)}` : '';
+    }
     function faseRmd(obs) {
         const l1 = String(obs || '').split(/\r?\n/).map((x) => x.trim()).find(Boolean) || '';
         if (/(^|[^A-Z0-9])F3(?![A-Z0-9])/i.test(l1)) return 'FASE 3';
@@ -15313,6 +15321,7 @@ async function maybeAutoStartTour() {
             : (txt === undefined ? numOGuion(n) : txt));
         // Columnas del detalle: título y ancho en Excel; soloExcel no va en la ventana.
         const COLS_DET = {
+            fase: { t: 'Fase', w: 9 },
             planta: { t: 'Planta', w: 7 },
             mes: { t: 'Mes', w: 15 },
             como: { t: 'Cuenta como', w: 30 },
@@ -15578,8 +15587,16 @@ async function maybeAutoStartTour() {
 
         // ---------- Excel del detalle ----------
         const valorExcel = (c, v) => (v === undefined || v === null ? '' : ((c === 'version' || c === 'dias') && v !== '' && Number.isFinite(Number(v)) ? Number(v) : String(v)));
-        function hojaDetalle(filas, cols) {
-            const ws = XLSX.utils.aoa_to_sheet([cols.map((c) => COLS_DET[c].t), ...filas.map((f) => cols.map((c) => valorExcel(c, f[c])))]);
+        // «Fase» al final (25/11/2026): de la primera línea de Observaciones de SAP del RMD (código + versión, o solicitud); vacía si no se reconoce
+        function faseDeFilaDetalle(f) {
+            const lista = Array.isArray(rmdAutorizadosDetalle) ? rmdAutorizadosDetalle : [];
+            if (faseDeFilaDetalle.lista !== lista) { const m = new Map(); lista.forEach((x) => { [x.codigo, x.solicitud].filter(Boolean).forEach((k) => m.set(`${k}|${Number(x.version) || 0}`, x.observacion || '')); }); faseDeFilaDetalle.lista = lista; faseDeFilaDetalle.mapa = m; }
+            const cod = String((f && f.codigo) || '').trim(), obs = cod ? faseDeFilaDetalle.mapa.get(`${cod}|${Number(f.version) || 0}`) : undefined;
+            return obs === undefined ? '' : faseRmdExcel(obs);
+        }
+        function hojaDetalle(filas, cols0) {
+            const cols = cols0.includes('fase') ? cols0 : [...cols0, 'fase'];
+            const ws = XLSX.utils.aoa_to_sheet([cols.map((c) => COLS_DET[c].t), ...filas.map((f) => cols.map((c) => (c === 'fase' ? faseDeFilaDetalle(f) : valorExcel(c, f[c]))))]);
             ws['!cols'] = cols.map((c) => ({ wch: COLS_DET[c].w }));
             ws['!autofilter'] = { ref: XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: Math.max(filas.length, 1), c: cols.length - 1 } }) };
             cols.forEach((c, i) => { const cel = ws[XLSX.utils.encode_cell({ r: 0, c: i })]; if (cel) cel.s = { font: { bold: true } }; });
@@ -17374,7 +17391,7 @@ async function maybeAutoStartTour() {
                     claves: { planta: 'Planta', tipo: 'Tipo', cuando: 'Meses anteriores / Mes vigente' },
                     cols: [['Planta', 7], ['Tipo', 11], ['Fase', 9], ['Meses anteriores / Mes vigente', 16], ['Mes al que pertenece', 10], ['Programa de producción', 14], ['Inicio producción', 11], ['Caracterización', 13], ['Código RMD', 13], ['Versión', 8], ['Descripción', 46], ['Etapa', 15], ['Código de solicitud', 13],
                         ['Fecha de solicitud', 11], ['Fecha de registro', 11], ['Versión anterior (estado hoy)', 26], ['Fecha de suspensión (versión anterior, o la propia si es Suspendido)', 14], ['Explicación', 70], ['Observaciones (SAP)', 60]],
-                    filas: pend.map((x) => [NOMBRE_PLANTA_BK[x.v.planta], x.tipo, faseRmd(x.v.obs), x.cuando, x.m, progDe(x.v) ? 'PROGRAMA DE PRODUCCIÓN' : '', progDe(x.v) && progDe(x.v).inicio ? fx(progDe(x.v).inicio) : '', carDe(x.v) ? 'CARACTERIZACIÓN' : '', x.v.codigo || '(sin código aún)', x.v.version, x.v.desc || '', x.v.etapa || '', x.v.sol || '', fx(x.v.fSol), fx(x.v.fReg), antTxt(x.ant), fx(x.fS), x.porque, x.v.obs || '']) },
+                    filas: pend.map((x) => [NOMBRE_PLANTA_BK[x.v.planta], x.tipo, faseRmdExcel(x.v.obs), x.cuando, x.m, progDe(x.v) ? 'PROGRAMA DE PRODUCCIÓN' : '', progDe(x.v) && progDe(x.v).inicio ? fx(progDe(x.v).inicio) : '', carDe(x.v) ? 'CARACTERIZACIÓN' : '', x.v.codigo || '(sin código aún)', x.v.version, x.v.desc || '', x.v.etapa || '', x.v.sol || '', fx(x.v.fSol), fx(x.v.fReg), antTxt(x.ant), fx(x.fS), x.porque, x.v.obs || '']) },
                 dec: { nombre: '3 Suspendidos vs INACTIVOS', titulo: `Los ${r.dec.length} suspendidos: ${inact} pasan a INACTIVO y ${mant} se mantienen SUSPENDIDOS (tabla 3)`,
                     nota: notaSusExcel,
                     claves: { planta: 'Planta', decision: 'Decisión del equipo' },
@@ -17399,7 +17416,7 @@ async function maybeAutoStartTour() {
                     claves: { planta: 'Planta', cuenta: 'Cuenta como' },
                     cols: [['Planta', 7], ['Cuenta como', 16], ['Fase', 9], ['Programa de producción', 14], ['Caracterización', 13], ['Código RMD', 13], ['Versión', 8], ['Descripción', 46], ['Etapa', 15], ['Fecha de registro', 11], ['Fecha de autorización', 11], ['Versión anterior (estado hoy)', 26],
                         ['Suspensión de la versión anterior', 12], ['Explicación', 70], ['Observaciones (SAP)', 60]],
-                    filas: aut.map((x) => [NOMBRE_PLANTA_BK[x.v.planta], x.cuenta, faseRmd(x.v.obs), progAut ? (progAut.has(claveAutProg(x.v)) ? 'PROGRAMA DE PRODUCCIÓN' : 'Fuera del programa') : '', carDe(x.v) ? 'CARACTERIZACIÓN' : '', x.v.codigo, x.v.version, x.v.desc || '', x.v.etapa || '', fx(x.v.fReg), fx(x.v.fAut), antTxt(x.ant), fx(x.fS), x.porque, x.v.obs || '']) },
+                    filas: aut.map((x) => [NOMBRE_PLANTA_BK[x.v.planta], x.cuenta, faseRmdExcel(x.v.obs), progAut ? (progAut.has(claveAutProg(x.v)) ? 'PROGRAMA DE PRODUCCIÓN' : 'Fuera del programa') : '', carDe(x.v) ? 'CARACTERIZACIÓN' : '', x.v.codigo, x.v.version, x.v.desc || '', x.v.etapa || '', fx(x.v.fReg), fx(x.v.fAut), antTxt(x.ant), fx(x.fS), x.porque, x.v.obs || '']) },
                 cambio: cambio && {
                     nombre: '6 Cambiaron de status', titulo: `Autorizados que cambiaron de status del 01/${r.corte.format('MM/YYYY')} al ${corte} (tabla 6 = «cambiaron de status» de la lámina 2)`,
                     nota: 'Autorizados del mes que no suman al total de masters (reautorizados, versión nueva de un RMD ya autorizado, ya tienen una versión más nueva) y autorizados al cierre que se suspendieron en el mes. Filtra «Tipo de cambio» para ver cada grupo.',
@@ -18506,7 +18523,7 @@ async function maybeAutoStartTour() {
             const d = (x) => (x && x.isValid && x.isValid() ? new Date(Date.UTC(x.year(), x.month(), x.date())) : '');
             const filas = lista.map((x, i) => {
                 const it = x.it, v = it.v, n = notaDe(it) || {}, est = estadoDe(it), man = manual(it);
-                return [i + 1, man ? 'Autorizado a mano' : it.prog ? 'Programa de producción' : 'Backlog', PLANTA_NOMBRE[v.planta], it.tipo, faseRmd(v.obs), it.nuevo ? 'NUEVO' : 'BACKLOG', it.prog ? 'PROGRAMA DE PRODUCCIÓN' : '', it.prog && it.prog.inicio ? d(it.prog.inicio) : '',
+                return [i + 1, man ? 'Autorizado a mano' : it.prog ? 'Programa de producción' : 'Backlog', PLANTA_NOMBRE[v.planta], it.tipo, faseRmdExcel(v.obs), it.nuevo ? 'NUEVO' : 'BACKLOG', it.prog ? 'PROGRAMA DE PRODUCCIÓN' : '', it.prog && it.prog.inicio ? d(it.prog.inicio) : '',
                     v.desc || '', it.etapa || '', v.codigo || '', v.version || '', v.sol || '', v.codDef || '', nombreMes(it.m), d(it.base), it.dias === null ? '' : it.dias,
                     (ESTADO[est.m] || ESTADO.OTRO).txt, est.confirmado ? 'Sí' : 'No (sugerido)', n.r || (ESTADO[est.m] || {}).resp || '', n.a || '', n.c ? d(dayjs(n.c + 'T00:00:00')) : '', SEGUIMIENTO[n.s || ''], n.t || '', n.u || '',
                     n.f ? dayjs(n.f).format('DD/MM/YYYY HH:mm') : '', man ? `${n.ok.u || ''} ${dayjs(n.ok.f).format('DD/MM/YYYY')}` : '', (ESTADO[it.sug.m] || ESTADO.OTRO).txt, it.sug.por, it.porque || '',
