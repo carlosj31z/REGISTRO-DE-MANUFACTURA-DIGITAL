@@ -18965,16 +18965,33 @@ async function maybeAutoStartTour() {
             const [a, k] = m.split('-').map(Number);
             return `${m}-${String(new Date(Date.UTC(a, k, 0)).getUTCDate()).padStart(2, '0')}`;
         }
+        // «Contar desde» (pedido de Carlos, 25/11/2026): el PPT solo toma los RMD desde esa fecha (12/10/2026 por defecto, o el día que elija).
+        //  - del portal, actualizado: fecha de autorización de la versión actualizada desde esa fecha;
+        //  - del portal, por actualizar: versión Ingresada registrada desde esa fecha;
+        //  - datos del portal recibidos antes de este cambio (sin fecha) y filas a mano: por el mes;
+        //  - las 11 filas fijas del PPT de octubre (sin fecha) solo entran si se cuenta desde el 01/10 o antes.
+        const ISO_DIA_OK = /^\d{4}-\d{2}-\d{2}$/;
+        function inicioDe(datos) { return ISO_DIA_OK.test((datos && datos.inicio) || '') ? datos.inicio : INICIAL.inicio; }
+        function enRango(r, inicio) {
+            if (!ISO_DIA_OK.test(inicio || '')) return true;
+            const porAct = r.despues === '' || r.despues === null || r.despues === undefined;
+            if (r.origen === 'ppt') return inicio <= '2026-10-01';
+            const f = porAct ? r.fechaRegistro : r.fecha;
+            if (ISO_DIA_OK.test(f || '')) return f >= inicio;
+            if (porAct && r.origen === 'sap') return true;
+            return /^\d{4}-\d{2}$/.test(r.mes || '') ? r.mes >= inicio.slice(0, 7) : true;
+        }
         function limpiar(datos) {
+            const inicio = inicioDe(datos);
             return (datos.rmd || []).map((r) => ({ ...r, antes: num(r.antes), despues: num(r.despues) }))
-                .filter((r) => /^\d{4}-\d{2}$/.test(r.mes || '') && (r.producto || r.codigo) && r.antes !== null);
+                .filter((r) => /^\d{4}-\d{2}$/.test(r.mes || '') && (r.producto || r.codigo) && r.antes !== null && enRango(r, inicio));
         }
         // sel: «AAAA-MM» o «todo» (desde el inicio). Devuelve todo lo que va al PowerPoint.
         function calcular(datos, sel, corte, hoyIso) {
             const filas = limpiar(datos);
             const act = (r) => r.despues !== null;
             const delSel = filas.filter((r) => act(r) && (sel === 'todo' || r.mes === sel));
-            if (!delSel.length) throw new Error(sel === 'todo' ? 'No hay RMD actualizados en el registro.' : `No hay RMD actualizados en ${mesNombre(sel)}.`);
+            if (!delSel.length) throw new Error(sel === 'todo' ? `No hay RMD actualizados desde el ${fechaCorta(inicioDe(datos))}.` : `No hay RMD actualizados en ${mesNombre(sel)} desde el ${fechaCorta(inicioDe(datos))}.`);
             const meses = [...new Set(filas.map((r) => r.mes))].sort();
             const antes = delSel.reduce((s, r) => s + r.antes, 0), despues = delSel.reduce((s, r) => s + r.despues, 0);
             const conElim = delSel.map((r) => ({ ...r, elim: r.antes - r.despues }));
@@ -19204,7 +19221,8 @@ async function maybeAutoStartTour() {
             const lotesTxt = r.origen === 'sap' && !porAct && r.lotes !== undefined ? (r.lotes ? ` · lotes: ${r.lotesCerrados} de ${r.lotes} cerrados` : ' · sin lotes') : '';
             const origen = r.origen === 'sap' ? `Portal: v${esc(r.versionAnt)} → v${esc(r.version)}${r.mesSap ? ` (en SAP autorizado en ${esc(mesNombre(r.mesSap))}; va en octubre como en el PPT)` : ''}${porAct ? ` (${esc(r.estado || 'sin autorizar')}${r.previsto !== undefined ? `, quedaría en ${esc(r.previsto)}` : ''})` : ''}${lotesTxt}` : r.origen === 'ppt' ? 'PPT de octubre' : 'A mano';
             const loteAuto = r.origen === 'sap' && r.lotes !== undefined, tituloLote = loteAuto ? esc(r.lotesDetalle ? `Lotes de la versión ${r.version}: ${r.lotesDetalle}` : 'La versión actualizada aún no tiene lotes en el portal') : '';
-            return `<tr data-i="${i}" data-extra="${esc(JSON.stringify(extra))}">
+            const fechaTxt = ISO_DIA_OK.test((porAct ? r.fechaRegistro : r.fecha) || '') ? ` · ${porAct ? 'registrado' : 'autorizado'} el ${(porAct ? r.fechaRegistro : r.fecha).split('-').reverse().join('/')}` : '';
+            return `<tr data-i="${i}" data-extra="${esc(JSON.stringify(extra))}" title="${esc(fechaTxt.replace(/^ · /, ''))}">
                 <td><input type="month" data-k="mes" value="${esc(r.mes)}" style="width:128px"></td>
                 <td><input data-k="codigo" value="${esc(r.codigo)}" placeholder="opcional" style="width:98px"></td>
                 <td><input data-k="producto" value="${esc(r.producto)}" style="width:100%;min-width:150px"></td>
@@ -19213,7 +19231,7 @@ async function maybeAutoStartTour() {
                 <td><input type="number" min="0" data-k="antes" value="${esc(r.antes)}" style="width:62px"></td>
                 <td><input type="number" min="0" data-k="despues" value="${esc(r.despues)}" placeholder="por act." style="width:72px"></td>
                 <td><select data-k="lote"${loteAuto ? ` disabled title="${tituloLote}"` : ''}>${opciones(LOTES.map((e) => [e, e]), r.lote, '—')}</select></td>
-                <td class="vb-nota vb-origen" title="${origen}">${origen}</td>
+                <td class="vb-nota vb-origen" title="${origen}${esc(fechaTxt)}">${origen}${esc(fechaTxt)}</td>
                 <td><button type="button" class="vb-quitar" data-quitar="${i}">Quitar</button></td></tr>`;
         }
         function leerVentana(cont) {
@@ -19228,8 +19246,17 @@ async function maybeAutoStartTour() {
             return { ...datos, inicio: cont.querySelector('#vbInicio').value || INICIAL.inicio, inicioTexto: cont.querySelector('#vbInicioTxt').value.trim(), rmd, porActualizar };
         }
         function mesesConRegistro(d) { return [...new Set(d.rmd.map((r) => r.mes).filter((m) => /^\d{4}-\d{2}$/.test(m || '')))].sort(); }
+        // Filas antes de «Contar desde»: quedan en el registro pero atenuadas y fuera del PPT.
+        function marcarFueraDeRango(cont, d) {
+            const inicio = inicioDe(d), trs = [...cont.querySelectorAll('tbody tr[data-i]')];
+            let fuera = 0;
+            d.rmd.forEach((r, k) => { const tr = trs[k]; if (!tr) return; const no = !enRango(r, inicio); if (no) fuera++; tr.classList.toggle('vb-fuera', no); });
+            const nota = cont.querySelector('#vbFueraNota');
+            if (nota) nota.textContent = fuera ? `${fuera} ${fuera === 1 ? 'RMD es anterior' : 'RMD son anteriores'} al ${fechaCorta(inicio)}: ${fuera === 1 ? 'queda' : 'quedan'} en el registro (atenuados) pero no ${fuera === 1 ? 'entra' : 'entran'} al PowerPoint.` : '';
+        }
         function pintarPie(cont) {
-            const d = leerVentana(cont), meses = mesesConRegistro(d);
+            const d0 = leerVentana(cont); marcarFueraDeRango(cont, d0);
+            const ini = inicioDe(d0), d = { ...d0, rmd: d0.rmd.filter((r) => enRango(r, ini)) }, meses = mesesConRegistro(d);
             const conAct = meses.filter((m) => d.rmd.some((r) => r.mes === m && r.despues !== '' && r.despues !== null));
             const sel = cont.querySelector('#vbMes'), antes = sel.value;
             const ultimoCerrado = conAct.filter((m) => m < hoyIso().slice(0, 7)).pop() || conAct[conAct.length - 1] || '';
@@ -19257,16 +19284,18 @@ async function maybeAutoStartTour() {
                 .vb-ventana .vb-origen { max-width:150px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
                 .vb-ventana .vb-quitar { white-space:nowrap; padding:2px 8px; color:#fca5a5; border-color:#7f1d1d; }
                 .vb-ventana #vbPend label { display:inline-flex; gap:6px; align-items:center; margin-right:12px; }
+                .vb-ventana tr.vb-fuera td { opacity:.4; }
             </style>
             <div class="vb-ventana">
-                <p class="vb-nota">Todo llega del portal: Exportar → «V°B° última vs. penúltima» → «Enviar a Status RMD» (seguimiento desde el 12/10/2026; cuenta la casilla «V.B.» de los pasos). Actualizados = Autorizados con menos V°B° que su versión anterior; por actualizar = Ingresados con menos V°B° (sin «después»). Status de lote: «Conforme» si al menos un lote de la versión actualizada se cerró; si no, «En proceso». Puedes corregir el nombre corto o agregar RMD a mano.</p>
-                <div class="vb-fila"><label>Inicio <input type="date" id="vbInicio" value="${esc(datos.inicio)}"></label>
+                <p class="vb-nota">Todo llega del portal: Exportar → «V°B° última vs. penúltima» → «Enviar a Status RMD» (cuenta la casilla «V.B.» de los pasos). El PowerPoint solo toma los RMD desde la fecha de «Contar desde» (12/10/2026 por defecto): actualizados por su fecha de autorización y por actualizar por su fecha de registro. Actualizados = Autorizados con menos V°B° que su versión anterior; por actualizar = Ingresados con menos V°B° (sin «después»). Status de lote: «Conforme» si al menos un lote de la versión actualizada se cerró; si no, «En proceso». Puedes corregir el nombre corto o agregar RMD a mano.</p>
+                <div class="vb-fila"><label>Contar desde <input type="date" id="vbInicio" value="${esc(inicioDe(datos))}" title="El PowerPoint solo toma los RMD autorizados (o ingresados, si están por actualizar) desde este día. También es el inicio de la línea de tiempo de la lámina 2."></label>
                     <label style="flex:1;display:flex;gap:6px;align-items:center">Texto <input id="vbInicioTxt" value="${esc(datos.inicioTexto)}" style="flex:1"></label></div>
                 <div style="max-height:46vh;overflow:auto;border:1px solid #1e293b;border-radius:8px">
                     <table><thead><tr><th>Mes</th><th>Código RMD</th><th>Producto</th><th>Planta</th><th>Etapa</th><th>V°B° antes</th><th>V°B° después</th><th>Status de lote</th><th>Origen</th><th></th></tr></thead>
                     <tbody>${datos.rmd.map(filaHtml).join('')}</tbody></table>
                 </div>
                 ${datos.rmd.length ? '' : '<p class="vb-nota" style="color:#fbbf24">Aún no llegan datos del portal. En el portal SAP: Exportar → «V°B° última vs. penúltima» → «Enviar a Status RMD».</p>'}
+                <p class="vb-nota" id="vbFueraNota" style="color:#fbbf24"></p>
                 <div class="vb-fila"><button type="button" id="vbAgregar">Agregar RMD</button></div>
                 <div style="display:none"><span id="vbPend"></span></div>
                 <div class="vb-fila" style="border-top:1px solid #334155;padding-top:10px">
@@ -19317,7 +19346,7 @@ async function maybeAutoStartTour() {
                         }
                         if (el.id === 'vbMes') ponerCorte(cont);
                         else if (el.id === 'vbCorte') { const m = cont.querySelector('#vbMes').value; if (m && el.value) datos.cortes[m] = el.value; }
-                        else if (['mes', 'despues'].includes(el.dataset.k)) pintarPie(cont);
+                        else if (['mes', 'despues'].includes(el.dataset.k) || el.id === 'vbInicio') pintarPie(cont);
                     });
                     pintarPie(cont);
                     if (typeof mesInicial === 'string') { const sel = cont.querySelector('#vbMes'); if ([...sel.options].some((o) => o.value === mesInicial)) { sel.value = mesInicial; ponerCorte(cont); } }
@@ -19391,9 +19420,9 @@ async function maybeAutoStartTour() {
                 const base = { codigo: u.codigo || '', principal: x.principal || '', producto: nombreCorto(x.producto), descripcionSap: x.producto || '', planta: PLANTA_SAP[x.planta] || x.planta || '', etapa: ETAPA_SAP(x.etapa),
                     antes: cp, version: u.version, versionAnt: p.version, codigoAnt: p.codigo || '', estado: u.estado || '', origen: 'sap', lotes: lotes.length, lotesCerrados: lotes.filter(cerrado).length,
                     lotesDetalle: lotes.slice(0, 20).map((l) => `${l.lote || l.orden || '?'}: ${l.estado || 'sin estado'}${l.activo === false ? ' (inactivo)' : ''}`).join('; ') };
-                if (x.tipo === 'actualizado' && /^\d{4}-\d{2}/.test(u.autorizacion || '')) out.push({ ...base, mes: u.autorizacion.slice(0, 7), despues: cu, lote: loteDe(lotes) });
+                if (x.tipo === 'actualizado' && /^\d{4}-\d{2}/.test(u.autorizacion || '')) out.push({ ...base, mes: u.autorizacion.slice(0, 7), fecha: String(u.autorizacion).slice(0, 10), despues: cu, lote: loteDe(lotes) });
                 // Por actualizar: solo las versiones Ingresadas registradas desde el inicio del seguimiento (las de antes no son de esta actualización).
-                else if (x.tipo === 'por actualizar' && !(msg.desde && /^\d{4}-\d{2}-\d{2}/.test(u.registro || '') && u.registro < msg.desde)) out.push({ ...base, mes: mesHoy, despues: '', previsto: cu, lote: 'En proceso' });
+                else if (x.tipo === 'por actualizar' && !(msg.desde && /^\d{4}-\d{2}-\d{2}/.test(u.registro || '') && u.registro < msg.desde)) out.push({ ...base, mes: mesHoy, fechaRegistro: String(u.registro || '').slice(0, 10), despues: '', previsto: cu, lote: 'En proceso' });
             });
             return out;
         }
