@@ -2827,9 +2827,9 @@
         #tab-backlog .bkl-tabla td.etapa, #tab-backlog .bkl-tabla td.est-sap { white-space:nowrap; }
         #tab-backlog .bkl-tabla th.est-sap { min-width:120px; }
         #tab-backlog .bkl-tabla th.nota, #tab-backlog .bkl-tabla td.nota { min-width:340px; width:26%; }
-        #tab-backlog .bkl-cambio { display:inline-flex; align-items:center; gap:6px; margin-bottom:5px; padding:2px 4px 2px 8px; border-radius:6px; font-size:10.5px; font-weight:700; letter-spacing:.02em; color:#7c2d12; background:#fed7aa; border:1px solid #fb923c; white-space:nowrap; }
-        #tab-backlog .bkl-cambio::before { content:''; width:0; height:0; border-left:6px solid #ea580c; border-top:4px solid transparent; border-bottom:4px solid transparent; }
-        #tab-backlog .bkl-cambio button { font:inherit; font-size:10px; font-weight:600; padding:1px 6px; border-radius:4px; border:1px solid #fb923c; background:#fff7ed; color:#7c2d12; cursor:pointer; }
+        #tab-backlog .bkl-cambio { display:flex; align-items:center; gap:4px; width:fit-content; margin:0 0 4px; padding:1px 6px; border-radius:5px; font:inherit; font-size:10px; font-weight:700; letter-spacing:.02em; color:#fff; background:#dc2626; border:1px solid #b91c1c; white-space:nowrap; cursor:pointer; line-height:1.4; }
+        #tab-backlog .bkl-cambio::before { content:''; width:0; height:0; border-left:5px solid #fff; border-top:3px solid transparent; border-bottom:3px solid transparent; }
+        #tab-backlog .bkl-cambio:hover { background:#b91c1c; }
         #tab-backlog .bkl-ult { margin-top:4px; font-size:11.5px; white-space:nowrap; }
         #tab-backlog .bkl-tabla th.ingreso { min-width:170px; }
         #tab-backlog .bkl-ing { display:flex; flex-direction:column; gap:5px; min-width:160px; }
@@ -18020,6 +18020,12 @@ async function maybeAutoStartTour() {
         // Desde qué fecha se cuentan los autorizados del backlog (la elige el usuario; compartida). Vacía = todos.
         const CLAVE_AUT_DESDE = 'val_backlog_aut_desde';
         let autDesde = '';
+        // Alerta de cambio de estado (pedido de Carlos, 26/11/2026): se guarda el último estado visto de cada pendiente
+        // («k» → { e: estado, ver, al: { de, a, f } }). La primera vez solo se anota (desde esa fecha queda mapeado); si después
+        // SAP muestra otro estado (p. ej. SUSPENDIDO → INGRESADO) sale la bandera roja hasta que alguien marca «Visto».
+        // CANCELADO, SOLICITUD APROBADA y SOLICITUD RECHAZADA no cuentan (ni de ni a). Compartida para todos.
+        const CLAVE_EST_VISTO = 'val_backlog_estado_visto';
+        let estVisto = {};
         const CLAVE_AUTOR = 'bkl_autor'; // localStorage: quién anota en este navegador (solo comodidad)
         const PLANTA_NOMBRE = { P1: 'ATE', P2: 'LIMA' };
         const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'setiembre', 'octubre', 'noviembre', 'diciembre'];
@@ -18088,8 +18094,34 @@ async function maybeAutoStartTour() {
         const respProd = (it) => responsableDeEstatus(estatusProd(it), responsablesEtapa.get(claveProd(it)));
         const SIN_ESTATUS = 'SIN';
         const SIN_DATO = '(vacío)';
-        const LETRA_TRAZ = { S: 'SOLICITADO', A: 'SOLICITUD APROBADA', R: 'SOLICITUD RECHAZADA', I: 'INGRESADO', U: 'AUTORIZADO', X: 'SUSPENDIDO', C: 'CANCELADO' };
-        const ESTADOS_PEND_CAMBIO = new Set(['SUSPENDIDO', 'SOLICITADO', 'INGRESADO', 'SOLICITUD APROBADA']);
+                // Compara el estado de hoy de cada pendiente con el último guardado y deja la alerta en it.cambio.
+        // Estos estados no generan alerta ni se guardan como «último estado» (Carlos, 26/11/2026).
+        const ESTADOS_SIN_ALERTA = new Set(['CANCELADO', 'SOLICITUD APROBADA', 'SOLICITUD RECHAZADA']);
+        async function revisarCambiosDeEstado(items) {
+            try { const g = await storeGet(CLAVE_EST_VISTO); estVisto = g && typeof g === 'object' && !Array.isArray(g) ? g : {}; } catch (e) { return; }
+            const porK = new Map();
+            items.forEach((it) => { const o = porK.get(it.k); if (!o || (Number(it.v.version) || 0) > (Number(o.v.version) || 0)) porK.set(it.k, it); });
+            let cambio = false;
+            const ahora = new Date().toISOString();
+            porK.forEach((it, k) => {
+                const cur = String(it.v.estado || '').trim().toUpperCase();
+                if (!cur || ESTADOS_SIN_ALERTA.has(cur)) return; // no cuentan: se espera al siguiente estado real
+                let r = estVisto[k];
+                if (!r && it.kSol && estVisto[it.kSol]) { r = { ...estVisto[it.kSol] }; delete estVisto[it.kSol]; cambio = true; } // la solicitud ya tiene código
+                if (!r) { estVisto[k] = { e: cur, ver: it.v.version || '' }; cambio = true; return; }
+                if (r.e !== cur) {
+                    if (!ESTADOS_SIN_ALERTA.has(r.e)) r.al = { de: r.e, a: cur, f: ahora };
+                    r.e = cur; r.ver = it.v.version || ''; estVisto[k] = r; cambio = true;
+                } else if (estVisto[k] !== r) { estVisto[k] = r; }
+            });
+            items.forEach((it) => { const r = estVisto[it.k]; it.cambio = r && r.al && r.al.a === String(it.v.estado || '').trim().toUpperCase() ? { de: r.al.de, a: r.al.a, f: dayjs(r.al.f) } : null; });
+            if (cambio) { try { await storeSet(CLAVE_EST_VISTO, estVisto); } catch (e) { /* se reintenta en el próximo cálculo */ } }
+        }
+        async function marcarCambioVisto(k) {
+            try { const g = await storeGet(CLAVE_EST_VISTO); if (g && typeof g === 'object' && !Array.isArray(g)) estVisto = g; } catch (e) { /* sigue con lo que hay */ }
+            if (estVisto[k] && estVisto[k].al) { delete estVisto[k].al; await storeSet(CLAVE_EST_VISTO, estVisto); }
+            const it = itemDe(k); if (it) it.cambio = null;
+        }
 
         // ---------- Programa de Producción (Ruta 1) ----------
         async function indicePrograma() {
@@ -18205,36 +18237,6 @@ async function maybeAutoStartTour() {
                 const fs = [v.fReg, v.fSol, fS].filter((d) => d && d.isValid && d.isValid()).sort((a, b) => b.valueOf() - a.valueOf());
                 return fs.length ? { f: fs[0], traz: false } : null;
             };
-            // Versiones de cada máster (para el cambio de estado).
-            const porMaster = new Map();
-            filas.forEach((f) => { const pl = StatusRmd.plantaDe(f.planta) || f.planta, c = String(f.codigo || '').trim(), ver = Number(f.version) || 0;
-                if (c) { const k = `${pl}|${c}`; if (!porMaster.has(k)) porMaster.set(k, []); porMaster.get(k).push({ ver, e: String(f.estado || '').trim().toUpperCase() }); } });
-            // Cambio de estado (pedido de Carlos, 26/11/2026): bandera cuando el RMD cambió de estado en el mes (Suspendido →
-            // Solicitado, Suspendido → Ingresado, Solicitado → Ingresado…). Sale de la Trazabilidad de SAP de la versión o, si es
-            // una versión nueva, del estado pendiente de la versión anterior del mismo máster.
-            const inicioMes = corte.startOf('month');
-            const cambioDe = (v) => {
-                const cur = String(v.estado || '').trim().toUpperCase();
-                const fija = mapEtapaAFija(normalizeEtapa(v.etapa || ''));
-                const t = traz && traz.items && fija ? (traz.items[`${v.codigo || ''}|${v.sol || ''}|${v.version}|${fija}`] || []) : [];
-                const ev = t.filter((y) => Number(y[0]) && LETRA_TRAZ[y[1]]).sort((a, b) => a[0] - b[0]);
-                let c = null;
-                if (ev.length > 1) {
-                    const ult = ev[ev.length - 1];
-                    let j = ev.length - 2; while (j >= 0 && ev[j][1] === ult[1]) j--;
-                    if (j >= 0) c = { de: LETRA_TRAZ[ev[j][1]], a: cur, f: dayjs(ult[0] * 1000) };
-                }
-                if (!c && v.codigo) {
-                    const ant = (porMaster.get(`${v.planta}|${String(v.codigo).trim()}`) || []).filter((x) => x.ver < v.version).sort((a, b) => b.ver - a.ver)[0];
-                    if (ant && ESTADOS_PEND_CAMBIO.has(ant.e) && ant.e !== cur) {
-                        const f = ev.length ? dayjs(ev[0][0] * 1000) : (v.fSol || v.fReg);
-                        if (f && f.isValid && f.isValid()) c = { de: ant.e, a: cur, f, verAnt: ant.ver };
-                    }
-                }
-                if (!c || c.de === c.a || c.f.isBefore(inicioMes)) return null;
-                c.sig = `${c.de}>${c.a}>${c.f.format('YYYYMMDD')}`;
-                return c;
-            };
             const items = bk.pend.map((x) => {
                 const v = x.v, et = etapaDe(v);
                 const base = x.tipo === 'Suspendido' ? x.fS : x.tipo === 'Solicitado' ? (v.fSol || v.fReg) : v.fReg;
@@ -18243,9 +18245,10 @@ async function maybeAutoStartTour() {
                 return { k: claveDe(v), kSol, v, tipo: x.tipo, m: x.m, nuevo: x.m === bk.mes, etapa: et, fS: x.fS || null, base: base || null,
                     dias: base ? corte.diff(base, 'day') : null, porque: x.porque, prio: x.prio || '', prog: pr,
                     seccion: secc.get(`${v.planta}|R${String(v.codigo || '').trim()}|${v.version}`) || secc.get(`${v.planta}|S${String(v.sol || '').trim()}|${v.version}`) || '',
-                    ult: ultimaTraz(v, x.fS || null), cambio: cambioDe(v) };
+                    ult: ultimaTraz(v, x.fS || null), cambio: null };
             });
             items.forEach((it) => { it.sug = sugerir(it); it.cc = CcBacklog.motivos(it.v, it.tipo); });
+            await revisarCambiosDeEstado(items);
             // Autorizados del backlog: los autorizados del mes en SAP (todos venían de esta lista: backlog o solicitud del mes) y
             // los autorizados a mano; se suman a lo guardado y nunca se borran.
             try { const ds = await storeGet(CLAVE_AUT_DESDE); autDesde = ds && typeof ds.d === 'string' ? ds.d : ''; } catch (err) { /* queda la de antes */ }
@@ -18367,7 +18370,7 @@ async function maybeAutoStartTour() {
                 ? `<select data-bkl-resp-sel="${k}" class="etapa-estatus-select${resp ? '' : ' etapa-estatus-select--alerta'}" title="Control de cambio: elige si el responsable es ASC o PRO">${['', 'ASC', 'PRO'].map((r) => `<option value="${r}"${r === resp ? ' selected' : ''}>${r || 'Elegir...'}</option>`).join('')}</select>`
                 : `<span class="etapa-responsable-auto" title="Responsable asignado automáticamente según el Estatus">${esc(resp || '—')}</span>`;
             const obs = String(v.obs || '').trim();
-            const ult = it.ult, cb = it.cambio && !(n && n.cv === it.cambio.sig) ? it.cambio : null;
+            const ult = it.ult, cb = it.cambio;
             const comp = compDe(n);
             return `<tr class="bkl-tr${it.nuevo ? ' es-nuevo' : ' es-bk'}${man ? ' es-manual' : ''}${cb ? ' con-cambio' : ''}" data-k="${k}">
                 <td class="pl"><span class="bkl-orden">${i + 1}</span><b>${PLANTA_NOMBRE[v.planta]}</b></td>
@@ -18376,7 +18379,7 @@ async function maybeAutoStartTour() {
                     <div class="bkl-meta">${codigo}${v.codDef ? ` · ${esc(v.codDef)}` : ''}</div>
                     <div class="bkl-etiquetas">${it.nuevo ? `<span class="bkl-sticker nuevo" title="Pendiente que entró este mes (${esc(nombreMes(modelo.mes))})">Solicitud del mes</span>` : `<span class="bkl-sticker bk" title="Pendiente desde ${esc(nombreMes(it.m))}. ${esc(it.porque || '')}">Backlog</span>`}${it.prog ? `<span class="bkl-sticker prog" title="${esc(progTip)}">Programa</span>` : ''}${man ? '<span class="bkl-ok">Autorizado a mano</span>' : ''}${htmlChipsCc(it)}</div></td>
                 <td class="etapa">${esc(it.etapa || '—')}</td>
-                <td class="est-sap">${cb ? `<div class="bkl-cambio" title="Cambió de estado en SAP el ${fmt(cb.f)}${cb.verAnt ? ` (la versión ${esc(cb.verAnt)} estaba ${esc(cb.de)})` : ''}"><span>Cambió: ${esc(cb.de)} → ${esc(cb.a)}</span><button type="button" data-bkl-visto="${k}" title="Quitar la alerta">Visto</button></div>` : ''}
+                <td class="est-sap">${cb ? `<button type="button" class="bkl-cambio" data-bkl-visto="${k}" title="Cambió de ${esc(cb.de)} a ${esc(cb.a)} (detectado el ${fmt(cb.f)}). Clic para marcar como visto.">Antes ${esc(cb.de)}</button>` : ''}
                     <span class="bkl-tipo ${it.tipo === 'Ingresado' ? 'ing' : it.tipo === 'Solicitado' ? 'sol' : 'sus'}">${esc(String(v.estado || '').toUpperCase())}</span>
                     <div class="bkl-ult">${ult ? `<span title="${ult.traz ? 'Última fecha de la Trazabilidad de SAP' : 'Sin cambios en la Trazabilidad leída: fecha de registro, solicitud o suspensión del maestro de SAP'}">${fmt(ult.f)}${ult.traz ? '' : ' <span class="pie">(maestro)</span>'}</span>` : '—'}${it.dias !== null ? `<div class="pie">${plural(it.dias, 'día', 'días')} pendiente</div>` : ''}</div></td>
                 <td class="ingreso"><div class="bkl-ing">
@@ -18767,7 +18770,7 @@ async function maybeAutoStartTour() {
                 if (d.bklLimpiar !== undefined) { limpiarFiltros(); pintar(); return; }
                 if (d.bklMas !== undefined) { vista.mostrar += POR_PAGINA; pintar(); return; }
                 if (d.bklAutMas !== undefined) { autVer += 60; pintar(); return; }
-                if (d.bklVisto) { const it = itemDe(d.bklVisto); if (it && it.cambio) escribir(it, { cv: it.cambio.sig }, 'Visto el cambio de estado', leerAutor() || '').then(pintar); }
+                if (d.bklVisto) { marcarCambioVisto(d.bklVisto).then(pintar); }
             });
             cont.addEventListener('change', (ev) => {
                 const s = ev.target.closest('[data-bkl-select]');
@@ -18819,6 +18822,7 @@ async function maybeAutoStartTour() {
             try { const g = await storeGet(CLAVE_NOTAS); notas = g && typeof g === 'object' && !Array.isArray(g) ? g : {}; } catch (e) { return; }
             try { const a = await storeGet(CLAVE_AUT); if (a && typeof a === 'object' && !Array.isArray(a)) autAcum = a; } catch (e) { /* queda lo que había */ }
             try { const ds = await storeGet(CLAVE_AUT_DESDE); if (ds && typeof ds.d === 'string') autDesde = ds.d; } catch (e) { /* queda la de antes */ }
+            try { const ev = await storeGet(CLAVE_EST_VISTO); if (ev && typeof ev === 'object' && !Array.isArray(ev)) { estVisto = ev; if (modelo) modelo.items.forEach((it) => { const r = estVisto[it.k]; it.cambio = r && r.al && r.al.a === String(it.v.estado || '').trim().toUpperCase() ? { de: r.al.de, a: r.al.a, f: dayjs(r.al.f) } : null; }); } } catch (e) { /* queda lo que había */ }
             if (modelo && currentTab === 'backlog' && !abierto && !escribiendoNota()) pintar();
         }
         function recargarPronto() {
@@ -18840,7 +18844,7 @@ async function maybeAutoStartTour() {
             const cab = CAB_XLS;
             const d = (x) => (x && x.isValid && x.isValid() ? new Date(Date.UTC(x.year(), x.month(), x.date())) : '');
             const filas = lista.map((x) => {
-                const it = x.it, v = it.v, n = notaDe(it) || {}, cb = it.cambio && n.cv !== it.cambio.sig ? it.cambio : null;
+                const it = x.it, v = it.v, n = notaDe(it) || {}, cb = it.cambio;
                 return [PLANTA_NOMBRE[v.planta], it.seccion || '', v.desc || '', v.codigo || (v.sol ? `Solicitud ${v.sol}` : ''), v.version || '', it.etapa || '', String(v.estado || '').toUpperCase(),
                     cb ? `${cb.de} → ${cb.a} (${fmt(cb.f)})` : '', it.ult ? d(it.ult.f) : '', n.ui || '', n.c ? d(dayjs(n.c + 'T00:00:00')) : '', n.fi ? d(dayjs(n.fi + 'T00:00:00')) : '',
                     estatusProd(it), respProd(it), v.obs || '', n.t || '', it.k];
