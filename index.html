@@ -18067,7 +18067,7 @@ async function maybeAutoStartTour() {
         let abierto = '';           // clave del pendiente con la nota abierta
         let recargaTimer = null;
         const grupos = { prog: false, manual: false };   // (ya sin grupos plegables desde el 26/11/2026)
-        const vista = { planta: '', desc: '', usuario: '', comp: '', area: '', sap: '', etapa: '', resp: '', conNota: '', tipo: '', nuevo: false, arrastre: false, programa: false, sinNota: false, vencidos: false, estado: '', cc: '', q: '', orden: 'excel', mostrar: POR_PAGINA };
+        const vista = { planta: '', desc: '', usuario: '', comp: '', cambio: '', area: '', sap: '', etapa: '', resp: '', conNota: '', tipo: '', nuevo: false, arrastre: false, programa: false, sinNota: false, vencidos: false, estado: '', cc: '', q: '', orden: 'excel', mostrar: POR_PAGINA };
         let ccAbierto = true;      // tabla de CC pendientes desplegada
 
         const esc = (t) => String(t === null || t === undefined ? '' : t).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -18110,11 +18110,11 @@ async function maybeAutoStartTour() {
                 if (!r && it.kSol && estVisto[it.kSol]) { r = { ...estVisto[it.kSol] }; delete estVisto[it.kSol]; cambio = true; } // la solicitud ya tiene código
                 if (!r) { estVisto[k] = { e: cur, ver: it.v.version || '' }; cambio = true; return; }
                 if (r.e !== cur) {
-                    if (!ESTADOS_SIN_ALERTA.has(r.e)) r.al = { de: r.e, a: cur, f: ahora };
+                    if (!ESTADOS_SIN_ALERTA.has(r.e)) { r.al = { de: r.e, a: cur, f: ahora }; r.uc = { ...r.al }; }
                     r.e = cur; r.ver = it.v.version || ''; estVisto[k] = r; cambio = true;
                 } else if (estVisto[k] !== r) { estVisto[k] = r; }
             });
-            items.forEach((it) => { const r = estVisto[it.k]; it.cambio = r && r.al && r.al.a === String(it.v.estado || '').trim().toUpperCase() ? { de: r.al.de, a: r.al.a, f: dayjs(r.al.f) } : null; });
+            items.forEach((it) => { const r = estVisto[it.k]; it.cambio = r && r.al && r.al.a === String(it.v.estado || '').trim().toUpperCase() ? { de: r.al.de, a: r.al.a, f: dayjs(r.al.f) } : null; it.ucambio = r && r.uc ? { de: r.uc.de, a: r.uc.a, f: dayjs(r.uc.f) } : null; });
             if (cambio) { try { await storeSet(CLAVE_EST_VISTO, estVisto); } catch (e) { /* se reintenta en el próximo cálculo */ } }
         }
         async function marcarCambioVisto(k) {
@@ -18301,6 +18301,16 @@ async function maybeAutoStartTour() {
         const compDe = (n) => { const c = n && n.c ? dayjs(n.c + 'T00:00:00') : null; return !c || !c.isValid() ? 'sin' : c.isBefore(hoy()) ? 'vencido' : 'con'; };
         const descDe = (it) => it.v.desc || (it.prog && it.prog.producto) || SIN_DATO;
         const en = (campo, val) => { const l = valoresDe(campo); return !l.length || l.includes(val); };
+        // Filtro «Cambio de estado» (Carlos, 26/11/2026): con alerta sin ver, o cambió hace poco (aunque ya se marcó Visto).
+        function cambioCumple(it, x) {
+            const uc = it.ucambio, dias = uc && uc.f && uc.f.isValid() ? dayjs().startOf('day').diff(uc.f.startOf('day'), 'day') : null;
+            if (x === 'alerta') return !!it.cambio;
+            if (x === 'hoy') return dias === 0;
+            if (x === '7') return dias !== null && dias < 7;
+            if (x === '30') return dias !== null && dias < 30;
+            if (x === 'sin') return dias === null;
+            return false;
+        }
         function pasaFiltros(it, sinEstado) {
             if (!en('planta', it.v.planta)) return false;
             if (vista.tipo && it.tipo !== vista.tipo) return false;
@@ -18315,6 +18325,7 @@ async function maybeAutoStartTour() {
             if (!en('desc', descDe(it))) return false;
             if (!en('usuario', String((n && n.ui) || '').trim().toUpperCase() || SIN_DATO)) return false;
             if (!en('comp', compDe(n))) return false;
+            if (valoresDe('cambio').length && !valoresDe('cambio').some((x) => cambioCumple(it, x))) return false;
             if (!en('area', it.seccion || SIN_DATO)) return false;
             if (!en('sap', String(it.v.estado || '').toUpperCase())) return false;
             if (!en('etapa', it.etapa || SIN_DATO)) return false;
@@ -18432,6 +18443,7 @@ async function maybeAutoStartTour() {
                 ${sel('area', 'Área', unicos((it) => it.seccion || SIN_DATO).map(id))}
                 ${sel('usuario', 'Usuario de ingreso', unicos((it) => String((notaDe(it) || {}).ui || '').trim().toUpperCase() || SIN_DATO).map(id))}
                 ${sel('comp', 'Fecha de compromiso', [['con', 'Con fecha'], ['vencido', 'Vencida'], ['sin', 'Sin fecha']])}
+                ${sel('cambio', 'Cambio de estado', [['alerta', 'Con alerta (sin ver)'], ['hoy', 'Cambió hoy'], ['7', 'Cambió en los últimos 7 días'], ['30', 'Cambió en los últimos 30 días'], ['sin', 'Sin cambios registrados']])}
                 ${sel('sap', 'Estado', unicos((it) => String(it.v.estado || '').toUpperCase()).filter(Boolean).map(id))}
                 ${sel('etapa', 'Etapa', unicos((it) => it.etapa || SIN_DATO).map(id))}
                 ${sel('estado', 'Estatus', [...ESTATUS_ETAPA_OPCIONES.map(id), [SIN_ESTATUS, 'Sin estatus']])}
@@ -18442,7 +18454,7 @@ async function maybeAutoStartTour() {
         function htmlTabla(vis) {
             const th = (txt, campo, cls) => `<th${cls ? ` class="${cls}"` : ''}${campo ? ` data-filtro="bklF-${campo}"` : ''}>${txt}</th>`;
             return `<div class="bkl-tabla-scroll"><table class="bkl-tabla">
-                <thead><tr>${th('Planta', 'planta')}${th('Área', 'area')}${th('Descripción', 'desc')}${th('Etapa', 'etapa')}${th('Estado', 'sap', 'est-sap')}${th('Usuario de ingreso · Fecha de compromiso · Fecha de ingreso', 'usuario,bklF-comp', 'ingreso')}${th('Estatus', 'estado')}${th('Responsable', 'resp')}${th('Observación (de SAP)')}${th('Nota', 'conNota', 'nota')}</tr></thead>
+                <thead><tr>${th('Planta', 'planta')}${th('Área', 'area')}${th('Descripción', 'desc')}${th('Etapa', 'etapa')}${th('Estado', 'cambio,bklF-sap', 'est-sap')}${th('Usuario de ingreso · Fecha de compromiso · Fecha de ingreso', 'usuario,bklF-comp', 'ingreso')}${th('Estatus', 'estado')}${th('Responsable', 'resp')}${th('Observación (de SAP)')}${th('Nota', 'conNota', 'nota')}</tr></thead>
                 <tbody>${vis.map((x, i) => htmlFila(x, i)).join('')}</tbody></table></div>`;
         }
         function htmlNota(it) {
@@ -18585,7 +18597,7 @@ async function maybeAutoStartTour() {
             const orden = vista.orden === 'prio' ? ordenar(filtrados) : ordenarExcel(filtrados), vis = orden.slice(0, vista.mostrar);
             const nPl = (l, p) => l.filter((it) => it.v.planta === p).length, nBk = filtrados.filter((it) => !it.nuevo).length;
             const man = pendTodos.filter(manual).length;
-            const hayFiltro = valoresDe('planta').length || valoresDe('desc').length || valoresDe('usuario').length || valoresDe('comp').length || valoresDe('area').length || valoresDe('sap').length || valoresDe('etapa').length || valoresDe('resp').length || valoresDe('conNota').length || valoresDe('estado').length || vista.tipo || vista.nuevo || vista.arrastre || vista.programa || vista.sinNota || vista.vencidos || vista.estado || vista.cc || vista.q;
+            const hayFiltro = valoresDe('planta').length || valoresDe('desc').length || valoresDe('usuario').length || valoresDe('comp').length || valoresDe('cambio').length || valoresDe('area').length || valoresDe('sap').length || valoresDe('etapa').length || valoresDe('resp').length || valoresDe('conNota').length || valoresDe('estado').length || vista.tipo || vista.nuevo || vista.arrastre || vista.programa || vista.sinNota || vista.vencidos || vista.estado || vista.cc || vista.q;
             const foco = document.activeElement && document.activeElement.matches && document.activeElement.matches('[data-bkl-buscar]');
             const sinRmd = modelo.sinRmdProg.P1 + modelo.sinRmdProg.P2;
             cont.innerHTML = `
@@ -18715,7 +18727,7 @@ async function maybeAutoStartTour() {
 
         // ---------- Eventos ----------
         let buscarTimer = null;
-        const limpiarFiltros = () => Object.assign(vista, { planta: '', desc: '', usuario: '', comp: '', area: '', sap: '', etapa: '', resp: '', conNota: '', tipo: '', nuevo: false, arrastre: false, programa: false, sinNota: false, vencidos: false, estado: '', cc: '', q: '', mostrar: POR_PAGINA });
+        const limpiarFiltros = () => Object.assign(vista, { planta: '', desc: '', usuario: '', comp: '', cambio: '', area: '', sap: '', etapa: '', resp: '', conNota: '', tipo: '', nuevo: false, arrastre: false, programa: false, sinNota: false, vencidos: false, estado: '', cc: '', q: '', mostrar: POR_PAGINA });
         // Nota única por RMD (26/11/2026): siempre visible en la fila y se guarda sola (al dejar de escribir o al salir del cuadro).
         const notaTimers = new Map();
         const escribiendoNota = () => notaTimers.size > 0 || !!(document.activeElement && document.activeElement.matches && document.activeElement.matches('[data-bkl-nota-auto]'));
@@ -18822,7 +18834,7 @@ async function maybeAutoStartTour() {
             try { const g = await storeGet(CLAVE_NOTAS); notas = g && typeof g === 'object' && !Array.isArray(g) ? g : {}; } catch (e) { return; }
             try { const a = await storeGet(CLAVE_AUT); if (a && typeof a === 'object' && !Array.isArray(a)) autAcum = a; } catch (e) { /* queda lo que había */ }
             try { const ds = await storeGet(CLAVE_AUT_DESDE); if (ds && typeof ds.d === 'string') autDesde = ds.d; } catch (e) { /* queda la de antes */ }
-            try { const ev = await storeGet(CLAVE_EST_VISTO); if (ev && typeof ev === 'object' && !Array.isArray(ev)) { estVisto = ev; if (modelo) modelo.items.forEach((it) => { const r = estVisto[it.k]; it.cambio = r && r.al && r.al.a === String(it.v.estado || '').trim().toUpperCase() ? { de: r.al.de, a: r.al.a, f: dayjs(r.al.f) } : null; }); } } catch (e) { /* queda lo que había */ }
+            try { const ev = await storeGet(CLAVE_EST_VISTO); if (ev && typeof ev === 'object' && !Array.isArray(ev)) { estVisto = ev; if (modelo) modelo.items.forEach((it) => { const r = estVisto[it.k]; it.cambio = r && r.al && r.al.a === String(it.v.estado || '').trim().toUpperCase() ? { de: r.al.de, a: r.al.a, f: dayjs(r.al.f) } : null; it.ucambio = r && r.uc ? { de: r.uc.de, a: r.uc.a, f: dayjs(r.uc.f) } : null; }); } } catch (e) { /* queda lo que había */ }
             if (modelo && currentTab === 'backlog' && !abierto && !escribiendoNota()) pintar();
         }
         function recargarPronto() {
