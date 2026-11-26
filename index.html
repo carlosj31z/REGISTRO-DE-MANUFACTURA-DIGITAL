@@ -965,6 +965,8 @@
         .pfc-ops button:hover, .pfc-ops button:focus-visible { background: rgb(var(--info-rgb) / 0.12); outline: none; }
         .pfc-ops button.is-activo { background: rgb(var(--info-rgb) / 0.18); border-color: rgb(var(--info-rgb) / 0.5); font-weight: 650; }
         .pfc-ops button .pill-count { margin-left: 6px; opacity: .7; }
+        .pfc-ops button .pfc-check { display: inline-block; width: 14px; height: 14px; margin-right: 6px; vertical-align: -2px; border: 1px solid var(--slate-500, #64748b); border-radius: 3px; font-size: 11px; line-height: 12px; text-align: center; }
+        .pfc-ops button.is-activo .pfc-check { border-color: rgb(var(--info-rgb)); background: rgb(var(--info-rgb) / 0.85); color: #fff; }
         /* Autorizados agrupados por fecha de autorización */
         .fila-grupo-aut > td { padding: 4px 0 !important; border-bottom: 1px solid rgb(var(--ok-rgb) / 0.22); }
         .gaut-btn { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; width: 100%; text-align: left; padding: 7px 10px; border-radius: 8px; color: var(--slate-300); background: rgb(var(--ok-rgb) / 0.06); border: 1px solid rgb(var(--ok-rgb) / 0.2); cursor: pointer; transition: background-color .15s; }
@@ -9258,7 +9260,16 @@ async function downloadPlanProduccionFromCloud() {
                 const esc = escapeHtmlRmdConfig, acciones = [];
                 const secciones = controles(th).map(el => {
                     let tit, ops;
-                    if (el.tagName === 'SELECT') {
+                    if (el.tagName === 'SELECT' && el.multiple) {
+                        // Varios valores a la vez (BACKLOG): «Todos» limpia; cada opción se marca o desmarca y el popup queda abierto.
+                        // La tabla se repinta en cada cambio, así que se busca el <select> vigente por su id.
+                        const o = Array.from(el.options), elegidos = o.filter(x => x.selected && x.value);
+                        tit = (o[0] && o[0].text.split(':')[0]) || nombre(th);
+                        ops = o.map((op, i) => ({ multi: true, todos: i === 0, txt: i === 0 ? (op.text.split(':')[1] || 'Todos').trim().replace(/^./, c => c.toUpperCase()) : op.text, on: i === 0 ? !elegidos.length : op.selected,
+                            fn: () => { const cur = (el.id && document.getElementById(el.id)) || el; const opc = Array.from(cur.options);
+                                if (i === 0) opc.forEach(x => { x.selected = false; }); else { const x = opc.find(z => z.value === op.value); if (x) x.selected = !x.selected; }
+                                cur.dispatchEvent(new Event('change', { bubbles: true })); } }));
+                    } else if (el.tagName === 'SELECT') {
                         const o = Array.from(el.options);
                         tit = (o[0] && o[0].text.split(':')[0]) || nombre(th);
                         ops = o.map((op, i) => ({ txt: i === 0 ? (op.text.split(':')[1] || 'Todos').trim().replace(/^./, c => c.toUpperCase()) : op.text, on: el.value === op.value,
@@ -9267,7 +9278,7 @@ async function downloadPlanProduccionFromCloud() {
                         tit = el.dataset.titulo || 'Mostrar';
                         ops = botonesDe(el).map(b => ({ txt: b.textContent.replace(/\s+/g, ' ').trim(), on: b.classList.contains('active'), fn: () => b.click() }));
                     }
-                    return `<div class="pfc-sec"><div class="pfc-tit">${esc(tit)}</div><div class="pfc-ops">${ops.map(o => { acciones.push(o.fn); return `<button type="button" data-i="${acciones.length - 1}" class="${o.on ? 'is-activo' : ''}">${esc(o.txt)}</button>`; }).join('')}</div></div>`;
+                    return `<div class="pfc-sec"><div class="pfc-tit">${esc(tit)}</div><div class="pfc-ops">${ops.map(o => { acciones.push(o.fn); return `<button type="button" data-i="${acciones.length - 1}"${o.multi ? ` data-multi="${o.todos ? 'todos' : '1'}" aria-pressed="${o.on}"` : ''} class="${o.on ? 'is-activo' : ''}">${o.multi ? `<span class="pfc-check" aria-hidden="true">${o.on ? '&#10003;' : ''}</span>` : ''}${esc(o.txt)}</button>`; }).join('')}</div></div>`;
                 }).join('');
                 const p = document.createElement('div');
                 p.id = 'popupFiltroCabecera';
@@ -9277,7 +9288,16 @@ async function downloadPlanProduccionFromCloud() {
                 p.setAttribute('aria-label', `Filtrar por ${nombre(th)}`);
                 p.innerHTML = secciones;
                 document.body.appendChild(p);
-                p.querySelectorAll('button[data-i]').forEach(b => b.addEventListener('click', () => { cerrar(); acciones[+b.dataset.i](); refrescar(); }));
+                p.querySelectorAll('button[data-i]').forEach(b => b.addEventListener('click', (e) => {
+                    if (!b.dataset.multi) { cerrar(); acciones[+b.dataset.i](); refrescar(); return; }
+                    e.stopPropagation();
+                    acciones[+b.dataset.i]();
+                    const marcar = (x, on) => { x.classList.toggle('is-activo', on); x.setAttribute('aria-pressed', String(on)); const c = x.querySelector('.pfc-check'); if (c) c.innerHTML = on ? '&#10003;' : ''; };
+                    const sec = b.closest('.pfc-ops'), todos = sec.querySelector('[data-multi="todos"]'), resto = Array.from(sec.querySelectorAll('[data-multi="1"]'));
+                    if (b === todos) resto.forEach(x => marcar(x, false)); else marcar(b, !b.classList.contains('is-activo'));
+                    marcar(todos, !resto.some(x => x.classList.contains('is-activo')));
+                    requestAnimationFrame(refrescar);
+                }));
                 const r = btn.getBoundingClientRect(), w = p.offsetWidth || 240, h = p.offsetHeight || 200;
                 p.style.left = Math.max(8, Math.min(r.left - 8, window.innerWidth - w - 8)) + 'px';
                 p.style.top = (r.bottom + 6 + h > window.innerHeight ? Math.max(8, r.top - h - 6) : r.bottom + 6) + 'px';
@@ -18171,8 +18191,11 @@ async function maybeAutoStartTour() {
         }
 
         // ---------- Filtros ----------
+        // Los filtros de cabecera permiten varios valores (26/11/2026): vista[campo] es '' (todos), un texto o una lista.
+        const valoresDe = (campo) => { const x = vista[campo]; return !x ? [] : Array.isArray(x) ? x : [x]; };
+        const en = (campo, val) => { const l = valoresDe(campo); return !l.length || l.includes(val); };
         function pasaFiltros(it, sinEstado) {
-            if (vista.planta && it.v.planta !== vista.planta) return false;
+            if (!en('planta', it.v.planta)) return false;
             if (vista.tipo && it.tipo !== vista.tipo) return false;
             if (vista.nuevo && !it.nuevo) return false;
             if (vista.arrastre && it.nuevo) return false;
@@ -18180,13 +18203,13 @@ async function maybeAutoStartTour() {
             const n = notaDe(it);
             if (vista.sinNota && estadoDe(it).m) return false;
             if (vista.vencidos && !vencido(n)) return false;
-            if (!sinEstado && vista.estado && (vista.estado === SIN_ESTATUS ? !!estadoDe(it).m : estadoDe(it).m !== vista.estado)) return false;
+            if (!sinEstado && !en('estado', estadoDe(it).m || SIN_ESTATUS)) return false;
             if (vista.cc && !(it.cc || []).includes(vista.cc)) return false;
-            if (vista.area && (it.seccion || SIN_DATO) !== vista.area) return false;
-            if (vista.sap && String(it.v.estado || '').toUpperCase() !== vista.sap) return false;
-            if (vista.etapa && (it.etapa || SIN_DATO) !== vista.etapa) return false;
-            if (vista.resp && (respProd(it) || SIN_DATO) !== vista.resp) return false;
-            if (vista.conNota && (vista.conNota === 'con') !== !!(n && n.t)) return false;
+            if (!en('area', it.seccion || SIN_DATO)) return false;
+            if (!en('sap', String(it.v.estado || '').toUpperCase())) return false;
+            if (!en('etapa', it.etapa || SIN_DATO)) return false;
+            if (!en('resp', respProd(it) || SIN_DATO)) return false;
+            if (!en('conNota', n && n.t ? 'con' : 'sin')) return false;
             if (vista.q) {
                 const q = vista.q.normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase();
                 const t = [it.v.desc, it.v.codigo, it.v.sol, it.v.codDef, it.etapa, it.seccion, it.v.obs, n && n.t, n && n.a, it.prog && it.prog.producto, ...(it.cc || []).filter(CcBacklog.esCc)].join(' ').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase();
@@ -18258,7 +18281,7 @@ async function maybeAutoStartTour() {
         let autVer = 60;
         function htmlAutorizados() {
             const lista = Object.entries(autAcum).map(([k, a]) => ({ k, ...a }))
-                .filter((a) => (!vista.planta || a.p === vista.planta) && (!vista.q || [a.d, a.cod, a.sol, a.et, a.sec, a.o, a.n].join(' ').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().includes(vista.q.normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase())))
+                .filter((a) => en('planta', a.p) && (!vista.q || [a.d, a.cod, a.sol, a.et, a.sec, a.o, a.n].join(' ').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().includes(vista.q.normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase())))
                 .sort((a, b) => String(b.fa || '').localeCompare(String(a.fa || '')));
             if (!lista.length) return '';
             const f = (x) => (x ? dayjs(x).format('DD/MM/YYYY') : '—'), vis = lista.slice(0, autVer);
@@ -18285,7 +18308,7 @@ async function maybeAutoStartTour() {
         // lee estos <select> ocultos (opciones sacadas de todos los pendientes) y al elegir dispara «change» → vista[campo].
         function htmlSelectsCabecera(items) {
             const unicos = (fn) => [...new Set(items.map(fn))].sort((a, b) => (a === SIN_DATO) - (b === SIN_DATO) || String(a).localeCompare(String(b), 'es'));
-            const sel = (campo, nombre, ops) => `<select id="bklF-${campo}" data-bkl-select="${campo}" tabindex="-1" aria-hidden="true"><option value="">${nombre}: todos</option>${ops.map(([val, txt]) => `<option value="${esc(val)}"${vista[campo] === val ? ' selected' : ''}>${esc(txt)}</option>`).join('')}</select>`;
+            const sel = (campo, nombre, ops) => `<select id="bklF-${campo}" data-bkl-select="${campo}" multiple tabindex="-1" aria-hidden="true"><option value="">${nombre}: todos</option>${ops.map(([val, txt]) => `<option value="${esc(val)}"${valoresDe(campo).includes(val) ? ' selected' : ''}>${esc(txt)}</option>`).join('')}</select>`;
             const id = (x) => [x, x];
             return `<div class="bkl-filtros-cab" hidden>
                 ${sel('planta', 'Planta', [['P1', 'ATE'], ['P2', 'LIMA']])}
@@ -18369,7 +18392,7 @@ async function maybeAutoStartTour() {
             const max = Math.max(1, ...filas.map((f) => f.n));
             return `<div class="bkl-panel">
                 <h3>Por estatus (los de Producción)</h3>
-                <div class="bkl-motivos">${filas.map((f) => `<button type="button" class="bkl-mot${vista.estado === f.m ? ' activo' : ''}" data-bkl-motivo="${esc(f.m)}" aria-pressed="${vista.estado === f.m}" title="${esc(`${f.m === SIN_ESTATUS ? 'Sin estatus' : f.m}: ${f.n}. Clic: filtrar`)}">
+                <div class="bkl-motivos">${filas.map((f) => `<button type="button" class="bkl-mot${valoresDe('estado').includes(f.m) ? ' activo' : ''}" data-bkl-motivo="${esc(f.m)}" aria-pressed="${valoresDe('estado').includes(f.m)}" title="${esc(`${f.m === SIN_ESTATUS ? 'Sin estatus' : f.m}: ${f.n}. Clic: filtrar`)}">
                     <span class="nom">${esc(f.m === SIN_ESTATUS ? 'Sin estatus' : f.m)}</span><span class="barra"><i style="width:${(f.n / max) * 100}%"></i></span><span class="n">${f.n}</span></button>`).join('')}</div>
             </div>`;
         }
@@ -18389,7 +18412,7 @@ async function maybeAutoStartTour() {
         }
         let ccSit = '';
         function htmlCcPendientes(pend) {
-            const base = pend.filter((it) => !vista.planta || it.v.planta === vista.planta);
+            const base = pend.filter((it) => en('planta', it.v.planta));
             const cuenta = new Map();
             base.forEach((it) => (it.cc || []).forEach((k) => { const c = cuenta.get(k) || { n: 0, P1: 0, P2: 0 }; c.n++; c[it.v.planta] = (c[it.v.planta] || 0) + 1; cuenta.set(k, c); }));
             const filas = [...cuenta.entries()].map(([k, c]) => ({ k, c, f: CcBacklog.ficha(k) })).sort((a, b) => b.c.n - a.c.n || a.k.localeCompare(b.k));
@@ -18418,7 +18441,7 @@ async function maybeAutoStartTour() {
             return `<section class="bkl-ccsec">
                 <button type="button" class="bkl-grupo-cab" data-bkl-cc-tabla aria-expanded="${ccAbierto}">
                     <span class="flecha" aria-hidden="true">${ccAbierto ? '▾' : '▸'}</span><b>Por qué siguen pendientes: controles de cambio y motivos</b><span class="n">${cc.length} CC/NC</span>
-                    <span class="sub">${plural(rmdCc, 'RMD espera', 'RMD esperan')} un CC o NC con código${vista.planta ? ` en ${PLANTA_NOMBRE[vista.planta]}` : ''} · el resto, por motivos sin código · solo lectura, no escribe en SAP</span>
+                    <span class="sub">${plural(rmdCc, 'RMD espera', 'RMD esperan')} un CC o NC con código${valoresDe('planta').length ? ` en ${valoresDe('planta').map((p) => PLANTA_NOMBRE[p]).join(' y ')}` : ''} · el resto, por motivos sin código · solo lectura, no escribe en SAP</span>
                 </button>
                 ${ccAbierto ? `<p class="bkl-leer">Sale de la <b>observación de SAP</b> de cada pendiente: la línea de la suspensión o la que dice qué falta. La ficha de cada CC se armó con el Excel «1.-CC-NC-DES Para actualizar RMD», los correos del CC y los RMD ya autorizados cuya observación <b>empieza</b> con el CC (referencias para copiar). <b>Situación</b>: Claro = se sabe cómo aplicarlo; Falta un dato = se sabe, pero falta algo (borrador, código, correo); En espera = depende de otra área; No sé cómo aplicarlo = hay que preguntar.</p>
                 <div class="bkl-ccsits" role="group" aria-label="Situación">${sitBtn('', 'Todas', null)}${porSit(filas).filter(([, n]) => n).map(([e, n]) => sitBtn(e, CcBacklog.SITUACION[e], n)).join('')}</div>
@@ -18443,7 +18466,7 @@ async function maybeAutoStartTour() {
             const orden = vista.orden === 'prio' ? ordenar(filtrados) : ordenarExcel(filtrados), vis = orden.slice(0, vista.mostrar);
             const nPl = (l, p) => l.filter((it) => it.v.planta === p).length, nBk = filtrados.filter((it) => !it.nuevo).length;
             const man = pendTodos.filter(manual).length;
-            const hayFiltro = vista.planta || vista.area || vista.sap || vista.etapa || vista.resp || vista.conNota || vista.tipo || vista.nuevo || vista.arrastre || vista.programa || vista.sinNota || vista.vencidos || vista.estado || vista.cc || vista.q;
+            const hayFiltro = valoresDe('planta').length || valoresDe('area').length || valoresDe('sap').length || valoresDe('etapa').length || valoresDe('resp').length || valoresDe('conNota').length || valoresDe('estado').length || vista.tipo || vista.nuevo || vista.arrastre || vista.programa || vista.sinNota || vista.vencidos || vista.estado || vista.cc || vista.q;
             const foco = document.activeElement && document.activeElement.matches && document.activeElement.matches('[data-bkl-buscar]');
             const sinRmd = modelo.sinRmdProg.P1 + modelo.sinRmdProg.P2;
             cont.innerHTML = `
@@ -18615,7 +18638,7 @@ async function maybeAutoStartTour() {
                 if (d.bklGrupo) { grupos[d.bklGrupo] = !grupos[d.bklGrupo]; pintar(); return; }
                 if (d.bklSet) { vista[d.bklSet] = d.valor; vista.mostrar = POR_PAGINA; pintar(); return; }
                 if (d.bklToggle) { const f = d.bklToggle; vista[f] = !vista[f]; if (vista[f] && f === 'nuevo') vista.arrastre = false; if (vista[f] && f === 'arrastre') vista.nuevo = false; vista.mostrar = POR_PAGINA; pintar(); return; }
-                if (d.bklMotivo) { vista.estado = vista.estado === d.bklMotivo ? '' : d.bklMotivo; vista.mostrar = POR_PAGINA; pintar(); const l = cont.querySelector('.bkl-filtros'); if (l) l.scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
+                if (d.bklMotivo) { const l0 = valoresDe('estado'); const l1 = l0.includes(d.bklMotivo) ? l0.filter((x) => x !== d.bklMotivo) : l0.concat(d.bklMotivo); vista.estado = l1.length ? l1 : ''; vista.mostrar = POR_PAGINA; pintar(); const l = cont.querySelector('.bkl-filtros'); if (l) l.scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
                 if (d.bklDato === 'cc') { ccAbierto = true; pintar(); const l = cont.querySelector('.bkl-ccsec'); if (l) l.scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
                 if (d.bklDato) {
                     const a = d.bklDato; limpiarFiltros();
@@ -18631,7 +18654,7 @@ async function maybeAutoStartTour() {
             });
             cont.addEventListener('change', (ev) => {
                 const s = ev.target.closest('[data-bkl-select]');
-                if (s) { vista[s.dataset.bklSelect] = s.value; vista.mostrar = POR_PAGINA; pintar(); return; }
+                if (s) { const vals = s.multiple ? Array.from(s.selectedOptions).map((o) => o.value).filter(Boolean) : null; vista[s.dataset.bklSelect] = vals ? (vals.length ? vals : '') : s.value; vista.mostrar = POR_PAGINA; pintar(); return; }
                 const e = ev.target.closest('[data-bkl-estatus]');
                 if (e) { cambiarEstatus(e.dataset.bklEstatus, e.value); return; }
                 const r = ev.target.closest('[data-bkl-resp-sel]');
