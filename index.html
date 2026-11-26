@@ -2836,6 +2836,8 @@
         #tab-backlog .bkl-ing label { display:flex; flex-direction:column; gap:1px; }
         #tab-backlog .bkl-ing label span { font-size:9.5px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; color:var(--slate-500); }
         #tab-backlog .bkl-ing .bkl-comp { height:28px; width:100%; }
+        #tab-backlog .bkl-desde { margin-left:auto; display:inline-flex; align-items:center; gap:6px; font-size:12px; font-weight:600; }
+        #tab-backlog .bkl-desde .bkl-comp { height:28px; }
         #tab-backlog .bkl-ing-ver { display:flex; flex-direction:column; gap:3px; font-size:11.5px; white-space:nowrap; }
         #tab-backlog .bkl-comp { font:inherit; font-size:12px; height:30px; padding:0 6px; border-radius:6px; border:1px solid var(--field-border); background:var(--field-bg); color:var(--field-text); }
         #tab-backlog .bkl-comp.vencido { border-color:rgb(var(--danger-rgb, 220 38 38)); color:rgb(var(--danger-rgb, 220 38 38)); font-weight:600; }
@@ -18015,6 +18017,9 @@ async function maybeAutoStartTour() {
         // Solo se agregan entradas; se quita una solo si se deshace una autorización a mano que SAP aún no registró.
         const CLAVE_AUT = 'val_backlog_autorizados';
         let autAcum = {};
+        // Desde qué fecha se cuentan los autorizados del backlog (la elige el usuario; compartida). Vacía = todos.
+        const CLAVE_AUT_DESDE = 'val_backlog_aut_desde';
+        let autDesde = '';
         const CLAVE_AUTOR = 'bkl_autor'; // localStorage: quién anota en este navegador (solo comodidad)
         const PLANTA_NOMBRE = { P1: 'ATE', P2: 'LIMA' };
         const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'setiembre', 'octubre', 'noviembre', 'diciembre'];
@@ -18243,6 +18248,7 @@ async function maybeAutoStartTour() {
             items.forEach((it) => { it.sug = sugerir(it); it.cc = CcBacklog.motivos(it.v, it.tipo); });
             // Autorizados del backlog: los autorizados del mes en SAP (todos venían de esta lista: backlog o solicitud del mes) y
             // los autorizados a mano; se suman a lo guardado y nunca se borran.
+            try { const ds = await storeGet(CLAVE_AUT_DESDE); autDesde = ds && typeof ds.d === 'string' ? ds.d : ''; } catch (err) { /* queda la de antes */ }
             try {
                 const g = await storeGet(CLAVE_AUT);
                 autAcum = g && typeof g === 'object' && !Array.isArray(g) ? g : {};
@@ -18388,16 +18394,16 @@ async function maybeAutoStartTour() {
         let autVer = 60;
         function htmlAutorizados() {
             const lista = Object.entries(autAcum).map(([k, a]) => ({ k, ...a }))
-                .filter((a) => en('planta', a.p) && (!vista.q || [a.d, a.cod, a.sol, a.et, a.sec, a.o, a.n].join(' ').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().includes(vista.q.normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase())))
+                .filter((a) => en('planta', a.p) && (!autDesde || (a.fa && dayjs(a.fa).format('YYYY-MM-DD') >= autDesde)) && (!vista.q || [a.d, a.cod, a.sol, a.et, a.sec, a.o, a.n].join(' ').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().includes(vista.q.normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase())))
                 .sort((a, b) => String(b.fa || '').localeCompare(String(a.fa || '')));
-            if (!lista.length) return '';
+            if (!lista.length && !autDesde) return '';
             const f = (x) => (x ? dayjs(x).format('DD/MM/YYYY') : '—'), vis = lista.slice(0, autVer);
             const nP = (p) => lista.filter((a) => a.p === p).length;
             return `<section class="bkl-autsec">
-                <h3>Autorizados del backlog <span class="n">${lista.length}</span><span class="sub">ATE ${nP('P1')} · LIMA ${nP('P2')} · se van sumando y no se borran · los más recientes primero</span></h3>
+                <h3>Autorizados del backlog <span class="n">${lista.length}</span><span class="sub">ATE ${nP('P1')} · LIMA ${nP('P2')}</span><label class="bkl-desde">Contar desde <input type="date" class="bkl-comp" data-bkl-aut-desde value="${esc(autDesde)}"></label></h3>
                 <div class="bkl-tabla-scroll"><table class="bkl-tabla verde">
                     <thead><tr><th>Planta</th><th>Área</th><th>Descripción</th><th>Etapa</th><th>Estado</th><th>Usuario de ingreso · Fecha de compromiso · Fecha de ingreso</th><th>Estatus</th><th>Autorizado por</th><th>Observación (de SAP)</th><th>Nota</th></tr></thead>
-                    <tbody>${vis.map((a) => { const o = String(a.o || ''); return `<tr>
+                    <tbody>${vis.length ? '' : `<tr><td colspan="10" class="pie">Ningún autorizado del backlog desde el ${esc(dayjs(autDesde).format('DD/MM/YYYY'))}.</td></tr>`}${vis.map((a) => { const o = String(a.o || ''); return `<tr>
                         <td class="pl"><b>${PLANTA_NOMBRE[a.p] || esc(a.p)}</b></td>
                         <td class="sec">${esc(a.sec || '—')}</td>
                         <td class="desc"><b>${esc(a.d || '(sin descripción)')}</b><div class="bkl-meta">${a.cod ? `RMD ${esc(a.cod)}` : `Solicitud ${esc(a.sol)}`} v${esc(a.ver)}${a.org ? ` · ${esc(a.org === 'BACKLOG' ? 'Backlog' : 'Solicitud del mes')}` : ''}</div></td>
@@ -18774,6 +18780,7 @@ async function maybeAutoStartTour() {
                 if (ui) { const it = itemDe(ui.dataset.bklUi); if (it) escribir(it, { ui: ui.value.trim() }, 'Usuario de ingreso', leerAutor() || '').then(pintar); return; }
                 const fi = ev.target.closest('[data-bkl-fi]');
                 if (fi) { const it = itemDe(fi.dataset.bklFi); if (it) escribir(it, { fi: fi.value || '' }, 'Fecha de ingreso', leerAutor() || '').then(pintar); return; }
+                if (ev.target.matches('[data-bkl-aut-desde]')) { autDesde = ev.target.value || ''; autVer = 60; pintar(); storeSet(CLAVE_AUT_DESDE, { d: autDesde }); return; }
                 const c = ev.target.closest('[data-bkl-comp]');
                 if (c) { const it = itemDe(c.dataset.bklComp); if (it) escribir(it, { c: c.value || '' }, c.value ? 'Fecha de compromiso' : 'Fecha de compromiso borrada', leerAutor() || '').then(pintar); }
             });
@@ -18811,6 +18818,7 @@ async function maybeAutoStartTour() {
         async function recargarNotas() {
             try { const g = await storeGet(CLAVE_NOTAS); notas = g && typeof g === 'object' && !Array.isArray(g) ? g : {}; } catch (e) { return; }
             try { const a = await storeGet(CLAVE_AUT); if (a && typeof a === 'object' && !Array.isArray(a)) autAcum = a; } catch (e) { /* queda lo que había */ }
+            try { const ds = await storeGet(CLAVE_AUT_DESDE); if (ds && typeof ds.d === 'string') autDesde = ds.d; } catch (e) { /* queda la de antes */ }
             if (modelo && currentTab === 'backlog' && !abierto && !escribiendoNota()) pintar();
         }
         function recargarPronto() {
