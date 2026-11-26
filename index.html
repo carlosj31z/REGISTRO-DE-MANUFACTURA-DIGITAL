@@ -17505,7 +17505,7 @@ async function maybeAutoStartTour() {
 
         return {
             alEntrar: () => actualizar(), actualizar, recargarPronto, pintarAcumuladoProduccion, descargarPpt, indicadoresDesdeFilas, caracterizacionesDesdeFilas, plantaDe,
-            abrirDetalle, exportarTodo, exportarBacklogMes, descargarGraficoR1, _datosBacklogMes: datosBacklogMes, _calcularRuta1: calcularRuta1, _libroBacklogMes: libroBacklogMes, _construirDetalle: construirDetalle,
+            abrirDetalle, exportarTodo, exportarBacklogMes, descargarGraficoR1, _datosBacklogMes: datosBacklogMes, _cierreJefatura: cierreJefatura, _calcularRuta1: calcularRuta1, _libroBacklogMes: libroBacklogMes, _construirDetalle: construirDetalle,
             setEstatus: (id, valor) => guardarEstatus(id, { e: valor }),
             setResponsable: (id, valor) => guardarEstatus(id, { r: valor }),
             filtrar: (campo, valor) => { vista[campo] = valor; if (ultimo) pintar(); },
@@ -17951,8 +17951,8 @@ async function maybeAutoStartTour() {
         let visitado = false;
         let abierto = '';           // clave del pendiente con la nota abierta
         let recargaTimer = null;
-        const grupos = { prog: false, manual: false };
-        const vista = { planta: '', tipo: '', nuevo: false, arrastre: false, sinNota: false, vencidos: false, estado: '', cc: '', q: '', mostrar: POR_PAGINA };
+        const grupos = { prog: false, manual: false };   // (ya sin grupos plegables desde el 26/11/2026)
+        const vista = { planta: '', tipo: '', nuevo: false, arrastre: false, programa: false, sinNota: false, vencidos: false, estado: '', cc: '', q: '', orden: 'excel', mostrar: POR_PAGINA };
         let ccAbierto = true;      // tabla de CC pendientes desplegada
 
         const esc = (t) => String(t === null || t === undefined ? '' : t).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -18036,6 +18036,14 @@ async function maybeAutoStartTour() {
             if (!por) por = it.tipo === 'Ingresado' ? 'Ya está en SAP: es el que menos falta para autorizar.' : it.tipo === 'Solicitado' ? 'Solicitud abierta: falta ingresarla.' : 'Suspendido sin versión nueva.';
             return { p, por };
         }
+        // Orden de la hoja «L2 Pendientes al <corte>» del Excel de sustento (pedido de Carlos, 26/11/2026: «lo que aparece en
+        // backlog debe ser lo que aparece aquí»): planta, Backlog antes que Solicitud del mes, Ingresado → Solicitado → Suspendido
+        // y descripción.
+        const O_TIPO = { Ingresado: 0, Solicitado: 1, Suspendido: 2 };
+        function ordenarExcel(lista) {
+            return lista.map((it) => ({ it, s: puntaje(it) })).sort((a, b) => a.it.v.planta.localeCompare(b.it.v.planta) || (a.it.nuevo - b.it.nuevo)
+                || (O_TIPO[a.it.tipo] - O_TIPO[b.it.tipo]) || String(a.it.v.desc || '').localeCompare(String(b.it.v.desc || '')));
+        }
         function ordenar(lista, porInicio) {
             const conP = lista.map((it) => ({ it, s: puntaje(it) }));
             const porAnt = (a, b) => (b.it.dias || 0) - (a.it.dias || 0);
@@ -18055,10 +18063,12 @@ async function maybeAutoStartTour() {
             let traz = trazabilidadSap;
             if (!traz) { try { traz = await storeGet('val_rmd_trazabilidad'); } catch (err) { traz = null; } }
             const corte = hoy();
-            const [bk, prog, guardadas] = await Promise.all([
+            const mesCierre = corte.startOf('month').subtract(1, 'day').format('YYYY-MM');
+            const [bk, prog, guardadas, cierre] = await Promise.all([
                 Promise.resolve(StatusRmd._datosBacklogMes(filas, traz, corte, rmdPrecisoDatos)),
                 indicePrograma(),
-                storeGet(CLAVE_NOTAS).catch(() => null)
+                storeGet(CLAVE_NOTAS).catch(() => null),
+                Promise.resolve(StatusRmd._cierreJefatura ? StatusRmd._cierreJefatura(mesCierre) : null).catch(() => null)
             ]);
             notas = guardadas && typeof guardadas === 'object' && !Array.isArray(guardadas) ? guardadas : {};
             const items = bk.pend.map((x) => {
@@ -18070,7 +18080,7 @@ async function maybeAutoStartTour() {
                     dias: base ? corte.diff(base, 'day') : null, porque: x.porque, prio: x.prio || '', prog: pr };
             });
             items.forEach((it) => { it.sug = sugerir(it); it.cc = CcBacklog.motivos(it.v, it.tipo); });
-            return { corte, mes: bk.mes, items, aut: bk.aut, sinRmdProg: prog.sinRmd, progError: prog.error || '' };
+            return { corte, mes: bk.mes, items, aut: bk.aut, cierre: cierre && cierre.pend ? cierre : null, sinRmdProg: prog.sinRmd, progError: prog.error || '' };
         }
 
         // ---------- Filtros ----------
@@ -18079,6 +18089,7 @@ async function maybeAutoStartTour() {
             if (vista.tipo && it.tipo !== vista.tipo) return false;
             if (vista.nuevo && !it.nuevo) return false;
             if (vista.arrastre && it.nuevo) return false;
+            if (vista.programa && !it.prog) return false;
             const n = notaDe(it);
             if (vista.sinNota && n && n.m) return false;
             if (vista.vencidos && !vencido(n)) return false;
@@ -18100,9 +18111,9 @@ async function maybeAutoStartTour() {
             const venc = pend.filter((it) => vencido(notaDe(it))).length;
             const dato = (n, l, accion, cls) => (accion ? `<button type="button" class="bkl-dato ${cls || ''}" data-bkl-dato="${accion}"><b>${n}</b><span>${l}</span></button>` : `<div class="bkl-dato ${cls || ''}"><b>${n}</b><span>${l}</span></div>`);
             return `<div class="bkl-franja">
-                ${dato(pend.length, 'pendientes por atender', 'todos', 'hoy')}
+                ${dato(pend.length, `pendientes al ${fmt(modelo.corte).slice(0, 5)}`, 'todos', 'hoy')}
                 ${dato(pl('P1'), 'ATE', 'P1')}${dato(pl('P2'), 'LIMA', 'P2')}
-                ${dato(pend.length - nue, 'backlog', 'arrastre', 'bk')}${dato(nue, 'nuevos del mes', 'nuevos', 'nuevo')}
+                ${dato(pend.length - nue, 'backlog', 'arrastre', 'bk')}${dato(nue, 'solicitud del mes', 'nuevos', 'nuevo')}
                 ${dato(prog, 'en el Programa de producción', 'prog', 'prog')}
                 ${dato(pend.filter((it) => (it.cc || []).some(CcBacklog.esCc)).length, 'esperan un CC o NC con código', 'cc', 'cc')}
                 ${dato(`${conEst}`, 'con estatus elegido', 'sinNota')}${venc ? dato(venc, 'compromisos vencidos', 'vencidos', 'venc') : ''}
@@ -18121,8 +18132,12 @@ async function maybeAutoStartTour() {
                     <option value="">Todos los estatus</option>
                     ${ESTADOS.map((e) => `<option value="${esc(e.id)}"${vista.estado === e.id ? ' selected' : ''}>${esc(e.txt)}</option>`).join('')}
                 </select>
-                ${tog('arrastre', 'Backlog')}${tog('nuevo', 'Nuevos')}${tog('sinNota', 'Sin estatus elegido')}${tog('vencidos', 'Compromiso vencido')}
+                ${tog('arrastre', 'Backlog')}${tog('nuevo', 'Solicitud del mes')}${tog('programa', 'Programa de producción')}${tog('sinNota', 'Sin estatus elegido')}${tog('vencidos', 'Compromiso vencido')}
                 ${vista.cc ? `<button type="button" class="bkl-toggle" data-bkl-cc-ver="${esc(vista.cc)}" aria-pressed="true" title="Quitar este filtro">Motivo: ${esc(ccNombre(vista.cc))} ✕</button>` : ''}
+                <select class="bkl-campo" data-bkl-select="orden" aria-label="Orden">
+                    <option value="excel"${vista.orden !== 'prio' ? ' selected' : ''}>Orden del Excel de sustento</option>
+                    <option value="prio"${vista.orden === 'prio' ? ' selected' : ''}>Orden por prioridad</option>
+                </select>
                 <input type="search" class="bkl-campo bkl-buscar" data-bkl-buscar placeholder="Buscar producto, código o nota" value="${esc(vista.q)}" aria-label="Buscar">
             </div>`;
         }
@@ -18142,7 +18157,7 @@ async function maybeAutoStartTour() {
                     ${conOrden ? `<span class="bkl-orden" title="${esc(x.s.por)}">${i + 1}</span>` : '<span class="bkl-orden"></span>'}
                     <div class="bkl-info">
                         <div class="bkl-etiquetas">
-                            ${it.nuevo ? `<span class="bkl-sticker nuevo" title="Pendiente que entró este mes (${esc(nombreMes(modelo.mes))})">Nuevo</span>` : `<span class="bkl-sticker bk" title="Pendiente desde ${esc(nombreMes(it.m))}">Backlog</span>`}
+                            ${it.nuevo ? `<span class="bkl-sticker nuevo" title="Pendiente que entró este mes (${esc(nombreMes(modelo.mes))})">Solicitud del mes</span>` : `<span class="bkl-sticker bk" title="Pendiente desde ${esc(nombreMes(it.m))}">Backlog</span>`}
                             ${it.prog ? `<span class="bkl-sticker prog" title="${esc(progTip)}">Programa de producción</span>` : ''}
                             <span class="bkl-tipo ${tipoCls}">${tipoTxt}</span>
                             ${htmlChipsCc(it)}
@@ -18213,29 +18228,22 @@ async function maybeAutoStartTour() {
                 </div>
             </div>`;
         }
-        function htmlGrupo(id, titulo, sub, lista, porInicio) {
-            if (!lista.length) return '';
-            const abiertoG = grupos[id];
-            return `<section class="bkl-grupo ${id}">
-                <button type="button" class="bkl-grupo-cab" data-bkl-grupo="${id}" aria-expanded="${abiertoG}">
-                    <span class="flecha" aria-hidden="true">${abiertoG ? '▾' : '▸'}</span><b>${esc(titulo)}</b><span class="n">${lista.length}</span><span class="sub">${esc(sub)}</span>
-                </button>
-                ${abiertoG ? `<ol class="bkl-lista" role="list">${ordenar(lista, porInicio).map((x, i) => htmlItem(x, i, false)).join('')}</ol>` : ''}
-            </section>`;
-        }
+        // «Cómo va el mes» = tabla 1 de «L2 Resumen» del Excel de sustento (26/11/2026): pendientes al cierre del mes anterior
+        // (congelado), ± ajuste por cierre congelado, − autorizados del backlog, + solicitados del mes que siguen pendientes.
         function htmlEcuacion(pl, mesCorto) {
-            const items = modelo.items.filter((it) => !pl || it.v.planta === pl), aut = modelo.aut.filter((a) => !pl || a.v.planta === pl);
-            const pend = items.filter((it) => !manual(it)), man = items.filter(manual);
+            const de = (x) => !pl || x.v.planta === pl, pend = modelo.items.filter(de), aut = modelo.aut.filter(de);
             const arr = pend.filter((it) => !it.nuevo).length, nue = pend.filter((it) => it.nuevo).length;
-            const autBk = aut.filter((a) => a.cuenta === 'Backlog').length + man.filter((it) => !it.nuevo).length;
-            const autMes = aut.filter((a) => a.cuenta !== 'Backlog').length + man.filter((it) => it.nuevo).length;
+            const autBk = aut.filter((a) => a.cuenta === 'Backlog').length;
+            const calc = arr + autBk, c = modelo.cierre;
+            const fijo = c ? (pl ? c.pend[pl] || 0 : (c.pend.P1 || 0) + (c.pend.P2 || 0)) : calc, aj = calc - fijo;
+            const fAnt = modelo.corte.startOf('month').subtract(1, 'day').format('DD/MM'), fCor = modelo.corte.format('DD/MM');
             const caja = (cls, op, n, l, s) => `<div class="bkl-ec-caja ${cls}">${op ? `<span class="op" aria-hidden="true">${op}</span>` : ''}<span class="n">${n}</span><span class="l">${l}</span>${s ? `<span class="s">${s}</span>` : ''}</div>`;
             return `<div class="bkl-ec${pl ? '' : ' total'}">
                 <div class="bkl-ec-planta">${pl ? PLANTA_NOMBRE[pl] : 'Total'}</div>
-                ${caja('', '', arr + autBk, `Backlog al 1 de ${mesCorto}`, `${arr} ${arr === 1 ? 'sigue pendiente' : 'siguen pendientes'}`)}
-                ${caja('nuevo', '+', nue + autMes, `Nuevos de ${mesCorto}`, `${nue} ${nue === 1 ? 'sigue pendiente' : 'siguen pendientes'}`)}
-                ${caja('atendido', '−', autBk + autMes, `Autorizados en ${mesCorto}`, `${autBk} del backlog · ${autMes} del mes${man.length ? ` · ${man.length} a mano` : ''}`)}
-                ${caja('hoy', '=', pend.length, 'Pendientes hoy', 'por atender')}
+                ${caja('', '', fijo, `Pendientes al ${fAnt}${c ? ' (congelado)' : ''}`, `${arr} ${arr === 1 ? 'sigue pendiente' : 'siguen pendientes'}${aj ? ` · ajuste por cierre congelado ${aj > 0 ? '+' : '−'}${Math.abs(aj)}` : ''}`)}
+                ${caja('atendido', '−', autBk, 'Autorizados del backlog', 'ya no están pendientes')}
+                ${caja('nuevo', '+', nue, `Solicitados de ${mesCorto}`, 'siguen pendientes')}
+                ${caja('hoy', '=', fijo + aj - autBk + nue, `Pendientes al ${fCor}`, 'por atender')}
             </div>`;
         }
         function htmlEstados(lista) {
@@ -18312,23 +18320,25 @@ async function maybeAutoStartTour() {
             const mesTxt = nombreMes(modelo.mes), mesCorto = mesTxt.split(' ')[0];
             const sub = document.getElementById('bklSub');
             if (sub) sub.textContent = `Pendientes por atender · Plantas Ate y Lima · corte ${fmt(modelo.corte)}`;
-            const pendTodos = modelo.items.filter((it) => !manual(it));
+            // 26/11/2026 (pedido de Carlos, con su Excel STATUS_RMD_<fecha>_sustento): la lista es la misma de la hoja «L2 Pendientes
+            // al <corte>»: todos los pendientes de SAP en una sola lista (los del Programa de producción y los autorizados a mano
+            // siguen en ella, con su etiqueta, porque en SAP siguen pendientes), con el mismo orden y el mismo conteo por planta.
+            const pendTodos = modelo.items;
             const filtrados = pendTodos.filter((it) => pasaFiltros(it, false));
-            const bk = filtrados.filter((it) => !it.prog), prog = filtrados.filter((it) => it.prog);
-            const man = modelo.items.filter(manual).filter((it) => pasaFiltros(it, false));
-            const orden = ordenar(bk), vis = orden.slice(0, vista.mostrar);
-            const hayFiltro = vista.planta || vista.tipo || vista.nuevo || vista.arrastre || vista.sinNota || vista.vencidos || vista.estado || vista.cc || vista.q;
+            const orden = vista.orden === 'prio' ? ordenar(filtrados) : ordenarExcel(filtrados), vis = orden.slice(0, vista.mostrar);
+            const nPl = (l, p) => l.filter((it) => it.v.planta === p).length, nBk = filtrados.filter((it) => !it.nuevo).length;
+            const man = pendTodos.filter(manual).length;
+            const hayFiltro = vista.planta || vista.tipo || vista.nuevo || vista.arrastre || vista.programa || vista.sinNota || vista.vencidos || vista.estado || vista.cc || vista.q;
             const foco = document.activeElement && document.activeElement.matches && document.activeElement.matches('[data-bkl-buscar]');
             const sinRmd = modelo.sinRmdProg.P1 + modelo.sinRmdProg.P2;
             cont.innerHTML = `
-                <p class="bkl-leer"><b>Backlog</b> = RMD que siguen pendientes: <b>Ingresados</b> por autorizar, <b>Solicitudes</b> por ingresar y <b>Suspendidos</b> sin versión nueva (sin los INACTIVO). Etiqueta <b>BACKLOG</b>: viene de meses anteriores; <b>NUEVO</b>: entró en ${esc(mesTxt)}. Lo que Producción necesita va agrupado en <b>Programa de producción</b>.</p>
+                <p class="bkl-leer"><b>Backlog</b> = RMD que siguen pendientes: <b>Ingresados</b> por autorizar, <b>Solicitudes</b> por ingresar y <b>Suspendidos</b> sin versión nueva (sin los INACTIVO). Es la misma lista de la hoja <b>«L2 Pendientes al ${esc(fmt(modelo.corte).slice(0, 5).replace('/', '-'))}»</b> del Excel de sustento (PPT para jefatura). Etiqueta <b>BACKLOG</b>: ya era pendiente al cierre del mes anterior; <b>SOLICITUD DEL MES</b>: entró en ${esc(mesTxt)}. <b>PROGRAMA DE PRODUCCIÓN</b>: lo necesita Producción.</p>
                 ${htmlFranja(pendTodos)}
                 ${htmlFiltros()}
-                <p class="bkl-conteo">${plural(bk.length, 'pendiente', 'pendientes')} de backlog${prog.length ? ` + ${prog.length} del Programa de producción` : ''}${hayFiltro ? ` con estos filtros · <button type="button" data-bkl-limpiar>Quitar filtros</button>` : ''} · orden: compromisos vencidos, bloqueados, Ingresado → Solicitado → Suspendido, más antiguo</p>
+                <p class="bkl-conteo">${plural(filtrados.length, 'pendiente', 'pendientes')} al ${esc(fmt(modelo.corte).slice(0, 5))}${hayFiltro ? ' con estos filtros' : ''}: ATE ${nPl(filtrados, 'P1')} · LIMA ${nPl(filtrados, 'P2')} · ${nBk} backlog + ${filtrados.length - nBk} solicitud del mes${man ? ` · ${plural(man, 'autorizado a mano (en SAP sigue pendiente)', 'autorizados a mano (en SAP siguen pendientes)')}` : ''}${hayFiltro ? ` · <button type="button" data-bkl-limpiar>Quitar filtros</button>` : ''} · ${vista.orden === 'prio' ? 'orden: compromisos vencidos, bloqueados, Ingresado → Solicitado → Suspendido, más antiguo' : 'orden del Excel: planta, Backlog → Solicitud del mes, Ingresado → Solicitado → Suspendido, descripción'}</p>
                 ${vis.length ? `<ol class="bkl-lista" role="list">${vis.map((x, i) => htmlItem(x, i, true)).join('')}</ol>` : '<p class="bkl-vacio">Nada con estos filtros.</p>'}
                 ${orden.length > vis.length ? `<div class="bkl-mas"><button type="button" class="sts-btn" data-bkl-mas>Ver ${Math.min(POR_PAGINA, orden.length - vis.length)} más (quedan ${orden.length - vis.length})</button></div>` : ''}
-                ${htmlGrupo('prog', 'Programa de producción', `también son pendientes; ordenados por fecha de inicio de producción${sinRmd ? ` · ${plural(sinRmd, 'etapa del programa no tiene', 'etapas del programa no tienen')} RMD en SAP (ver Producción)` : ''}`, prog, true)}
-                ${htmlGrupo('manual', 'Autorizados a mano', 'ya no cuentan como pendientes; vuelven si SAP cambia el estado o la versión sin autorizarlo', man, false)}
+                ${sinRmd ? `<p class="bkl-leer">${plural(sinRmd, 'etapa del Programa de producción no tiene', 'etapas del Programa de producción no tienen')} RMD en SAP (ver Producción): no están en esta lista.</p>` : ''}
                 ${htmlCcPendientes(pendTodos)}
                 <div class="bkl-sec">Cómo va el mes</div>
                 <div class="bkl-ecuaciones">${htmlEcuacion('P1', mesCorto)}${htmlEcuacion('P2', mesCorto)}${htmlEcuacion('', mesCorto)}</div>
@@ -18443,7 +18453,7 @@ async function maybeAutoStartTour() {
 
         // ---------- Eventos ----------
         let buscarTimer = null;
-        const limpiarFiltros = () => Object.assign(vista, { planta: '', tipo: '', nuevo: false, arrastre: false, sinNota: false, vencidos: false, estado: '', cc: '', q: '', mostrar: POR_PAGINA });
+        const limpiarFiltros = () => Object.assign(vista, { planta: '', tipo: '', nuevo: false, arrastre: false, programa: false, sinNota: false, vencidos: false, estado: '', cc: '', q: '', mostrar: POR_PAGINA });
         function iniciar() {
             const cont = document.getElementById('bklContenido');
             if (!cont) return;
@@ -18477,9 +18487,9 @@ async function maybeAutoStartTour() {
                 if (d.bklDato) {
                     const a = d.bklDato; limpiarFiltros();
                     if (a === 'P1' || a === 'P2') vista.planta = a; else if (a === 'arrastre') vista.arrastre = true; else if (a === 'nuevos') vista.nuevo = true;
-                    else if (a === 'sinNota') vista.sinNota = true; else if (a === 'vencidos') vista.vencidos = true; else if (a === 'prog') grupos.prog = true;
+                    else if (a === 'sinNota') vista.sinNota = true; else if (a === 'vencidos') vista.vencidos = true; else if (a === 'prog') vista.programa = true;
                     pintar();
-                    const l = cont.querySelector(a === 'prog' ? '.bkl-grupo.prog' : '.bkl-filtros'); if (l) l.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    const l = cont.querySelector('.bkl-filtros'); if (l) l.scrollIntoView({ behavior: 'smooth', block: 'start' });
                     return;
                 }
                 if (d.bklLimpiar !== undefined) { limpiarFiltros(); pintar(); return; }
@@ -18530,14 +18540,14 @@ async function maybeAutoStartTour() {
         async function exportar() {
             if (!modelo || modelo.vacio) { Swal.fire({ icon: 'info', title: 'Sin datos', text: 'Abre la pestaña cuando haya RMD de SAP («Enviar a Status RMD»).', background: '#0f172a', color: '#e2e8f0' }); return; }
             const filt = modelo.items.filter((it) => pasaFiltros(it, false));
-            const lista = [...ordenar(filt.filter((it) => !it.prog && !manual(it))), ...ordenar(filt.filter((it) => it.prog && !manual(it)), true), ...ordenar(filt.filter(manual))];
-            const cab = ['Orden', 'Grupo', 'Planta', 'Tipo', 'Fase', 'Backlog / Nuevo', 'Programa de producción', 'Inicio producción', 'Producto', 'Etapa', 'RMD', 'Versión', 'Solicitud', 'Código por defecto',
+            const lista = vista.orden === 'prio' ? ordenar(filt) : ordenarExcel(filt);
+            const cab = ['Orden', 'Grupo', 'Planta', 'Tipo', 'Fase', 'Origen (Backlog / Solicitud del mes)', 'Programa de producción', 'Inicio producción', 'Producto', 'Etapa', 'RMD', 'Versión', 'Solicitud', 'Código por defecto',
                 'Pendiente desde (mes)', 'Fecha', 'Días', 'Estatus', 'Estatus elegido', 'Responsable', 'Siguiente paso', 'Compromiso', 'Seguimiento', 'Nota', 'Anotado por', 'Fecha de la nota',
                 'Autorizado a mano', 'Estatus sugerido', 'Por qué se sugiere', 'Por qué cuenta en ese mes', 'CC / motivo', 'Situación del CC', 'Cómo aplicarlo', 'Qué falta', 'Observaciones (SAP)'];
             const d = (x) => (x && x.isValid && x.isValid() ? new Date(Date.UTC(x.year(), x.month(), x.date())) : '');
             const filas = lista.map((x, i) => {
                 const it = x.it, v = it.v, n = notaDe(it) || {}, est = estadoDe(it), man = manual(it);
-                return [i + 1, man ? 'Autorizado a mano' : it.prog ? 'Programa de producción' : 'Backlog', PLANTA_NOMBRE[v.planta], it.tipo, faseRmdExcel(v.obs), it.nuevo ? 'NUEVO' : 'BACKLOG', it.prog ? 'PROGRAMA DE PRODUCCIÓN' : '', it.prog && it.prog.inicio ? d(it.prog.inicio) : '',
+                return [i + 1, man ? 'Autorizado a mano' : it.prog ? 'Programa de producción' : 'Backlog', PLANTA_NOMBRE[v.planta], it.tipo, faseRmdExcel(v.obs), it.nuevo ? 'SOLICITUD DEL MES' : 'BACKLOG', it.prog ? 'PROGRAMA DE PRODUCCIÓN' : '', it.prog && it.prog.inicio ? d(it.prog.inicio) : '',
                     v.desc || '', it.etapa || '', v.codigo || '', v.version || '', v.sol || '', v.codDef || '', nombreMes(it.m), d(it.base), it.dias === null ? '' : it.dias,
                     (ESTADO[est.m] || ESTADO.OTRO).txt, est.confirmado ? 'Sí' : 'No (sugerido)', n.r || (ESTADO[est.m] || {}).resp || '', n.a || '', n.c ? d(dayjs(n.c + 'T00:00:00')) : '', SEGUIMIENTO[n.s || ''], n.t || '', n.u || '',
                     n.f ? dayjs(n.f).format('DD/MM/YYYY HH:mm') : '', man ? `${n.ok.u || ''} ${dayjs(n.ok.f).format('DD/MM/YYYY')}` : '', (ESTADO[it.sug.m] || ESTADO.OTRO).txt, it.sug.por, it.porque || '',
@@ -18552,7 +18562,7 @@ async function maybeAutoStartTour() {
                 if (val instanceof Date) c.z = 'dd/mm/yyyy';
                 if (j === 4 && val === 'FASE 2') c.s = { font: { bold: true, color: { rgb: '3B1F66' } }, fill: { patternType: 'solid', fgColor: { rgb: 'D9C8F0' } } };
                 if (j === 4 && val === 'FASE 3') c.s = { font: { bold: true, color: { rgb: '1E5631' } }, fill: { patternType: 'solid', fgColor: { rgb: 'C6EFCE' } } };
-                if (j === 5) c.s = val === 'NUEVO' ? { font: { bold: true, color: { rgb: 'FFFFFF' } }, fill: { patternType: 'solid', fgColor: { rgb: 'C2652E' } } } : { font: { bold: true, color: { rgb: 'FFFFFF' } }, fill: { patternType: 'solid', fgColor: { rgb: '5B5F97' } } };
+                if (j === 5) c.s = val === 'SOLICITUD DEL MES' ? { font: { bold: true, color: { rgb: 'FFFFFF' } }, fill: { patternType: 'solid', fgColor: { rgb: 'C2652E' } } } : { font: { bold: true, color: { rgb: 'FFFFFF' } }, fill: { patternType: 'solid', fgColor: { rgb: '5B5F97' } } };
                 if (j === 6 && val) c.s = { font: { bold: true, color: { rgb: '3B2F06' } }, fill: { patternType: 'solid', fgColor: { rgb: 'F3D36B' } } };
             }));
             ws['!cols'] = cab.map((h) => ({ wch: /Producto|Nota|Observaci|Por qué|Cómo aplicarlo|Qué falta/.test(h) ? 42 : /Siguiente/.test(h) ? 30 : Math.max(9, Math.min(22, h.length + 2)) }));
