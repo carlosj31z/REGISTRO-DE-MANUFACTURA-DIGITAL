@@ -8161,7 +8161,7 @@ async function downloadPlanProduccionFromCloud() {
                     const codigoRmdCol = colIndexByName['código'] ?? colIndexByName['codigo'] ?? -1;
                     const solicitudCol = findCol('código de solicitud', 'codigo de solicitud');
                     const plantaCol = findCol('planta');
-                    const seccionCol = findCol('secci');
+                    const seccionCol = findCol('secci', 'área', 'area');   // Área del RMD en SAP (columna «Sección» o «Área»)
                     const fechaSolicitudCol = findCol('fecha solicitud');
                     const fechaAutorizacionCol = findCol('fecha autoriz');
                     const fechaRegistroCol = findCol('fecha registro');
@@ -18245,7 +18245,7 @@ async function maybeAutoStartTour() {
                 <td class="desc"><button type="button" class="bkl-prod" data-bkl-abrir="${k}" aria-expanded="${ab}">${esc(v.desc || (it.prog && it.prog.producto) || '(sin descripción)')}</button>
                     <div class="bkl-meta">${codigo}${v.codDef ? ` · ${esc(v.codDef)}` : ''}</div>
                     <div class="bkl-etiquetas">${it.nuevo ? `<span class="bkl-sticker nuevo" title="Pendiente que entró este mes (${esc(nombreMes(modelo.mes))})">Solicitud del mes</span>` : `<span class="bkl-sticker bk" title="Pendiente desde ${esc(nombreMes(it.m))}. ${esc(it.porque || '')}">Backlog</span>`}${it.prog ? `<span class="bkl-sticker prog" title="${esc(progTip)}">Programa</span>` : ''}${man ? '<span class="bkl-ok">Autorizado a mano</span>' : ''}${htmlChipsCc(it)}</div></td>
-                <td class="sec">${it.seccion ? esc(it.seccion) : '<span class="pie" title="La sección llega con «Enviar a Status RMD» desde el portal">—</span>'}</td>
+                <td class="sec">${it.seccion ? esc(it.seccion) : '<span class="pie" title="El área llega de SAP con «Enviar a Status RMD» desde el portal">—</span>'}</td>
                 <td class="est-sap"><span class="bkl-tipo ${it.tipo === 'Ingresado' ? 'ing' : it.tipo === 'Solicitado' ? 'sol' : 'sus'}">${esc(String(v.estado || '').toUpperCase())}</span></td>
                 <td class="fecha">${ult ? `<span title="${ult.traz ? 'Último cambio de estado en la Trazabilidad de SAP' : 'Sin cambios en la Trazabilidad leída: fecha de registro, solicitud o suspensión del maestro de SAP'}">${fmt(ult.f)}${ult.traz ? '' : ' <span class="pie">(maestro)</span>'}</span>` : '—'}${it.dias !== null ? `<div class="pie">${plural(it.dias, 'día', 'días')} pendiente</div>` : ''}</td>
                 <td class="etapa">${esc(it.etapa || '—')}</td>
@@ -18267,7 +18267,7 @@ async function maybeAutoStartTour() {
             return `<section class="bkl-autsec">
                 <h3>Autorizados del backlog <span class="n">${lista.length}</span><span class="sub">ATE ${nP('P1')} · LIMA ${nP('P2')} · se van sumando y no se borran · los más recientes primero</span></h3>
                 <div class="bkl-tabla-scroll"><table class="bkl-tabla verde">
-                    <thead><tr><th>Planta</th><th>Descripción</th><th>Sección</th><th>Estado</th><th>Fecha de autorización</th><th>Etapa</th><th>Estatus</th><th>Autorizado por</th><th>Observación (de SAP)</th><th>Nota</th></tr></thead>
+                    <thead><tr><th>Planta</th><th>Descripción</th><th>Área</th><th>Estado</th><th>Fecha de autorización</th><th>Etapa</th><th>Estatus</th><th>Autorizado por</th><th>Observación (de SAP)</th><th>Nota</th></tr></thead>
                     <tbody>${vis.map((a) => { const o = String(a.o || ''); return `<tr>
                         <td class="pl"><b>${PLANTA_NOMBRE[a.p] || esc(a.p)}</b></td>
                         <td class="desc"><b>${esc(a.d || '(sin descripción)')}</b><div class="bkl-meta">${a.cod ? `RMD ${esc(a.cod)}` : `Solicitud ${esc(a.sol)}`} v${esc(a.ver)}${a.org ? ` · ${esc(a.org === 'BACKLOG' ? 'Backlog' : 'Solicitud del mes')}` : ''}</div></td>
@@ -18284,7 +18284,7 @@ async function maybeAutoStartTour() {
         }
         function htmlTabla(vis) {
             return `<div class="bkl-tabla-scroll"><table class="bkl-tabla">
-                <thead><tr><th>Planta</th><th>Descripción</th><th>Sección</th><th>Estado</th><th>Última fecha de trazabilidad (SAP)</th><th>Etapa</th><th>Estatus</th><th>Responsable</th><th>Observación (de SAP)</th><th>Nota</th></tr></thead>
+                <thead><tr><th>Planta</th><th>Descripción</th><th>Área</th><th>Estado</th><th>Última fecha de trazabilidad (SAP)</th><th>Etapa</th><th>Estatus</th><th>Responsable</th><th>Observación (de SAP)</th><th>Nota</th></tr></thead>
                 <tbody>${vis.map((x, i) => htmlFila(x, i)).join('')}</tbody></table></div>`;
         }
         function htmlNota(it) {
@@ -18649,7 +18649,7 @@ async function maybeAutoStartTour() {
             if (!modelo || modelo.vacio) { Swal.fire({ icon: 'info', title: 'Sin datos', text: 'Abre la pestaña cuando haya RMD de SAP («Enviar a Status RMD»).', background: '#0f172a', color: '#e2e8f0' }); return; }
             const filt = modelo.items.filter((it) => pasaFiltros(it, false));
             const lista = vista.orden === 'prio' ? ordenar(filt) : ordenarExcel(filt);
-            const cab = ['Planta', 'Descripción', 'Sección', 'Estado', 'Última fecha de trazabilidad (SAP)', 'Etapa', 'Estatus', 'Responsable', 'Observación (de SAP)', 'Nota',
+            const cab = ['Planta', 'Descripción', 'Área', 'Estado', 'Última fecha de trazabilidad (SAP)', 'Etapa', 'Estatus', 'Responsable', 'Observación (de SAP)', 'Nota',
                 'Orden', 'Origen (Backlog / Solicitud del mes)', 'Programa de producción', 'Inicio producción', 'Tipo', 'Fase', 'RMD', 'Versión', 'Solicitud', 'Código por defecto',
                 'Pendiente desde (mes)', 'Fecha', 'Días', 'Siguiente paso', 'Compromiso', 'Seguimiento', 'Anotado por', 'Fecha de la nota', 'Autorizado a mano', 'Por qué cuenta en ese mes',
                 'CC / motivo', 'Situación del CC', 'Cómo aplicarlo', 'Qué falta'];
