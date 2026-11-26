@@ -2597,6 +2597,9 @@
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11"/><path d="M7.5 10.5 12 15l4.5-4.5"/><path d="M5 19.5h14"/></svg>
                         <span>Exportar Excel</span>
                     </button>
+                    <button type="button" class="sts-btn" onclick="BacklogRmd.importar()" title="Sube el Excel exportado de esta pestaña con Fecha de compromiso, Estatus, Responsable o Nota cambiados">
+                        <span>Importar Excel</span>
+                    </button>
                 </div>
             </div>
             <div id="bklContenido" aria-live="polite"><p class="bkl-vacio">Cargando…</p></div>
@@ -2822,8 +2825,15 @@
         #tab-backlog .bkl-tabla td.desc { min-width:240px; } #tab-backlog .bkl-tabla td.desc .bkl-prod { text-align:left; }
         #tab-backlog .bkl-tabla td.desc .bkl-etiquetas { margin-top:4px; display:flex; flex-wrap:wrap; gap:4px; }
         #tab-backlog .bkl-tabla td.etapa, #tab-backlog .bkl-tabla td.est-sap { white-space:nowrap; }
-        #tab-backlog .bkl-tabla th.fecha, #tab-backlog .bkl-tabla td.fecha { width:96px; max-width:96px; white-space:normal; }
+        #tab-backlog .bkl-tabla th.est-sap { min-width:120px; }
         #tab-backlog .bkl-tabla th.nota, #tab-backlog .bkl-tabla td.nota { min-width:340px; width:26%; }
+        #tab-backlog .bkl-cambio { display:inline-flex; align-items:center; gap:6px; margin-bottom:5px; padding:2px 4px 2px 8px; border-radius:6px; font-size:10.5px; font-weight:700; letter-spacing:.02em; color:#7c2d12; background:#fed7aa; border:1px solid #fb923c; white-space:nowrap; }
+        #tab-backlog .bkl-cambio::before { content:''; width:0; height:0; border-left:6px solid #ea580c; border-top:4px solid transparent; border-bottom:4px solid transparent; }
+        #tab-backlog .bkl-cambio button { font:inherit; font-size:10px; font-weight:600; padding:1px 6px; border-radius:4px; border:1px solid #fb923c; background:#fff7ed; color:#7c2d12; cursor:pointer; }
+        #tab-backlog .bkl-ult { margin-top:4px; font-size:11.5px; white-space:nowrap; }
+        #tab-backlog .bkl-tabla td.usr, #tab-backlog .bkl-tabla td.fing { white-space:nowrap; font-size:12px; }
+        #tab-backlog .bkl-comp { font:inherit; font-size:12px; height:30px; padding:0 6px; border-radius:6px; border:1px solid var(--field-border); background:var(--field-bg); color:var(--field-text); }
+        #tab-backlog .bkl-comp.vencido { border-color:rgb(var(--danger-rgb, 220 38 38)); color:rgb(var(--danger-rgb, 220 38 38)); font-weight:600; }
         #tab-backlog .bkl-obs-completa { white-space:pre-line; overflow-wrap:anywhere; }
         #tab-backlog .bkl-tabla td.obs { min-width:260px; max-width:380px; font-size:11.5px; color:var(--slate-400); }
         #tab-backlog .bkl-nota-auto { width:100%; min-height:44px; resize:vertical; font:inherit; font-size:12px; line-height:1.4; padding:5px 7px; border-radius:6px; border:1px solid var(--field-border); background:var(--field-bg); color:var(--field-text); }
@@ -6645,6 +6655,28 @@ function buildDateColumnMapPlanta1(headerRow, weekLabelRow, hiddenCols) {
             if (currentTab === 'caract' && typeof Caracterizacion !== 'undefined') Caracterizacion.refrescar();
         };
 
+        // Pedido de Carlos (26/11/2026): una etapa ya autorizada en SAP no guarda el estatus con el que se autorizó; si vuelve
+        // a quedar pendiente (versión nueva, suspensión) aparece sin estatus, como pendiente nuevo. Se borra el estatus (y su
+        // responsable) de las claves «material::ETAPA» cuyo RMD vigente está AUTORIZADO en SAP.
+        async function limpiarEstatusDeAutorizados() {
+            try {
+                if (!rmdPreciso || !rmdPreciso.porMatEtapa || !estatusEtapa.size) return 0;
+                const borrar = [];
+                estatusEtapa.forEach((_, key) => {
+                    const todas = rmdPreciso.porMatEtapa.get(key) || [], c = estadoDeCadenaPrecisa(todas);
+                    if (!c || c.pendiente || !c.ultima || c.ultima.estadoNorm !== 'AUTORIZADO') return;
+                    // Una versión más nueva Suspendida (o pendiente) sigue en el BACKLOG con su estatus: no se toca.
+                    if (todas.some((x) => (Number(x.version) || 0) > (Number(c.ultima.version) || 0) && !ESTADOS_RESUELTOS_RMD.has(x.estadoNorm))) return;
+                    borrar.push(key);
+                });
+                if (!borrar.length) return 0;
+                borrar.forEach((k) => { estatusEtapa.delete(k); responsablesEtapa.delete(k); });
+                await saveEstatusEtapa();
+                await saveResponsablesEtapa();
+                return borrar.length;
+            } catch (err) { console.warn('No se pudo limpiar el estatus de lo autorizado', err); return 0; }
+        }
+
         function escapeHtmlRmdConfig(s) {
             return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
         }
@@ -8257,6 +8289,7 @@ async function downloadPlanProduccionFromCloud() {
                     // Maestro de RMD para la validación por árbol de producción (con recetas, o sumado / sin recetas).
                     rmdPrecisoDatos = datosPrecisos;
                     rmdPreciso = construirIndicePreciso(datosPrecisos);
+                    limpiarEstatusDeAutorizados();
                     // Se espera a que el guardado termine ANTES de avisar "Listo".
                     const guardadoOk = await saveValidacionData();
                     document.getElementById('rmdAutorizadosStatusBadge').style.display = 'inline-flex';
@@ -11537,6 +11570,7 @@ async function maybeAutoStartTour() {
             }
             // Recién ahora (datos guardados ya cargados) se aceptan datos directos del portal SAP.
             window.__statusRmdAppLista = true;
+            limpiarEstatusDeAutorizados().then((n) => { if (n && currentTab === 'produccion') runValidacionMateriales(); });
             // El semáforo de los datos de SAP se recalcula solo (la página puede quedar abierta varios días).
             const refrescarSemaforoSap = () => { updateFuentesStatusUI(); updateFuentesStatusForecastUI(); };
             setInterval(refrescarSemaforoSap, 30 * 60 * 1000);
@@ -18017,7 +18051,7 @@ async function maybeAutoStartTour() {
         let abierto = '';           // clave del pendiente con la nota abierta
         let recargaTimer = null;
         const grupos = { prog: false, manual: false };   // (ya sin grupos plegables desde el 26/11/2026)
-        const vista = { planta: '', desc: '', area: '', sap: '', etapa: '', resp: '', conNota: '', tipo: '', nuevo: false, arrastre: false, programa: false, sinNota: false, vencidos: false, estado: '', cc: '', q: '', orden: 'excel', mostrar: POR_PAGINA };
+        const vista = { planta: '', desc: '', usuario: '', comp: '', area: '', sap: '', etapa: '', resp: '', conNota: '', tipo: '', nuevo: false, arrastre: false, programa: false, sinNota: false, vencidos: false, estado: '', cc: '', q: '', orden: 'excel', mostrar: POR_PAGINA };
         let ccAbierto = true;      // tabla de CC pendientes desplegada
 
         const esc = (t) => String(t === null || t === undefined ? '' : t).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -18043,7 +18077,10 @@ async function maybeAutoStartTour() {
         const estatusProd = (it) => estatusVigente(estatusEtapa.get(claveProd(it))) || '';
         const respProd = (it) => responsableDeEstatus(estatusProd(it), responsablesEtapa.get(claveProd(it)));
         const SIN_ESTATUS = 'SIN';
-        const SIN_DATO = '(vacío)';   // valor del filtro de cabecera para celdas sin dato
+        const SIN_DATO = '(vacío)';
+        const LETRA_TRAZ = { S: 'SOLICITADO', A: 'SOLICITUD APROBADA', R: 'SOLICITUD RECHAZADA', I: 'INGRESADO', U: 'AUTORIZADO', X: 'SUSPENDIDO', C: 'CANCELADO' };
+        const ESTADOS_PEND_CAMBIO = new Set(['SUSPENDIDO', 'SOLICITADO', 'INGRESADO', 'SOLICITUD APROBADA']);
+        const usuarioCorto = (u) => { const a = u && typeof autorizadorCorto === 'function' ? autorizadorCorto(u) : null; return a ? a.corto : (u || ''); };   // valor del filtro de cabecera para celdas sin dato
 
         // ---------- Programa de Producción (Ruta 1) ----------
         async function indicePrograma() {
@@ -18159,6 +18196,37 @@ async function maybeAutoStartTour() {
                 const fs = [v.fReg, v.fSol, fS].filter((d) => d && d.isValid && d.isValid()).sort((a, b) => b.valueOf() - a.valueOf());
                 return fs.length ? { f: fs[0], traz: false } : null;
             };
+            // Usuario de ingreso (Usuario Registro de SAP) y versiones de cada máster (para el cambio de estado).
+            const usr = new Map(), porMaster = new Map();
+            filas.forEach((f) => { const pl = StatusRmd.plantaDe(f.planta) || f.planta, c = String(f.codigo || '').trim(), sl = String(f.solicitud || '').trim(), ver = Number(f.version) || 0;
+                if (f.usuarioRegistro) { if (c) usr.set(`${pl}|R${c}|${ver}`, f.usuarioRegistro); if (sl) usr.set(`${pl}|S${sl}|${ver}`, f.usuarioRegistro); }
+                if (c) { const k = `${pl}|${c}`; if (!porMaster.has(k)) porMaster.set(k, []); porMaster.get(k).push({ ver, e: String(f.estado || '').trim().toUpperCase() }); } });
+            // Cambio de estado (pedido de Carlos, 26/11/2026): bandera cuando el RMD cambió de estado en el mes (Suspendido →
+            // Solicitado, Suspendido → Ingresado, Solicitado → Ingresado…). Sale de la Trazabilidad de SAP de la versión o, si es
+            // una versión nueva, del estado pendiente de la versión anterior del mismo máster.
+            const inicioMes = corte.startOf('month');
+            const cambioDe = (v) => {
+                const cur = String(v.estado || '').trim().toUpperCase();
+                const fija = mapEtapaAFija(normalizeEtapa(v.etapa || ''));
+                const t = traz && traz.items && fija ? (traz.items[`${v.codigo || ''}|${v.sol || ''}|${v.version}|${fija}`] || []) : [];
+                const ev = t.filter((y) => Number(y[0]) && LETRA_TRAZ[y[1]]).sort((a, b) => a[0] - b[0]);
+                let c = null;
+                if (ev.length > 1) {
+                    const ult = ev[ev.length - 1];
+                    let j = ev.length - 2; while (j >= 0 && ev[j][1] === ult[1]) j--;
+                    if (j >= 0) c = { de: LETRA_TRAZ[ev[j][1]], a: cur, f: dayjs(ult[0] * 1000) };
+                }
+                if (!c && v.codigo) {
+                    const ant = (porMaster.get(`${v.planta}|${String(v.codigo).trim()}`) || []).filter((x) => x.ver < v.version).sort((a, b) => b.ver - a.ver)[0];
+                    if (ant && ESTADOS_PEND_CAMBIO.has(ant.e) && ant.e !== cur) {
+                        const f = ev.length ? dayjs(ev[0][0] * 1000) : (v.fSol || v.fReg);
+                        if (f && f.isValid && f.isValid()) c = { de: ant.e, a: cur, f, verAnt: ant.ver };
+                    }
+                }
+                if (!c || c.de === c.a || c.f.isBefore(inicioMes)) return null;
+                c.sig = `${c.de}>${c.a}>${c.f.format('YYYYMMDD')}`;
+                return c;
+            };
             const items = bk.pend.map((x) => {
                 const v = x.v, et = etapaDe(v);
                 const base = x.tipo === 'Suspendido' ? x.fS : x.tipo === 'Solicitado' ? (v.fSol || v.fReg) : v.fReg;
@@ -18167,7 +18235,9 @@ async function maybeAutoStartTour() {
                 return { k: claveDe(v), kSol, v, tipo: x.tipo, m: x.m, nuevo: x.m === bk.mes, etapa: et, fS: x.fS || null, base: base || null,
                     dias: base ? corte.diff(base, 'day') : null, porque: x.porque, prio: x.prio || '', prog: pr,
                     seccion: secc.get(`${v.planta}|R${String(v.codigo || '').trim()}|${v.version}`) || secc.get(`${v.planta}|S${String(v.sol || '').trim()}|${v.version}`) || '',
-                    ult: ultimaTraz(v, x.fS || null) };
+                    ult: ultimaTraz(v, x.fS || null), cambio: cambioDe(v),
+                    usuario: usr.get(`${v.planta}|R${String(v.codigo || '').trim()}|${v.version}`) || usr.get(`${v.planta}|S${String(v.sol || '').trim()}|${v.version}`) || '',
+                    fIng: x.tipo === 'Solicitado' ? null : (v.fIng || v.fReg || null) };
             });
             items.forEach((it) => { it.sug = sugerir(it); it.cc = CcBacklog.motivos(it.v, it.tipo); });
             // Autorizados del backlog: los autorizados del mes en SAP (todos venían de esta lista: backlog o solicitud del mes) y
@@ -18177,8 +18247,9 @@ async function maybeAutoStartTour() {
                 autAcum = g && typeof g === 'object' && !Array.isArray(g) ? g : {};
                 let nuevos = 0;
                 const iso = (d) => (d && d.isValid && d.isValid() ? d.toISOString() : '');
-                const base = (v, x) => ({ p: v.planta, d: v.desc || '', sec: x.sec || '', et: etapaDe(v), o: v.obs || '', n: ((notas[claveDe(v)] || {}).t) || '', cod: v.codigo ? String(v.codigo).trim() : '',
-                    sol: v.sol ? String(v.sol).trim() : '', ver: v.version, org: x.org || '', g: new Date().toISOString() });
+                const base = (v, x) => ({ p: v.planta, d: v.desc || '', sec: x.sec || '', et: etapaDe(v), o: v.obs || '', n: ((notas[claveDe(v)] || {}).t) || '', c: ((notas[claveDe(v)] || {}).c) || '', cod: v.codigo ? String(v.codigo).trim() : '',
+                    sol: v.sol ? String(v.sol).trim() : '', ver: v.version, org: x.org || '', g: new Date().toISOString(),
+                    ui: usr.get(`${v.planta}|R${String(v.codigo || '').trim()}|${v.version}`) || usr.get(`${v.planta}|S${String(v.sol || '').trim()}|${v.version}`) || '', fi: iso(v.fIng || v.fReg) });
                 bk.aut.forEach((a) => {
                     const v = a.v, k = `${v.planta}|${claveDe(v).split('|')[1]}|${v.version}`, prev = autAcum[k];
                     if (prev && prev.como === 'SAP') return;
@@ -18195,6 +18266,21 @@ async function maybeAutoStartTour() {
                     nuevos++;
                 });
                 if (nuevos) await storeSet(CLAVE_AUT, autAcum);
+                // Autorizado en SAP: la nota y el compromiso quedan en la sección verde y se vacían en la lista, así cuando el RMD
+                // vuelve al backlog (versión nueva, suspensión…) llega como pendiente nuevo, sin la nota anterior. Solo se borra lo
+                // anotado antes de la autorización.
+                let notasCambiadas = false;
+                bk.aut.forEach((a) => {
+                    const v = a.v, fa = v.fAut && v.fAut.isValid && v.fAut.isValid() ? v.fAut.endOf('day').valueOf() : null;
+                    if (!fa) return;
+                    [claveDe(v), v.codigo && v.sol ? `${v.planta}|S${String(v.sol).trim()}` : ''].filter(Boolean).forEach((k) => {
+                        const n = notas[k];
+                        if (!n || (!n.t && !n.c && !n.cv)) return;
+                        if (n.f && Date.parse(n.f) > fa) return;
+                        notas = Object.assign({}, notas); delete notas[k]; notasCambiadas = true;
+                    });
+                });
+                if (notasCambiadas) await storeSet(CLAVE_NOTAS, notas);
             } catch (err) { console.warn('Backlog: no se pudo guardar los autorizados acumulados', err); }
             return { corte, mes: bk.mes, items, aut: bk.aut, cierre: cierre && cierre.pend ? cierre : null, sinRmdProg: prog.sinRmd, progError: prog.error || '' };
         }
@@ -18202,6 +18288,7 @@ async function maybeAutoStartTour() {
         // ---------- Filtros ----------
         // Los filtros de cabecera permiten varios valores (26/11/2026): vista[campo] es '' (todos), un texto o una lista.
         const valoresDe = (campo) => { const x = vista[campo]; return !x ? [] : Array.isArray(x) ? x : [x]; };
+        const compDe = (n) => { const c = n && n.c ? dayjs(n.c + 'T00:00:00') : null; return !c || !c.isValid() ? 'sin' : c.isBefore(hoy()) ? 'vencido' : 'con'; };
         const descDe = (it) => it.v.desc || (it.prog && it.prog.producto) || SIN_DATO;
         const en = (campo, val) => { const l = valoresDe(campo); return !l.length || l.includes(val); };
         function pasaFiltros(it, sinEstado) {
@@ -18216,6 +18303,8 @@ async function maybeAutoStartTour() {
             if (!sinEstado && !en('estado', estadoDe(it).m || SIN_ESTATUS)) return false;
             if (vista.cc && !(it.cc || []).includes(vista.cc)) return false;
             if (!en('desc', descDe(it))) return false;
+            if (!en('usuario', usuarioCorto(it.usuario) || SIN_DATO)) return false;
+            if (!en('comp', compDe(n))) return false;
             if (!en('area', it.seccion || SIN_DATO)) return false;
             if (!en('sap', String(it.v.estado || '').toUpperCase())) return false;
             if (!en('etapa', it.etapa || SIN_DATO)) return false;
@@ -18271,16 +18360,21 @@ async function maybeAutoStartTour() {
                 ? `<select data-bkl-resp-sel="${k}" class="etapa-estatus-select${resp ? '' : ' etapa-estatus-select--alerta'}" title="Control de cambio: elige si el responsable es ASC o PRO">${['', 'ASC', 'PRO'].map((r) => `<option value="${r}"${r === resp ? ' selected' : ''}>${r || 'Elegir...'}</option>`).join('')}</select>`
                 : `<span class="etapa-responsable-auto" title="Responsable asignado automáticamente según el Estatus">${esc(resp || '—')}</span>`;
             const obs = String(v.obs || '').trim();
-            const ult = it.ult;
-            return `<tr class="bkl-tr${it.nuevo ? ' es-nuevo' : ' es-bk'}${man ? ' es-manual' : ''}" data-k="${k}">
+            const ult = it.ult, cb = it.cambio && !(n && n.cv === it.cambio.sig) ? it.cambio : null;
+            const comp = compDe(n);
+            return `<tr class="bkl-tr${it.nuevo ? ' es-nuevo' : ' es-bk'}${man ? ' es-manual' : ''}${cb ? ' con-cambio' : ''}" data-k="${k}">
                 <td class="pl"><span class="bkl-orden">${i + 1}</span><b>${PLANTA_NOMBRE[v.planta]}</b></td>
+                <td class="sec">${it.seccion ? esc(it.seccion) : '<span class="pie" title="El área llega de SAP con «Enviar a Status RMD» desde el portal">—</span>'}</td>
                 <td class="desc"><b class="bkl-prod-txt">${esc(v.desc || (it.prog && it.prog.producto) || '(sin descripción)')}</b>
                     <div class="bkl-meta">${codigo}${v.codDef ? ` · ${esc(v.codDef)}` : ''}</div>
                     <div class="bkl-etiquetas">${it.nuevo ? `<span class="bkl-sticker nuevo" title="Pendiente que entró este mes (${esc(nombreMes(modelo.mes))})">Solicitud del mes</span>` : `<span class="bkl-sticker bk" title="Pendiente desde ${esc(nombreMes(it.m))}. ${esc(it.porque || '')}">Backlog</span>`}${it.prog ? `<span class="bkl-sticker prog" title="${esc(progTip)}">Programa</span>` : ''}${man ? '<span class="bkl-ok">Autorizado a mano</span>' : ''}${htmlChipsCc(it)}</div></td>
-                <td class="sec">${it.seccion ? esc(it.seccion) : '<span class="pie" title="El área llega de SAP con «Enviar a Status RMD» desde el portal">—</span>'}</td>
-                <td class="est-sap"><span class="bkl-tipo ${it.tipo === 'Ingresado' ? 'ing' : it.tipo === 'Solicitado' ? 'sol' : 'sus'}">${esc(String(v.estado || '').toUpperCase())}</span></td>
-                <td class="fecha">${ult ? `<span title="${ult.traz ? 'Último cambio de estado en la Trazabilidad de SAP' : 'Sin cambios en la Trazabilidad leída: fecha de registro, solicitud o suspensión del maestro de SAP'}">${fmt(ult.f)}${ult.traz ? '' : ' <span class="pie">(maestro)</span>'}</span>` : '—'}${it.dias !== null ? `<div class="pie">${plural(it.dias, 'día', 'días')} pendiente</div>` : ''}</td>
                 <td class="etapa">${esc(it.etapa || '—')}</td>
+                <td class="est-sap">${cb ? `<div class="bkl-cambio" title="Cambió de estado en SAP el ${fmt(cb.f)}${cb.verAnt ? ` (la versión ${esc(cb.verAnt)} estaba ${esc(cb.de)})` : ''}"><span>Cambió: ${esc(cb.de)} → ${esc(cb.a)}</span><button type="button" data-bkl-visto="${k}" title="Quitar la alerta">Visto</button></div>` : ''}
+                    <span class="bkl-tipo ${it.tipo === 'Ingresado' ? 'ing' : it.tipo === 'Solicitado' ? 'sol' : 'sus'}">${esc(String(v.estado || '').toUpperCase())}</span>
+                    <div class="bkl-ult">${ult ? `<span title="${ult.traz ? 'Última fecha de la Trazabilidad de SAP' : 'Sin cambios en la Trazabilidad leída: fecha de registro, solicitud o suspensión del maestro de SAP'}">${fmt(ult.f)}${ult.traz ? '' : ' <span class="pie">(maestro)</span>'}</span>` : '—'}${it.dias !== null ? `<div class="pie">${plural(it.dias, 'día', 'días')} pendiente</div>` : ''}</div></td>
+                <td class="usr">${it.usuario ? esc(usuarioCorto(it.usuario)) : '<span class="pie">—</span>'}</td>
+                <td class="comp"><input type="date" class="bkl-comp${comp === 'vencido' ? ' vencido' : ''}" data-bkl-comp="${k}" value="${esc((n && n.c) || '')}" aria-label="Fecha de compromiso"></td>
+                <td class="fing">${it.fIng ? fmt(it.fIng) : '<span class="pie">—</span>'}</td>
                 <td class="estatus"><select data-bkl-estatus="${k}" class="etapa-estatus-select ${claseColorEstatus(est)}" title="Estatus (el mismo de la pestaña Producción)">${opciones}</select></td>
                 <td class="resp">${selResp}</td>
                 <td class="obs">${obs ? `<span class="bkl-obs-completa">${esc(obs)}</span>` : '<span class="pie">—</span>'}</td>
@@ -18299,14 +18393,16 @@ async function maybeAutoStartTour() {
             return `<section class="bkl-autsec">
                 <h3>Autorizados del backlog <span class="n">${lista.length}</span><span class="sub">ATE ${nP('P1')} · LIMA ${nP('P2')} · se van sumando y no se borran · los más recientes primero</span></h3>
                 <div class="bkl-tabla-scroll"><table class="bkl-tabla verde">
-                    <thead><tr><th>Planta</th><th>Descripción</th><th>Área</th><th>Estado</th><th>Fecha de autorización</th><th>Etapa</th><th>Estatus</th><th>Autorizado por</th><th>Observación (de SAP)</th><th>Nota</th></tr></thead>
+                    <thead><tr><th>Planta</th><th>Área</th><th>Descripción</th><th>Etapa</th><th>Estado</th><th>Usuario de ingreso</th><th>Fecha de compromiso</th><th>Fecha de ingreso</th><th>Estatus</th><th>Autorizado por</th><th>Observación (de SAP)</th><th>Nota</th></tr></thead>
                     <tbody>${vis.map((a) => { const o = String(a.o || ''); return `<tr>
                         <td class="pl"><b>${PLANTA_NOMBRE[a.p] || esc(a.p)}</b></td>
-                        <td class="desc"><b>${esc(a.d || '(sin descripción)')}</b><div class="bkl-meta">${a.cod ? `RMD ${esc(a.cod)}` : `Solicitud ${esc(a.sol)}`} v${esc(a.ver)}${a.org ? ` · ${esc(a.org === 'BACKLOG' ? 'Backlog' : 'Solicitud del mes')}` : ''}</div></td>
                         <td class="sec">${esc(a.sec || '—')}</td>
-                        <td class="est-sap"><span class="bkl-aut">AUTORIZADO</span></td>
-                        <td class="fecha">${f(a.fa)}</td>
+                        <td class="desc"><b>${esc(a.d || '(sin descripción)')}</b><div class="bkl-meta">${a.cod ? `RMD ${esc(a.cod)}` : `Solicitud ${esc(a.sol)}`} v${esc(a.ver)}${a.org ? ` · ${esc(a.org === 'BACKLOG' ? 'Backlog' : 'Solicitud del mes')}` : ''}</div></td>
                         <td class="etapa">${esc(a.et || '—')}</td>
+                        <td class="est-sap"><span class="bkl-aut">AUTORIZADO</span><div class="bkl-ult">${f(a.fa)}</div></td>
+                        <td class="usr">${esc(usuarioCorto(a.ui) || '—')}</td>
+                        <td class="comp">${a.c ? f(a.c + 'T00:00:00') : '—'}</td>
+                        <td class="fing">${f(a.fi)}</td>
                         <td class="estatus"><span class="bkl-aut">${a.como === 'A mano' ? 'AUTORIZADO A MANO' : 'AUTORIZADO EN SAP'}</span></td>
                         <td class="resp">${esc(a.q || '—')}</td>
                         <td class="obs">${o ? `<span class="bkl-obs-completa">${esc(o)}</span>` : '—'}</td>
@@ -18324,6 +18420,8 @@ async function maybeAutoStartTour() {
                 ${sel('planta', 'Planta', [['P1', 'ATE'], ['P2', 'LIMA']])}
                 ${sel('desc', 'Descripción', unicos(descDe).map(id))}
                 ${sel('area', 'Área', unicos((it) => it.seccion || SIN_DATO).map(id))}
+                ${sel('usuario', 'Usuario de ingreso', unicos((it) => usuarioCorto(it.usuario) || SIN_DATO).map(id))}
+                ${sel('comp', 'Fecha de compromiso', [['con', 'Con fecha'], ['vencido', 'Vencida'], ['sin', 'Sin fecha']])}
                 ${sel('sap', 'Estado', unicos((it) => String(it.v.estado || '').toUpperCase()).filter(Boolean).map(id))}
                 ${sel('etapa', 'Etapa', unicos((it) => it.etapa || SIN_DATO).map(id))}
                 ${sel('estado', 'Estatus', [...ESTATUS_ETAPA_OPCIONES.map(id), [SIN_ESTATUS, 'Sin estatus']])}
@@ -18334,7 +18432,7 @@ async function maybeAutoStartTour() {
         function htmlTabla(vis) {
             const th = (txt, campo, cls) => `<th${cls ? ` class="${cls}"` : ''}${campo ? ` data-filtro="bklF-${campo}"` : ''}>${txt}</th>`;
             return `<div class="bkl-tabla-scroll"><table class="bkl-tabla">
-                <thead><tr>${th('Planta', 'planta')}${th('Descripción', 'desc')}${th('Área', 'area')}${th('Estado', 'sap')}${th('Última fecha de trazabilidad (SAP)', '', 'fecha')}${th('Etapa', 'etapa')}${th('Estatus', 'estado')}${th('Responsable', 'resp')}${th('Observación (de SAP)')}${th('Nota', 'conNota', 'nota')}</tr></thead>
+                <thead><tr>${th('Planta', 'planta')}${th('Área', 'area')}${th('Descripción', 'desc')}${th('Etapa', 'etapa')}${th('Estado', 'sap', 'est-sap')}${th('Usuario de ingreso', 'usuario', 'usr')}${th('Fecha de compromiso', 'comp', 'comp')}${th('Fecha de ingreso', '', 'fing')}${th('Estatus', 'estado')}${th('Responsable', 'resp')}${th('Observación (de SAP)')}${th('Nota', 'conNota', 'nota')}</tr></thead>
                 <tbody>${vis.map((x, i) => htmlFila(x, i)).join('')}</tbody></table></div>`;
         }
         function htmlNota(it) {
@@ -18477,7 +18575,7 @@ async function maybeAutoStartTour() {
             const orden = vista.orden === 'prio' ? ordenar(filtrados) : ordenarExcel(filtrados), vis = orden.slice(0, vista.mostrar);
             const nPl = (l, p) => l.filter((it) => it.v.planta === p).length, nBk = filtrados.filter((it) => !it.nuevo).length;
             const man = pendTodos.filter(manual).length;
-            const hayFiltro = valoresDe('planta').length || valoresDe('desc').length || valoresDe('area').length || valoresDe('sap').length || valoresDe('etapa').length || valoresDe('resp').length || valoresDe('conNota').length || valoresDe('estado').length || vista.tipo || vista.nuevo || vista.arrastre || vista.programa || vista.sinNota || vista.vencidos || vista.estado || vista.cc || vista.q;
+            const hayFiltro = valoresDe('planta').length || valoresDe('desc').length || valoresDe('usuario').length || valoresDe('comp').length || valoresDe('area').length || valoresDe('sap').length || valoresDe('etapa').length || valoresDe('resp').length || valoresDe('conNota').length || valoresDe('estado').length || vista.tipo || vista.nuevo || vista.arrastre || vista.programa || vista.sinNota || vista.vencidos || vista.estado || vista.cc || vista.q;
             const foco = document.activeElement && document.activeElement.matches && document.activeElement.matches('[data-bkl-buscar]');
             const sinRmd = modelo.sinRmdProg.P1 + modelo.sinRmdProg.P2;
             cont.innerHTML = `
@@ -18607,7 +18705,7 @@ async function maybeAutoStartTour() {
 
         // ---------- Eventos ----------
         let buscarTimer = null;
-        const limpiarFiltros = () => Object.assign(vista, { planta: '', desc: '', area: '', sap: '', etapa: '', resp: '', conNota: '', tipo: '', nuevo: false, arrastre: false, programa: false, sinNota: false, vencidos: false, estado: '', cc: '', q: '', mostrar: POR_PAGINA });
+        const limpiarFiltros = () => Object.assign(vista, { planta: '', desc: '', usuario: '', comp: '', area: '', sap: '', etapa: '', resp: '', conNota: '', tipo: '', nuevo: false, arrastre: false, programa: false, sinNota: false, vencidos: false, estado: '', cc: '', q: '', mostrar: POR_PAGINA });
         // Nota única por RMD (26/11/2026): siempre visible en la fila y se guarda sola (al dejar de escribir o al salir del cuadro).
         const notaTimers = new Map();
         const escribiendoNota = () => notaTimers.size > 0 || !!(document.activeElement && document.activeElement.matches && document.activeElement.matches('[data-bkl-nota-auto]'));
@@ -18661,7 +18759,8 @@ async function maybeAutoStartTour() {
                 }
                 if (d.bklLimpiar !== undefined) { limpiarFiltros(); pintar(); return; }
                 if (d.bklMas !== undefined) { vista.mostrar += POR_PAGINA; pintar(); return; }
-                if (d.bklAutMas !== undefined) { autVer += 60; pintar(); }
+                if (d.bklAutMas !== undefined) { autVer += 60; pintar(); return; }
+                if (d.bklVisto) { const it = itemDe(d.bklVisto); if (it && it.cambio) escribir(it, { cv: it.cambio.sig }, 'Visto el cambio de estado', leerAutor() || '').then(pintar); }
             });
             cont.addEventListener('change', (ev) => {
                 const s = ev.target.closest('[data-bkl-select]');
@@ -18669,7 +18768,9 @@ async function maybeAutoStartTour() {
                 const e = ev.target.closest('[data-bkl-estatus]');
                 if (e) { cambiarEstatus(e.dataset.bklEstatus, e.value); return; }
                 const r = ev.target.closest('[data-bkl-resp-sel]');
-                if (r) cambiarResponsable(r.dataset.bklRespSel, r.value);
+                if (r) { cambiarResponsable(r.dataset.bklRespSel, r.value); return; }
+                const c = ev.target.closest('[data-bkl-comp]');
+                if (c) { const it = itemDe(c.dataset.bklComp); if (it) escribir(it, { c: c.value || '' }, c.value ? 'Fecha de compromiso' : 'Fecha de compromiso borrada', leerAutor() || '').then(pintar); }
             });
             cont.addEventListener('input', (ev) => {
                 if (ev.target.matches('[data-bkl-nota-auto]')) {
@@ -18714,34 +18815,159 @@ async function maybeAutoStartTour() {
         }
 
         // ---------- Excel ----------
+        // Excel con la misma estructura de la tabla (26/11/2026). Las columnas en verde (Fecha de compromiso, Estatus,
+        // Responsable y Nota) se pueden editar en el Excel y volver a subir con «Importar Excel»; la columna Clave identifica cada RMD.
+        const CAB_XLS = ['Planta', 'Área', 'Descripción', 'Código del máster', 'Versión', 'Etapa', 'Estado', 'Cambio de estado', 'Última fecha de trazabilidad (SAP)',
+            'Usuario de ingreso', 'Fecha de compromiso', 'Fecha de ingreso', 'Estatus', 'Responsable', 'Observación (de SAP)', 'Nota', 'Clave (no editar)'];
+        const EDITABLES_XLS = ['Fecha de compromiso', 'Estatus', 'Responsable', 'Nota'];
         async function exportar() {
             if (!modelo || modelo.vacio) { Swal.fire({ icon: 'info', title: 'Sin datos', text: 'Abre la pestaña cuando haya RMD de SAP («Enviar a Status RMD»).', background: '#0f172a', color: '#e2e8f0' }); return; }
             const filt = modelo.items.filter((it) => pasaFiltros(it, false));
             const lista = vista.orden === 'prio' ? ordenar(filt) : ordenarExcel(filt);
-            // 26/11/2026 (pedido de Carlos): Excel simple, una hoja con las columnas de la tabla más el código del máster y su versión,
-            // con los filtros que estén puestos en la pestaña.
-            const cab = ['Planta', 'Descripción', 'Código del máster', 'Versión', 'Área', 'Estado', 'Última fecha de trazabilidad (SAP)', 'Etapa', 'Estatus', 'Responsable', 'Observación (de SAP)', 'Nota'];
+            const cab = CAB_XLS;
             const d = (x) => (x && x.isValid && x.isValid() ? new Date(Date.UTC(x.year(), x.month(), x.date())) : '');
             const filas = lista.map((x) => {
-                const it = x.it, v = it.v, n = notaDe(it) || {};
-                return [PLANTA_NOMBRE[v.planta], v.desc || '', v.codigo || (v.sol ? `Solicitud ${v.sol}` : ''), v.version || '', it.seccion || '', String(v.estado || '').toUpperCase(), it.ult ? d(it.ult.f) : '', it.etapa || '', estatusProd(it), respProd(it), v.obs || '', n.t || ''];
+                const it = x.it, v = it.v, n = notaDe(it) || {}, cb = it.cambio && n.cv !== it.cambio.sig ? it.cambio : null;
+                return [PLANTA_NOMBRE[v.planta], it.seccion || '', v.desc || '', v.codigo || (v.sol ? `Solicitud ${v.sol}` : ''), v.version || '', it.etapa || '', String(v.estado || '').toUpperCase(),
+                    cb ? `${cb.de} → ${cb.a} (${fmt(cb.f)})` : '', it.ult ? d(it.ult.f) : '', usuarioCorto(it.usuario), n.c ? d(dayjs(n.c + 'T00:00:00')) : '', d(it.fIng),
+                    estatusProd(it), respProd(it), v.obs || '', n.t || '', it.k];
             });
             const ws = XLSX.utils.aoa_to_sheet([cab, ...filas], { cellDates: true });
-            cab.forEach((_, j) => { const c = ws[XLSX.utils.encode_cell({ r: 0, c: j })]; if (c) c.s = { font: { bold: true, color: { rgb: 'FFFFFF' } }, fill: { patternType: 'solid', fgColor: { rgb: '1F3864' } }, alignment: { vertical: 'center', wrapText: true } }; });
-            filas.forEach((f, i) => f.forEach((val, j) => { const c = ws[XLSX.utils.encode_cell({ r: i + 1, c: j })]; if (c && val instanceof Date) c.z = 'dd/mm/yyyy'; }));
-            ws['!cols'] = cab.map((h) => ({ wch: /Descripci|Nota|Observaci/.test(h) ? 42 : Math.max(9, Math.min(22, h.length + 2)) }));
+            cab.forEach((h, j) => { const c = ws[XLSX.utils.encode_cell({ r: 0, c: j })]; if (c) c.s = { font: { bold: true, color: { rgb: 'FFFFFF' } }, fill: { patternType: 'solid', fgColor: { rgb: EDITABLES_XLS.includes(h) ? '1E7B4A' : h.startsWith('Clave') ? '7F7F7F' : '1F3864' } }, alignment: { vertical: 'center', wrapText: true } }; });
+            const jCambio = cab.indexOf('Cambio de estado');
+            filas.forEach((f, i) => f.forEach((val, j) => {
+                const c = ws[XLSX.utils.encode_cell({ r: i + 1, c: j })];
+                if (!c) return;
+                if (val instanceof Date) c.z = 'dd/mm/yyyy';
+                if (j === jCambio && val) c.s = { font: { bold: true, color: { rgb: '7C2D12' } }, fill: { patternType: 'solid', fgColor: { rgb: 'FED7AA' } } };
+            }));
+            ws['!cols'] = cab.map((h) => ({ wch: /Descripci|Nota|Observaci/.test(h) ? 42 : /Cambio/.test(h) ? 30 : /Clave/.test(h) ? 16 : Math.max(9, Math.min(22, h.length + 2)) }));
             ws['!autofilter'] = { ref: XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: filas.length, c: cab.length - 1 } }) };
+            const ayuda = XLSX.utils.aoa_to_sheet([['Cómo editar e importar'], [],
+                ['1. En la hoja Backlog puedes cambiar solo las columnas en verde: Fecha de compromiso, Estatus, Responsable y Nota.'],
+                [`2. Estatus válidos: ${ESTATUS_ETAPA_OPCIONES.join(', ')} (vacío = sin estatus).`],
+                [`3. Responsable solo se usa con ${ESTATUS_CC}: escribe ASC o PRO. Con los otros estatus el responsable sale solo.`],
+                ['4. Fecha de compromiso en formato dd/mm/aaaa (vacía = sin fecha).'],
+                ['5. No cambies ni borres la columna «Clave (no editar)»: con ella se ubica cada RMD.'],
+                ['6. Guarda el archivo y súbelo con «Importar Excel» en la pestaña BACKLOG. Antes de guardar se muestra un resumen de los cambios.']]);
+            ayuda['!cols'] = [{ wch: 110 }];
             const wb = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(wb, ws, 'Backlog');
+            XLSX.utils.book_append_sheet(wb, ayuda, 'Cómo importar');
             XLSX.writeFile(wb, `Backlog_RMD_${modelo.corte.format('YYYY-MM-DD')}.xlsx`, { cellStyles: true });
+        }
+
+        // ---------- Importar Excel ----------
+        const normTxt = (t) => String(t === null || t === undefined ? '' : t).normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, ' ').trim().toUpperCase();
+        function fechaXls(val) {
+            if (val === null || val === undefined || val === '') return '';
+            if (val instanceof Date && !isNaN(val)) return dayjs(new Date(val.getTime() + val.getTimezoneOffset() * 60000 + 12 * 3600000)).format('YYYY-MM-DD');
+            if (typeof val === 'number') { const dt = XLSX.SSF.parse_date_code(val); return dt ? dayjs(new Date(dt.y, dt.m - 1, dt.d)).format('YYYY-MM-DD') : null; }
+            const m = String(val).trim().match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{2,4})$/) || null;
+            if (m) { const y = m[3].length === 2 ? 2000 + Number(m[3]) : Number(m[3]); const f = dayjs(new Date(y, Number(m[2]) - 1, Number(m[1]))); return f.isValid() ? f.format('YYYY-MM-DD') : null; }
+            const iso = dayjs(String(val).trim()); return iso.isValid() ? iso.format('YYYY-MM-DD') : null;
+        }
+        function importar() {
+            if (!modelo || modelo.vacio) { Swal.fire({ icon: 'info', title: 'Sin datos', text: 'Abre la pestaña cuando haya RMD de SAP («Enviar a Status RMD»).', background: '#0f172a', color: '#e2e8f0' }); return; }
+            const inp = document.createElement('input');
+            inp.type = 'file'; inp.accept = '.xlsx,.xls';
+            inp.addEventListener('change', () => { const f = inp.files && inp.files[0]; if (f) leerImportacion(f); });
+            inp.click();
+        }
+        async function leerImportacion(archivo) {
+            let filas;
+            try {
+                const wb = XLSX.read(await archivo.arrayBuffer(), { type: 'array', cellDates: true });
+                const ws = wb.Sheets.Backlog || wb.Sheets[wb.SheetNames[0]];
+                filas = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: '' });
+            } catch (err) { Swal.fire({ icon: 'error', title: 'No se pudo leer el Excel', text: err.message, background: '#0f172a', color: '#e2e8f0' }); return; }
+            const cab = (filas[0] || []).map(normTxt), col = (n) => cab.indexOf(normTxt(n));
+            const cClave = cab.findIndex((h) => h.startsWith('CLAVE')), cPl = col('Planta'), cCod = col('Código del máster');
+            const cComp = col('Fecha de compromiso'), cEst = col('Estatus'), cResp = col('Responsable'), cNota = col('Nota');
+            if (cClave < 0 && (cPl < 0 || cCod < 0)) { Swal.fire({ icon: 'error', title: 'Formato no reconocido', text: 'Usa el Excel que sale de «Exportar Excel» de esta pestaña (con la columna «Clave (no editar)»).', background: '#0f172a', color: '#e2e8f0' }); return; }
+            const porClave = new Map(modelo.items.map((it) => [it.k, it]));
+            const plantaDeTxt = (t) => { const x = normTxt(t); return x === 'ATE' || x === 'P1' || x === 'PLANTA 1' ? 'P1' : x === 'LIMA' || x === 'P2' || x === 'PLANTA 2' ? 'P2' : ''; };
+            const opciones = new Map(ESTATUS_ETAPA_OPCIONES.map((e) => [normTxt(e), e]));
+            const cambios = [], noEncontrados = [], errores = [];
+            filas.slice(1).forEach((r, i) => {
+                if (!r || r.every((x) => x === '' || x === null)) return;
+                let it = cClave >= 0 ? porClave.get(String(r[cClave] || '').trim()) : null;
+                if (!it && cPl >= 0 && cCod >= 0) {
+                    const pl = plantaDeTxt(r[cPl]), cod = String(r[cCod] || '').trim(), sol = (cod.match(/^Solicitud\s+(\S+)/i) || [])[1];
+                    it = porClave.get(`${pl}|${sol ? `S${sol}` : `R${cod}`}`) || null;
+                }
+                const fila = i + 2;
+                if (!it) { noEncontrados.push(fila); return; }
+                const n = notaDe(it) || {}, c = { it };
+                if (cEst >= 0) {
+                    const e = normTxt(r[cEst]), nuevo = e ? opciones.get(e) || (e === 'POR REVISION' ? opciones.get('POR REVISIÓN') : null) : '';
+                    if (nuevo === null || nuevo === undefined) errores.push(`Fila ${fila}: estatus «${r[cEst]}» no válido`);
+                    else if (nuevo !== estatusProd(it)) c.est = nuevo;
+                }
+                const estFinal = c.est !== undefined ? c.est : estatusProd(it);
+                if (cResp >= 0 && estFinal === ESTATUS_CC) {
+                    const rr = normTxt(r[cResp]);
+                    if (rr && rr !== 'ASC' && rr !== 'PRO') errores.push(`Fila ${fila}: responsable «${r[cResp]}» (usa ASC o PRO)`);
+                    else if (rr && rr !== respProd(it)) c.resp = rr;
+                }
+                if (cComp >= 0) {
+                    const f = fechaXls(r[cComp]);
+                    if (f === null) errores.push(`Fila ${fila}: fecha de compromiso «${r[cComp]}» no válida`);
+                    else if (f !== (n.c || '')) c.comp = f;
+                }
+                if (cNota >= 0) { const t = String(r[cNota] === null || r[cNota] === undefined ? '' : r[cNota]).trim(); if (t !== String(n.t || '').trim()) c.nota = t; }
+                if (c.est !== undefined || c.resp !== undefined || c.comp !== undefined || c.nota !== undefined) cambios.push(c);
+            });
+            const nE = cambios.filter((c) => c.est !== undefined).length, nR = cambios.filter((c) => c.resp !== undefined).length;
+            const nC = cambios.filter((c) => c.comp !== undefined).length, nN = cambios.filter((c) => c.nota !== undefined).length;
+            const avisos = [noEncontrados.length ? `${plural(noEncontrados.length, 'fila no se encontró', 'filas no se encontraron')} en el backlog de hoy (ya autorizados o ya no pendientes): ${noEncontrados.slice(0, 12).join(', ')}${noEncontrados.length > 12 ? '…' : ''}` : '', ...errores.slice(0, 10), errores.length > 10 ? `y ${errores.length - 10} más` : ''].filter(Boolean);
+            if (!cambios.length) { Swal.fire({ icon: 'info', title: 'Sin cambios', html: `El Excel no trae cambios respecto de lo guardado.${avisos.length ? `<br><br><small>${avisos.map(esc).join('<br>')}</small>` : ''}`, background: '#0f172a', color: '#e2e8f0' }); return; }
+            const r = await Swal.fire({ title: 'Importar cambios del Excel', icon: 'question', showCancelButton: true, confirmButtonText: 'Guardar cambios', cancelButtonText: 'Cancelar', background: '#0f172a', color: '#e2e8f0',
+                html: `<p>${plural(cambios.length, 'RMD cambia', 'RMD cambian')}: ${[nE ? plural(nE, 'estatus', 'estatus') : '', nR ? plural(nR, 'responsable', 'responsables') : '', nC ? plural(nC, 'fecha de compromiso', 'fechas de compromiso') : '', nN ? plural(nN, 'nota', 'notas') : ''].filter(Boolean).join(' · ')}.</p>${avisos.length ? `<p style="margin-top:10px;font-size:12px;opacity:.85">${avisos.map(esc).join('<br>')}</p>` : ''}` });
+            if (!r.isConfirmed) return;
+            await aplicarImportacion(cambios);
+        }
+        async function aplicarImportacion(cambios) {
+            const autor = leerAutor() || '', ahora = new Date().toISOString();
+            // Estatus y responsable: mismas claves (y grupo de claves hermanas) que Producción; se guarda una sola vez.
+            let hayEst = false;
+            cambios.forEach((c) => {
+                if (c.est === undefined && c.resp === undefined) return;
+                hayEst = true;
+                clavesDelGrupo(claveProd(c.it)).forEach((key) => {
+                    if (c.est !== undefined) {
+                        if (!c.est) { estatusEtapa.delete(key); responsablesEtapa.delete(key); }
+                        else { estatusEtapa.set(key, c.est); responsablesEtapa.set(key, ESTATUS_ETAPA_RESPONSABLE_DEFECTO[c.est] || ''); }
+                    }
+                    if (c.resp !== undefined) responsablesEtapa.set(key, c.resp);
+                });
+            });
+            // Notas y compromisos: una sola escritura.
+            const nuevas = Object.assign({}, notas);
+            cambios.forEach((c) => {
+                if (c.comp === undefined && c.nota === undefined) return;
+                const k = c.it.k, antes = nuevas[k] || {}, cambio = {};
+                if (c.comp !== undefined) cambio.c = c.comp;
+                if (c.nota !== undefined) cambio.t = c.nota;
+                const h = (Array.isArray(antes.h) ? antes.h : []).concat([[ahora, autor, 'Importado desde Excel']]).slice(-20);
+                const nueva = Object.assign({}, antes, cambio, { u: autor, f: ahora, h });
+                Object.keys(nueva).forEach((x) => { if (nueva[x] === '' || nueva[x] === null || nueva[x] === undefined) delete nueva[x]; });
+                nuevas[k] = nueva;
+            });
+            const oks = [];
+            if (hayEst) { oks.push(await saveEstatusEtapa()); oks.push(await saveResponsablesEtapa()); }
+            if (cambios.some((c) => c.comp !== undefined || c.nota !== undefined)) { notas = nuevas; oks.push(await storeSet(CLAVE_NOTAS, notas)); }
+            pintar();
+            Swal.fire({ icon: oks.every(Boolean) ? 'success' : 'warning', title: oks.every(Boolean) ? 'Cambios guardados' : 'Guardado solo en este equipo',
+                text: oks.every(Boolean) ? `${plural(cambios.length, 'RMD actualizado', 'RMD actualizados')} desde el Excel.` : 'No se pudo subir a la nube; se reintentará solo.', background: '#0f172a', color: '#e2e8f0' });
         }
 
         return {
             alEntrar: () => { visitado = true; return actualizar(); },
-            actualizar, exportar, recargarNotas, recargarPronto,
+            actualizar, exportar, importar, recargarNotas, recargarPronto,
             // Para el Excel «Backlog del mes» de StatusRmd: devuelve (v) => info del Programa de producción o null.
             programaParaExcel: async () => { const p = await indicePrograma(); const f = (v) => programaDe(p.idx, v); f.autorizados = p.autorizados || null; return f; },
-            _modelo: () => modelo, _notas: () => notas, _vista: vista, _grupos: grupos, _sugerir: sugerir
+            _modelo: () => modelo, _notas: () => notas, _vista: vista, _grupos: grupos, _sugerir: sugerir, _leerImportacion: leerImportacion
         };
     })();
     </script>
