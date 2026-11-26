@@ -965,6 +965,7 @@
         .pfc-ops button:hover, .pfc-ops button:focus-visible { background: rgb(var(--info-rgb) / 0.12); outline: none; }
         .pfc-ops button.is-activo { background: rgb(var(--info-rgb) / 0.18); border-color: rgb(var(--info-rgb) / 0.5); font-weight: 650; }
         .pfc-ops button .pill-count { margin-left: 6px; opacity: .7; }
+        .pfc-buscar { width: 100%; margin-bottom: 6px; padding: 5px 8px; font: inherit; font-size: 12px; border-radius: 6px; border: 1px solid var(--field-border); background: var(--field-bg); color: var(--field-text); }
         .pfc-ops button .pfc-check { display: inline-block; width: 14px; height: 14px; margin-right: 6px; vertical-align: -2px; border: 1px solid var(--slate-500, #64748b); border-radius: 3px; font-size: 11px; line-height: 12px; text-align: center; }
         .pfc-ops button.is-activo .pfc-check { border-color: rgb(var(--info-rgb)); background: rgb(var(--info-rgb) / 0.85); color: #fff; }
         /* Autorizados agrupados por fecha de autorización */
@@ -2820,9 +2821,10 @@
         #tab-backlog .bkl-tabla td.pl { white-space:nowrap; } #tab-backlog .bkl-tabla td.pl .bkl-orden { margin-right:6px; }
         #tab-backlog .bkl-tabla td.desc { min-width:240px; } #tab-backlog .bkl-tabla td.desc .bkl-prod { text-align:left; }
         #tab-backlog .bkl-tabla td.desc .bkl-etiquetas { margin-top:4px; display:flex; flex-wrap:wrap; gap:4px; }
-        #tab-backlog .bkl-tabla td.fecha, #tab-backlog .bkl-tabla td.etapa, #tab-backlog .bkl-tabla td.est-sap { white-space:nowrap; }
+        #tab-backlog .bkl-tabla td.etapa, #tab-backlog .bkl-tabla td.est-sap { white-space:nowrap; }
+        #tab-backlog .bkl-tabla th.fecha, #tab-backlog .bkl-tabla td.fecha { width:96px; max-width:96px; white-space:normal; }
+        #tab-backlog .bkl-tabla th.nota, #tab-backlog .bkl-tabla td.nota { min-width:340px; width:26%; }
         #tab-backlog .bkl-tabla td.obs { min-width:220px; max-width:320px; font-size:11.5px; color:var(--slate-400); }
-        #tab-backlog .bkl-tabla td.nota { min-width:200px; }
         #tab-backlog .bkl-nota-auto { width:100%; min-height:44px; resize:vertical; font:inherit; font-size:12px; line-height:1.4; padding:5px 7px; border-radius:6px; border:1px solid var(--field-border); background:var(--field-bg); color:var(--field-text); }
         #tab-backlog .bkl-nota-auto::placeholder { color:var(--slate-500); opacity:1; }
         #tab-backlog .bkl-nota-auto:focus { outline:none; border-color:rgb(var(--info-rgb)); }
@@ -9279,7 +9281,8 @@ async function downloadPlanProduccionFromCloud() {
                         tit = el.dataset.titulo || 'Mostrar';
                         ops = botonesDe(el).map(b => ({ txt: b.textContent.replace(/\s+/g, ' ').trim(), on: b.classList.contains('active'), fn: () => b.click() }));
                     }
-                    return `<div class="pfc-sec"><div class="pfc-tit">${esc(tit)}</div><div class="pfc-ops">${ops.map(o => { acciones.push(o.fn); return `<button type="button" data-i="${acciones.length - 1}"${o.multi ? ` data-multi="${o.todos ? 'todos' : '1'}" aria-pressed="${o.on}"` : ''} class="${o.on ? 'is-activo' : ''}">${o.multi ? `<span class="pfc-check" aria-hidden="true">${o.on ? '&#10003;' : ''}</span>` : ''}${esc(o.txt)}</button>`; }).join('')}</div></div>`;
+                    const buscar = ops.length > 12 && ops[0] && ops[0].multi ? `<input type="search" class="pfc-buscar" placeholder="Buscar…" aria-label="Buscar en ${esc(tit)}">` : '';
+                    return `<div class="pfc-sec"><div class="pfc-tit">${esc(tit)}</div>${buscar}<div class="pfc-ops">${ops.map(o => { acciones.push(o.fn); return `<button type="button" data-i="${acciones.length - 1}"${o.multi ? ` data-multi="${o.todos ? 'todos' : '1'}" aria-pressed="${o.on}"` : ''} class="${o.on ? 'is-activo' : ''}">${o.multi ? `<span class="pfc-check" aria-hidden="true">${o.on ? '&#10003;' : ''}</span>` : ''}${esc(o.txt)}</button>`; }).join('')}</div></div>`;
                 }).join('');
                 const p = document.createElement('div');
                 p.id = 'popupFiltroCabecera';
@@ -9289,6 +9292,10 @@ async function downloadPlanProduccionFromCloud() {
                 p.setAttribute('aria-label', `Filtrar por ${nombre(th)}`);
                 p.innerHTML = secciones;
                 document.body.appendChild(p);
+                p.querySelectorAll('.pfc-buscar').forEach(inp => inp.addEventListener('input', () => {
+                    const q = inp.value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().trim();
+                    inp.nextElementSibling.querySelectorAll('[data-multi="1"]').forEach(b => { b.hidden = !!q && !b.textContent.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().includes(q); });
+                }));
                 p.querySelectorAll('button[data-i]').forEach(b => b.addEventListener('click', (e) => {
                     if (!b.dataset.multi) { cerrar(); acciones[+b.dataset.i](); refrescar(); return; }
                     e.stopPropagation();
@@ -9302,7 +9309,7 @@ async function downloadPlanProduccionFromCloud() {
                 const r = btn.getBoundingClientRect(), w = p.offsetWidth || 240, h = p.offsetHeight || 200;
                 p.style.left = Math.max(8, Math.min(r.left - 8, window.innerWidth - w - 8)) + 'px';
                 p.style.top = (r.bottom + 6 + h > window.innerHeight ? Math.max(8, r.top - h - 6) : r.bottom + 6) + 'px';
-                const primero = p.querySelector('button.is-activo') || p.querySelector('button');
+                const primero = p.querySelector('.pfc-buscar') || p.querySelector('button.is-activo') || p.querySelector('button');
                 if (primero) primero.focus({ preventScroll: true });
                 setTimeout(() => { document.addEventListener('click', fuera, true); document.addEventListener('keydown', tecla, true); }, 0);
             }
@@ -18009,7 +18016,7 @@ async function maybeAutoStartTour() {
         let abierto = '';           // clave del pendiente con la nota abierta
         let recargaTimer = null;
         const grupos = { prog: false, manual: false };   // (ya sin grupos plegables desde el 26/11/2026)
-        const vista = { planta: '', area: '', sap: '', etapa: '', resp: '', conNota: '', tipo: '', nuevo: false, arrastre: false, programa: false, sinNota: false, vencidos: false, estado: '', cc: '', q: '', orden: 'excel', mostrar: POR_PAGINA };
+        const vista = { planta: '', desc: '', area: '', sap: '', etapa: '', resp: '', conNota: '', tipo: '', nuevo: false, arrastre: false, programa: false, sinNota: false, vencidos: false, estado: '', cc: '', q: '', orden: 'excel', mostrar: POR_PAGINA };
         let ccAbierto = true;      // tabla de CC pendientes desplegada
 
         const esc = (t) => String(t === null || t === undefined ? '' : t).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -18194,6 +18201,7 @@ async function maybeAutoStartTour() {
         // ---------- Filtros ----------
         // Los filtros de cabecera permiten varios valores (26/11/2026): vista[campo] es '' (todos), un texto o una lista.
         const valoresDe = (campo) => { const x = vista[campo]; return !x ? [] : Array.isArray(x) ? x : [x]; };
+        const descDe = (it) => it.v.desc || (it.prog && it.prog.producto) || SIN_DATO;
         const en = (campo, val) => { const l = valoresDe(campo); return !l.length || l.includes(val); };
         function pasaFiltros(it, sinEstado) {
             if (!en('planta', it.v.planta)) return false;
@@ -18206,6 +18214,7 @@ async function maybeAutoStartTour() {
             if (vista.vencidos && !vencido(n)) return false;
             if (!sinEstado && !en('estado', estadoDe(it).m || SIN_ESTATUS)) return false;
             if (vista.cc && !(it.cc || []).includes(vista.cc)) return false;
+            if (!en('desc', descDe(it))) return false;
             if (!en('area', it.seccion || SIN_DATO)) return false;
             if (!en('sap', String(it.v.estado || '').toUpperCase())) return false;
             if (!en('etapa', it.etapa || SIN_DATO)) return false;
@@ -18313,6 +18322,7 @@ async function maybeAutoStartTour() {
             const id = (x) => [x, x];
             return `<div class="bkl-filtros-cab" hidden>
                 ${sel('planta', 'Planta', [['P1', 'ATE'], ['P2', 'LIMA']])}
+                ${sel('desc', 'Descripción', unicos(descDe).map(id))}
                 ${sel('area', 'Área', unicos((it) => it.seccion || SIN_DATO).map(id))}
                 ${sel('sap', 'Estado', unicos((it) => String(it.v.estado || '').toUpperCase()).filter(Boolean).map(id))}
                 ${sel('etapa', 'Etapa', unicos((it) => it.etapa || SIN_DATO).map(id))}
@@ -18322,9 +18332,9 @@ async function maybeAutoStartTour() {
             </div>`;
         }
         function htmlTabla(vis) {
-            const th = (txt, campo) => `<th${campo ? ` data-filtro="bklF-${campo}"` : ''}>${txt}</th>`;
+            const th = (txt, campo, cls) => `<th${cls ? ` class="${cls}"` : ''}${campo ? ` data-filtro="bklF-${campo}"` : ''}>${txt}</th>`;
             return `<div class="bkl-tabla-scroll"><table class="bkl-tabla">
-                <thead><tr>${th('Planta', 'planta')}${th('Descripción')}${th('Área', 'area')}${th('Estado', 'sap')}${th('Última fecha de trazabilidad (SAP)')}${th('Etapa', 'etapa')}${th('Estatus', 'estado')}${th('Responsable', 'resp')}${th('Observación (de SAP)')}${th('Nota', 'conNota')}</tr></thead>
+                <thead><tr>${th('Planta', 'planta')}${th('Descripción', 'desc')}${th('Área', 'area')}${th('Estado', 'sap')}${th('Última fecha de trazabilidad (SAP)', '', 'fecha')}${th('Etapa', 'etapa')}${th('Estatus', 'estado')}${th('Responsable', 'resp')}${th('Observación (de SAP)')}${th('Nota', 'conNota', 'nota')}</tr></thead>
                 <tbody>${vis.map((x, i) => htmlFila(x, i)).join('')}</tbody></table></div>`;
         }
         function htmlNota(it) {
@@ -18467,7 +18477,7 @@ async function maybeAutoStartTour() {
             const orden = vista.orden === 'prio' ? ordenar(filtrados) : ordenarExcel(filtrados), vis = orden.slice(0, vista.mostrar);
             const nPl = (l, p) => l.filter((it) => it.v.planta === p).length, nBk = filtrados.filter((it) => !it.nuevo).length;
             const man = pendTodos.filter(manual).length;
-            const hayFiltro = valoresDe('planta').length || valoresDe('area').length || valoresDe('sap').length || valoresDe('etapa').length || valoresDe('resp').length || valoresDe('conNota').length || valoresDe('estado').length || vista.tipo || vista.nuevo || vista.arrastre || vista.programa || vista.sinNota || vista.vencidos || vista.estado || vista.cc || vista.q;
+            const hayFiltro = valoresDe('planta').length || valoresDe('desc').length || valoresDe('area').length || valoresDe('sap').length || valoresDe('etapa').length || valoresDe('resp').length || valoresDe('conNota').length || valoresDe('estado').length || vista.tipo || vista.nuevo || vista.arrastre || vista.programa || vista.sinNota || vista.vencidos || vista.estado || vista.cc || vista.q;
             const foco = document.activeElement && document.activeElement.matches && document.activeElement.matches('[data-bkl-buscar]');
             const sinRmd = modelo.sinRmdProg.P1 + modelo.sinRmdProg.P2;
             cont.innerHTML = `
@@ -18597,7 +18607,7 @@ async function maybeAutoStartTour() {
 
         // ---------- Eventos ----------
         let buscarTimer = null;
-        const limpiarFiltros = () => Object.assign(vista, { planta: '', area: '', sap: '', etapa: '', resp: '', conNota: '', tipo: '', nuevo: false, arrastre: false, programa: false, sinNota: false, vencidos: false, estado: '', cc: '', q: '', mostrar: POR_PAGINA });
+        const limpiarFiltros = () => Object.assign(vista, { planta: '', desc: '', area: '', sap: '', etapa: '', resp: '', conNota: '', tipo: '', nuevo: false, arrastre: false, programa: false, sinNota: false, vencidos: false, estado: '', cc: '', q: '', mostrar: POR_PAGINA });
         // Nota única por RMD (26/11/2026): siempre visible en la fila y se guarda sola (al dejar de escribir o al salir del cuadro).
         const notaTimers = new Map();
         const escribiendoNota = () => notaTimers.size > 0 || !!(document.activeElement && document.activeElement.matches && document.activeElement.matches('[data-bkl-nota-auto]'));
