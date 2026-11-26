@@ -2533,27 +2533,32 @@
                             <input type="date" id="stsHasta" class="sts-campo" aria-label="Hasta">
                         </div>
                     </div>
-                    <button type="button" class="sts-btn sts-btn-icono" onclick="StatusRmd.actualizar()" title="Volver a calcular con los datos guardados" aria-label="Actualizar">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 11a8 8 0 0 0-14.6-4.5L4 8"/><path d="M4 3.5V8h4.5"/><path d="M4 13a8 8 0 0 0 14.6 4.5L20 16"/><path d="M20 20.5V16h-4.5"/></svg>
-                    </button>
-                    <button type="button" class="sts-btn" id="stsBtnExcel" onclick="StatusRmd.exportarTodo()" title="Descarga en Excel lo que cuenta cada número de la pestaña">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M4 9.5h16M4 15h16M10 9.5V20"/></svg>
-                        <span>Exportar detalle</span>
-                    </button>
-                    <button type="button" class="sts-btn" id="stsBtnBacklogMes" onclick="StatusRmd.exportarBacklogMes()" title="Excel del backlog del mes: Resumen (pendientes, composición, suspendidos vs INACTIVOS, prioridades, autorizados) y el detalle de cada tabla">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>
-                        <span>Backlog del mes (Excel)</span>
-                    </button>
-                    <button type="button" class="sts-btn sts-btn-primario" id="stsBtnPpt" onclick="StatusRmd.descargarPpt()">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11"/><path d="M7.5 10.5 12 15l4.5-4.5"/><path d="M5 19.5h14"/></svg>
-                        <span>Descargar PowerPoint</span>
-                    </button>
-                    <button type="button" class="sts-btn" id="stsBtnPptJef" onclick="StatusRmd.descargarPpt(true)" title="El PowerPoint que se presentó a jefatura (formato del 17/11/2026): status general al corte con Programa, Otros proyectados por días hábiles y caracterizaciones; Ruta 1, Ruta 2 y pendientes por planta">
-                        <span>PPT para jefatura</span>
-                    </button>
-                    <button type="button" class="sts-btn" id="stsBtnPptVb" onclick="VbRmd.abrir()" title="PowerPoint «Seguimiento de V°B° en RMD»: disminución de vistos buenos de los RMD actualizados (registro por RMD, antes y después)">
-                        <span>PPT de V°B°</span>
-                    </button>
+                </div>
+            </div>
+            <!-- Botones agrupados por función (pedido de Carlos, 26/11/2026: «hay muchos botones desagrupados y no está claro»).
+                 Solo texto, sin iconos. Mismos id y onclick de siempre (descargarPpt y traerListadoCaract cambian el <span>). -->
+            <div class="sts-herr" role="toolbar" aria-label="Acciones de Indicadores">
+                <div class="sts-grupo" role="group" aria-labelledby="stsGrpDatos">
+                    <span class="sts-grupo-lbl" id="stsGrpDatos">Datos</span>
+                    <div class="sts-grupo-btns">
+                        <button type="button" class="sts-btn" id="stsBtnRecalcular" onclick="StatusRmd.actualizar()" title="Vuelve a calcular la pestaña con los datos guardados y el periodo elegido"><span>Recalcular</span></button>
+                        <button type="button" class="sts-btn" id="stsBtnListadoCaract" onclick="StatusRmd.traerListadoCaract()" title="Trae de SharePoint el Excel CARACTERIZACIÓN LISTADO (hojas PLA1 y PLA2): de ahí sale la Ruta 2 y sus láminas del PowerPoint"><span>Traer Excel de caracterización</span></button>
+                    </div>
+                </div>
+                <div class="sts-grupo" role="group" aria-labelledby="stsGrpExcel">
+                    <span class="sts-grupo-lbl" id="stsGrpExcel">Descargar Excel</span>
+                    <div class="sts-grupo-btns">
+                        <button type="button" class="sts-btn" id="stsBtnExcel" onclick="StatusRmd.exportarTodo()" title="Descarga en Excel lo que cuenta cada número de la pestaña"><span>Detalle de los números</span></button>
+                        <button type="button" class="sts-btn" id="stsBtnBacklogMes" onclick="StatusRmd.exportarBacklogMes()" title="Excel del backlog del mes: Resumen (pendientes, composición, suspendidos vs INACTIVOS, prioridades, autorizados) y el detalle de cada tabla"><span>Backlog del mes</span></button>
+                    </div>
+                </div>
+                <div class="sts-grupo" role="group" aria-labelledby="stsGrpPpt">
+                    <span class="sts-grupo-lbl" id="stsGrpPpt">Descargar PowerPoint</span>
+                    <div class="sts-grupo-btns">
+                        <button type="button" class="sts-btn sts-btn-primario" id="stsBtnPpt" onclick="StatusRmd.descargarPpt()" title="El PowerPoint del status RMD con la plantilla del equipo, ya lleno con los números de la pestaña"><span>Status RMD</span></button>
+                        <button type="button" class="sts-btn" id="stsBtnPptJef" onclick="StatusRmd.descargarPpt(true)" title="El PowerPoint que se presentó a jefatura (formato del 17/11/2026): status general al corte con Programa, Otros proyectados por días hábiles y caracterizaciones; Ruta 1, Ruta 2 y pendientes por planta. Baja también el Excel de pendientes de la Ruta 1 y la Ruta 2"><span>Para jefatura</span></button>
+                        <button type="button" class="sts-btn" id="stsBtnPptVb" onclick="VbRmd.abrir()" title="PowerPoint «Seguimiento de V°B° en RMD»: disminución de vistos buenos de los RMD actualizados (registro por RMD, antes y después, con «Contar desde»)"><span>Seguimiento de V°B°</span></button>
+                    </div>
                 </div>
             </div>
             <div id="stsContenido" aria-live="polite"><p class="sts-vacio">Cargando…</p></div>
@@ -11180,7 +11185,7 @@ const TOUR_STEPS = [
     { tab: 'rmd', selector: '#alertsListRMD', title: 'Fechas Críticas', text: 'Lista priorizada de órdenes por urgencia: vencidas primero, luego las más próximas a vencer.' },
 
     // ---- Pestaña Indicadores (antes Status RMD) ----
-    { tab: 'status', selector: '#tab-status .sts-card', title: 'Indicadores', text: 'Los indicadores de RMD de Programa y Caracterizaciones por planta, como el PowerPoint del status: solicitados, backlog y autorizados del mes (del mes y del backlog), y los pendientes por etapa y responsable. «Descargar PowerPoint» baja la plantilla ya llena.' },
+    { tab: 'status', selector: '#tab-status .sts-card', title: 'Indicadores', text: 'Los indicadores de RMD de Programa y Caracterizaciones por planta, como el PowerPoint del status: solicitados, backlog y autorizados del mes (del mes y del backlog), y los pendientes por etapa y responsable. Arriba, los botones van por grupo: Datos (Recalcular, Traer Excel de caracterización), Descargar Excel (Detalle de los números, Backlog del mes) y Descargar PowerPoint (Status RMD, Para jefatura, Seguimiento de V°B°).' },
     { tab: 'backlog', selector: '#tab-backlog .bkl-card', title: 'Backlog', text: 'Los RMD que siguen pendientes (Ingresados, Solicitudes y Suspendidos sin versión nueva), con la etiqueta NUEVO para lo que entró este mes y PROGRAMA DE PRODUCCIÓN para lo que Producción necesita. Etiquetas BACKLOG y NUEVO; lo del Programa de producción va agrupado. Cada pendiente lleva su Estatus (como en Producción), una nota y se puede autorizar a mano.' },
 
     // ---- Pestaña Acuerdos ----
@@ -12647,6 +12652,18 @@ async function maybeAutoStartTour() {
         .sts-btn-icono { width:36px; padding:0; justify-content:center; }
         .sts-btn-primario { background:var(--accent); border-color:var(--accent); color:var(--accent-ink); }
         .sts-btn-primario:hover { background:var(--accent-strong); border-color:var(--accent-strong); }
+        /* Barra de acciones de INDICADORES agrupada por función (26/11/2026). */
+        #tab-status .sts-cabecera { border-bottom:0; padding-bottom:0; margin-bottom:16px; }
+        #tab-status .sts-herr { display:flex; flex-wrap:wrap; gap:12px 28px; align-items:flex-start; padding-bottom:18px; margin:-4px 0 18px; border-bottom:1px solid var(--card-border-highlight); }
+        #tab-status .sts-grupo { display:flex; flex-direction:column; gap:6px; min-width:0; }
+        #tab-status .sts-grupo + .sts-grupo { padding-left:28px; border-left:1px solid var(--card-border-highlight); }
+        #tab-status .sts-grupo-lbl { font-size:10.5px; font-weight:600; letter-spacing:.04em; text-transform:uppercase; color:var(--slate-400); }
+        #tab-status .sts-grupo-btns { display:flex; flex-wrap:wrap; gap:8px; }
+        @media (max-width: 1240px) {
+            #tab-status .sts-grupo + .sts-grupo { padding-left:0; border-left:0; }
+            #tab-status .sts-herr { gap:14px 32px; }
+        }
+        @media (max-width: 700px) { #tab-status .sts-herr { flex-direction:column; } }
 
         :is(#tab-status, #prodAcumulado) .sts-vacio { font-size:13px; color:var(--slate-400); padding:28px 0; text-align:center; }
         :is(#tab-status, #prodAcumulado) .sts-meta { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:16px; }
@@ -15950,12 +15967,9 @@ async function maybeAutoStartTour() {
         const URL_LISTADO_CARACT = 'https://medifarmape.sharepoint.com' + RUTA_LISTADO_CARACT.split('/').map(encodeURIComponent).join('/');
         function htmlOrigenListado(d) {
             const l = d.listado;
-            const btn = `<button type="button" class="sts-btn" id="stsBtnListadoCaract" onclick="StatusRmd.traerListadoCaract()" title="Trae de SharePoint el Excel CARACTERIZACIÓN LISTADO (hojas PLA1 y PLA2)">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 11a8 8 0 0 0-14.6-4.5L4 8"/><path d="M4 3.5V8h4.5"/><path d="M4 13a8 8 0 0 0 14.6 4.5L20 16"/><path d="M20 20.5V16h-4.5"/></svg>
-                <span>Traer Excel de caracterización</span></button>`;
             const txt = l ? `Del Excel <b>CARACTERIZACIÓN LISTADO</b> de SharePoint, traído el ${esc(dayjs(l.cargado).format('DD/MM/YYYY HH:mm'))} (${l.filas.length} filas de PLA1 y PLA2). Así sale también en el PowerPoint.`
                 : 'Todavía no se trajo el Excel <b>CARACTERIZACIÓN LISTADO</b>: por ahora la Ruta 2 sale de los RMD de SAP con Motivo CARACTERIZACION.';
-            return `<div class="sts-regla" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap"><span style="flex:1;min-width:240px">${txt}</span>${btn}</div>`;
+            return `<div class="sts-regla">${txt} Se trae con <b>Datos › Traer Excel de caracterización</b>, arriba.</div>`;
         }
         // Guarda el Excel que llega (bytes en base64 o ArrayBuffer) y recalcula.
         async function recibirListadoCaract(x) {
