@@ -2807,6 +2807,29 @@
         #tab-backlog .bkl-ccsit { font:inherit; font-size:12px; height:30px; padding:0 11px; border-radius:8px; border:1px solid var(--field-border); background:transparent; color:var(--slate-300); cursor:pointer; }
         #tab-backlog .bkl-ccsit[aria-pressed="true"] { border-color:var(--accent); background:rgba(var(--accent-rgb) / .14); color:var(--app-text); font-weight:600; }
         #tab-backlog .bkl-cc-h { font-size:12px; font-weight:700; color:var(--app-text); margin:14px 14px 6px; }
+        /* Tabla de pendientes (26/11/2026): columnas de la pestaña Producción */
+        #tab-backlog .bkl-tabla-scroll { overflow-x:auto; border:1px solid var(--card-border-highlight); border-radius:12px; }
+        #tab-backlog .bkl-tabla { width:100%; min-width:1280px; border-collapse:collapse; font-size:12px; line-height:1.4; color:var(--slate-300); }
+        #tab-backlog .bkl-tabla th { position:sticky; top:0; z-index:1; text-align:left; font-size:10px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--slate-400); background:var(--surface-2); padding:8px; border-bottom:1px solid var(--card-border-highlight); }
+        #tab-backlog .bkl-tabla td { vertical-align:top; padding:8px; border-bottom:1px solid var(--card-border-highlight); }
+        #tab-backlog .bkl-tabla tr.es-nuevo td.pl { box-shadow:inset 3px 0 0 rgb(var(--copper-rgb)); }
+        #tab-backlog .bkl-tabla tr.es-bk td.pl { box-shadow:inset 3px 0 0 rgba(var(--plum-rgb) / .7); }
+        #tab-backlog .bkl-tabla tr.abierto td { background:var(--surface-1-soft); }
+        #tab-backlog .bkl-tabla td.pl { white-space:nowrap; } #tab-backlog .bkl-tabla td.pl .bkl-orden { margin-right:6px; }
+        #tab-backlog .bkl-tabla td.desc { min-width:240px; } #tab-backlog .bkl-tabla td.desc .bkl-prod { text-align:left; }
+        #tab-backlog .bkl-tabla td.desc .bkl-etiquetas { margin-top:4px; display:flex; flex-wrap:wrap; gap:4px; }
+        #tab-backlog .bkl-tabla td.fecha, #tab-backlog .bkl-tabla td.etapa, #tab-backlog .bkl-tabla td.est-sap { white-space:nowrap; }
+        #tab-backlog .bkl-tabla td.obs { min-width:220px; max-width:320px; font-size:11.5px; color:var(--slate-400); }
+        #tab-backlog .bkl-tabla td.nota { min-width:170px; }
+        #tab-backlog .bkl-tabla td.nota .bkl-botones { display:flex; gap:4px; margin-top:4px; }
+        #tab-backlog .bkl-tabla .pie { font-size:10.5px; color:var(--slate-500); }
+        #tab-backlog .bkl-tabla tr.bkl-tr-nota td { padding:0; }
+        #tab-backlog .bkl-autsec { margin:18px 0; padding:12px; border-radius:14px; border:1px solid rgb(var(--ok-rgb) / .45); background:rgb(var(--ok-rgb) / .07); }
+        #tab-backlog .bkl-autsec h3 { display:flex; align-items:baseline; flex-wrap:wrap; gap:8px; margin:0 0 10px; font-size:14px; font-weight:700; color:rgb(var(--ok-rgb)); }
+        #tab-backlog .bkl-autsec h3 .n { font-size:18px; } #tab-backlog .bkl-autsec h3 .sub { font-size:11.5px; font-weight:400; color:var(--slate-400); }
+        #tab-backlog .bkl-tabla.verde td { background:rgb(var(--ok-rgb) / .05); }
+        #tab-backlog .bkl-tabla.verde th { background:rgb(var(--ok-rgb) / .16); color:rgb(var(--ok-rgb)); }
+        #tab-backlog .bkl-aut { display:inline-block; font-size:10px; font-weight:800; letter-spacing:.05em; padding:3px 7px; border-radius:4px; background:rgb(var(--ok-rgb) / .18); color:rgb(var(--ok-rgb)); white-space:nowrap; }
         #tab-backlog .bkl-cc-scroll { overflow-x:auto; margin:0 0 6px; padding:0 14px 8px; }
         #tab-backlog .bkl-cc-tabla { width:100%; min-width:980px; border-collapse:collapse; font-size:12px; line-height:1.45; color:var(--slate-300); }
         #tab-backlog .bkl-cc-tabla th { text-align:left; font-size:11px; font-weight:700; color:var(--slate-400); padding:6px 8px; border-bottom:1px solid var(--card-border-highlight); white-space:nowrap; }
@@ -3790,7 +3813,7 @@ alter publication supabase_realtime add table public.rmd_dashboard_kv;`;
             val_manual_autorizados: 'lista', val_manual_autorizados_meta: 'objeto',
             val_manual_autorizados_forecast: 'lista', val_manual_autorizados_forecast_meta: 'objeto',
             val_fecha_inicio_manual: 'objeto',
-            val_backlog_notas: 'objeto'
+            val_backlog_notas: 'objeto', val_backlog_autorizados: 'objeto'
         };
         function compartidoAMapa(formato, valor) {
             const m = new Map();
@@ -8138,6 +8161,7 @@ async function downloadPlanProduccionFromCloud() {
                     const codigoRmdCol = colIndexByName['código'] ?? colIndexByName['codigo'] ?? -1;
                     const solicitudCol = findCol('código de solicitud', 'codigo de solicitud');
                     const plantaCol = findCol('planta');
+                    const seccionCol = findCol('secci');
                     const fechaSolicitudCol = findCol('fecha solicitud');
                     const fechaAutorizacionCol = findCol('fecha autoriz');
                     const fechaRegistroCol = findCol('fecha registro');
@@ -8183,6 +8207,8 @@ async function downloadPlanProduccionFromCloud() {
                             solicitud: solicitudCol !== -1 ? String(row[solicitudCol] || '').trim() : '',
                             // Planta (P1 Ate / P2 Lima): con ella Status RMD muestra qué RMD hay detrás de cada número del cuadro del mes.
                             planta: plantaCol !== -1 ? (StatusRmd.plantaDe(row[plantaCol]) || '') : '',
+                            // Sección de SAP (26/11/2026, columna SECCION de la pestaña BACKLOG).
+                            seccion: seccionCol !== -1 ? String(row[seccionCol] || '').trim() : '',
                             fechaRegistro: fechaRegistroCol !== -1 ? fechaTexto(row[fechaRegistroCol]) : '',
                             usuarioRegistro: usuarioRegistroCol !== -1 ? String(row[usuarioRegistroCol] || '').trim() : '',
                             fechaAutorizacion: fechaAutorizacionCol !== -1 ? fechaTexto(row[fechaAutorizacionCol]) : '',
@@ -17911,6 +17937,12 @@ async function maybeAutoStartTour() {
 
     const BacklogRmd = (() => {
         const CLAVE_NOTAS = 'val_backlog_notas';
+        // Autorizados del backlog acumulados (pedido de Carlos, 26/11/2026: «todo lo que se vaya autorizando que se vaya guardando
+        // abajo de color verde y acumulando, que no se borre»). Clave compartida (objeto) «P1|R<código>|<versión>» → { p, d, sec,
+        // et, o, n, cod, sol, ver, fa (fecha de autorización ISO), como ('SAP' | 'A mano'), q (quién autorizó), org, g (guardado) }.
+        // Solo se agregan entradas; se quita una solo si se deshace una autorización a mano que SAP aún no registró.
+        const CLAVE_AUT = 'val_backlog_autorizados';
+        let autAcum = {};
         const CLAVE_AUTOR = 'bkl_autor'; // localStorage: quién anota en este navegador (solo comodidad)
         const PLANTA_NOMBRE = { P1: 'ATE', P2: 'LIMA' };
         const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'setiembre', 'octubre', 'noviembre', 'diciembre'];
@@ -17969,6 +18001,15 @@ async function maybeAutoStartTour() {
         const nombres = () => Object.values(typeof DNI_DIRECTORIO === 'object' ? DNI_DIRECTORIO : {});
         // Autorizado a mano y SAP sigue igual (mismo estado y versión): ya no es pendiente.
         const manual = (it) => { const n = notaDe(it); return !!(n && n.ok && n.ok.firma === firmaDe(it)); };
+        // Estatus y responsable = los de la pestaña Producción (pedido de Carlos, 26/11/2026: «los mismos 5 estatus»): se leen y
+        // se guardan en el mismo lugar (val_estatus_etapa / val_responsables_etapa) con la misma clave «material::ETAPA», donde el
+        // material es el código por defecto del RMD (el código de la etapa en Producción). Lo que se elige aquí se ve en
+        // Producción y al revés.
+        const matDe = (v) => normalizeMaterialCode(v.codDef || '') || (v.codigo ? `RMD${String(v.codigo).trim()}` : `SOL${String(v.sol || '').trim()}`);
+        const claveProd = (it) => responsableKey(matDe(it.v), it.etapa);
+        const estatusProd = (it) => estatusVigente(estatusEtapa.get(claveProd(it))) || '';
+        const respProd = (it) => responsableDeEstatus(estatusProd(it), responsablesEtapa.get(claveProd(it)));
+        const SIN_ESTATUS = 'SIN';
 
         // ---------- Programa de Producción (Ruta 1) ----------
         async function indicePrograma() {
@@ -18018,7 +18059,7 @@ async function maybeAutoStartTour() {
             if (/MASIV/i.test(obs)) return { m: 'MASIVO', por: 'La Observación de SAP menciona un cambio masivo.' };
             return { m: 'VERSION', por: it.prog ? 'Está en el Programa de Producción y su RMD sigue suspendido.' : 'Suspendido sin versión nueva.' };
         }
-        function estadoDe(it) { const n = notaDe(it), m = n && estadoId(n.m); return m ? { m, confirmado: true } : { m: it.sug.m, confirmado: false }; }
+        function estadoDe(it) { const m = estatusProd(it); return { m, confirmado: !!m }; }
         function vencido(n) { if (!n || !n.c) return false; const c = dayjs(n.c + 'T00:00:00'); return c.isValid() && c.isBefore(hoy()); }
 
         // ---------- Orden ----------
@@ -18071,15 +18112,56 @@ async function maybeAutoStartTour() {
                 Promise.resolve(StatusRmd._cierreJefatura ? StatusRmd._cierreJefatura(mesCierre) : null).catch(() => null)
             ]);
             notas = guardadas && typeof guardadas === 'object' && !Array.isArray(guardadas) ? guardadas : {};
+            // Sección de SAP de cada RMD (llega con «Enviar a Status RMD» desde el 26/11/2026).
+            const secc = new Map();
+            filas.forEach((f) => { if (!f.seccion) return; const pl = StatusRmd.plantaDe(f.planta) || f.planta, c = String(f.codigo || '').trim(), sl = String(f.solicitud || '').trim();
+                if (c) secc.set(`${pl}|R${c}|${Number(f.version) || 0}`, f.seccion); if (sl) secc.set(`${pl}|S${sl}|${Number(f.version) || 0}`, f.seccion); });
+            // Última fecha de la Trazabilidad de SAP de la versión (cualquier cambio de estado). Sin cambios leídos en la
+            // Trazabilidad, la última fecha que trae el maestro de SAP (registro, solicitud o suspensión).
+            const ultimaTraz = (v, fS) => {
+                const fija = mapEtapaAFija(normalizeEtapa(v.etapa || ''));
+                const t = traz && traz.items && fija ? traz.items[`${v.codigo || ''}|${v.sol || ''}|${v.version}|${fija}`] : null;
+                if (t && t.length) { const ms = Math.max(...t.map((y) => Number(y[0]) || 0)); if (ms) return { f: dayjs(ms * 1000), traz: true }; }
+                const fs = [v.fReg, v.fSol, fS].filter((d) => d && d.isValid && d.isValid()).sort((a, b) => b.valueOf() - a.valueOf());
+                return fs.length ? { f: fs[0], traz: false } : null;
+            };
             const items = bk.pend.map((x) => {
                 const v = x.v, et = etapaDe(v);
                 const base = x.tipo === 'Suspendido' ? x.fS : x.tipo === 'Solicitado' ? (v.fSol || v.fReg) : v.fReg;
                 const kSol = v.codigo && v.sol ? `${v.planta}|S${String(v.sol).trim()}` : '';
                 const pr = programaDe(prog.idx, v);
                 return { k: claveDe(v), kSol, v, tipo: x.tipo, m: x.m, nuevo: x.m === bk.mes, etapa: et, fS: x.fS || null, base: base || null,
-                    dias: base ? corte.diff(base, 'day') : null, porque: x.porque, prio: x.prio || '', prog: pr };
+                    dias: base ? corte.diff(base, 'day') : null, porque: x.porque, prio: x.prio || '', prog: pr,
+                    seccion: secc.get(`${v.planta}|R${String(v.codigo || '').trim()}|${v.version}`) || secc.get(`${v.planta}|S${String(v.sol || '').trim()}|${v.version}`) || '',
+                    ult: ultimaTraz(v, x.fS || null) };
             });
             items.forEach((it) => { it.sug = sugerir(it); it.cc = CcBacklog.motivos(it.v, it.tipo); });
+            // Autorizados del backlog: los autorizados del mes en SAP (todos venían de esta lista: backlog o solicitud del mes) y
+            // los autorizados a mano; se suman a lo guardado y nunca se borran.
+            try {
+                const g = await storeGet(CLAVE_AUT);
+                autAcum = g && typeof g === 'object' && !Array.isArray(g) ? g : {};
+                let nuevos = 0;
+                const iso = (d) => (d && d.isValid && d.isValid() ? d.toISOString() : '');
+                const base = (v, x) => ({ p: v.planta, d: v.desc || '', sec: x.sec || '', et: etapaDe(v), o: v.obs || '', n: ((notas[claveDe(v)] || {}).t) || '', cod: v.codigo ? String(v.codigo).trim() : '',
+                    sol: v.sol ? String(v.sol).trim() : '', ver: v.version, org: x.org || '', g: new Date().toISOString() });
+                bk.aut.forEach((a) => {
+                    const v = a.v, k = `${v.planta}|${claveDe(v).split('|')[1]}|${v.version}`, prev = autAcum[k];
+                    if (prev && prev.como === 'SAP') return;
+                    const q = (typeof autorizadorDeRmd === 'function' && autorizadorDeRmd(v.codigo, v.sol)) || null;
+                    autAcum[k] = Object.assign(base(v, { sec: secc.get(`${v.planta}|R${String(v.codigo || '').trim()}|${v.version}`), org: a.cuenta === 'Backlog' ? 'BACKLOG' : 'SOLICITUD DEL MES' }),
+                        prev || {}, { fa: iso(v.fAut), como: 'SAP', q: q ? q.corto : '' });
+                    nuevos++;
+                });
+                items.filter(manual).forEach((it) => {
+                    const v = it.v, k = `${v.planta}|${claveDe(v).split('|')[1]}|${v.version}`;
+                    if (autAcum[k]) return;
+                    const ok = (notaDe(it) || {}).ok || {};
+                    autAcum[k] = Object.assign(base(v, { sec: it.seccion, org: it.nuevo ? 'SOLICITUD DEL MES' : 'BACKLOG' }), { fa: ok.f || new Date().toISOString(), como: 'A mano', q: ok.u || '' });
+                    nuevos++;
+                });
+                if (nuevos) await storeSet(CLAVE_AUT, autAcum);
+            } catch (err) { console.warn('Backlog: no se pudo guardar los autorizados acumulados', err); }
             return { corte, mes: bk.mes, items, aut: bk.aut, cierre: cierre && cierre.pend ? cierre : null, sinRmdProg: prog.sinRmd, progError: prog.error || '' };
         }
 
@@ -18091,13 +18173,13 @@ async function maybeAutoStartTour() {
             if (vista.arrastre && it.nuevo) return false;
             if (vista.programa && !it.prog) return false;
             const n = notaDe(it);
-            if (vista.sinNota && n && n.m) return false;
+            if (vista.sinNota && estadoDe(it).m) return false;
             if (vista.vencidos && !vencido(n)) return false;
-            if (!sinEstado && vista.estado && estadoDe(it).m !== vista.estado) return false;
+            if (!sinEstado && vista.estado && (vista.estado === SIN_ESTATUS ? !!estadoDe(it).m : estadoDe(it).m !== vista.estado)) return false;
             if (vista.cc && !(it.cc || []).includes(vista.cc)) return false;
             if (vista.q) {
                 const q = vista.q.normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase();
-                const t = [it.v.desc, it.v.codigo, it.v.sol, it.v.codDef, it.etapa, n && n.t, n && n.a, it.prog && it.prog.producto, ...(it.cc || []).filter(CcBacklog.esCc)].join(' ').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase();
+                const t = [it.v.desc, it.v.codigo, it.v.sol, it.v.codDef, it.etapa, it.seccion, it.v.obs, n && n.t, n && n.a, it.prog && it.prog.producto, ...(it.cc || []).filter(CcBacklog.esCc)].join(' ').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase();
                 if (!q.split(/\s+/).every((p) => t.includes(p))) return false;
             }
             return true;
@@ -18130,7 +18212,8 @@ async function maybeAutoStartTour() {
                 </select>
                 <select class="bkl-campo" data-bkl-select="estado" aria-label="Estatus">
                     <option value="">Todos los estatus</option>
-                    ${ESTADOS.map((e) => `<option value="${esc(e.id)}"${vista.estado === e.id ? ' selected' : ''}>${esc(e.txt)}</option>`).join('')}
+                    ${ESTATUS_ETAPA_OPCIONES.map((e) => `<option value="${esc(e)}"${vista.estado === e ? ' selected' : ''}>${esc(e)}</option>`).join('')}
+                    <option value="${SIN_ESTATUS}"${vista.estado === SIN_ESTATUS ? ' selected' : ''}>Sin estatus</option>
                 </select>
                 ${tog('arrastre', 'Backlog')}${tog('nuevo', 'Solicitud del mes')}${tog('programa', 'Programa de producción')}${tog('sinNota', 'Sin estatus elegido')}${tog('vencidos', 'Compromiso vencido')}
                 ${vista.cc ? `<button type="button" class="bkl-toggle" data-bkl-cc-ver="${esc(vista.cc)}" aria-pressed="true" title="Quitar este filtro">Motivo: ${esc(ccNombre(vista.cc))} ✕</button>` : ''}
@@ -18138,54 +18221,76 @@ async function maybeAutoStartTour() {
                     <option value="excel"${vista.orden !== 'prio' ? ' selected' : ''}>Orden del Excel de sustento</option>
                     <option value="prio"${vista.orden === 'prio' ? ' selected' : ''}>Orden por prioridad</option>
                 </select>
-                <input type="search" class="bkl-campo bkl-buscar" data-bkl-buscar placeholder="Buscar producto, código o nota" value="${esc(vista.q)}" aria-label="Buscar">
+                <input type="search" class="bkl-campo bkl-buscar" data-bkl-buscar placeholder="Buscar producto, código, observación o nota" value="${esc(vista.q)}" aria-label="Buscar">
             </div>`;
         }
-        function htmlItem(x, i, conOrden) {
-            const it = x.it, v = it.v, n = notaDe(it), est = estadoDe(it), E = ESTADO[est.m] || ESTADO.OTRO, man = manual(it);
-            const tipoCls = it.tipo === 'Ingresado' ? 'ing' : it.tipo === 'Solicitado' ? 'sol' : 'sus';
-            const tipoTxt = it.tipo === 'Ingresado' ? 'Ingresado · por autorizar' : it.tipo === 'Solicitado' ? 'Solicitud · por ingresar' : 'Suspendido · sin versión nueva';
-            const progTip = it.prog ? `Programa de producción: ${it.prog.producto || ''}${it.prog.inicio ? ` · inicia ${fmt(it.prog.inicio)}` : ''}${it.prog.estatus ? ` · Estatus en Producción: ${it.prog.estatus}` : ''}` : '';
-            const codigo = v.codigo ? `RMD ${esc(v.codigo)} v${esc(v.version)}` : `Solicitud ${esc(v.sol)}`;
-            const desde = it.base ? `${it.tipo === 'Suspendido' ? 'suspendido' : it.tipo === 'Solicitado' ? 'solicitado' : 'ingresado'} el ${fmt(it.base)} · ${plural(it.dias, 'día', 'días')}` : (it.tipo === 'Suspendido' ? 'suspendido antes de 2026' : '');
-            const comp = n && n.c ? dayjs(n.c + 'T00:00:00') : null, venc = vencido(n);
-            const seg = n && n.s ? n.s : '';
-            const resp = (n && n.r) || E.resp || '';
-            const ab = abierto === it.k;
-            return `<li class="bkl-item${it.nuevo ? ' es-nuevo' : ' es-bk'}${ab ? ' abierto' : ''}${man ? ' es-manual' : ''}" data-k="${esc(it.k)}">
-                <div class="bkl-fila">
-                    ${conOrden ? `<span class="bkl-orden" title="${esc(x.s.por)}">${i + 1}</span>` : '<span class="bkl-orden"></span>'}
-                    <div class="bkl-info">
-                        <div class="bkl-etiquetas">
-                            ${it.nuevo ? `<span class="bkl-sticker nuevo" title="Pendiente que entró este mes (${esc(nombreMes(modelo.mes))})">Solicitud del mes</span>` : `<span class="bkl-sticker bk" title="Pendiente desde ${esc(nombreMes(it.m))}">Backlog</span>`}
-                            ${it.prog ? `<span class="bkl-sticker prog" title="${esc(progTip)}">Programa de producción</span>` : ''}
-                            <span class="bkl-tipo ${tipoCls}">${tipoTxt}</span>
-                            ${htmlChipsCc(it)}
-                        </div>
-                        <button type="button" class="bkl-prod" data-bkl-abrir="${esc(it.k)}" aria-expanded="${ab}">${esc(v.desc || (it.prog && it.prog.producto) || '(sin descripción)')}</button>
-                        <div class="bkl-meta"><b>${PLANTA_NOMBRE[v.planta]}</b> · ${esc(it.etapa || 'sin etapa')} · ${codigo} · pendiente desde ${esc(nombreMes(it.m))}${desde ? ` · ${esc(desde)}` : ''}${it.prog && it.prog.inicio ? ` · <b>inicia producción ${fmt(it.prog.inicio)}</b>` : ''}</div>
-                        ${n && (n.a || n.t) ? `<div class="bkl-nota-corta">${n.a ? `<b>Siguiente paso:</b> ${esc(n.a)}${n.t ? ' · ' : ''}` : ''}${esc(n.t || '')}${n.u ? ` <span class="pie">(${esc(n.u)}, ${esc(dayjs(n.f).format('DD/MM HH:mm'))})</span>` : ''}</div>` : ''}
-                    </div>
-                    <div class="bkl-control-fila">
-                        ${man ? `<span class="bkl-ok">Autorizado a mano</span><span class="bkl-ok-pie">${esc(n.ok.u || '')} · ${esc(dayjs(n.ok.f).format('DD/MM/YYYY'))}</span><button type="button" class="bkl-mini" data-bkl-desautorizar="${esc(it.k)}">Deshacer</button>`
-                            : `<label class="bkl-est-lbl"><span class="sr-only">Estatus</span>
-                            <select class="bkl-est${est.confirmado ? '' : ' sugerido'}" data-bkl-estatus="${esc(it.k)}" title="${esc(est.confirmado ? E.ayuda : `Sugerido: ${it.sug.por}`)}">
-                                ${est.confirmado ? '' : `<option value="" selected>${esc(E.txt)} (sugerido)</option>`}
-                                ${ESTADOS.map((e) => `<option value="${esc(e.id)}"${est.confirmado && e.id === est.m ? ' selected' : ''}>${esc(e.txt)}</option>`).join('')}
-                            </select></label>
-                            <span class="bkl-resp">${resp ? esc(resp) : ''}${seg ? ` · <span class="bkl-seg-est ${seg}">${SEGUIMIENTO[seg]}</span>` : ''}${comp && comp.isValid() ? ` · <span class="bkl-comp${venc ? ' vencido' : ''}">${venc ? 'venció' : 'para el'} ${fmt(comp)}</span>` : ''}</span>
-                            <span class="bkl-botones"><button type="button" class="bkl-mini ok" data-bkl-autorizar="${esc(it.k)}" title="Marcar como autorizado a mano (vale hasta que SAP cambie el estado o la versión)">Autorizar</button>
-                            <button type="button" class="bkl-mini" data-bkl-abrir="${esc(it.k)}" aria-expanded="${ab}">${ab ? 'Cerrar' : (n && (n.t || n.a) ? 'Ver nota' : 'Nota')}</button></span>`}
-                    </div>
-                </div>
-                ${ab ? htmlNota(it) : ''}
-            </li>`;
+        // Fila de la tabla (26/11/2026, estructura pedida por Carlos): PLANTA · DESCRIPCION · SECCION · ESTADO · ULTIMA FECHA DE
+        // TRAZABILIDAD (SAP) · ETAPA · ESTATUS · RESPONSABLE · OBSERVACION (DE SAP) · NOTA. Estatus y responsable con el mismo
+        // selector de Producción (mismas 5 opciones, colores y responsable automático; CONTROL DE CAMBIO pide ASC o PRO).
+        const OBS_CORTA = 140;
+        function htmlFila(x, i) {
+            const it = x.it, v = it.v, n = notaDe(it), man = manual(it), ab = abierto === it.k;
+            const est = estatusProd(it), resp = respProd(it), k = esc(it.k);
+            const progTip = it.prog ? `Programa de producción: ${it.prog.producto || ''}${it.prog.inicio ? ` · inicia ${fmt(it.prog.inicio)}` : ''}` : '';
+            const codigo = v.codigo ? `RMD ${esc(v.codigo)} v${esc(v.version)}` : `Solicitud ${esc(v.sol)} v${esc(v.version)}`;
+            const opciones = ['', ...ESTATUS_ETAPA_OPCIONES].map((e) => `<option value="${esc(e)}"${e === est ? ' selected' : ''}>${esc(e || 'Estatus...')}</option>`).join('');
+            const selResp = est === ESTATUS_CC
+                ? `<select data-bkl-resp-sel="${k}" class="etapa-estatus-select${resp ? '' : ' etapa-estatus-select--alerta'}" title="Control de cambio: elige si el responsable es ASC o PRO">${['', 'ASC', 'PRO'].map((r) => `<option value="${r}"${r === resp ? ' selected' : ''}>${r || 'Elegir...'}</option>`).join('')}</select>`
+                : `<span class="etapa-responsable-auto" title="Responsable asignado automáticamente según el Estatus">${esc(resp || '—')}</span>`;
+            const obs = String(v.obs || '').trim(), obsCorta = obs.length > OBS_CORTA ? `${obs.slice(0, OBS_CORTA)}…` : obs;
+            const ult = it.ult;
+            const notaTxt = n && (n.t || n.a) ? `${n.a ? `<b>Siguiente paso:</b> ${esc(n.a)}${n.t ? ' · ' : ''}` : ''}${esc(n.t || '')}` : '';
+            return `<tr class="bkl-tr${it.nuevo ? ' es-nuevo' : ' es-bk'}${ab ? ' abierto' : ''}${man ? ' es-manual' : ''}" data-k="${k}">
+                <td class="pl"><span class="bkl-orden">${i + 1}</span><b>${PLANTA_NOMBRE[v.planta]}</b></td>
+                <td class="desc"><button type="button" class="bkl-prod" data-bkl-abrir="${k}" aria-expanded="${ab}">${esc(v.desc || (it.prog && it.prog.producto) || '(sin descripción)')}</button>
+                    <div class="bkl-meta">${codigo}${v.codDef ? ` · ${esc(v.codDef)}` : ''}</div>
+                    <div class="bkl-etiquetas">${it.nuevo ? `<span class="bkl-sticker nuevo" title="Pendiente que entró este mes (${esc(nombreMes(modelo.mes))})">Solicitud del mes</span>` : `<span class="bkl-sticker bk" title="Pendiente desde ${esc(nombreMes(it.m))}. ${esc(it.porque || '')}">Backlog</span>`}${it.prog ? `<span class="bkl-sticker prog" title="${esc(progTip)}">Programa</span>` : ''}${man ? '<span class="bkl-ok">Autorizado a mano</span>' : ''}${htmlChipsCc(it)}</div></td>
+                <td class="sec">${it.seccion ? esc(it.seccion) : '<span class="pie" title="La sección llega con «Enviar a Status RMD» desde el portal">—</span>'}</td>
+                <td class="est-sap"><span class="bkl-tipo ${it.tipo === 'Ingresado' ? 'ing' : it.tipo === 'Solicitado' ? 'sol' : 'sus'}">${esc(String(v.estado || '').toUpperCase())}</span></td>
+                <td class="fecha">${ult ? `<span title="${ult.traz ? 'Último cambio de estado en la Trazabilidad de SAP' : 'Sin cambios en la Trazabilidad leída: fecha de registro, solicitud o suspensión del maestro de SAP'}">${fmt(ult.f)}${ult.traz ? '' : ' <span class="pie">(maestro)</span>'}</span>` : '—'}${it.dias !== null ? `<div class="pie">${plural(it.dias, 'día', 'días')} pendiente</div>` : ''}</td>
+                <td class="etapa">${esc(it.etapa || '—')}</td>
+                <td class="estatus"><select data-bkl-estatus="${k}" class="etapa-estatus-select ${claseColorEstatus(est)}" title="Estatus (el mismo de la pestaña Producción)">${opciones}</select></td>
+                <td class="resp">${selResp}</td>
+                <td class="obs">${obs ? `<span class="bkl-obs-corta" title="${esc(obs)}">${esc(obsCorta)}</span>` : '<span class="pie">—</span>'}</td>
+                <td class="nota">${notaTxt ? `<div class="bkl-nota-corta">${notaTxt}</div>` : ''}<span class="bkl-botones"><button type="button" class="bkl-mini" data-bkl-abrir="${k}" aria-expanded="${ab}">${ab ? 'Cerrar' : (notaTxt ? 'Ver nota' : 'Nota')}</button>${man ? `<button type="button" class="bkl-mini" data-bkl-desautorizar="${k}">Deshacer</button>` : `<button type="button" class="bkl-mini ok" data-bkl-autorizar="${k}" title="Marcar como autorizado a mano (vale hasta que SAP cambie el estado o la versión)">Autorizar</button>`}</span></td>
+            </tr>${ab ? `<tr class="bkl-tr-nota"><td colspan="10">${htmlNota(it)}</td></tr>` : ''}`;
+        }
+        // Sección verde al final: lo autorizado del backlog, acumulado (no se borra), con la misma estructura y la fecha de autorización.
+        let autVer = 60;
+        function htmlAutorizados() {
+            const lista = Object.entries(autAcum).map(([k, a]) => ({ k, ...a }))
+                .filter((a) => (!vista.planta || a.p === vista.planta) && (!vista.q || [a.d, a.cod, a.sol, a.et, a.sec, a.o, a.n].join(' ').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().includes(vista.q.normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase())))
+                .sort((a, b) => String(b.fa || '').localeCompare(String(a.fa || '')));
+            if (!lista.length) return '';
+            const f = (x) => (x ? dayjs(x).format('DD/MM/YYYY') : '—'), vis = lista.slice(0, autVer);
+            const nP = (p) => lista.filter((a) => a.p === p).length;
+            return `<section class="bkl-autsec">
+                <h3>Autorizados del backlog <span class="n">${lista.length}</span><span class="sub">ATE ${nP('P1')} · LIMA ${nP('P2')} · se van sumando y no se borran · los más recientes primero</span></h3>
+                <div class="bkl-tabla-scroll"><table class="bkl-tabla verde">
+                    <thead><tr><th>Planta</th><th>Descripción</th><th>Sección</th><th>Estado</th><th>Fecha de autorización</th><th>Etapa</th><th>Estatus</th><th>Autorizado por</th><th>Observación (de SAP)</th><th>Nota</th></tr></thead>
+                    <tbody>${vis.map((a) => { const o = String(a.o || ''); return `<tr>
+                        <td class="pl"><b>${PLANTA_NOMBRE[a.p] || esc(a.p)}</b></td>
+                        <td class="desc"><b>${esc(a.d || '(sin descripción)')}</b><div class="bkl-meta">${a.cod ? `RMD ${esc(a.cod)}` : `Solicitud ${esc(a.sol)}`} v${esc(a.ver)}${a.org ? ` · ${esc(a.org === 'BACKLOG' ? 'Backlog' : 'Solicitud del mes')}` : ''}</div></td>
+                        <td class="sec">${esc(a.sec || '—')}</td>
+                        <td class="est-sap"><span class="bkl-aut">AUTORIZADO</span></td>
+                        <td class="fecha">${f(a.fa)}</td>
+                        <td class="etapa">${esc(a.et || '—')}</td>
+                        <td class="estatus"><span class="bkl-aut">${a.como === 'A mano' ? 'AUTORIZADO A MANO' : 'AUTORIZADO EN SAP'}</span></td>
+                        <td class="resp">${esc(a.q || '—')}</td>
+                        <td class="obs">${o ? `<span class="bkl-obs-corta" title="${esc(o)}">${esc(o.length > OBS_CORTA ? `${o.slice(0, OBS_CORTA)}…` : o)}</span>` : '—'}</td>
+                        <td class="nota">${esc(a.n || '')}</td></tr>`; }).join('')}</tbody></table></div>
+                ${lista.length > vis.length ? `<div class="bkl-mas"><button type="button" class="sts-btn" data-bkl-aut-mas>Ver ${Math.min(60, lista.length - vis.length)} más (quedan ${lista.length - vis.length})</button></div>` : ''}
+            </section>`;
+        }
+        function htmlTabla(vis) {
+            return `<div class="bkl-tabla-scroll"><table class="bkl-tabla">
+                <thead><tr><th>Planta</th><th>Descripción</th><th>Sección</th><th>Estado</th><th>Última fecha de trazabilidad (SAP)</th><th>Etapa</th><th>Estatus</th><th>Responsable</th><th>Observación (de SAP)</th><th>Nota</th></tr></thead>
+                <tbody>${vis.map((x, i) => htmlFila(x, i)).join('')}</tbody></table></div>`;
         }
         function htmlNota(it) {
-            const n = notaDe(it) || {}, v = it.v, sel = estadoId(n.m) || it.sug.m, resp = n.r || (ESTADO[sel] || {}).resp || '';
+            const n = notaDe(it) || {}, v = it.v;
             const autor = leerAutor();
             const pistas = [
-                `<p><b>Sugerido:</b> ${esc((ESTADO[it.sug.m] || ESTADO.OTRO).txt)}. ${esc(it.sug.por)}</p>`,
                 `<p><b>Por qué cuenta en ${esc(nombreMes(it.m))}:</b> ${esc(it.porque || '')}</p>`,
                 it.prog ? `<p><b>Programa de producción:</b> ${esc(it.prog.producto || '')}${it.prog.etapa ? ` · ${esc(it.prog.etapa)}` : ''}${it.prog.inicio ? ` · inicia ${fmt(it.prog.inicio)}` : ''}${it.prog.estatus ? ` · Estatus en Producción: ${esc(it.prog.estatus)}${it.prog.resp ? ` (${esc(it.prog.resp)})` : ''}` : ''}</p>` : '',
                 it.prio ? `<p><b>Prioridad del equipo:</b> ${esc(it.prio)}</p>` : '',
@@ -18195,16 +18300,11 @@ async function maybeAutoStartTour() {
             const hist = Array.isArray(n.h) ? n.h.slice().reverse() : [];
             return `<div class="bkl-nota" data-bkl-nota="${esc(it.k)}">
                 <div>
-                    <label class="lbl" id="bklLblMot">Estatus</label>
-                    <div class="bkl-chips" role="group" aria-labelledby="bklLblMot">${ESTADOS.map((m) => `<button type="button" class="bkl-chip${!n.m && m.id === it.sug.m ? ' sugerido' : ''}" data-bkl-mot="${esc(m.id)}" aria-pressed="${m.id === sel}" title="${esc(m.ayuda)}${!n.m && m.id === it.sug.m ? ' (sugerido)' : ''}">${esc(m.txt)}</button>`).join('')}</div>
                     <label class="lbl" for="bklTxt">Nota</label>
                     <textarea id="bklTxt" data-bkl-campo="t" placeholder="Qué falta, con quién se habló, qué se espera…">${esc(n.t || '')}</textarea>
-                    <p class="bkl-detecto" data-bkl-detecto aria-live="polite"></p>
                     <label class="lbl" for="bklAcc">Siguiente paso</label>
                     <input type="text" id="bklAcc" data-bkl-campo="a" value="${esc(n.a || '')}" placeholder="Ej.: pedir el borrador a Producción">
                     <div class="bkl-dos-campos">
-                        <div><label class="lbl" id="bklLblResp">Responsable</label>
-                            <div class="bkl-chips" role="group" aria-labelledby="bklLblResp">${RESPONSABLES.map((r) => `<button type="button" class="bkl-chip" data-bkl-resp="${r}" aria-pressed="${r === resp}">${r}</button>`).join('')}</div></div>
                         <div><label class="lbl" for="bklComp">Fecha de compromiso</label>
                             <input type="date" id="bklComp" data-bkl-campo="c" value="${esc(n.c || '')}"></div>
                     </div>
@@ -18217,7 +18317,7 @@ async function maybeAutoStartTour() {
                     <div class="bkl-guardar">
                         <button type="button" class="sts-btn sts-btn-primario" data-bkl-guardar>Guardar</button>
                         <button type="button" class="sts-btn" data-bkl-cerrar>Cancelar</button>
-                        ${n.m || n.t ? '<button type="button" class="sts-btn" data-bkl-borrar title="Quita el estatus, la nota y su historial de este RMD">Borrar nota</button>' : ''}
+                        ${n.m || n.t ? '<button type="button" class="sts-btn" data-bkl-borrar title="Quita la nota y su historial de este RMD (el estatus es el de Producción y no se toca)">Borrar nota</button>' : ''}
                         <span class="est" data-bkl-estado aria-live="polite"></span>
                     </div>
                 </div>
@@ -18248,14 +18348,13 @@ async function maybeAutoStartTour() {
         }
         function htmlEstados(lista) {
             const cuenta = new Map();
-            lista.forEach((it) => { const x = estadoDe(it), c = cuenta.get(x.m) || { a: 0, s: 0 }; if (x.confirmado) c.a++; else c.s++; cuenta.set(x.m, c); });
-            const filas = ESTADOS.filter((m) => cuenta.has(m.id)).map((m) => ({ m, ...cuenta.get(m.id) })).sort((a, b) => (b.a + b.s) - (a.a + a.s));
-            const max = Math.max(1, ...filas.map((f) => f.a + f.s));
+            lista.forEach((it) => { const m = estatusProd(it) || SIN_ESTATUS; cuenta.set(m, (cuenta.get(m) || 0) + 1); });
+            const filas = [...ESTATUS_ETAPA_OPCIONES, SIN_ESTATUS].filter((m) => cuenta.has(m)).map((m) => ({ m, n: cuenta.get(m) }));
+            const max = Math.max(1, ...filas.map((f) => f.n));
             return `<div class="bkl-panel">
-                <h3>Por estatus</h3>
-                <div class="bkl-motivos">${filas.map((f) => `<button type="button" class="bkl-mot${vista.estado === f.m.id ? ' activo' : ''}" data-bkl-motivo="${esc(f.m.id)}" aria-pressed="${vista.estado === f.m.id}" title="${esc(`${f.m.txt}: ${f.a} elegidos, ${f.s} sugeridos. Clic: filtrar`)}">
-                    <span class="nom">${esc(f.m.txt)}</span><span class="barra"><i style="width:${(f.a / max) * 100}%"></i><i class="sug" style="width:${(f.s / max) * 100}%"></i></span><span class="n">${f.a + f.s}</span></button>`).join('')}</div>
-                <div class="bkl-leyenda"><span><i></i>Elegido por el equipo</span><span><i class="sug"></i>Sugerido por la página (falta confirmar)</span></div>
+                <h3>Por estatus (los de Producción)</h3>
+                <div class="bkl-motivos">${filas.map((f) => `<button type="button" class="bkl-mot${vista.estado === f.m ? ' activo' : ''}" data-bkl-motivo="${esc(f.m)}" aria-pressed="${vista.estado === f.m}" title="${esc(`${f.m === SIN_ESTATUS ? 'Sin estatus' : f.m}: ${f.n}. Clic: filtrar`)}">
+                    <span class="nom">${esc(f.m === SIN_ESTATUS ? 'Sin estatus' : f.m)}</span><span class="barra"><i style="width:${(f.n / max) * 100}%"></i></span><span class="n">${f.n}</span></button>`).join('')}</div>
             </div>`;
         }
 
@@ -18336,9 +18435,10 @@ async function maybeAutoStartTour() {
                 ${htmlFranja(pendTodos)}
                 ${htmlFiltros()}
                 <p class="bkl-conteo">${plural(filtrados.length, 'pendiente', 'pendientes')} al ${esc(fmt(modelo.corte).slice(0, 5))}${hayFiltro ? ' con estos filtros' : ''}: ATE ${nPl(filtrados, 'P1')} · LIMA ${nPl(filtrados, 'P2')} · ${nBk} backlog + ${filtrados.length - nBk} solicitud del mes${man ? ` · ${plural(man, 'autorizado a mano (en SAP sigue pendiente)', 'autorizados a mano (en SAP siguen pendientes)')}` : ''}${hayFiltro ? ` · <button type="button" data-bkl-limpiar>Quitar filtros</button>` : ''} · ${vista.orden === 'prio' ? 'orden: compromisos vencidos, bloqueados, Ingresado → Solicitado → Suspendido, más antiguo' : 'orden del Excel: planta, Backlog → Solicitud del mes, Ingresado → Solicitado → Suspendido, descripción'}</p>
-                ${vis.length ? `<ol class="bkl-lista" role="list">${vis.map((x, i) => htmlItem(x, i, true)).join('')}</ol>` : '<p class="bkl-vacio">Nada con estos filtros.</p>'}
+                ${vis.length ? htmlTabla(vis) : '<p class="bkl-vacio">Nada con estos filtros.</p>'}
                 ${orden.length > vis.length ? `<div class="bkl-mas"><button type="button" class="sts-btn" data-bkl-mas>Ver ${Math.min(POR_PAGINA, orden.length - vis.length)} más (quedan ${orden.length - vis.length})</button></div>` : ''}
                 ${sinRmd ? `<p class="bkl-leer">${plural(sinRmd, 'etapa del Programa de producción no tiene', 'etapas del Programa de producción no tienen')} RMD en SAP (ver Producción): no están en esta lista.</p>` : ''}
+                ${htmlAutorizados()}
                 ${htmlCcPendientes(pendTodos)}
                 <div class="bkl-sec">Cómo va el mes</div>
                 <div class="bkl-ecuaciones">${htmlEcuacion('P1', mesCorto)}${htmlEcuacion('P2', mesCorto)}${htmlEcuacion('', mesCorto)}</div>
@@ -18375,8 +18475,6 @@ async function maybeAutoStartTour() {
         }
         function resumenCambio(antes, nueva) {
             const p = [];
-            if (estadoId(antes.m) !== nueva.m) p.push(`Estatus: ${(ESTADO[nueva.m] || ESTADO.OTRO).txt}`);
-            if ((antes.r || '') !== nueva.r && nueva.r) p.push(`Responsable: ${nueva.r}`);
             if ((antes.s || '') !== nueva.s) p.push(`Seguimiento: ${SEGUIMIENTO[nueva.s]}`);
             if ((antes.c || '') !== nueva.c) p.push(nueva.c ? `Compromiso: ${dayjs(nueva.c + 'T00:00:00').format('DD/MM/YYYY')}` : 'Sin compromiso');
             if ((antes.a || '') !== nueva.a && nueva.a) p.push(`Siguiente paso: ${nueva.a}`);
@@ -18388,21 +18486,24 @@ async function maybeAutoStartTour() {
             const it = itemDe(k);
             if (!it) return;
             const e = leerEditor(caja), estado = caja.querySelector('[data-bkl-estado]');
-            if (!e.m) { estado.textContent = 'Elige un estatus.'; return; }
             if (!e.u) { estado.textContent = 'Elige quién anota.'; caja.querySelector('[data-bkl-campo="u"]').focus(); return; }
             ponerAutor(e.u);
             estado.textContent = 'Guardando…';
-            await escribir(it, { m: e.m, r: e.r, a: e.a, c: e.c, s: e.s, t: e.t }, resumenCambio(notaDe(it) || {}, e), e.u);
+            await escribir(it, { a: e.a, c: e.c, s: e.s, t: e.t }, resumenCambio(notaDe(it) || {}, e), e.u);
             abierto = '';
             pintar();
         }
+        // Estatus y responsable: los mismos setters de Producción (guardan para todas las claves del mismo RMD).
         async function cambiarEstatus(k, valor) {
             const it = itemDe(k);
-            if (!it || !valor) return;
-            const autor = await quienAnota('¿Quién cambia el estatus?');
-            if (!autor) { pintar(); return; }
-            const E = ESTADO[valor] || ESTADO.OTRO, antes = notaDe(it) || {};
-            await escribir(it, { m: valor, r: E.resp || antes.r || '' }, `Estatus: ${E.txt}`, autor);
+            if (!it) return;
+            await window.setEstatusEtapa(matDe(it.v), it.etapa, valor);
+            pintar();
+        }
+        async function cambiarResponsable(k, valor) {
+            const it = itemDe(k);
+            if (!it) return;
+            await window.setResponsableEtapa(matDe(it.v), it.etapa, valor);
             pintar();
         }
         async function autorizar(k) {
@@ -18428,12 +18529,14 @@ async function maybeAutoStartTour() {
             const sinOk = Object.assign({}, antes); delete sinOk.ok;
             notas = Object.assign({}, notas, { [it.k]: sinOk });
             await escribir(it, {}, 'Se deshizo la autorización a mano', autor);
+            const ka = `${it.v.planta}|${it.k.split('|')[1]}|${it.v.version}`;
+            if (autAcum[ka] && autAcum[ka].como === 'A mano') { autAcum = Object.assign({}, autAcum); delete autAcum[ka]; await storeSet(CLAVE_AUT, autAcum); }
             pintar();
         }
         async function borrar(k) {
             const it = itemDe(k);
             if (!it) return;
-            const r = await Swal.fire({ title: '¿Borrar la nota?', text: 'Se quita el estatus, la nota y su historial de este RMD.', icon: 'question', showCancelButton: true, confirmButtonText: 'Borrar', cancelButtonText: 'Cancelar', background: '#0f172a', color: '#e2e8f0' });
+            const r = await Swal.fire({ title: '¿Borrar la nota?', text: 'Se quita la nota y su historial de este RMD. El estatus es el de Producción y no cambia.', icon: 'question', showCancelButton: true, confirmButtonText: 'Borrar', cancelButtonText: 'Cancelar', background: '#0f172a', color: '#e2e8f0' });
             if (!r.isConfirmed) return;
             notas = Object.assign({}, notas); delete notas[it.k]; if (it.kSol) delete notas[it.kSol];
             await storeSet(CLAVE_NOTAS, notas);
@@ -18441,6 +18544,7 @@ async function maybeAutoStartTour() {
             pintar();
         }
         function detectar(caja) {
+            if (!caja.querySelector('[data-bkl-mot]')) return;
             const t = (caja.querySelector('[data-bkl-campo="t"]') || {}).value || '', out = caja.querySelector('[data-bkl-detecto]');
             if (!out) return;
             const hit = PALABRAS.find(([rx]) => rx.test(t)), sel = caja.querySelector('[data-bkl-mot][aria-pressed="true"]');
@@ -18463,7 +18567,7 @@ async function maybeAutoStartTour() {
                 const d = t.dataset, caja = t.closest('[data-bkl-nota]');
                 if (d.bklAbrir !== undefined) {
                     abierto = abierto === d.bklAbrir ? '' : d.bklAbrir; pintar();
-                    const b = cont.querySelector(`.bkl-item[data-k="${CSS.escape(d.bklAbrir)}"] .bkl-prod`); if (b) b.focus();
+                    const b = cont.querySelector(`.bkl-tr[data-k="${CSS.escape(d.bklAbrir)}"] .bkl-prod`); if (b) b.focus();
                     if (abierto) { const c2 = cont.querySelector('[data-bkl-nota]'); if (c2) detectar(c2); }
                     return;
                 }
@@ -18493,13 +18597,16 @@ async function maybeAutoStartTour() {
                     return;
                 }
                 if (d.bklLimpiar !== undefined) { limpiarFiltros(); pintar(); return; }
-                if (d.bklMas !== undefined) { vista.mostrar += POR_PAGINA; pintar(); }
+                if (d.bklMas !== undefined) { vista.mostrar += POR_PAGINA; pintar(); return; }
+                if (d.bklAutMas !== undefined) { autVer += 60; pintar(); }
             });
             cont.addEventListener('change', (ev) => {
                 const s = ev.target.closest('[data-bkl-select]');
                 if (s) { vista[s.dataset.bklSelect] = s.value; vista.mostrar = POR_PAGINA; pintar(); return; }
                 const e = ev.target.closest('[data-bkl-estatus]');
-                if (e) cambiarEstatus(e.dataset.bklEstatus, e.value);
+                if (e) { cambiarEstatus(e.dataset.bklEstatus, e.value); return; }
+                const r = ev.target.closest('[data-bkl-resp-sel]');
+                if (r) cambiarResponsable(r.dataset.bklRespSel, r.value);
             });
             cont.addEventListener('input', (ev) => {
                 if (ev.target.matches('[data-bkl-buscar]')) { clearTimeout(buscarTimer); const v = ev.target.value; buscarTimer = setTimeout(() => { vista.q = v.trim(); vista.mostrar = POR_PAGINA; pintar(); }, 250); return; }
@@ -18528,6 +18635,7 @@ async function maybeAutoStartTour() {
         // del programa se recalculan si la pestaña está abierta.
         async function recargarNotas() {
             try { const g = await storeGet(CLAVE_NOTAS); notas = g && typeof g === 'object' && !Array.isArray(g) ? g : {}; } catch (e) { return; }
+            try { const a = await storeGet(CLAVE_AUT); if (a && typeof a === 'object' && !Array.isArray(a)) autAcum = a; } catch (e) { /* queda lo que había */ }
             if (modelo && currentTab === 'backlog' && !abierto) pintar();
         }
         function recargarPronto() {
@@ -18541,18 +18649,18 @@ async function maybeAutoStartTour() {
             if (!modelo || modelo.vacio) { Swal.fire({ icon: 'info', title: 'Sin datos', text: 'Abre la pestaña cuando haya RMD de SAP («Enviar a Status RMD»).', background: '#0f172a', color: '#e2e8f0' }); return; }
             const filt = modelo.items.filter((it) => pasaFiltros(it, false));
             const lista = vista.orden === 'prio' ? ordenar(filt) : ordenarExcel(filt);
-            const cab = ['Orden', 'Grupo', 'Planta', 'Tipo', 'Fase', 'Origen (Backlog / Solicitud del mes)', 'Programa de producción', 'Inicio producción', 'Producto', 'Etapa', 'RMD', 'Versión', 'Solicitud', 'Código por defecto',
-                'Pendiente desde (mes)', 'Fecha', 'Días', 'Estatus', 'Estatus elegido', 'Responsable', 'Siguiente paso', 'Compromiso', 'Seguimiento', 'Nota', 'Anotado por', 'Fecha de la nota',
-                'Autorizado a mano', 'Estatus sugerido', 'Por qué se sugiere', 'Por qué cuenta en ese mes', 'CC / motivo', 'Situación del CC', 'Cómo aplicarlo', 'Qué falta', 'Observaciones (SAP)'];
+            const cab = ['Planta', 'Descripción', 'Sección', 'Estado', 'Última fecha de trazabilidad (SAP)', 'Etapa', 'Estatus', 'Responsable', 'Observación (de SAP)', 'Nota',
+                'Orden', 'Origen (Backlog / Solicitud del mes)', 'Programa de producción', 'Inicio producción', 'Tipo', 'Fase', 'RMD', 'Versión', 'Solicitud', 'Código por defecto',
+                'Pendiente desde (mes)', 'Fecha', 'Días', 'Siguiente paso', 'Compromiso', 'Seguimiento', 'Anotado por', 'Fecha de la nota', 'Autorizado a mano', 'Por qué cuenta en ese mes',
+                'CC / motivo', 'Situación del CC', 'Cómo aplicarlo', 'Qué falta'];
             const d = (x) => (x && x.isValid && x.isValid() ? new Date(Date.UTC(x.year(), x.month(), x.date())) : '');
             const filas = lista.map((x, i) => {
-                const it = x.it, v = it.v, n = notaDe(it) || {}, est = estadoDe(it), man = manual(it);
-                return [i + 1, man ? 'Autorizado a mano' : it.prog ? 'Programa de producción' : 'Backlog', PLANTA_NOMBRE[v.planta], it.tipo, faseRmdExcel(v.obs), it.nuevo ? 'SOLICITUD DEL MES' : 'BACKLOG', it.prog ? 'PROGRAMA DE PRODUCCIÓN' : '', it.prog && it.prog.inicio ? d(it.prog.inicio) : '',
-                    v.desc || '', it.etapa || '', v.codigo || '', v.version || '', v.sol || '', v.codDef || '', nombreMes(it.m), d(it.base), it.dias === null ? '' : it.dias,
-                    (ESTADO[est.m] || ESTADO.OTRO).txt, est.confirmado ? 'Sí' : 'No (sugerido)', n.r || (ESTADO[est.m] || {}).resp || '', n.a || '', n.c ? d(dayjs(n.c + 'T00:00:00')) : '', SEGUIMIENTO[n.s || ''], n.t || '', n.u || '',
-                    n.f ? dayjs(n.f).format('DD/MM/YYYY HH:mm') : '', man ? `${n.ok.u || ''} ${dayjs(n.ok.f).format('DD/MM/YYYY')}` : '', (ESTADO[it.sug.m] || ESTADO.OTRO).txt, it.sug.por, it.porque || '',
-                    ...(() => { const fs = (it.cc || []).map((k) => [k, CcBacklog.ficha(k)]); return [fs.map(([k]) => ccNombre(k)).join(' · '), fs.map(([, f]) => CcBacklog.SITUACION[f.e] || '').join(' · '), fs.map(([k, f]) => `${fs.length > 1 ? `${ccNombre(k)}: ` : ''}${f.c}`).join(' | '), fs.map(([, f]) => f.f || '').filter(Boolean).join(' | ')]; })(),
-                    v.obs || ''];
+                const it = x.it, v = it.v, n = notaDe(it) || {}, man = manual(it);
+                return [PLANTA_NOMBRE[v.planta], v.desc || '', it.seccion || '', String(v.estado || '').toUpperCase(), it.ult ? d(it.ult.f) : '', it.etapa || '', estatusProd(it), respProd(it), v.obs || '', n.t || '',
+                    i + 1, it.nuevo ? 'SOLICITUD DEL MES' : 'BACKLOG', it.prog ? 'PROGRAMA DE PRODUCCIÓN' : '', it.prog && it.prog.inicio ? d(it.prog.inicio) : '', it.tipo, faseRmdExcel(v.obs),
+                    v.codigo || '', v.version || '', v.sol || '', v.codDef || '', nombreMes(it.m), d(it.base), it.dias === null ? '' : it.dias,
+                    n.a || '', n.c ? d(dayjs(n.c + 'T00:00:00')) : '', SEGUIMIENTO[n.s || ''], n.u || '', n.f ? dayjs(n.f).format('DD/MM/YYYY HH:mm') : '', man ? `${n.ok.u || ''} ${dayjs(n.ok.f).format('DD/MM/YYYY')}` : '', it.porque || '',
+                    ...(() => { const fs = (it.cc || []).map((k) => [k, CcBacklog.ficha(k)]); return [fs.map(([k]) => ccNombre(k)).join(' · '), fs.map(([, f]) => CcBacklog.SITUACION[f.e] || '').join(' · '), fs.map(([k, f]) => `${fs.length > 1 ? `${ccNombre(k)}: ` : ''}${f.c}`).join(' | '), fs.map(([, f]) => f.f || '').filter(Boolean).join(' | ')]; })()];
             });
             const ws = XLSX.utils.aoa_to_sheet([cab, ...filas], { cellDates: true });
             cab.forEach((_, j) => { const c = ws[XLSX.utils.encode_cell({ r: 0, c: j })]; if (c) c.s = { font: { bold: true, color: { rgb: 'FFFFFF' } }, fill: { patternType: 'solid', fgColor: { rgb: '1F3864' } }, alignment: { vertical: 'center', wrapText: true } }; });
@@ -18560,12 +18668,13 @@ async function maybeAutoStartTour() {
                 const c = ws[XLSX.utils.encode_cell({ r: i + 1, c: j })];
                 if (!c) return;
                 if (val instanceof Date) c.z = 'dd/mm/yyyy';
-                if (j === 4 && val === 'FASE 2') c.s = { font: { bold: true, color: { rgb: '3B1F66' } }, fill: { patternType: 'solid', fgColor: { rgb: 'D9C8F0' } } };
-                if (j === 4 && val === 'FASE 3') c.s = { font: { bold: true, color: { rgb: '1E5631' } }, fill: { patternType: 'solid', fgColor: { rgb: 'C6EFCE' } } };
-                if (j === 5) c.s = val === 'SOLICITUD DEL MES' ? { font: { bold: true, color: { rgb: 'FFFFFF' } }, fill: { patternType: 'solid', fgColor: { rgb: 'C2652E' } } } : { font: { bold: true, color: { rgb: 'FFFFFF' } }, fill: { patternType: 'solid', fgColor: { rgb: '5B5F97' } } };
-                if (j === 6 && val) c.s = { font: { bold: true, color: { rgb: '3B2F06' } }, fill: { patternType: 'solid', fgColor: { rgb: 'F3D36B' } } };
+                const jFase = cab.indexOf('Fase'), jOrigen = cab.indexOf('Origen (Backlog / Solicitud del mes)'), jProg = cab.indexOf('Programa de producción');
+                if (j === jFase && val === 'FASE 2') c.s = { font: { bold: true, color: { rgb: '3B1F66' } }, fill: { patternType: 'solid', fgColor: { rgb: 'D9C8F0' } } };
+                if (j === jFase && val === 'FASE 3') c.s = { font: { bold: true, color: { rgb: '1E5631' } }, fill: { patternType: 'solid', fgColor: { rgb: 'C6EFCE' } } };
+                if (j === jOrigen) c.s = val === 'SOLICITUD DEL MES' ? { font: { bold: true, color: { rgb: 'FFFFFF' } }, fill: { patternType: 'solid', fgColor: { rgb: 'C2652E' } } } : { font: { bold: true, color: { rgb: 'FFFFFF' } }, fill: { patternType: 'solid', fgColor: { rgb: '5B5F97' } } };
+                if (j === jProg && val) c.s = { font: { bold: true, color: { rgb: '3B2F06' } }, fill: { patternType: 'solid', fgColor: { rgb: 'F3D36B' } } };
             }));
-            ws['!cols'] = cab.map((h) => ({ wch: /Producto|Nota|Observaci|Por qué|Cómo aplicarlo|Qué falta/.test(h) ? 42 : /Siguiente/.test(h) ? 30 : Math.max(9, Math.min(22, h.length + 2)) }));
+            ws['!cols'] = cab.map((h) => ({ wch: /Descripci|Nota|Observaci|Por qué|Cómo aplicarlo|Qué falta/.test(h) ? 42 : /Siguiente/.test(h) ? 30 : Math.max(9, Math.min(22, h.length + 2)) }));
             ws['!autofilter'] = { ref: XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: filas.length, c: cab.length - 1 } }) };
             const res = [['Backlog de RMD', `corte ${fmt(modelo.corte)}`], [], ['Planta', `Backlog al 1 de ${nombreMes(modelo.mes)}`, 'Nuevos del mes', 'Autorizados en el mes', 'Pendientes hoy', 'Pendientes FASE 1', 'Pendientes FASE 2', 'Pendientes FASE 3', 'Con estatus elegido', 'En Programa de producción', 'Autorizados a mano']];
             ['P1', 'P2', ''].forEach((pl) => {
