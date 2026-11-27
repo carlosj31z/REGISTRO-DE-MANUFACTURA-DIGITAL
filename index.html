@@ -6662,6 +6662,15 @@ function buildDateColumnMapPlanta1(headerRow, weekLabelRow, hiddenCols) {
             if (currentTab === 'caract' && typeof Caracterizacion !== 'undefined') Caracterizacion.refrescar();
         };
 
+        // ¿Hay en la cadena un RMD pendiente (no resuelto) que no esté reemplazado por una versión más nueva de su misma línea?
+        // Línea = mismo código por defecto o misma descripción (igual que agrupa el BACKLOG).
+        function hayPendienteVivo(todas) {
+            const linea = (x, y) => (x.defecto && y.defecto && String(x.defecto).trim() === String(y.defecto).trim())
+                || (x.desc && y.desc && String(x.desc).trim().toUpperCase().replace(/\s+/g, ' ') === String(y.desc).trim().toUpperCase().replace(/\s+/g, ' '));
+            const masNueva = (y, x) => (Number(y.version) || 0) > (Number(x.version) || 0)
+                || ((Number(y.version) || 0) === (Number(x.version) || 0) && (Number(y.fecha) || 0) > (Number(x.fecha) || 0));
+            return todas.some((x) => !ESTADOS_RESUELTOS_RMD.has(x.estadoNorm) && !todas.some((y) => y !== x && linea(x, y) && masNueva(y, x)));
+        }
         // Pedido de Carlos (26/11/2026): una etapa ya autorizada en SAP no guarda el estatus con el que se autorizó; si vuelve
         // a quedar pendiente (versión nueva, suspensión) aparece sin estatus, como pendiente nuevo. Se borra el estatus (y su
         // responsable) de las claves «material::ETAPA» cuyo RMD vigente está AUTORIZADO en SAP.
@@ -6674,12 +6683,12 @@ function buildDateColumnMapPlanta1(headerRow, weekLabelRow, hiddenCols) {
                     if (!c || c.pendiente || !c.ultima || c.ultima.estadoNorm !== 'AUTORIZADO') return;
                     // Una versión más nueva Suspendida (o pendiente) sigue en el BACKLOG con su estatus: no se toca.
                     if (todas.some((x) => (Number(x.version) || 0) > (Number(c.ultima.version) || 0) && !ESTADOS_RESUELTOS_RMD.has(x.estadoNorm))) return;
-                    // Fix 27/11/2026 (Carlos: «el estatus se borra al actualizar»): la cadena aparta los másters de reacondicionado
-                    // (REA) y los de otra línea, pero el BACKLOG sí los muestra. Si alguno sigue pendiente (ej. 6000003634
-                    // ACONDICIONADO: MEDROXIPROGEST v2 Autorizado + REACONDICIONADO - SHO ASOHAC01 v2 Ingresado) el estatus es
-                    // de ese pendiente y no se borra. Ídem una versión pendiente registrada después de la autorizada.
-                    const fUlt = Number(c.ultima.fecha) || 0;
-                    if (todas.some((x) => !ESTADOS_RESUELTOS_RMD.has(x.estadoNorm) && (x.rea || (fUlt && (Number(x.fecha) || 0) > fUlt)))) return;
+                    // Fix 27/11/2026 (Carlos: «el estatus se borra al actualizar», casos 6000003634 ACONDICIONADO y 5000000088
+                    // FABRICACION): la cadena elige UNA versión entre todos los másters del material (aparta los REA, compara
+                    // versiones de líneas distintas), pero el BACKLOG muestra la versión más nueva de CADA línea (mismo código por
+                    // defecto o misma descripción). Si alguna de esas líneas sigue pendiente en SAP, el estatus es de ese
+                    // pendiente y no se borra.
+                    if (hayPendienteVivo(todas)) return;
                     borrar.push(key);
                 });
                 if (!borrar.length) return 0;
