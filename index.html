@@ -6674,6 +6674,12 @@ function buildDateColumnMapPlanta1(headerRow, weekLabelRow, hiddenCols) {
                     if (!c || c.pendiente || !c.ultima || c.ultima.estadoNorm !== 'AUTORIZADO') return;
                     // Una versión más nueva Suspendida (o pendiente) sigue en el BACKLOG con su estatus: no se toca.
                     if (todas.some((x) => (Number(x.version) || 0) > (Number(c.ultima.version) || 0) && !ESTADOS_RESUELTOS_RMD.has(x.estadoNorm))) return;
+                    // Fix 27/11/2026 (Carlos: «el estatus se borra al actualizar»): la cadena aparta los másters de reacondicionado
+                    // (REA) y los de otra línea, pero el BACKLOG sí los muestra. Si alguno sigue pendiente (ej. 6000003634
+                    // ACONDICIONADO: MEDROXIPROGEST v2 Autorizado + REACONDICIONADO - SHO ASOHAC01 v2 Ingresado) el estatus es
+                    // de ese pendiente y no se borra. Ídem una versión pendiente registrada después de la autorizada.
+                    const fUlt = Number(c.ultima.fecha) || 0;
+                    if (todas.some((x) => !ESTADOS_RESUELTOS_RMD.has(x.estadoNorm) && (x.rea || (fUlt && (Number(x.fecha) || 0) > fUlt)))) return;
                     borrar.push(key);
                 });
                 if (!borrar.length) return 0;
