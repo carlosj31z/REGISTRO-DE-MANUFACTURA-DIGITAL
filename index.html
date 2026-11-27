@@ -7117,6 +7117,22 @@ async function downloadPlanProduccionFromCloud() {
         const ESTADOS_IGNORADOS_RMD = new Set(['CANCELADO']);
         const CABECERA_CLASICA_RMD = ['Código', 'Código de Solicitud', 'Versión', 'Estado', 'Código por Defecto', 'Código Agrupador', 'Descripción', 'Etapa', 'Fecha Registro', 'Usuario Registro', 'Fecha Autorización', 'Usuario Autorización', 'A/F', 'Fecha Solicitud', 'Planta', 'Sección', 'Motivo', 'Observación', 'Producción Estado'];
         const CABECERA_RECETAS_RMD = ['Linaje', 'Código Receta', 'Versión Receta', 'Descripción Receta', 'Etapa Receta', 'Puesto Trabajo', 'Hoja Ruta', 'Contador'];
+        // Solicitudes que SAP no deja aprobar ni rechazar (27/11/2026, pedido de Carlos): no cuentan en ningún lado (backlog, PPT,
+        // Excel, indicadores); manda el estado de la versión anterior del master. Mientras sigan en estado «Solicitado» se quitan al
+        // leer SAP y al cargar lo guardado; si algún día se aprueban o rechazan, vuelven a contar solas.
+        //  - 1202502782 ELECTRORL PEDIÁTRICO NF FRESA SOL v1 (ATE, GRAN VOLUMEN 2, solicitada 15/01/2025): ver README.
+        const SOLICITUDES_BLOQUEADAS = new Set(['1202502782']);
+        const esSolicitudBloqueada = (sol, estado) => SOLICITUDES_BLOQUEADAS.has(String(sol || '').trim()) && normalizeEstadoRmd(String(estado || '')) === 'SOLICITADO';
+        // Filas del Exportado / datos directos de SAP (arreglos, con cabecera en la fila 0): fuera las de una solicitud bloqueada.
+        function sinSolicitudesBloqueadasFilas(rows) {
+            if (!Array.isArray(rows) || rows.length < 2) return rows;
+            const fuera = (r) => Array.isArray(r) && r.some((c) => SOLICITUDES_BLOQUEADAS.has(String(c === null || c === undefined ? '' : c).trim()))
+                && r.some((c) => normalizeEstadoRmd(String(c === null || c === undefined ? '' : c)) === 'SOLICITADO');
+            return [rows[0], ...rows.slice(1).filter((r) => !fuera(r))];
+        }
+        // Lo guardado: detalle ({ solicitud, estado }) y datos precisos (filas [rmd, linaje, version, estado, …, códigoSolicitud]).
+        const sinSolicitudesBloqueadasDetalle = (d) => (Array.isArray(d) ? d.filter((x) => !(x && esSolicitudBloqueada(x.solicitud, x.estado))) : d);
+        const sinSolicitudesBloqueadasPrecisos = (p) => (p && Array.isArray(p.filas) ? Object.assign({}, p, { filas: p.filas.filter((f) => !(Array.isArray(f) && esSolicitudBloqueada(f[10], f[3]))) }) : p);
         let rmdPrecisoDatos = null; // lo que se guarda: { generado, origen, filas:[[rmd, linaje, version, estado, etapa, agr, defecto, desc, [[material, verid]...], fechaRegistroMs, códigoSolicitud]] } (una por RMD)
         let rmdPreciso = null;      // índices construidos desde rmdPrecisoDatos (no se guardan)
 
@@ -8168,7 +8184,7 @@ async function downloadPlanProduccionFromCloud() {
         // Núcleo común del Exportado RMD (archivo subido o datos directos del portal SAP). Devuelve { ok, resumen, motivo } para quien necesite saber el resultado (el enlace con SAP).
         async function procesarFilasRmd(rowsEntrada, opciones) {
             const { fileName, origen, generado, usuarioTxt } = opciones || {};
-                    let rows = rowsEntrada;
+                    let rows = sinSolicitudesBloqueadasFilas(rowsEntrada);
                     let datosPrecisos = null, resumenFusion = null;
                     if (rows.length >= 2 && esFormatoConRecetas(rows[0])) {
                         // Formato "con recetas": índice preciso + filas clásicas (una por RMD) para todo lo demás.
@@ -8462,8 +8478,8 @@ async function downloadPlanProduccionFromCloud() {
 
             if (!flags) return;
 
-            if (rd) { rmdAutorizadosDetalle = rd; corregirFechasAutDetalle(rmdAutorizadosDetalle, trazabilidadSap); }
-            rmdPrecisoDatos = (rp && Array.isArray(rp.filas) && rp.filas.length > 0) ? rp : null;
+            if (rd) { rmdAutorizadosDetalle = sinSolicitudesBloqueadasDetalle(rd); corregirFechasAutDetalle(rmdAutorizadosDetalle, trazabilidadSap); }
+            rmdPrecisoDatos = (rp && Array.isArray(rp.filas) && rp.filas.length > 0) ? sinSolicitudesBloqueadasPrecisos(rp) : null;
             // Sin maestro guardado (datos de antes de esta versión) pero con un Exportado clásico: la validación por árbol
             // funciona igual con él (cada RMD por su Código por Defecto) hasta la próxima sincronización con SAP.
             if (!rmdPrecisoDatos && Array.isArray(rmdAutorizadosDetalle) && rmdAutorizadosDetalle.length > 0) rmdPrecisoDatos = datosPrecisosDesdeDetalle(rmdAutorizadosDetalle);
@@ -13255,7 +13271,8 @@ async function maybeAutoStartTour() {
         const esInactivo = (v) => !!(v && v.codigo && RMD_INACTIVOS[v.planta] && RMD_INACTIVOS[v.planta].has(String(v.codigo).trim()));
         // Firma de la lista de INACTIVO (27/11/2026, pedido de Carlos: «esto borra de indicadores»): el cuadro guardado con otra lista
         // se vuelve a calcular al mostrarse, sin esperar a la siguiente sincronización.
-        const FIRMA_INACTIVOS = `${RMD_INACTIVOS.P1.size}|${RMD_INACTIVOS.P2.size}`;
+        // También cambia con la lista de solicitudes bloqueadas (SOLICITUDES_BLOQUEADAS), que salen de los pendientes.
+        const FIRMA_INACTIVOS = `${RMD_INACTIVOS.P1.size}|${RMD_INACTIVOS.P2.size}|sb:${[...SOLICITUDES_BLOQUEADAS].sort().join(',')}`;
         // Los suspendidos que el equipo mantiene (los de RMD_SUSPENDIDOS_EQUIPO y los suspendidos después de la revisión, si son la
         // última versión) suman al backlog desde el mes en curso
         // (los meses cerrados quedan como se reportaron) o desde su suspensión, si es posterior. false = solo masivos, como antes.
