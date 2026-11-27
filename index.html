@@ -18237,7 +18237,15 @@ async function maybeAutoStartTour() {
                 const fs = [v.fReg, v.fSol, fS].filter((d) => d && d.isValid && d.isValid()).sort((a, b) => b.valueOf() - a.valueOf());
                 return fs.length ? { f: fs[0], traz: false } : null;
             };
-            const items = bk.pend.map((x) => {
+            // Sin duplicados (pedido de Carlos, 26/11/2026): si un Suspendido ya tiene una versión más nueva Solicitada o Ingresada en la
+            // misma línea (planta + etapa + misma descripción; sin descripción, el mismo código por defecto), en esta lista queda solo
+            // la más nueva (p. ej. la solicitud v2 aunque aún no tenga código de RMD). Los números del cuadro no cambian.
+            const lineaBkl = (v) => { const e = etapaDe(v), d = String(v.desc || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toUpperCase().replace(/\s+/g, ' ');
+                return d ? `${v.planta}|D:${d}|${e}` : v.codDef ? `${v.planta}|C:${normalizeMaterialCode(v.codDef)}|${e}` : ''; };
+            const verMax = new Map();
+            bk.pend.forEach((x) => { if (x.tipo === 'Suspendido') return; const l = lineaBkl(x.v), ver = Number(x.v.version) || 0; if (l && ver > (verMax.get(l) || 0)) verMax.set(l, ver); });
+            const pendSinDup = bk.pend.filter((x) => !(x.tipo === 'Suspendido' && (verMax.get(lineaBkl(x.v)) || 0) > (Number(x.v.version) || 0)));
+            const items = pendSinDup.map((x) => {
                 const v = x.v, et = etapaDe(v);
                 const base = x.tipo === 'Suspendido' ? x.fS : x.tipo === 'Solicitado' ? (v.fSol || v.fReg) : v.fReg;
                 const kSol = v.codigo && v.sol ? `${v.planta}|S${String(v.sol).trim()}` : '';
