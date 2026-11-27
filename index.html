@@ -6663,10 +6663,14 @@ function buildDateColumnMapPlanta1(headerRow, weekLabelRow, hiddenCols) {
         };
 
         // ¿Hay en la cadena un RMD pendiente (no resuelto) que no esté reemplazado por una versión más nueva de su misma línea?
-        // Línea = mismo código por defecto o misma descripción (igual que agrupa el BACKLOG).
+        // Línea = misma descripción, o sin descripción el mismo código por defecto (igual que agrupa el BACKLOG).
         function hayPendienteVivo(todas) {
-            const linea = (x, y) => (x.defecto && y.defecto && String(x.defecto).trim() === String(y.defecto).trim())
-                || (x.desc && y.desc && String(x.desc).trim().toUpperCase().replace(/\s+/g, ' ') === String(y.desc).trim().toUpperCase().replace(/\s+/g, ' '));
+            // Misma regla que «Sin duplicados» del BACKLOG (lineaBkl): misma descripción; sin descripción, mismo código por defecto.
+            // (Caso 5000000088 FABRICACION: CLARIMED 162 kg v5 Ingresado y CLARIMED 45kg v10 Autorizado comparten código por
+            // defecto, pero son líneas distintas.)
+            const desc = (x) => String(x.desc || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toUpperCase().replace(/\s+/g, ' ');
+            const lineaDe = (x) => desc(x) ? `D:${desc(x)}` : (x.defecto ? `C:${String(x.defecto).trim()}` : '');
+            const linea = (x, y) => !!lineaDe(x) && lineaDe(x) === lineaDe(y);
             const masNueva = (y, x) => (Number(y.version) || 0) > (Number(x.version) || 0)
                 || ((Number(y.version) || 0) === (Number(x.version) || 0) && (Number(y.fecha) || 0) > (Number(x.fecha) || 0));
             return todas.some((x) => !ESTADOS_RESUELTOS_RMD.has(x.estadoNorm) && !todas.some((y) => y !== x && linea(x, y) && masNueva(y, x)));
