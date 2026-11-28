@@ -782,6 +782,8 @@
         .edad-pend { font-size: 9.5px; line-height: 1.3; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--slate-400); white-space: nowrap; cursor: help; }
         .edad-pend--media { color: rgb(var(--semaforo-ambar-rgb)); }
         .edad-pend--vieja { color: rgb(var(--danger-rgb)); }
+        .alerta-sin-aut { display: inline-flex; align-items: center; justify-content: center; width: 13px; height: 13px; border-radius: 50%; font-size: 9.5px; line-height: 1; font-weight: 800; color: #fff; background: rgb(var(--danger-rgb)); cursor: help; flex: none; }
+        .leyenda-sin-aut { font-size: 11px; color: var(--slate-400); display: inline-flex; align-items: center; gap: 5px; }
         /* OP sin RMD: órdenes de producción de SAP cuya versión de fabricación no tiene RMD autorizado */
         .op-sin-rmd { display: flex; flex-wrap: wrap; align-items: center; gap: 0.3rem; font-size: 10.5px; line-height: 1.35; color: var(--slate-300); cursor: help; }
         /* Caracterización: marcas de origen (Listado / Motivo SAP / En programa) y la ventana para revisar el listado */
@@ -2126,7 +2128,8 @@
                     <button type="button" id="filtroAutProd" onclick="abrirFiltroFechaAut('produccion', this, event)" class="field-input filtro-etapa-select btn-filtro-fecha-aut" title="Ver solo lo autorizado (en SAP o a mano) un día o en un rango de días" aria-haspopup="dialog">F. autorización: todas</button>
                     <button type="button" id="filtrosEtapaLimpiarProd" onclick="limpiarFiltrosEtapa('produccion')" class="filtro-etapa-limpiar" style="display:none;">Quitar filtros</button>
                 </div>
-                <span id="validacionContadorFilas" class="text-[11px] text-slate-500 whitespace-nowrap sm:ml-auto"></span>
+                <span class="leyenda-sin-aut sm:ml-auto" title="Si una etapa pendiente no muestra el signo, su versión anterior está Autorizada y Producción puede usarla aunque no sea la última."><span class="alerta-sin-aut">!</span>Sin versión autorizada: la última está Solicitada o Ingresada y la anterior Suspendida (o no hay anterior)</span>
+                <span id="validacionContadorFilas" class="text-[11px] text-slate-500 whitespace-nowrap"></span>
             </div>
 
             <div class="overflow-x-auto overflow-y-auto rounded-lg border border-slate-700/50 custom-scrollbar" id="tablaPendientesWrapper" style="display:none; max-height:70vh;">
@@ -7317,8 +7320,18 @@ async function downloadPlanProduccionFromCloud() {
                 const nuevos = entradas.filter(x => (x.estadoNorm === 'INGRESADO' || x.estadoNorm === 'SOLICITADO') && x.fecha && x.fecha > ultima.fecha);
                 if (nuevos.length > 0) { ultima = nuevos.reduce((a, b) => (b.fecha > a.fecha ? b : a)); masNuevo = true; }
             }
+            // Alerta «sin versión autorizada» (pedido de Carlos, 28/11/2026; solo se muestra, no cambia ningún número): la última
+            // está Solicitada o Ingresada y en la cadena no queda ninguna versión Autorizada (la anterior quedó Suspendida, o es la
+            // primera). Las solicitudes Aprobadas/Rechazadas no cuentan como versión. Sin la alerta, Producción sabe que tiene una
+            // versión Autorizada que puede usar aunque no sea la última.
+            const esVersion = (x) => x !== ultima && !/^SOLICITUD /.test(x.estadoNorm);
+            const enCurso = ultima.estadoNorm === 'SOLICITADO' || ultima.estadoNorm === 'INGRESADO';
+            const hayAutorizada = entradas.some(x => esVersion(x) && x.estadoNorm === 'AUTORIZADO');
+            const previas = entradas.filter(x => esVersion(x) && x.version < ultima.version);
+            const anterior = previas.length ? previas.reduce((a, b) => (b.version !== a.version ? (b.version > a.version ? b : a) : ((b.fecha || 0) > (a.fecha || 0) ? b : a))) : null;
             return { ultima, masNuevo, pendiente: !ESTADOS_RESUELTOS_RMD.has(ultima.estadoNorm), versiones: todas.length, suspendidasApartadas: entradas.length - base.length,
-                     reaApartadas: todas.length - entradas.length, soloRea: !propias.length };
+                     reaApartadas: todas.length - entradas.length, soloRea: !propias.length,
+                     sinAutorizadaPrevia: enCurso && !hayAutorizada, anterior: anterior ? { version: anterior.version, estado: anterior.estado, estadoNorm: anterior.estadoNorm, rmd: anterior.rmd } : null };
         }
 
         // ==== Árbol de producción: la ÚNICA fuente de qué etapas tiene cada producto y con qué material se hace cada una ====
@@ -7447,7 +7460,8 @@ async function downloadPlanProduccionFromCloud() {
                     estado: u ? u.estado : 'Sin RMD', estadoNorm: u ? u.estadoNorm : 'SIN RMD', sinRmd: !cadena, pendiente: cadena ? cadena.pendiente : true,
                     versiones: cadena ? cadena.versiones : 0, apartadas: cadena ? cadena.suspendidasApartadas : 0, masNuevo: cadena ? cadena.masNuevo : false,
                     reaApartadas: cadena ? cadena.reaApartadas : 0, soloRea: !!(cadena && cadena.soloRea), defecto: u && u.defecto ? String(u.defecto).trim() : '',
-                    fecha: u && Number.isFinite(u.fecha) ? u.fecha : null // Fecha Registro del RMD que decide (antigüedad del pendiente)
+                    fecha: u && Number.isFinite(u.fecha) ? u.fecha : null, // Fecha Registro del RMD que decide (antigüedad del pendiente)
+                    sinAutorizadaPrevia: !!(cadena && cadena.sinAutorizadaPrevia), anterior: cadena ? cadena.anterior : null
                 };
             }).sort((a, b) => (Number(b.pendiente) - Number(a.pendiente)) || ((b.version || 0) - (a.version || 0)));
             const rep = candidatos[0];
@@ -7485,6 +7499,16 @@ async function downloadPlanProduccionFromCloud() {
         function diasDesde(fecha) {
             if (!Number.isFinite(fecha)) return null;
             return Math.max(0, dayjs().startOf('day').diff(dayjs(fecha).startOf('day'), 'day'));
+        }
+        // Signo «!» junto al estado SAP de una etapa pendiente cuyo código no tiene ninguna versión Autorizada (ver
+        // estadoDeCadenaPrecisa). Si no aparece, la versión anterior está Autorizada y Producción puede usarla.
+        function alertaSinAutorizadaHtml(d) {
+            const c = d && d.candidatos && d.candidatos.find(x => x.pendiente && x.sinAutorizadaPrevia);
+            if (!c) return '';
+            const a = c.anterior;
+            const motivo = a ? `la versión anterior (v${a.version}${a.rmd ? ' — RMD ' + a.rmd : ''}) está ${a.estado}` : 'no hay una versión anterior en SAP';
+            const txt = `Sin versión autorizada: ${c.material} está ${c.estado} v${c.version} y ${motivo}. Producción no tiene una versión Autorizada que pueda usar.`;
+            return `<span class="alerta-sin-aut" title="${escapeHtmlRmdConfig(txt)}" aria-label="${escapeHtmlRmdConfig(txt)}">!</span>`;
         }
         function edadPendienteHtml(c) {
             if (!c || !c.pendiente || c.sinRmd) return '';
@@ -9490,7 +9514,7 @@ async function downloadPlanProduccionFromCloud() {
                 ? `<select id="${idResp}${mat}_${fija}" onchange="setResponsableEtapa('${mat}','${fija}', this.value)" class="etapa-estatus-select${valorActual ? '' : ' etapa-estatus-select--alerta'}" title="Control de cambio: elige si el responsable es ASC o PRO">${['', 'ASC', 'PRO'].map(r => `<option value="${r}" ${r === valorActual ? 'selected' : ''}>${r || 'Elegir...'}</option>`).join('')}</select>`
                 : `<span class="etapa-responsable-auto" title="Responsable asignado automáticamente según el Estatus">${esc(valorActual || '—')}</span>`;
             return {
-                etapa: `<span class="etapa-label-celda"><span class="text-red-300 cursor-pointer hover:underline" onclick="${verDetalle}" title="Ver el código y el RMD de esta etapa">${label}</span><span class="chip-sap-fila">${chip}${edadPendienteHtml(candidatoDelChip(f.d))}</span></span>`
+                etapa: `<span class="etapa-label-celda"><span class="text-red-300 cursor-pointer hover:underline" onclick="${verDetalle}" title="Ver el código y el RMD de esta etapa">${label}</span><span class="chip-sap-fila">${chip}${alertaSinAutorizadaHtml(f.d)}${edadPendienteHtml(candidatoDelChip(f.d))}</span></span>`
                     + (f.sinArbol ? `<span class="block text-[10px] text-amber-400" title="${esc(f.sinArbol)}">⚠ Sin árbol de producción: etapas anteriores sin verificar</span>` : ''),
                 estatus: `<select id="${idEstatus}${mat}_${fija}" onchange="setEstatusEtapa('${mat}','${fija}', this.value)" class="etapa-estatus-select ${claseColorEstatus(estatusActual)}" title="Estatus de ${label}">${opciones}</select>`,
                 resp,
