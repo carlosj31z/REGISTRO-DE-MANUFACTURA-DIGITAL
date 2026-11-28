@@ -441,6 +441,11 @@ Pedido de Carlos (14/11/2026), pensado para que David lo lea de un vistazo. Cód
 - **Estatus** (como en Producción): BORRADOR, INGRESAR, FLUJO SAP, CONTROL DE CAMBIO, POR REVISIÓN, más FALTA VERSIÓN NUEVA, NO
   CONFORMIDAD, RECETA / DATO EN SAP, CAMBIO MASIVO, SIN DEMANDA y OTRO. Se elige en la fila o en la nota; sin elegir, la página sugiere
   uno (Estatus de Producción, Observación de SAP: PEND CC, PEND JEFE, flujo «Enviado», masivo).
+- **Producción Estado** (28/11/2026, pedido de Carlos): columna junto a Estado con el estado de aprobación de Producción en SAP
+  (llega con «Enviar a Status RMD», script v1.109.0+): PENDIENTE = aún no se envía a Producción; ENVIADO = en el flujo, falta el jefe
+  o el gerente (naranja); APROBADO = aprobado por jefe y gerente (verde); RECHAZADO = devuelto (rojo). Tiene filtro en el encabezado,
+  entra en la búsqueda, sale en el Excel de la pestaña (columna «Producción Estado», solo lectura al importar) y la franja muestra
+  cuántos «esperan al jefe o gerente de Producción» (clic = filtra). No cambia ningún número.
 - **Autorizar a mano** (como en Producción, sin fecha de producción): deja de contar como pendiente y suma a «Autorizados en el mes»
   mientras SAP siga igual (firma estado|versión); si SAP cambia, manda SAP. Se puede deshacer.
 - **Guardado** (`val_backlog_notas`, clave compartida formato objeto): por RMD (`P1|R<código>` o `P1|S<solicitud>`) estatus `m`,
