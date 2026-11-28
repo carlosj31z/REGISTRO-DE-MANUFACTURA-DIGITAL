@@ -7327,7 +7327,7 @@ async function downloadPlanProduccionFromCloud() {
             const esVersion = (x) => x !== ultima && !/^SOLICITUD /.test(x.estadoNorm);
             const enCurso = ultima.estadoNorm === 'SOLICITADO' || ultima.estadoNorm === 'INGRESADO';
             const hayAutorizada = entradas.some(x => esVersion(x) && x.estadoNorm === 'AUTORIZADO');
-            const previas = entradas.filter(x => esVersion(x) && x.version < ultima.version);
+            const previas = entradas.filter(x => esVersion(x) && (x.version < ultima.version || (masNuevo && x.fecha && ultima.fecha && x.fecha < ultima.fecha))); // con otra línea de versiones: la registrada antes
             const anterior = previas.length ? previas.reduce((a, b) => (b.version !== a.version ? (b.version > a.version ? b : a) : ((b.fecha || 0) > (a.fecha || 0) ? b : a))) : null;
             return { ultima, masNuevo, pendiente: !ESTADOS_RESUELTOS_RMD.has(ultima.estadoNorm), versiones: todas.length, suspendidasApartadas: entradas.length - base.length,
                      reaApartadas: todas.length - entradas.length, soloRea: !propias.length,
