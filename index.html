@@ -2682,6 +2682,13 @@
         #tab-backlog .bkl-tipo.ing { color:rgb(var(--info-rgb)); border-color:rgba(var(--info-rgb) / .4); }
         #tab-backlog .bkl-tipo.sol { color:rgb(var(--plum-rgb)); border-color:rgba(var(--plum-rgb) / .4); }
         #tab-backlog .bkl-tipo.sus { color:rgb(var(--danger-rgb)); border-color:rgba(var(--danger-rgb) / .4); }
+        /* «Producción Estado» de SAP (28/11/2026): aprobación del jefe y gerente de Producción */
+        #tab-backlog .bkl-prod-est { display:inline-flex; align-items:center; font-size:10.5px; font-weight:700; letter-spacing:.03em; padding:2px 8px; border-radius:999px; border:1px solid var(--card-border-highlight); color:var(--slate-300); white-space:nowrap; }
+        #tab-backlog .bkl-prod-est.apr { color:rgb(var(--ok-rgb)); border-color:rgb(var(--ok-rgb) / .45); background:rgb(var(--ok-rgb) / .12); }
+        #tab-backlog .bkl-prod-est.env { color:rgb(var(--copper-rgb)); border-color:rgb(var(--copper-rgb) / .45); background:rgb(var(--copper-rgb) / .12); }
+        #tab-backlog .bkl-prod-est.rec { color:rgb(var(--danger-rgb)); border-color:rgb(var(--danger-rgb) / .45); background:rgb(var(--danger-rgb) / .12); }
+        #tab-backlog .bkl-tabla td.prod-est { white-space:nowrap; }
+        #tab-backlog .bkl-tabla td.prod-est .pie { display:block; margin-top:3px; font-size:10.5px; white-space:normal; max-width:150px; }
 
         /* Lista */
         #tab-backlog .bkl-lista { display:grid; gap:8px; }
@@ -18148,7 +18155,7 @@ async function maybeAutoStartTour() {
         let abierto = '';           // clave del pendiente con la nota abierta
         let recargaTimer = null;
         const grupos = { prog: false, manual: false };   // (ya sin grupos plegables desde el 26/11/2026)
-        const vista = { planta: '', desc: '', usuario: '', comp: '', cambio: '', area: '', sap: '', etapa: '', resp: '', conNota: '', tipo: '', nuevo: false, arrastre: false, programa: false, sinNota: false, vencidos: false, estado: '', cc: '', q: '', orden: 'excel', mostrar: POR_PAGINA };
+        const vista = { planta: '', desc: '', usuario: '', comp: '', cambio: '', area: '', sap: '', prod: '', etapa: '', resp: '', conNota: '', tipo: '', nuevo: false, arrastre: false, programa: false, sinNota: false, vencidos: false, estado: '', cc: '', q: '', orden: 'excel', mostrar: POR_PAGINA };
         let ccAbierto = true;      // tabla de CC pendientes desplegada
 
         const esc = (t) => String(t === null || t === undefined ? '' : t).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -18175,6 +18182,19 @@ async function maybeAutoStartTour() {
         const respProd = (it) => responsableDeEstatus(estatusProd(it), responsablesEtapa.get(claveProd(it)));
         const SIN_ESTATUS = 'SIN';
         const SIN_DATO = '(vacío)';
+        // «Producción Estado» de SAP (28/11/2026, pedido de Carlos): dice si el RMD ya lo aprobaron el jefe y el gerente de
+        // Producción. Llega con «Enviar a Status RMD» (script v1.109.0+): PENDIENTE (aún no se envía a Producción), ENVIADO
+        // (en el flujo, falta el jefe o el gerente), APROBADO (aprobado por jefe y gerente) o RECHAZADO (devuelto).
+        const prodEstDe = (it) => String((it && it.v && it.v.prodEstado) || '').trim().toUpperCase();
+        function prodEstInfo(txt) {
+            const t = String(txt || '').trim().toUpperCase();
+            if (!t) return { cls: '', txt: '', por: '' };
+            if (/APROB/.test(t)) return { cls: 'apr', txt: t, por: 'Aprobado por el jefe y el gerente de Producción' };
+            if (/ENVIAD/.test(t)) return { cls: 'env', txt: t, por: 'En el flujo de Producción: falta la aprobación del jefe o del gerente' };
+            if (/RECHAZ/.test(t)) return { cls: 'rec', txt: t, por: 'Producción lo rechazó (jefe o gerente)' };
+            if (/PEND/.test(t)) return { cls: '', txt: t, por: 'Aún no se envía a Producción para su aprobación' };
+            return { cls: '', txt: t, por: '' };
+        }
                 // Compara el estado de hoy de cada pendiente con el último guardado y deja la alerta en it.cambio.
         // Estos estados no generan alerta ni se guardan como «último estado» (Carlos, 26/11/2026).
         const ESTADOS_SIN_ALERTA = new Set(['CANCELADO', 'SOLICITUD APROBADA', 'SOLICITUD RECHAZADA']);
@@ -18417,12 +18437,13 @@ async function maybeAutoStartTour() {
             if (valoresDe('cambio').length && !valoresDe('cambio').some((x) => cambioCumple(it, x))) return false;
             if (!en('area', it.seccion || SIN_DATO)) return false;
             if (!en('sap', String(it.v.estado || '').toUpperCase())) return false;
+            if (!en('prod', prodEstDe(it) || SIN_DATO)) return false;
             if (!en('etapa', it.etapa || SIN_DATO)) return false;
             if (!en('resp', respProd(it) || SIN_DATO)) return false;
             if (!en('conNota', n && n.t ? 'con' : 'sin')) return false;
             if (vista.q) {
                 const q = vista.q.normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase();
-                const t = [it.v.desc, it.v.codigo, it.v.sol, it.v.codDef, it.etapa, it.seccion, it.v.obs, n && n.t, n && n.a, it.prog && it.prog.producto, ...(it.cc || []).filter(CcBacklog.esCc)].join(' ').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase();
+                const t = [it.v.desc, it.v.codigo, it.v.sol, it.v.codDef, it.etapa, it.seccion, it.v.obs, it.v.prodEstado, n && n.t, n && n.a, it.prog && it.prog.producto, ...(it.cc || []).filter(CcBacklog.esCc)].join(' ').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase();
                 if (!q.split(/\s+/).every((p) => t.includes(p))) return false;
             }
             return true;
@@ -18440,6 +18461,7 @@ async function maybeAutoStartTour() {
                 ${dato(pl('P1'), 'ATE', 'P1')}${dato(pl('P2'), 'LIMA', 'P2')}
                 ${dato(pend.length - nue, 'del backlog', 'arrastre', 'bk')}${dato(nue, 'solicitudes del mes', 'nuevos', 'nuevo')}
                 ${dato(prog, 'en el Programa de producción', 'prog', 'prog')}
+                ${(() => { const env = pend.filter((it) => prodEstInfo(prodEstDe(it)).cls === 'env').length; return env ? dato(env, 'esperan al jefe o gerente de Producción', 'prodEnv') : ''; })()}
                 ${dato(pend.filter((it) => (it.cc || []).some(CcBacklog.esCc)).length, 'esperan un CC o NC con código', 'cc', 'cc')}
                 ${dato(pend.length - conEst, 'sin estatus elegido', 'sinNota')}${venc ? dato(venc, 'compromisos vencidos', 'vencidos', 'venc') : ''}
             </div>`;
@@ -18460,6 +18482,11 @@ async function maybeAutoStartTour() {
         // Fila de la tabla (26/11/2026, estructura pedida por Carlos): PLANTA · DESCRIPCION · SECCION · ESTADO · ULTIMA FECHA DE
         // TRAZABILIDAD (SAP) · ETAPA · ESTATUS · RESPONSABLE · OBSERVACION (DE SAP) · NOTA. Estatus y responsable con el mismo
         // selector de Producción (mismas 5 opciones, colores y responsable automático; CONTROL DE CAMBIO pide ASC o PRO).
+        function htmlProdEst(it) {
+            const pe = prodEstInfo(prodEstDe(it));
+            if (!pe.txt) return `<span class="pie" title="${it.tipo === 'Ingresado' ? 'Llega de SAP con «Enviar a Status RMD» desde el portal' : 'Sin RMD ingresado: aún no pasa por Producción'}">—</span>`;
+            return `<span class="bkl-prod-est ${pe.cls}" title="${esc(pe.por || pe.txt)}">${esc(pe.txt)}</span>${pe.cls === 'env' || pe.cls === 'rec' ? `<span class="pie">${pe.cls === 'env' ? 'Falta jefe o gerente' : 'Devuelto por Producción'}</span>` : ''}`;
+        }
         function htmlFila(x, i) {
             const it = x.it, v = it.v, n = notaDe(it), man = manual(it);
             const est = estatusProd(it), resp = respProd(it), k = esc(it.k);
@@ -18482,6 +18509,7 @@ async function maybeAutoStartTour() {
                 <td class="est-sap">${cb ? `<button type="button" class="bkl-cambio" data-bkl-visto="${k}" title="Cambió de ${esc(cb.de)} a ${esc(cb.a)} el ${fmt(cb.f)}. Clic: marcar como visto">Antes: ${esc(cb.de)}</button>` : ''}
                     <span class="bkl-tipo ${it.tipo === 'Ingresado' ? 'ing' : it.tipo === 'Solicitado' ? 'sol' : 'sus'}">${esc(String(v.estado || '').toUpperCase())}</span>
                     <div class="bkl-ult">${ult ? `<span title="${ult.traz ? 'Última fecha de la Trazabilidad de SAP' : 'Sin cambios en la Trazabilidad leída: fecha de registro, solicitud o suspensión del maestro de SAP'}">${fmt(ult.f)}${ult.traz ? '' : ' <span class="pie">(maestro)</span>'}</span>` : '—'}${it.dias !== null ? `<div class="pie">${plural(it.dias, 'día', 'días')} pendiente</div>` : ''}</div></td>
+                <td class="prod-est">${htmlProdEst(it)}</td>
                 <td class="ingreso"><div class="bkl-ing">
                     <label><span>Usuario de ingreso</span><input type="text" class="bkl-comp bkl-ui" data-bkl-ui="${k}" value="${esc((n && n.ui) || '')}" list="bklUsuarios" placeholder="Usuario…"></label>
                     <label><span>Fecha de compromiso</span><input type="date" class="bkl-comp${comp === 'vencido' ? ' vencido' : ''}" data-bkl-comp="${k}" value="${esc((n && n.c) || '')}"></label>
@@ -18534,6 +18562,7 @@ async function maybeAutoStartTour() {
                 ${sel('comp', 'Fecha de compromiso', [['con', 'Con fecha'], ['vencido', 'Vencida'], ['sin', 'Sin fecha']])}
                 ${sel('cambio', 'Cambio de estado', [['alerta', 'Con alerta (sin ver)'], ['hoy', 'Cambió hoy'], ['7', 'Cambió en los últimos 7 días'], ['30', 'Cambió en los últimos 30 días'], ['sin', 'Sin cambios registrados']])}
                 ${sel('sap', 'Estado', unicos((it) => String(it.v.estado || '').toUpperCase()).filter(Boolean).map(id))}
+                ${sel('prod', 'Producción Estado', unicos((it) => prodEstDe(it) || SIN_DATO).map(id))}
                 ${sel('etapa', 'Etapa', unicos((it) => it.etapa || SIN_DATO).map(id))}
                 ${sel('estado', 'Estatus', [...ESTATUS_ETAPA_OPCIONES.map(id), [SIN_ESTATUS, 'Sin estatus']])}
                 ${sel('resp', 'Responsable', unicos((it) => respProd(it) || SIN_DATO).map(id))}
@@ -18543,7 +18572,7 @@ async function maybeAutoStartTour() {
         function htmlTabla(vis) {
             const th = (txt, campo, cls) => `<th${cls ? ` class="${cls}"` : ''}${campo ? ` data-filtro="bklF-${campo}"` : ''}>${txt}</th>`;
             return `<div class="bkl-tabla-scroll"><table class="bkl-tabla">
-                <thead><tr>${th('Planta', 'planta')}${th('Área', 'area')}${th('Descripción', 'desc')}${th('Etapa', 'etapa')}${th('Estado', 'cambio,bklF-sap', 'est-sap')}${th('Usuario de ingreso · Fecha de compromiso · Fecha de ingreso', 'usuario,bklF-comp', 'ingreso')}${th('Estatus', 'estado')}${th('Responsable', 'resp')}${th('Observación (de SAP)')}${th('Nota', 'conNota', 'nota')}</tr></thead>
+                <thead><tr>${th('Planta', 'planta')}${th('Área', 'area')}${th('Descripción', 'desc')}${th('Etapa', 'etapa')}${th('Estado', 'cambio,bklF-sap', 'est-sap')}${th('Producción Estado', 'prod', 'prod-est')}${th('Usuario de ingreso · Fecha de compromiso · Fecha de ingreso', 'usuario,bklF-comp', 'ingreso')}${th('Estatus', 'estado')}${th('Responsable', 'resp')}${th('Observación (de SAP)')}${th('Nota', 'conNota', 'nota')}</tr></thead>
                 <tbody>${vis.map((x, i) => htmlFila(x, i)).join('')}</tbody></table></div>`;
         }
         function htmlNota(it) {
@@ -18688,7 +18717,7 @@ async function maybeAutoStartTour() {
             const orden = vista.orden === 'prio' ? ordenar(filtrados) : ordenarExcel(filtrados), vis = orden.slice(0, vista.mostrar);
             const nPl = (l, p) => l.filter((it) => it.v.planta === p).length, nBk = filtrados.filter((it) => !it.nuevo).length;
             const man = pendTodos.filter(manual).length;
-            const hayFiltro = valoresDe('planta').length || valoresDe('desc').length || valoresDe('usuario').length || valoresDe('comp').length || valoresDe('cambio').length || valoresDe('area').length || valoresDe('sap').length || valoresDe('etapa').length || valoresDe('resp').length || valoresDe('conNota').length || valoresDe('estado').length || vista.tipo || vista.nuevo || vista.arrastre || vista.programa || vista.sinNota || vista.vencidos || vista.estado || vista.cc || vista.q;
+            const hayFiltro = valoresDe('planta').length || valoresDe('desc').length || valoresDe('usuario').length || valoresDe('comp').length || valoresDe('cambio').length || valoresDe('area').length || valoresDe('sap').length || valoresDe('prod').length || valoresDe('etapa').length || valoresDe('resp').length || valoresDe('conNota').length || valoresDe('estado').length || vista.tipo || vista.nuevo || vista.arrastre || vista.programa || vista.sinNota || vista.vencidos || vista.estado || vista.cc || vista.q;
             const foco = document.activeElement && document.activeElement.matches && document.activeElement.matches('[data-bkl-buscar]');
             const sinRmd = modelo.sinRmdProg.P1 + modelo.sinRmdProg.P2;
             cont.innerHTML = `
@@ -18818,7 +18847,7 @@ async function maybeAutoStartTour() {
 
         // ---------- Eventos ----------
         let buscarTimer = null;
-        const limpiarFiltros = () => Object.assign(vista, { planta: '', desc: '', usuario: '', comp: '', cambio: '', area: '', sap: '', etapa: '', resp: '', conNota: '', tipo: '', nuevo: false, arrastre: false, programa: false, sinNota: false, vencidos: false, estado: '', cc: '', q: '', mostrar: POR_PAGINA });
+        const limpiarFiltros = () => Object.assign(vista, { planta: '', desc: '', usuario: '', comp: '', cambio: '', area: '', sap: '', prod: '', etapa: '', resp: '', conNota: '', tipo: '', nuevo: false, arrastre: false, programa: false, sinNota: false, vencidos: false, estado: '', cc: '', q: '', mostrar: POR_PAGINA });
         // Nota única por RMD (26/11/2026): siempre visible en la fila y se guarda sola (al dejar de escribir o al salir del cuadro).
         const notaTimers = new Map();
         const escribiendoNota = () => notaTimers.size > 0 || !!(document.activeElement && document.activeElement.matches && document.activeElement.matches('[data-bkl-nota-auto]'));
@@ -18866,6 +18895,7 @@ async function maybeAutoStartTour() {
                     const a = d.bklDato; limpiarFiltros();
                     if (a === 'P1' || a === 'P2') vista.planta = a; else if (a === 'arrastre') vista.arrastre = true; else if (a === 'nuevos') vista.nuevo = true;
                     else if (a === 'sinNota') vista.sinNota = true; else if (a === 'vencidos') vista.vencidos = true; else if (a === 'prog') vista.programa = true;
+                    else if (a === 'prodEnv') vista.prod = [...new Set(modelo.items.map(prodEstDe).filter((t) => prodEstInfo(t).cls === 'env'))];
                     pintar();
                     const l = cont.querySelector('.bkl-filtros'); if (l) l.scrollIntoView({ behavior: 'smooth', block: 'start' });
                     return;
@@ -18937,7 +18967,7 @@ async function maybeAutoStartTour() {
         // ---------- Excel ----------
         // Excel con la misma estructura de la tabla (26/11/2026). Las columnas en verde (Fecha de compromiso, Estatus,
         // Responsable y Nota) se pueden editar en el Excel y volver a subir con «Importar Excel»; la columna Clave identifica cada RMD.
-        const CAB_XLS = ['Planta', 'Área', 'Descripción', 'Código del máster', 'Versión', 'Etapa', 'Estado', 'Cambio de estado', 'Última fecha de trazabilidad (SAP)',
+        const CAB_XLS = ['Planta', 'Área', 'Descripción', 'Código del máster', 'Versión', 'Etapa', 'Estado', 'Producción Estado', 'Cambio de estado', 'Última fecha de trazabilidad (SAP)',
             'Usuario de ingreso', 'Fecha de compromiso', 'Fecha de ingreso', 'Estatus', 'Responsable', 'Observación (de SAP)', 'Nota', 'Clave (no editar)'];
         const EDITABLES_XLS = ['Usuario de ingreso', 'Fecha de compromiso', 'Fecha de ingreso', 'Estatus', 'Responsable', 'Nota'];
         async function exportar() {
@@ -18948,7 +18978,7 @@ async function maybeAutoStartTour() {
             const d = (x) => (x && x.isValid && x.isValid() ? new Date(Date.UTC(x.year(), x.month(), x.date())) : '');
             const filas = lista.map((x) => {
                 const it = x.it, v = it.v, n = notaDe(it) || {}, cb = it.cambio;
-                return [PLANTA_NOMBRE[v.planta], it.seccion || '', v.desc || '', v.codigo || (v.sol ? `Solicitud ${v.sol}` : ''), v.version || '', it.etapa || '', String(v.estado || '').toUpperCase(),
+                return [PLANTA_NOMBRE[v.planta], it.seccion || '', v.desc || '', v.codigo || (v.sol ? `Solicitud ${v.sol}` : ''), v.version || '', it.etapa || '', String(v.estado || '').toUpperCase(), prodEstDe(it),
                     cb ? `${cb.de} → ${cb.a} (${fmt(cb.f)})` : '', it.ult ? d(it.ult.f) : '', n.ui || '', n.c ? d(dayjs(n.c + 'T00:00:00')) : '', n.fi ? d(dayjs(n.fi + 'T00:00:00')) : '',
                     estatusProd(it), respProd(it), v.obs || '', n.t || '', it.k];
             });
