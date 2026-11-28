@@ -782,6 +782,9 @@
         .edad-pend { font-size: 9.5px; line-height: 1.3; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--slate-400); white-space: nowrap; cursor: help; }
         .edad-pend--media { color: rgb(var(--semaforo-ambar-rgb)); }
         .edad-pend--vieja { color: rgb(var(--danger-rgb)); }
+        /* «!»: la versión anterior está Suspendida (no hay versión autorizada que Producción pueda usar) */
+        .alerta-ant { display: inline-flex; align-items: center; justify-content: center; width: 14px; height: 14px; border-radius: 50%; font-size: 10px; font-weight: 800; line-height: 1;
+            color: #fff; background: rgb(var(--danger-rgb)); cursor: help; flex: none; }
         /* OP sin RMD: órdenes de producción de SAP cuya versión de fabricación no tiene RMD autorizado */
         .op-sin-rmd { display: flex; flex-wrap: wrap; align-items: center; gap: 0.3rem; font-size: 10.5px; line-height: 1.35; color: var(--slate-300); cursor: help; }
         /* Caracterización: marcas de origen (Listado / Motivo SAP / En programa) y la ventana para revisar el listado */
@@ -7317,8 +7320,19 @@ async function downloadPlanProduccionFromCloud() {
                 const nuevos = entradas.filter(x => (x.estadoNorm === 'INGRESADO' || x.estadoNorm === 'SOLICITADO') && x.fecha && x.fecha > ultima.fecha);
                 if (nuevos.length > 0) { ultima = nuevos.reduce((a, b) => (b.fecha > a.fecha ? b : a)); masNuevo = true; }
             }
+            // Versión anterior (pedido de Carlos, 28/11/2026): si la última está Solicitada o Ingresada, la versión anterior (el RMD
+            // real de versión más alta por debajo; con versiones de otra línea, el registrado antes) dice si Producción tiene una
+            // versión autorizada para trabajar. alertaAnterior = la anterior está Suspendida y en la cadena no queda ninguna
+            // Autorizada. Las Solicitudes Aprobadas/Rechazadas no cuentan (ni como última ni como anterior).
+            let anterior = null;
+            if (ultima.estadoNorm === 'SOLICITADO' || ultima.estadoNorm === 'INGRESADO') {
+                const previas = entradas.filter(x => x !== ultima && x.rmd && (x.estadoNorm === 'AUTORIZADO' || x.estadoNorm === 'SUSPENDIDO')
+                    && (x.version < ultima.version || (masNuevo && x.fecha && ultima.fecha && x.fecha < ultima.fecha)));
+                anterior = previas.reduce((a, b) => (!a ? b : b.version !== a.version ? (b.version > a.version ? b : a) : ((b.fecha || 0) > (a.fecha || 0) ? b : a)), null);
+            }
+            const alertaAnterior = !!(anterior && anterior.estadoNorm === 'SUSPENDIDO' && !entradas.some(x => x.estadoNorm === 'AUTORIZADO'));
             return { ultima, masNuevo, pendiente: !ESTADOS_RESUELTOS_RMD.has(ultima.estadoNorm), versiones: todas.length, suspendidasApartadas: entradas.length - base.length,
-                     reaApartadas: todas.length - entradas.length, soloRea: !propias.length };
+                     reaApartadas: todas.length - entradas.length, soloRea: !propias.length, anterior, alertaAnterior };
         }
 
         // ==== Árbol de producción: la ÚNICA fuente de qué etapas tiene cada producto y con qué material se hace cada una ====
@@ -7447,7 +7461,9 @@ async function downloadPlanProduccionFromCloud() {
                     estado: u ? u.estado : 'Sin RMD', estadoNorm: u ? u.estadoNorm : 'SIN RMD', sinRmd: !cadena, pendiente: cadena ? cadena.pendiente : true,
                     versiones: cadena ? cadena.versiones : 0, apartadas: cadena ? cadena.suspendidasApartadas : 0, masNuevo: cadena ? cadena.masNuevo : false,
                     reaApartadas: cadena ? cadena.reaApartadas : 0, soloRea: !!(cadena && cadena.soloRea), defecto: u && u.defecto ? String(u.defecto).trim() : '',
-                    fecha: u && Number.isFinite(u.fecha) ? u.fecha : null // Fecha Registro del RMD que decide (antigüedad del pendiente)
+                    fecha: u && Number.isFinite(u.fecha) ? u.fecha : null, // Fecha Registro del RMD que decide (antigüedad del pendiente)
+                    alertaAnterior: !!(cadena && cadena.alertaAnterior),
+                    anterior: cadena && cadena.anterior ? { rmd: cadena.anterior.rmd, version: cadena.anterior.version, estado: cadena.anterior.estado } : null
                 };
             }).sort((a, b) => (Number(b.pendiente) - Number(a.pendiente)) || ((b.version || 0) - (a.version || 0)));
             const rep = candidatos[0];
@@ -7481,6 +7497,14 @@ async function downloadPlanProduccionFromCloud() {
         const textoCandidato = (c) => (c.sinRmd ? `${c.material} sin RMD en SAP` : `${c.material} ${c.estado} v${c.version} (${refRmdCandidato(c)})`);
         const plural = (n, uno, varios) => `${n} ${n === 1 ? uno : varios}`;
 
+        // ---- Versión anterior Suspendida (Programa de Producción, pedido de Carlos 28/11/2026) ----
+        // «!» junto a una etapa pendiente cuya última versión está Solicitada o Ingresada y cuya versión anterior está Suspendida
+        // (sin ninguna Autorizada): Producción no tiene versión autorizada que usar. Sin «!», la anterior está Autorizada.
+        function alertaAnteriorHtml(c) {
+            if (!c || !c.pendiente || c.sinRmd || !c.alertaAnterior || !c.anterior) return '';
+            const a = c.anterior, ult = `${String(c.estado || '').toLowerCase()} v${c.version}`;
+            return `<span class="alerta-ant" title="${escapeHtmlRmdConfig(`Sin versión autorizada: la última está ${ult} y la anterior (RMD ${a.rmd} v${a.version}) está ${String(a.estado || '').toLowerCase()}. Producción no puede usar una versión autorizada de esta etapa.`)}">!</span>`;
+        }
         // ---- Antigüedad del pendiente: días desde la Fecha Registro del RMD que decide la etapa ----
         function diasDesde(fecha) {
             if (!Number.isFinite(fecha)) return null;
@@ -9490,7 +9514,7 @@ async function downloadPlanProduccionFromCloud() {
                 ? `<select id="${idResp}${mat}_${fija}" onchange="setResponsableEtapa('${mat}','${fija}', this.value)" class="etapa-estatus-select${valorActual ? '' : ' etapa-estatus-select--alerta'}" title="Control de cambio: elige si el responsable es ASC o PRO">${['', 'ASC', 'PRO'].map(r => `<option value="${r}" ${r === valorActual ? 'selected' : ''}>${r || 'Elegir...'}</option>`).join('')}</select>`
                 : `<span class="etapa-responsable-auto" title="Responsable asignado automáticamente según el Estatus">${esc(valorActual || '—')}</span>`;
             return {
-                etapa: `<span class="etapa-label-celda"><span class="text-red-300 cursor-pointer hover:underline" onclick="${verDetalle}" title="Ver el código y el RMD de esta etapa">${label}</span><span class="chip-sap-fila">${chip}${edadPendienteHtml(candidatoDelChip(f.d))}</span></span>`
+                etapa: `<span class="etapa-label-celda"><span class="text-red-300 cursor-pointer hover:underline" onclick="${verDetalle}" title="Ver el código y el RMD de esta etapa">${label}</span><span class="chip-sap-fila">${chip}${edadPendienteHtml(candidatoDelChip(f.d))}${fc ? '' : alertaAnteriorHtml(candidatoDelChip(f.d))}</span></span>`
                     + (f.sinArbol ? `<span class="block text-[10px] text-amber-400" title="${esc(f.sinArbol)}">⚠ Sin árbol de producción: etapas anteriores sin verificar</span>` : ''),
                 estatus: `<select id="${idEstatus}${mat}_${fija}" onchange="setEstatusEtapa('${mat}','${fija}', this.value)" class="etapa-estatus-select ${claseColorEstatus(estatusActual)}" title="Estatus de ${label}">${opciones}</select>`,
                 resp,
